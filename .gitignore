@@ -1,2 +1,55 @@
-AU_ERP/AU_ERP/obj/Debug/net8.0/staticwebassets.build.json.cache
-AU_ERP/AU_ERP/obj/Debug/net8.0/rpswa.dswa.cache.json
+# Repository root — ignore rules apply to all paths below.
+
+## Build outputs (.NET / MSBuild)
+**/bin/
+**/obj/
+**/out/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
+
+## Compiled / generated binaries (also covered by bin/obj; explicit for stray copies)
+*.dll
+*.exe
+*.pdb
+*.cache
+*.ilk
+*.log
+*.vspscc
+*.vssscc
+
+## NuGet / MSBuild extras
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.suo
+*.rsuser
+
+## JetBrains Rider
+.idea/
+*.sln.iml
+
+## VS Code (uncomment to ignore all local VS Code settings)
+# .vscode/
+
+## OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+## Local secrets (never commit)
+appsettings.Local.json
+**/appsettings.*.local.json
+*.pfx
+secrets.json
