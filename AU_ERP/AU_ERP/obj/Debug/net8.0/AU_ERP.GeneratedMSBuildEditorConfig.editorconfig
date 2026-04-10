@@ -28,8 +28,28 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/create.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcY3JlYXRlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/GetMaterialList.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcR2V0TWF0ZXJpYWxMaXN0LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/materialtype.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcbWF0ZXJpYWx0eXBlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/numberranges.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcbnVtYmVycmFuZ2VzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
 [D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Shared/Error.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXEVycm9yLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Shared/_Layout_Master.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9MYXlvdXRfTWFzdGVyLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Shared/_ValidationScriptsPartial.cshtml]

@@ -1,0 +1,255 @@
+﻿@model List<AU_ERP.Models.MaterialNumberRange>
+@{
+    ViewBag.Title = "Number Ranges Configuration";
+    var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
+    var safeModel = Model ?? new List<AU_ERP.Models.MaterialNumberRange>();
+}
+
+@if (TempData["Success"] != null)
+{
+    <script>alert("@TempData["Success"]");</script>
+}
+@if (TempData["Error"] != null)
+{
+    <script>alert("@TempData["Error"]");</script>
+}
+
+<div class="sap-window" id="app">
+    @using (Html.BeginForm("numberranges", "Material", FormMethod.Post, new { id = "rangeForm" }))
+    {
+        @Html.AntiForgeryToken()
+        <div class="sap-toolbar">
+            <div class="view-title">Change View "Material Number Ranges": Overview</div>
+            <div class="d-flex">
+                <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">✏️ Edit</button>
+                <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>📄 New Entries</button>
+                <button type="submit" id="btnSave" class="btn btn-sap" disabled>💾 Save</button>
+                <button type="button" id="btnDelete" class="btn btn-sap text-danger" onclick="handleDelete()" disabled>🗑️ Delete</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table-sap">
+                <thead>
+                    <tr>
+                        <th style="width: 35px;">Sel</th>
+                        <th style="width: 250px;">Material Type</th>
+                        <th>From Range</th>
+                        <th>To Range</th>
+                        <th>Current Status</th>
+                        <th style="width: 60px; text-align: center;">Ext</th>
+                    </tr>
+                </thead>
+                <tbody id="gridBody">
+                    @for (int i = 0; i < safeModel.Count; i++)
+                    {
+                        <tr>
+                            <td class="col-sel" onclick="selectRow(this)">
+                                <input type="hidden" name="[@i].RangeID" value="@safeModel[i].RangeID" class="row-id" />
+                            </td>
+                            <td>
+                                <select name="[@i].MaterialTypeCode" class="sap-input" disabled>
+                                    <option value="">Select Type</option>
+                                    @foreach (var opt in mTypes)
+                                    {
+                                        if (opt.Value == safeModel[i].MaterialTypeCode)
+                                        {
+                                            <option value="@opt.Value" selected>@opt.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@opt.Value">@opt.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </td>
+                            <td><input name="[@i].FromNumber" class="sap-input" value="@safeModel[i].FromNumber" readonly /></td>
+                            <td><input name="[@i].ToNumber" class="sap-input" value="@safeModel[i].ToNumber" readonly /></td>
+                            <td><input name="[@i].CurrentNumber" class="sap-input" value="@safeModel[i].CurrentNumber" readonly /></td>
+                            <td style="text-align: center;">
+                                <input type="checkbox" name="[@i].IsExternal" value="true" class="sap-check" @(safeModel[i].IsExternal == true ? "checked" : "") disabled />
+                                <input type="hidden" name="[@i].IsExternal" value="false" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+        --sap-selected: #b3d7ff;
+    }
+
+    body {
+        background-color: var(--sap-bg);
+        font-family: Arial;
+        font-size: 13px;
+        padding: 10px;
+    }
+
+    .sap-window {
+        background: white;
+        border: 1px solid var(--sap-border);
+        display: flex;
+        flex-direction: column;
+        min-height: 500px;
+    }
+
+    .sap-toolbar {
+        padding: 12px;
+        border-bottom: 2px solid var(--sap-border);
+        background: #fff;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .btn-sap {
+        border-radius: 2px;
+        font-size: 12px;
+        border: 1px solid #bbb;
+        margin-left: 5px;
+        padding: 4px 10px;
+        background: linear-gradient(to bottom, #fdfdfd, #eee);
+        cursor: pointer;
+    }
+
+        .btn-sap:disabled {
+            opacity: 0.4;
+        }
+
+    .table-sap {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .table-sap th {
+            background: var(--sap-header-bg);
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            font-weight: normal;
+        }
+
+        .table-sap td {
+            border: 1px solid #ccc;
+            padding: 0;
+            height: 32px;
+        }
+
+    .sap-input {
+        width: 100%;
+        height: 100%;
+        border: none;
+        padding: 0 10px;
+        background: var(--sap-readonly);
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .edit-mode .sap-input:not([readonly]):not([disabled]) {
+        background: #fff;
+    }
+
+    .col-sel {
+        width: 35px;
+        background: #f0f0f0;
+        cursor: pointer;
+    }
+
+    .row-selected {
+        background-color: var(--sap-selected) !important;
+    }
+</style>
+
+<script>
+    let isEditMode = false;
+    let selectedRow = null;
+    let rowCount = @safeModel.Count;
+
+    function setMode(edit) {
+        isEditMode = edit;
+        document.getElementById('app').classList.toggle('edit-mode', edit);
+        document.querySelectorAll('.sap-input, .sap-check').forEach(input => {
+            if (input.tagName === 'SELECT' || input.type === 'checkbox') input.disabled = !edit;
+            else input.readOnly = !edit;
+        });
+        document.getElementById('btnEdit').disabled = edit;
+        document.getElementById('btnNew').disabled = !edit;
+        document.getElementById('btnSave').disabled = !edit;
+    }
+
+    // IMPORTANT: Enable all fields before submit so they reach the controller
+    document.getElementById('rangeForm').onsubmit = function() {
+        document.querySelectorAll('.sap-input, .sap-check, select').forEach(input => {
+            input.disabled = false;
+            input.readOnly = false;
+        });
+        return true;
+    };
+
+    function addNewRow() {
+        const body = document.getElementById('gridBody');
+        const tr = document.createElement('tr');
+        let opts = '<option value="">Select Type</option>';
+        @foreach(var item in mTypes) {
+            @:opts += '<option value="@item.Value">@item.Text</option>';
+        }
+
+        tr.innerHTML = `
+            <td class="col-sel" onclick="selectRow(this)">
+                <input type="hidden" name="[${rowCount}].RangeID" value="" class="row-id" />
+            </td>
+            <td><select name="[${rowCount}].MaterialTypeCode" class="sap-input">${opts}</select></td>
+            <td><input name="[${rowCount}].FromNumber" class="sap-input"></td>
+            <td><input name="[${rowCount}].ToNumber" class="sap-input"></td>
+            <td><input name="[${rowCount}].CurrentNumber" class="sap-input"></td>
+            <td style="text-align: center;">
+                <input type="checkbox" name="[${rowCount}].IsExternal" value="true" class="sap-check">
+                <input type="hidden" name="[${rowCount}].IsExternal" value="false">
+            </td>
+        `;
+        body.appendChild(tr);
+        rowCount++;
+    }
+
+    function selectRow(cell) {
+        if (!isEditMode) return;
+        if (selectedRow) selectedRow.classList.remove('row-selected');
+        selectedRow = cell.parentElement;
+        selectedRow.classList.add('row-selected');
+        document.getElementById('btnDelete').disabled = false;
+    }
+
+    function handleDelete() {
+        if (selectedRow && confirm("Confirm delete?")) {
+            const rangeId = selectedRow.querySelector('.row-id').value;
+            if (rangeId) {
+                $.post('/Material/DeleteNumberRange', { id: rangeId }, function (res) {
+                    if (res.success) { selectedRow.remove(); reIndex(); }
+                });
+            } else { selectedRow.remove(); reIndex(); }
+        }
+    }
+
+    function reIndex() {
+        const rows = document.querySelectorAll('#gridBody tr');
+        rows.forEach((row, idx) => {
+            // Re-index every element that has a 'name' attribute
+            row.querySelectorAll('[name]').forEach(el => {
+                const name = el.name;
+                if (name.includes('.')) {
+                    const property = name.split('.')[1];
+                    el.name = `[${idx}].${property}`;
+                }
+            });
+        });
+        rowCount = rows.length;
+    }
+</script>

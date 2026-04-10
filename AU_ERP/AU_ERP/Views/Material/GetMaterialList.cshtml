@@ -1,0 +1,387 @@
+﻿@model List<AU_ERP.Models.CreateMaterialMaster>
+
+@{
+    var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
+    var safeModel = Model ?? new List<AU_ERP.Models.CreateMaterialMaster>();
+}
+
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+        --sap-selected: #b3d7ff;
+    }
+
+    body {
+        background-color: var(--sap-bg);
+        font-family: Arial;
+        font-size: 13px;
+        padding: 10px;
+    }
+
+    .sap-window {
+        background: white;
+        border: 1px solid var(--sap-border);
+        display: flex;
+        flex-direction: column;
+        min-height: 500px;
+    }
+
+    .sap-toolbar {
+        padding: 12px;
+        border-bottom: 2px solid var(--sap-border);
+        background: #fff;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .btn-sap {
+        border-radius: 2px;
+        font-size: 12px;
+        border: 1px solid #bbb;
+        margin-left: 5px;
+        padding: 4px 10px;
+        background: linear-gradient(to bottom, #fdfdfd, #eee);
+        cursor: pointer;
+    }
+
+        .btn-sap:disabled {
+            opacity: 0.4;
+        }
+
+    .table-sap {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .table-sap th {
+            background: var(--sap-header-bg);
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            font-weight: normal;
+        }
+
+        .table-sap td {
+            border: 1px solid #ccc;
+            padding: 0;
+            height: 32px;
+        }
+
+    .sap-input {
+        width: 100%;
+        height: 100%;
+        border: none;
+        padding: 0 10px;
+        background: var(--sap-readonly);
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .edit-mode .sap-input:not([readonly]):not([disabled]) {
+        background: #fff;
+    }
+
+    .col-sel {
+        width: 35px;
+        background: #f0f0f0;
+        cursor: pointer;
+    }
+
+    .row-selected {
+        background-color: var(--sap-selected) !important;
+    }
+
+    .sap-select:disabled {
+        background: var(--sap-readonly);
+        color: #666;
+        cursor: not-allowed;
+    }
+</style>
+<div class="sap-window" id="app">
+
+    <form id="materialForm" method="post" action="/Material/GetMaterialList">
+
+        <!-- TOP TOOLBAR -->
+        <div class="sap-toolbar">
+
+            <div class="view-title">
+                Material Master Overview
+            </div>
+
+            <!-- RIGHT SIDE BUTTONS -->
+            <div class="sap-actions">
+                <button type="button" class="btn-sap" onclick="setMode(true)">✏️ Edit</button>
+                <button type="button" class="btn-sap" onclick="addNewRow()" disabled id="btnNew">📄 New</button>
+                <button type="submit" class="btn-sap" onclick="saveAll()" disabled id="btnSave">
+                    💾 Save
+                </button>
+                <button type="button" class="btn-sap text-danger" onclick="handleDelete()" disabled id="btnDelete">🗑️ Delete</button>
+            </div>
+
+        </div>
+
+        <!-- CENTER TABLE WRAPPER -->
+        <div class="table-wrapper">
+
+            <table class="table-sap">
+                <thead>
+                    <tr>
+                        <th style="width:40px;">Sel</th>
+                        <th>No</th>
+                        <th>Material Number</th>
+                        <th>Description</th>
+                        <th>Type Code</th>
+                        <th>Base Unit</th>
+                    </tr>
+                </thead>
+
+                <tbody id="gridBody">
+
+                    @{
+                        int i = 0;
+                    }
+
+                    @foreach (var item in safeModel)
+                    {
+                        <tr>
+                            <td class="col-sel" onclick="selectRow(this)">
+                                <input type="hidden" name="[@i].MaterialNumber"
+                                       value="@item.MaterialNumber"
+                                       class="row-id"/>
+                            </td>
+
+                            <td>@(i + 1)</td>
+
+                            <td>
+                                <input name="[@i].MaterialNumber"
+                                       class="sap-input mat-number"
+                                       value="@item.MaterialNumber"
+                                       readonly />
+                            </td>
+
+                            <td>
+                                <input name="[@i].Description"
+                                       class="sap-input"
+                                       value="@item.Description"
+                                       readonly />
+                            </td>
+
+                            <td>
+                                <select name="[@i].MaterialTypeCode"
+                                        class="sap-input sap-select"
+                                        onchange="onTypeChange(this)" readonly>
+                             
+                                    @foreach (var opt in mTypes)
+                                    {
+                                        if (opt.Value == item.MaterialTypeCode)
+                                        {
+                                            <option value="@opt.Value" selected>@opt.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@opt.Value">@opt.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </td>
+
+                            <td>
+                                <input name="[@i].BaseUnitCode"
+                                       class="sap-input"
+                                       value="@item.BaseUnitCode"
+                                       readonly />
+                            </td>
+                        </tr>
+                        i++;
+                    }
+
+                </tbody>
+            </table>
+
+        </div>
+
+    </form>
+</div>
+<script>
+       let isEditMode = false;
+    let selectedRow = null;
+    let rowCount = @safeModel.Count;
+
+           function setMode(edit) {
+        isEditMode = edit;
+
+        document.getElementById('app').classList.toggle('edit-mode', edit);
+
+        document.querySelectorAll('.sap-input').forEach(el => {
+
+            // Material Number ALWAYS readonly
+            if (el.name && el.name.includes("MaterialNumber")) {
+                el.readOnly = true;
+                return;
+            }
+
+            // TEXT / INPUT fields
+            if (el.tagName === "INPUT") {
+                el.readOnly = !edit;
+            }
+
+            // SELECT fields (dropdowns)
+            if (el.tagName === "SELECT") {
+                el.disabled = !edit;
+            }
+        });
+
+        document.getElementById('btnNew').disabled = !edit;
+        document.getElementById('btnSave').disabled = !edit;
+    }
+
+    document.getElementById('materialForm').onsubmit = function () {
+        document.querySelectorAll('.sap-input').forEach(el => {
+            el.disabled = false;
+            el.readOnly = false;
+        });
+        return true;
+    };
+
+    function addNewRow() {
+        const body = document.getElementById("gridBody");
+
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+            <td class="col-sel" onclick="selectRow(this)">
+                <input type="hidden" name="[${rowCount}].MaterialNumber" class="row-id" />
+            </td>
+
+            <td>${rowCount + 1}</td>
+
+            <td><input name="[${rowCount}].MaterialNumber" class="sap-input"></td>
+            <td><input name="[${rowCount}].Description" class="sap-input"></td>
+
+            <td>
+                <select name="[${rowCount}].MaterialTypeCode" class="sap-input">
+                    <option value="">Select Type</option>
+                    @foreach (var opt in mTypes)
+                    {
+                            <text>
+                                <option value="@opt.Value">@opt.Text</option>
+                            </text>
+                    }
+                </select>
+            </td>
+
+            <td><input name="[${rowCount}].BaseUnitCode" class="sap-input"></td>
+        `;
+
+        body.appendChild(tr);
+        rowCount++;
+    }
+
+    function selectRow(cell) {
+        if (!isEditMode) return;
+
+        document.querySelectorAll("#gridBody tr").forEach(r => {
+            r.classList.remove("row-selected");
+        });
+
+        selectedRow = cell.parentElement;
+        selectedRow.classList.add("row-selected");
+
+        document.getElementById("btnDelete").disabled = false;
+    }
+
+    function handleDelete() {
+        if (!selectedRow) return;
+
+        const id = selectedRow.querySelector(".row-id").value;
+
+        if (!confirm("Delete this material?")) return;
+
+        if (id) {
+            fetch('/Material/DeleteMaterial?id=' + id, { method: 'POST' })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) selectedRow.remove();
+                });
+        } else {
+            selectedRow.remove();
+        }
+    }
+        function saveAll() {
+
+        let data = [];
+
+        document.querySelectorAll("#gridBody tr").forEach(row => {
+
+            let obj = {
+                MaterialNumber: row.querySelector("[name$='.MaterialNumber']")?.value,
+                Description: row.querySelector("[name$='.Description']")?.value,
+                MaterialTypeCode: row.querySelector("[name$='.MaterialTypeCode']")?.value,
+                BaseUnitCode: row.querySelector("[name$='.BaseUnitCode']")?.value
+            };
+
+            data.push(obj);
+        });
+
+        fetch('/Material/SaveMaterials', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(res => {
+            if (res.success) {
+                alert("Saved successfully!");
+                location.reload();
+            } else {
+                alert(res.message || "Save failed");
+            }
+        });
+    }
+            function fetchNextMaterialNumber(typeCode, statusBoxId, inputElement) {
+
+        const statusBox = document.getElementById(statusBoxId);
+
+        $.ajax({
+            url: '/Main_Controller/Material/GetNextMaterialNumber',
+            type: 'GET',
+            data: { materialTypeCode: typeCode },
+
+            success: function (res) {
+
+                if (res.success) {
+
+                    if (inputElement) {
+                        inputElement.value = res.nextNumber;
+                        inputElement.readOnly = true;
+                    }
+
+                    if (statusBox)
+                        statusBox.innerText = "✔ " + res.nextNumber;
+                }
+                else {
+                    if (statusBox)
+                        statusBox.innerText = "❌ " + res.message;
+                }
+            }
+        });
+    }
+                function onTypeChange(selectElement) {
+
+        const row = selectElement.closest("tr");
+        const typeCode = selectElement.value;
+
+        if (!typeCode) return;
+
+        const materialInput = row.querySelector(".mat-number");
+
+        if (!materialInput) return;
+
+        fetchNextMaterialNumber(typeCode, "statusBar", materialInput);
+    }
+</script>

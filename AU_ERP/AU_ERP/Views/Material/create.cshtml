@@ -1,0 +1,428 @@
+﻿@model AU_ERP.Models.CreateMaterialMaster
+
+@{
+    Layout = "~/Views/Shared/_Layout_Master.cshtml";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAP MM01 Simulator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        :root {
+            --sap-bg: #cedbe9;
+            --sap-header: #a3b8cc;
+            --sap-border: #8ca3ba;
+            --sap-yellow: #fff9c4;
+            --sap-readonly: #f4f4f4;
+        }
+
+        body {
+            background: var(--sap-bg);
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+        }
+
+        .sap-window {
+            background: #fff;
+            min-height: 96vh;
+            margin: 10px;
+            border: 1px solid var(--sap-border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sap-header {
+            background: linear-gradient(#fff,var(--sap-header));
+            padding: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 1px solid var(--sap-border);
+        }
+
+        .sap-menu {
+            background: #eee;
+            padding: 8px;
+            border-bottom: 1px solid var(--sap-border);
+        }
+
+        .sap-btn {
+            font-size: 13px;
+            padding: 5px 12px;
+            margin-right: 6px;
+            border: 1px solid #ababab;
+            background: #fff;
+        }
+
+        /* Top Navigation Tabs (Create/List) */
+        .top-nav-bar {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 5px 15px 0 15px;
+        }
+
+        /* SAP Sub-Tabs (Basic Data/Sales) */
+        .nav-tabs .nav-link {
+            font-size: 12px;
+            padding: 6px 12px;
+            background: #c8d7e6;
+            color: #333;
+            border: 1px solid var(--sap-border);
+            margin-right: 2px;
+            border-radius: 0;
+        }
+
+            .nav-tabs .nav-link.active {
+                background: #fff;
+                font-weight: bold;
+                border-bottom-color: transparent;
+            }
+
+        .tab-content {
+            overflow-y: auto;
+            padding: 20px;
+            flex-grow: 1;
+        }
+
+        .sap-frame {
+            border: 1px solid var(--sap-border);
+            padding: 20px;
+            margin-bottom: 25px;
+            position: relative;
+            background: #fdfdfd;
+        }
+
+        .sap-frame-title {
+            position: absolute;
+            top: -12px;
+            left: 15px;
+            background: #fff;
+            padding: 0 8px;
+            font-weight: bold;
+            color: #444;
+        }
+
+        .form-label {
+            font-weight: 500;
+            margin-bottom: 2px;
+            display: block;
+            color: #555;
+            font-size: 12px;
+        }
+
+        .form-control {
+            border-radius: 0;
+            height: 28px !important;
+            font-size: 13px !important;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+        }
+
+        .sap-readonly {
+            background-color: var(--sap-readonly) !important;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .req {
+            border-left: 4px solid #d32f2f !important;
+        }
+
+        .status-bar {
+            background: #f1f1f1;
+            padding: 4px 12px;
+            font-size: 12px;
+            border-top: 1px solid var(--sap-border);
+            min-height: 25px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sap-window">
+        <div class="sap-header">🖥️ SAP MM01 – Create Material</div>
+
+        <div class="top-nav-bar">
+            <ul class="nav nav-pills">
+                <li class="nav-item">
+                    <a class="nav-link active" href="@Url.Action("create", "Material", new { area = "Main_Controller" })" style="border-radius: 4px 4px 0 0; font-weight: bold;">Create</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="@Url.Action("GetMaterialList", "Material", new { area = "Main_Controller" })">List</a>
+                </li>
+                <li class="nav-item"><a class="nav-link disabled" href="#">Update</a></li>
+                <li class="nav-item"><a class="nav-link disabled" href="#">Delete</a></li>
+            </ul>
+        </div>
+
+        @using (Html.BeginForm("create", "Material", FormMethod.Post, new { id = "mm01Form" }))
+        {
+            @Html.ValidationSummary(false, "", new { @class = "text-danger", style = "font-weight:bold; padding: 10px;" })
+            @Html.AntiForgeryToken()
+
+            <div class="sap-menu">
+                <button type="submit" class="btn sap-btn">💾 Save</button>
+                <button type="button" class="btn sap-btn" onclick="checkValidations()">✔ Check</button>
+            </div>
+
+            <div class="p-3 border-bottom bg-light">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Material Number</label>
+                        @Html.TextBoxFor(m => m.MaterialNumber, new { @class = "form-control sap-readonly", @readonly = "readonly", id = "txtMaterialNumber" })
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Industry Sector</label>
+                        @Html.DropDownListFor(m => m.IndustrySectorCode, new List<SelectListItem> {
+                            new SelectListItem { Text = "Mechanical Engineering", Value = "M" },
+                            new SelectListItem { Text = "Chemical Industry", Value = "C" }
+                        }, "Select Sector", new { @class = "form-control req" })
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Material Type</label>
+                    @Html.DropDownListFor(m => m.MaterialTypeCode,
+                                        ViewBag.MaterialTypeList as IEnumerable<SelectListItem>,
+                                        "Select Type",
+                                        new { @class = "form-control req", id = "matType", onchange = "onMaterialTypeChange()" })
+                    </div>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs px-3 pt-2" id="mmTabs">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#basic" type="button">Basic Data</button></li>
+                <li class="nav-item" id="nav-sales"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#sales" type="button">Sales</button></li>
+                <li class="nav-item" id="nav-purch"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#purch" type="button">Purchasing</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#mrp" type="button">MRP</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#uom" type="button">Units of Measure</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#acc" type="button">Accounting</button></li>
+            </ul>
+
+            <div class="tab-content">
+                @* BASIC DATA *@
+                <div class="tab-pane fade show active" id="basic">
+                    <div class="sap-frame">
+                        <span class="sap-frame-title">Basic Data 1 & 2</span>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Description</label>
+                                @Html.EditorFor(m => m.Description, new { htmlAttributes = new { @class = "form-control req" } })
+                                <label class="form-label">Base Unit</label>
+                                @Html.EditorFor(m => m.BaseUnitCode, new { htmlAttributes = new { @class = "form-control req", maxlength = "3", id = "BaseUnitCode" } })
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Material Group</label>
+                                @Html.EditorFor(m => m.MaterialGroupCode, new { htmlAttributes = new { @class = "form-control" } })
+                                <label class="form-label">EAN/UPC</label>
+                                @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control" } })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* SALES *@
+                <div class="tab-pane fade" id="sales">
+                    <div class="sap-frame">
+                        <span class="sap-frame-title">Sales Organization Data</span>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Delivering Plant</label>
+                                @Html.EditorFor(m => m.DeliveringPlantCode, new { htmlAttributes = new { @class = "form-control" } })
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Item Category Group</label>
+                                @Html.EditorFor(m => m.ItemCategoryGroup, new { htmlAttributes = new { @class = "form-control" } })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* PURCHASING *@
+                <div class="tab-pane fade" id="purch">
+                    <div class="sap-frame">
+                        <span class="sap-frame-title">Purchasing Data</span>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Purchasing Group</label>
+                                @Html.EditorFor(m => m.PurchasingGroupCode, new { htmlAttributes = new { @class = "form-control", maxlength = "3" } })
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">GR Processing Time</label>
+                                @Html.EditorFor(m => m.GrProcessingTime, new { htmlAttributes = new { @class = "form-control", type = "number" } })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* MRP *@
+                <div class="tab-pane fade" id="mrp">
+                    <div class="sap-frame">
+                        <span class="sap-frame-title">MRP Data</span>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">MRP Type</label>
+                                @Html.EditorFor(m => m.MrpTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
+                                <label class="form-label">Procurement Type</label>
+                                @Html.EditorFor(m => m.ProcurementTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "1" } })
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Strategy Group</label>
+                                @Html.EditorFor(m => m.StrategyGroup, new { htmlAttributes = new { @class = "form-control" } })
+                                <label class="form-label">Availability Check</label>
+                                @Html.EditorFor(m => m.AvailabilityCheckCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* UNITS OF MEASURE *@
+                <div class="tab-pane fade" id="uom">
+                    <div class="sap-frame">
+                        <span class="sap-frame-title">Unit Conversions</span>
+                        <table class="table table-bordered table-sm" id="uomTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Alt. Unit</th>
+                                    <th>Numerator</th>
+                                    <th>=</th>
+                                    <th>Denominator</th>
+                                    <th>Base Unit</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button type="button" class="btn btn-sm btn-success" onclick="addUomRow()">+ Add Row</button>
+                    </div>
+                </div>
+
+                @* ACCOUNTING *@
+                <div class="tab-pane fade" id="acc">
+                    <div class="sap-frame">
+                        <span class="sap-frame-title">Valuation</span>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Valuation Class</label>
+                                @Html.EditorFor(m => m.ValuationClassCode, new { htmlAttributes = new { @class = "form-control req" } })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-bar" id="statusBar">Ready</div>
+        }
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    let uomIndex = 0;
+
+    function onMaterialTypeChange() {
+        handleTabVisibility();
+        fetchNextMaterialNumber();
+    }
+
+    function handleTabVisibility() {
+        const type = document.getElementById("matType").value;
+        const salesTab = document.getElementById("nav-sales");
+        const purchTab = document.getElementById("nav-purch");
+
+        if (!salesTab || !purchTab) return;
+
+        salesTab.style.display = "block";
+        purchTab.style.display = "block";
+
+        if (type === "ROH") {
+            salesTab.style.display = "none";
+        } else if (type === "FERT") {
+            purchTab.style.display = "none";
+        }
+    }
+
+    function fetchNextMaterialNumber() {
+        const typeCode = document.getElementById("matType").value;
+        const statusBox = document.getElementById("statusBar");
+
+        if (!typeCode) {
+            document.getElementById("txtMaterialNumber").value = "";
+            return;
+        }
+
+        if (statusBox) statusBox.innerText = "⏳ Fetching next material number...";
+
+        $.ajax({
+            // Path updated to include the Main_Controller folder/area
+          url: '@Url.Action("GetNextMaterialNumber", "Material", new { area = "Main_Controller" })',
+            type: 'GET',
+            data: { materialTypeCode: typeCode },
+            success: function (response) {
+                if (response.success) {
+                    document.getElementById("txtMaterialNumber").value = response.nextNumber;
+                    if (statusBox) statusBox.innerText = "✔ Material number assigned: " + response.nextNumber;
+                } else {
+                    document.getElementById("txtMaterialNumber").value = "";
+                    if (statusBox) statusBox.innerText = "❌ Error: " + response.message;
+                }
+            },
+            error: function () {
+                if (statusBox) statusBox.innerText = "❌ Communication error with server.";
+            }
+        });
+    }
+
+    function addUomRow() {
+        const tbody = document.querySelector("#uomTable tbody");
+        const baseUomField = document.getElementById("BaseUnitCode");
+        const baseUomValue = (baseUomField && baseUomField.value) ? baseUomField.value : "PC";
+
+        const rowId = `row_${uomIndex}`;
+        const html = `
+            <tr id="${rowId}">
+                <td><input name="Conversions[${uomIndex}].AltUnitCode" class="form-control form-control-sm" maxlength="3" /></td>
+                <td><input name="Conversions[${uomIndex}].Numerator" class="form-control form-control-sm" type="number" /></td>
+                <td class="text-center" style="vertical-align: middle;">=</td>
+                <td><input name="Conversions[${uomIndex}].Denominator" class="form-control form-control-sm" value="1" type="number" /></td>
+                <td><input class="form-control form-control-sm sap-readonly" value="${baseUomValue}" readonly /></td>
+                <td><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('${rowId}').remove()">✖</button></td>
+            </tr>`;
+
+        tbody.insertAdjacentHTML('beforeend', html);
+        uomIndex++;
+        document.getElementById("statusBar").innerText = "Row added to Conversion table.";
+    }
+
+    function checkValidations() {
+        document.getElementById("statusBar").innerText = "✔ Validating entries...";
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        handleTabVisibility();
+
+        // Success Message Logic
+        var message = '@TempData["SuccessMessage"]';
+        if (message && message !== "") {
+            Swal.fire({
+                title: 'Success!',
+                text: message,
+                icon: 'success',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#a3b8cc'
+            });
+
+            const statusBar = document.getElementById("statusBar");
+            if(statusBar) {
+                statusBar.innerText = "✔ " + message;
+                statusBar.style.color = "green";
+            }
+        }
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,251 @@
+﻿@model List<AU_ERP.Models.MaterialType>
+
+@{
+    ViewBag.Title = "Material Types";
+    // Prevents NullReferenceException if Controller sends a null model
+    var safeModel = Model ?? new List<AU_ERP.Models.MaterialType>();
+}
+
+<div class="sap-window" id="app">
+    @using (Html.BeginForm("materialtype", "Material", FormMethod.Post, new { id = "mm01Form" }))
+    {
+        @Html.AntiForgeryToken()
+
+        <div class="sap-toolbar">
+            <div class="view-title">Change View "Material Types": Overview</div>
+            <div class="d-flex">
+                <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">✏️ Edit</button>
+                <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>📄 New Entries</button>
+                <button type="submit" id="btnSave" class="btn btn-sap" disabled>💾 Save</button>
+                <button type="button" id="btnDelete" class="btn btn-sap text-danger" onclick="handleDelete()" disabled>🗑️ Delete</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table-sap">
+                <thead>
+                    <tr>
+                        <th style="width: 35px;">Sel</th>
+                        <th style="width: 150px;">MTyp</th>
+                        <th>Description</th>
+                        <th style="width: 200px;">Field Ref</th>
+                    </tr>
+                </thead>
+                <tbody id="gridBody">
+                    @for (int i = 0; i < safeModel.Count; i++)
+                    {
+                        <tr>
+                            <td class="col-sel" onclick="selectRow(this)"></td>
+                            <td>
+                                <input name="[@i].MaterialTypeCode" class="sap-input" value="@safeModel[i].MaterialTypeCode" readonly maxlength="4" />
+                            </td>
+                            <td>
+                                <input name="[@i].Description" class="sap-input" value="@safeModel[i].Description" readonly />
+                            </td>
+                            <td>
+                                <input name="[@i].FieldReference" class="sap-input" value="@safeModel[i].FieldReference" readonly maxlength="4" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+        --sap-selected: #b3d7ff;
+        --sap-focus: #fff9c4;
+    }
+
+    body {
+        background-color: var(--sap-bg);
+        font-family: Arial, sans-serif;
+        font-size: 13px;
+        padding: 10px;
+        height: 100vh;
+    }
+
+    .sap-window {
+        background: white;
+        border: 1px solid var(--sap-border);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .sap-toolbar {
+        padding: 12px;
+        border-bottom: 2px solid var(--sap-border);
+        background: #fff;
+    }
+
+    .btn-sap {
+        border-radius: 2px;
+        font-size: 12px;
+        border: 1px solid #bbb;
+        margin-right: 5px;
+        background: #fdfdfd;
+        cursor: pointer;
+    }
+
+        .btn-sap:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+    .table-container {
+        overflow-y: auto;
+        flex-grow: 1;
+    }
+
+    .table-sap {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .table-sap th {
+            background: var(--sap-header-bg);
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            font-weight: normal;
+            text-align: left;
+        }
+
+        .table-sap td {
+            border: 1px solid #ccc;
+            padding: 0;
+            height: 30px;
+        }
+
+    .sap-input {
+        width: 100%;
+        height: 100%;
+        border: none;
+        padding: 0 10px;
+        background: var(--sap-readonly);
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .edit-mode .sap-input:not([readonly]) {
+        background: #fff;
+    }
+
+    .edit-mode .sap-input:focus {
+        background: var(--sap-focus);
+        outline: 1px solid orange;
+    }
+
+    .col-sel {
+        width: 35px;
+        background: #f0f0f0;
+        cursor: pointer;
+    }
+
+    .row-selected {
+        background-color: var(--sap-selected) !important;
+    }
+
+        .row-selected .sap-input {
+            background-color: transparent !important;
+        }
+</style>
+<script>
+    let isEditMode = false;
+    let selectedRow = null;
+    // Set initial rowCount based on the existing Model data
+    let rowCount = @(Model != null ? Model.Count : 0);
+
+    // 1. Toggles the UI between Read-Only and Edit Mode
+    function setMode(edit) {
+        isEditMode = edit;
+        document.getElementById('app').classList.toggle('edit-mode', edit);
+
+        // Toggle readonly on all existing inputs
+        document.querySelectorAll('.sap-input').forEach(input => {
+            input.readOnly = !edit;
+        });
+
+        document.getElementById('btnEdit').disabled = edit;
+        document.getElementById('btnNew').disabled = !edit;
+        document.getElementById('btnSave').disabled = !edit;
+    }
+
+    // 2. Adds a new blank row with the correct List Index [n]
+    function addNewRow() {
+        const body = document.getElementById('gridBody');
+        const tr = document.createElement('tr');
+
+        // We use backticks (`) for the template string
+        tr.innerHTML = `
+            <td class="col-sel" onclick="selectRow(this)"></td>
+            <td><input name="[${rowCount}].MaterialTypeCode" class="sap-input" maxlength="4"></td>
+            <td><input name="[${rowCount}].Description" class="sap-input"></td>
+            <td><input name="[${rowCount}].FieldReference" class="sap-input" maxlength="4"></td>
+        `;
+
+        body.appendChild(tr);
+        rowCount++;
+        tr.querySelector('input').focus();
+    }
+
+    // 3. Handles Row Selection (Clicking the 'Sel' column)
+    function selectRow(cell) {
+        if (!isEditMode) return;
+
+        if (selectedRow) {
+            selectedRow.classList.remove('row-selected');
+        }
+
+        selectedRow = cell.parentElement;
+        selectedRow.classList.add('row-selected');
+        document.getElementById('btnDelete').disabled = false;
+    }
+
+    // 4. Deletes a row and RE-INDEXES the remaining rows
+    function handleDelete() {
+        if (selectedRow && confirm("Are you sure you want to delete this entry?")) {
+            // Get the MaterialTypeCode from the first input in the selected row
+            const mTypeCode = selectedRow.querySelector('input[name*="MaterialTypeCode"]').value;
+
+            if (mTypeCode) {
+                // Send request to the Controller
+                $.post('/Material/DeleteMaterialType', { id: mTypeCode }, function (response) {
+                    if (response.success) {
+                        selectedRow.remove();
+                        selectedRow = null;
+                        document.getElementById('btnDelete').disabled = true;
+                        reIndexAllRows(); // Refresh indexes for the remaining list
+                    } else {
+                        alert("Error: " + response.message);
+                    }
+                });
+            } else {
+                // If it's a new unsaved row, just remove it from UI
+                selectedRow.remove();
+                selectedRow = null;
+                reIndexAllRows();
+            }
+        }
+    }
+
+    // 5. Helper function to ensure indexes are always 0, 1, 2...
+    function reIndexAllRows() {
+        const rows = document.querySelectorAll('#gridBody tr');
+        rows.forEach((row, index) => {
+            const inputs = row.querySelectorAll('input');
+            if (inputs.length >= 3) {
+                inputs[0].name = `[${index}].MaterialTypeCode`;
+                inputs[1].name = `[${index}].Description`;
+                inputs[2].name = `[${index}].FieldReference`;
+            }
+        });
+        rowCount = rows.length; // Reset rowCount to the actual number of rows
+    }
+</script>

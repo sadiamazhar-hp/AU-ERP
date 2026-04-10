@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>A&U Tiles</title>
+    <!-- plugins:css -->
+    <link rel="stylesheet" href="~/Assets/assets/vendors/mdi/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="~/Assets/assets/vendors/ti-icons/css/themify-icons.css">
+    <link rel="stylesheet" href="~/Assets/assets/vendors/css/vendor.bundle.base.css">
+    <link rel="stylesheet" href="~/Assets/assets/vendors/font-awesome/css/font-awesome.min.css">
+    <!-- endinject -->
+    <!-- Plugin css for this page -->
+    <link rel="stylesheet" href="~/Assets/assets/vendors/font-awesome/css/font-awesome.min.css" />
+    <link rel="stylesheet" href="~/Assets/assets/vendors/bootstrap-datepicker/bootstrap-datepicker.min.css">
+    <!-- End plugin css for this page -->
+    <!-- inject:css -->
+    <!-- endinject -->
+    <!-- Layout styles -->
+    <link rel="stylesheet" href="~/Assets/assets/css/style.css">
+    <!-- End layout styles -->
+    <link rel="shortcut icon" href="~/Assets/assets/images/favicon.png" />
+    <style>
+        .content-wrapper {
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=1600') !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-attachment: fixed !important;
+            min-height: calc(100vh - 70px);
+        }
+        /* Ensure dashboard cards look good on dark background */
+        .card {
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff !important;
+        }
+        .page-title {
+            color: #ffffff !important;
+        }
+        .card .card-title {
+            color: #ffffff !important;
+        }
+        .text-muted {
+            color: #e0e0e0 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-scroller">
+        <!-- partial:partials/_navbar.html -->
+        <nav class="navbar default-layout-navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
+            <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-start">
+                <a class="navbar-brand brand-logo" href="@Url.Action("Index", "Home")">
+                    <img src="~/Assets/assets/images/logo_au_tiles.png" alt="logo" style="width: 120px; height: auto;" />
+                </a>
+                <a class="navbar-brand brand-logo-mini" href="@Url.Action("Index", "Home")">
+                    <img src="~/Assets/assets/images/logo_au_tiles.png" alt="logo" style="width: 40px; height: auto;" />
+                </a>
+            </div>
+            <div class="navbar-menu-wrapper d-flex align-items-stretch">
+                <button class="navbar-toggler navbar-toggler align-self-center" type="button" data-toggle="minimize">
+                    <span class="mdi mdi-menu"></span>
+                </button>
+                <ul class="navbar-nav navbar-nav-right">
+                    <li class="nav-item d-none d-lg-block">
+                        <span class="nav-link" style="color: #da8cff; font-weight: 500;">
+@*                             Welcome, <strong style="color: #ffffff;">@(Session["User"] != null ? ((AU_ERP.Models.User)Session["User"]).name : "Guest")!</strong>
+ *@                        </span>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <div class="dropdown-menu dropdown-menu-end navbar-dropdown preview-list" aria-labelledby="notificationDropdown">
+                            <h6 class="p-3 mb-0">Notifications</h6>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item preview-item">
+                                <div class="preview-thumbnail">
+                                    <div class="preview-icon bg-success">
+                                        <i class="mdi mdi-calendar"></i>
+                                    </div>
+                                </div>
+                                <div class="preview-item-content d-flex align-items-start flex-column justify-content-center">
+                                    <h6 class="preview-subject font-weight-normal mb-1">Event today</h6>
+                                    <p class="text-gray ellipsis mb-0"> Just a reminder that you have an event today </p>
+                                </div>
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item preview-item">
+                                <div class="preview-thumbnail">
+                                    <div class="preview-icon bg-warning">
+                                        <i class="mdi mdi-cog"></i>
+                                    </div>
+                                </div>
+                                <div class="preview-item-content d-flex align-items-start flex-column justify-content-center">
+                                    <h6 class="preview-subject font-weight-normal mb-1">Settings</h6>
+                                    <p class="text-gray ellipsis mb-0"> Update dashboard </p>
+                                </div>
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item preview-item">
+                                <div class="preview-thumbnail">
+                                    <div class="preview-icon bg-info">
+                                        <i class="mdi mdi-link-variant"></i>
+                                    </div>
+                                </div>
+                                <div class="preview-item-content d-flex align-items-start flex-column justify-content-center">
+                                    <h6 class="preview-subject font-weight-normal mb-1">Launch Admin</h6>
+                                    <p class="text-gray ellipsis mb-0"> New admin wow! </p>
+                                </div>
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <h6 class="p-3 mb-0 text-center">See all notifications</h6>
+                        </div>
+                    </li>
+                    <li class="nav-item nav-logout">
+                        <a class="nav-link" href="@Url.Action("Logout", "Users")" style="color: #ffffff; display: flex; align-items: center; font-weight: 600;">
+                            <i class="mdi mdi-power me-2" style="font-size: 1.25rem; color: #ff6b6b;"></i> Logout
+                        </a>
+                    </li>
+                </ul>
+                <button class="navbar-toggler navbar-toggler-right d-lg-none align-self-center" type="button" data-toggle="offcanvas">
+                    <span class="mdi mdi-menu"></span>
+                </button>
+            </div>
+        </nav>
+        <!-- partial -->
+        <div class="container-fluid page-body-wrapper">
+            <!-- partial:partials/_sidebar.html -->
+            <nav class="sidebar sidebar-offcanvas" id="sidebar">
+                <ul class="nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">
+                            <span class="menu-title">Dashboard</span>
+                            <i class="mdi mdi-home menu-icon"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="collapse" href="#masters" aria-expanded="false" aria-controls="masters">
+                            <span class="menu-title">Master Data</span>
+                            <i class="menu-arrow"></i>
+                            <i class="mdi mdi-database menu-icon"></i>
+                        </a>
+                        <div class="collapse" id="masters">
+                            <ul class="nav flex-column sub-menu">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "Materials")">Materials</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "MaterialTypes")">Material Types</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "Material_Groups")">Material Groups</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "UoMs")">UoMs</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "Business_partners")">Business Partners</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "BPGroups")">BP Groups</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "WorkCenters")">Work Centers</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "BOMs")">BOMs</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "ProductionVersions")">Production Versions</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("Index", "Document_Type")">Document Types</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="@Url.Action("create", "Material", new { area = "Main_Controller" })">
+                                        Create Material Master
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+                </ul>
+            </nav>
+            <!-- partial -->
+            <div class="main-panel">
+                <div class="content-wrapper">
+                    <div class="page-header">
+                        <h3 class="page-title">
+                            <span class="page-title-icon bg-gradient-primary text-white me-2">
+                                <i class="mdi mdi-home"></i>
+                            </span> Dashboard
+                        </h3>
+                    </div>
+                    @RenderBody()
+                </div>
+
+                <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered" role="document">
+                        <div class="modal-content" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                            <div class="modal-header border-0 pb-0">
+                                <h5 class="modal-title font-weight-bold" id="deleteModalLabel" style="color: #333;">Confirm Action</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="background:none; border:none; font-size: 1.5rem; color:#666;">&times;</button>
+                            </div>
+                            <div class="modal-body py-4 text-center">
+                                <i class="mdi mdi-delete-variant mb-3 d-inline-block" style="font-size: 3.5rem; color: #ff5e62;"></i>
+                                <h4 style="color: #444; font-weight: 600;">Remove Record?</h4>
+                                <p style="color: #666;">Are you sure you want to delete <strong id="deleteItemName" style="color: #000;"></strong>? This cannot be undone.</p>
+                            </div>
+                            <div class="modal-footer border-0 pt-0 justify-content-center pb-4">
+                                <button type="button" class="btn btn-secondary px-4 py-2" data-bs-dismiss="modal" style="border-radius: 6px; font-weight: 500;">Go Back</button>
+                                <button type="button" class="btn btn-gradient-danger px-4 py-2" id="confirmDeleteBtn" style="border-radius: 6px; font-weight: 500; background: linear-gradient(to right, #ff5e62, #ff9966); border: none; color: white;">Yes, Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- content-wrapper ends -->
+                <!-- partial:partials/_footer.html -->
+                <footer class="footer">
+                    <div class="d-sm-flex justify-content-center justify-content-sm-between">
+                    </div>
+                </footer>
+                <!-- partial -->
+            </div>
+            <!-- main-panel ends -->
+        </div>
+        <!-- page-body-wrapper ends -->
+    </div>
+    <!-- container-scroller -->
+    <!-- plugins:js -->
+    <script src="~/Assets/assets/vendors/js/vendor.bundle.base.js"></script>
+    <!-- endinject -->
+    <!-- Plugin js for this page -->
+    <script src="~/Assets/assets/vendors/chart.js/chart.umd.js"></script>
+    <script src="~/Assets/assets/vendors/bootstrap-datepicker/bootstrap-datepicker.min.js"></script>
+    <!-- End plugin js for this page -->
+    <!-- inject:js -->
+    <script src="~/Assets/assets/js/off-canvas.js"></script>
+    <script src="~/Assets/assets/js/misc.js"></script>
+    <script src="~/Assets/assets/js/settings.js"></script>
+    <script src="~/Assets/assets/js/todolist.js"></script>
+    <script src="~/Assets/assets/js/jquery.cookie.js"></script>
+    <!-- endinject -->
+    <!-- Custom js for this page -->
+    <script src="~/Assets/assets/js/dashboard.js"></script>
+    <script>
+        function confirmDelete(id, name) {
+            document.getElementById('deleteItemName').innerText = name;
+            var deleteEl = document.getElementById('deleteModal');
+            var deleteModal = new bootstrap.Modal(deleteEl);
+            deleteModal.show();
+
+            document.getElementById('confirmDeleteBtn').onclick = function () {
+                document.getElementById('deleteId').value = id;
+                document.getElementById('deleteForm').submit();
+            };
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Apply restrictions explicitly on user input for these class names
+            const applyValidation = (selector, regex) => {
+                document.querySelectorAll(selector).forEach(function (el) {
+                    el.addEventListener('input', function () {
+                        this.value = this.value.replace(regex, '');
+                    });
+                });
+            };
+
+            applyValidation('.val-alpha', /[^a-zA-Z\s]/g);
+            applyValidation('.val-numeric', /[^0-9+.]/g);
+            applyValidation('.val-alphanumeric', /[^a-zA-Z0-9\s]/g);
+        });
+    </script>
+    <!-- End custom js for this page -->
+    @RenderSection("Scripts", required: false)
+</body>
+</html> 
