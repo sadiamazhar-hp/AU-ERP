@@ -36,12 +36,24 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcR2V0TWF0ZXJpYWxMaXN0LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/materialgroup.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcbWF0ZXJpYWxncm91cC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/materialtype.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcbWF0ZXJpYWx0eXBlLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/numberranges.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcbnVtYmVycmFuZ2VzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/sampleofmaterialandrangemapping.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcc2FtcGxlb2ZtYXRlcmlhbGFuZHJhbmdlbWFwcGluZy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Material/unitofmeasure.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWF0ZXJpYWxcdW5pdG9mbWVhc3VyZS5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
 [D:/My Apps/A&U-Project/AU_Project/AU-ERP/AU_ERP/AU_ERP/Views/Shared/Error.cshtml]

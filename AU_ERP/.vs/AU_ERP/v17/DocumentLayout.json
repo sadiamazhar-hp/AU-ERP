@@ -3,36 +3,52 @@
   "WorkspaceRootPath": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\material\\create.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\material\\create.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\shared\\_layout_master.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\shared\\_layout_master.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\models\\creatematerialmaster.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\models\\creatematerialmaster.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\material\\getmateriallist.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\material\\getmateriallist.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\shared\\_layout.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\shared\\_layout.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\controllers\\materialcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\controllers\\materialcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\material\\numberranges.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\material\\numberranges.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\models\\materialtype.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\models\\materialtype.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\models\\creatematerialmaster.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\models\\creatematerialmaster.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\app_data\\dbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\app_data\\dbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\_viewstart.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\_viewstart.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\material\\getmateriallist.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\material\\getmateriallist.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\material\\materialtype.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
       "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\material\\materialtype.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\models\\unitconversion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\models\\unitconversion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\material\\create.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\material\\create.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\app_data\\dbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\app_data\\dbcontext.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\material\\numberranges.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\material\\numberranges.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\models\\unitconversion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\models\\unitconversion.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\controllers\\bpcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -41,14 +57,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\controllers\\purchaseordercontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\controllers\\purchaseordercontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\views\\shared\\_layout_master.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\views\\shared\\_layout_master.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\models\\materialtype.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|solutionrelative:au_erp\\models\\materialtype.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{2DDF5B12-40D2-4FC7-96CE-30B79CC8D80F}|AU_ERP\\AU_ERP.csproj|d:\\my apps\\a\u0026u-project\\au_project\\au-erp\\au_erp\\au_erp\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -66,102 +74,63 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 6,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "numberranges.cshtml",
-              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\numberranges.cshtml",
-              "RelativeDocumentMoniker": "AU_ERP\\Views\\Material\\numberranges.cshtml",
-              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\numberranges.cshtml",
-              "RelativeToolTip": "AU_ERP\\Views\\Material\\numberranges.cshtml",
-              "ViewState": "AgIAAJ8AAAAAAAAAAAAAAKgAAAAIAAAAAAAAAA==",
+              "DocumentIndex": 1,
+              "Title": "_Layout.cshtml",
+              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Shared\\_Layout.cshtml",
+              "RelativeDocumentMoniker": "AU_ERP\\Views\\Shared\\_Layout.cshtml",
+              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Shared\\_Layout.cshtml",
+              "RelativeToolTip": "AU_ERP\\Views\\Shared\\_Layout.cshtml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
-              "WhenOpened": "2026-04-09T22:12:13.729Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 6,
-              "Title": "UnitConversion.cs",
-              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\UnitConversion.cs",
-              "RelativeDocumentMoniker": "AU_ERP\\Models\\UnitConversion.cs",
-              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\UnitConversion.cs",
-              "RelativeToolTip": "AU_ERP\\Models\\UnitConversion.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAMAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-09T18:29:54.063Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "create.cshtml",
-              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\create.cshtml",
-              "RelativeDocumentMoniker": "AU_ERP\\Views\\Material\\create.cshtml",
-              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\create.cshtml",
-              "RelativeToolTip": "AU_ERP\\Views\\Material\\create.cshtml",
-              "ViewState": "AgIAALwAAAAAAAAAAAAlwMsAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
-              "WhenOpened": "2026-04-09T20:31:12.515Z",
+              "WhenOpened": "2026-04-10T18:30:46.308Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 2,
-              "Title": "GetMaterialList.cshtml",
-              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
-              "RelativeDocumentMoniker": "AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
-              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
-              "RelativeToolTip": "AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
-              "ViewState": "AgIAAJsAAAAAAAAAAAAAAKIAAAAhAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
-              "WhenOpened": "2026-04-09T22:05:57.87Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
               "Title": "MaterialController.cs",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Controllers\\MaterialController.cs",
               "RelativeDocumentMoniker": "AU_ERP\\Controllers\\MaterialController.cs",
               "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Controllers\\MaterialController.cs",
               "RelativeToolTip": "AU_ERP\\Controllers\\MaterialController.cs",
-              "ViewState": "AgIAACUAAAAAAAAAAADwvzAAAABEAAAAAAAAAA==",
+              "ViewState": "AgIAAFgAAAAAAAAAAAAmwGkAAAA7AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-04-09T15:25:25.115Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 4,
               "Title": "CreateMaterialMaster.cs",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\CreateMaterialMaster.cs",
               "RelativeDocumentMoniker": "AU_ERP\\Models\\CreateMaterialMaster.cs",
               "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\CreateMaterialMaster.cs",
               "RelativeToolTip": "AU_ERP\\Models\\CreateMaterialMaster.cs",
-              "ViewState": "AgIAAA4AAAAAAAAAAAA9wBgAAAAWAAAAAAAAAA==",
+              "ViewState": "AgIAAAoAAAAAAAAAAAAQwBsAAAA2AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-04-09T20:33:32.416Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 5,
               "Title": "DbContext.cs",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\App_Data\\DbContext.cs",
               "RelativeDocumentMoniker": "AU_ERP\\App_Data\\DbContext.cs",
               "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\App_Data\\DbContext.cs",
               "RelativeToolTip": "AU_ERP\\App_Data\\DbContext.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAuwAgAAAA/AAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAApAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-04-09T16:13:03.454Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 8,
               "Title": "materialtype.cshtml",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\materialtype.cshtml",
               "RelativeDocumentMoniker": "AU_ERP\\Views\\Material\\materialtype.cshtml",
@@ -175,19 +144,82 @@
             {
               "$type": "Document",
               "DocumentIndex": 10,
+              "Title": "numberranges.cshtml",
+              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\numberranges.cshtml",
+              "RelativeDocumentMoniker": "AU_ERP\\Views\\Material\\numberranges.cshtml",
+              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\numberranges.cshtml",
+              "RelativeToolTip": "AU_ERP\\Views\\Material\\numberranges.cshtml",
+              "ViewState": "AgIAAJ8AAAAAAAAAAAAAAKgAAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-04-09T22:12:13.729Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
               "Title": "_Layout_Master.cshtml",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Shared\\_Layout_Master.cshtml",
               "RelativeDocumentMoniker": "AU_ERP\\Views\\Shared\\_Layout_Master.cshtml",
               "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Shared\\_Layout_Master.cshtml",
               "RelativeToolTip": "AU_ERP\\Views\\Shared\\_Layout_Master.cshtml",
-              "ViewState": "AgIAADAAAAAAAAAAAIAwwEIAAAA7AAAAAAAAAA==",
+              "ViewState": "AgIAALgAAAAAAAAAAAAAADYAAAA1AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
               "WhenOpened": "2026-04-09T18:38:14.571Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "MaterialType.cs",
+              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\MaterialType.cs",
+              "RelativeDocumentMoniker": "AU_ERP\\Models\\MaterialType.cs",
+              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\MaterialType.cs",
+              "RelativeToolTip": "AU_ERP\\Models\\MaterialType.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-09T18:30:08.257Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "GetMaterialList.cshtml",
+              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
+              "RelativeDocumentMoniker": "AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
+              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
+              "RelativeToolTip": "AU_ERP\\Views\\Material\\GetMaterialList.cshtml",
+              "ViewState": "AgIAAJsAAAAAAAAAAAAAAKIAAAAhAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-04-09T22:05:57.87Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 9,
+              "Title": "create.cshtml",
+              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\create.cshtml",
+              "RelativeDocumentMoniker": "AU_ERP\\Views\\Material\\create.cshtml",
+              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\Material\\create.cshtml",
+              "RelativeToolTip": "AU_ERP\\Views\\Material\\create.cshtml",
+              "ViewState": "AgIAALUAAAAAAAAAAAAlwMQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-04-09T20:31:12.515Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "UnitConversion.cs",
+              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\UnitConversion.cs",
+              "RelativeDocumentMoniker": "AU_ERP\\Models\\UnitConversion.cs",
+              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\UnitConversion.cs",
+              "RelativeToolTip": "AU_ERP\\Models\\UnitConversion.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-09T18:29:54.063Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
               "Title": "purchaseorderController.cs",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Controllers\\purchaseorderController.cs",
               "RelativeDocumentMoniker": "AU_ERP\\Controllers\\purchaseorderController.cs",
@@ -195,12 +227,24 @@
               "RelativeToolTip": "AU_ERP\\Controllers\\purchaseorderController.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-09T18:45:27.584Z",
+              "WhenOpened": "2026-04-09T18:45:27.584Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "_ViewStart.cshtml",
+              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\_ViewStart.cshtml",
+              "RelativeDocumentMoniker": "AU_ERP\\Views\\_ViewStart.cshtml",
+              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Views\\_ViewStart.cshtml",
+              "RelativeToolTip": "AU_ERP\\Views\\_ViewStart.cshtml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAA0AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2026-04-10T17:52:14.511Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 12,
               "Title": "BPController.cs",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Controllers\\BPController.cs",
               "RelativeDocumentMoniker": "AU_ERP\\Controllers\\BPController.cs",
@@ -208,12 +252,11 @@
               "RelativeToolTip": "AU_ERP\\Controllers\\BPController.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-09T18:45:30.161Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-04-09T18:45:30.161Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 15,
               "Title": "appsettings.json",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\appsettings.json",
               "RelativeDocumentMoniker": "AU_ERP\\appsettings.json",
@@ -221,12 +264,11 @@
               "RelativeToolTip": "AU_ERP\\appsettings.json",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAaAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-04-09T15:20:22.499Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-04-09T15:20:22.499Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 14,
               "Title": "Program.cs",
               "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Program.cs",
               "RelativeDocumentMoniker": "AU_ERP\\Program.cs",
@@ -234,21 +276,7 @@
               "RelativeToolTip": "AU_ERP\\Program.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-09T15:20:18.358Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 11,
-              "Title": "MaterialType.cs",
-              "DocumentMoniker": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\MaterialType.cs",
-              "RelativeDocumentMoniker": "AU_ERP\\Models\\MaterialType.cs",
-              "ToolTip": "D:\\My Apps\\A\u0026U-Project\\AU_Project\\AU-ERP\\AU_ERP\\AU_ERP\\Models\\MaterialType.cs",
-              "RelativeToolTip": "AU_ERP\\Models\\MaterialType.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-04-09T18:30:08.257Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-04-09T15:20:18.358Z"
             }
           ]
         }

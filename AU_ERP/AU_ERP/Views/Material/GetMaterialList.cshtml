@@ -348,7 +348,7 @@
         const statusBox = document.getElementById(statusBoxId);
 
         $.ajax({
-            url: '/Main_Controller/Material/GetNextMaterialNumber',
+            url: '@Url.Action("GetNextMaterialNumber", "Material")',
             type: 'GET',
             data: { materialTypeCode: typeCode },
 

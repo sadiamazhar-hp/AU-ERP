@@ -24,6 +24,8 @@ namespace AU_ERP.Models
         public string? AvailabilityCheckCode { get; set; }
         public string? ValuationClassCode { get; set; }
 
+        //Nav property
+        public MaterialType MaterialType { get; set; }
 
     }
     

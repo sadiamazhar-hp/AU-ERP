@@ -1,3 +1,15 @@
+/* A&U Tiles — global theme palette (use: var(--au-primary), etc.) */
+:root {
+  --au-primary: #6FB3B8;
+  --au-primary-dark: #388087;
+  --au-primary-light: #BADFE7;
+  --au-secondary-light: #C2EDCE;
+  --au-secondary: #6fd18a;
+  --au-secondary-dark: #35b85a;
+  --au-white: #f6f6f2;
+  --au-black: #171717;
+}
+
 html {
   font-size: 14px;
 }

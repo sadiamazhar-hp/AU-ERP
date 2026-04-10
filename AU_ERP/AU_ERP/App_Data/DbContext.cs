@@ -10,5 +10,14 @@ namespace AU_ERP.Models
         public DbSet<MaterialNumberRange> MaterialNumberRanges { get; set; }
         public DbSet<UnitConversion> UnitConversions { get; set; }
         public DbSet<MaterialType> MaterialTypes { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<CreateMaterialMaster>()
+                .HasOne(m => m.MaterialType)
+                .WithMany(t => t.CreateMaterialMasters)
+                .HasForeignKey(m => m.MaterialTypeCode)
+                .OnDelete(DeleteBehavior.Restrict);
+        }
     }
 }

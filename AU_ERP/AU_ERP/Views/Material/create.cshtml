@@ -1,18 +1,12 @@
 ﻿@model AU_ERP.Models.CreateMaterialMaster
 
 @{
-    Layout = "~/Views/Shared/_Layout_Master.cshtml";
+    ViewData["Title"] = "SAP MM01 – Create Material";
 }
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAP MM01 Simulator</title>
+@section Styles {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
     <style>
         :root {
             --sap-bg: #cedbe9;
@@ -141,19 +135,18 @@
             min-height: 25px;
         }
     </style>
-</head>
-<body>
+}
 
-    <div class="sap-window">
+<div class="sap-window">
         <div class="sap-header">🖥️ SAP MM01 – Create Material</div>
 
         <div class="top-nav-bar">
             <ul class="nav nav-pills">
                 <li class="nav-item">
-                    <a class="nav-link active" href="@Url.Action("create", "Material", new { area = "Main_Controller" })" style="border-radius: 4px 4px 0 0; font-weight: bold;">Create</a>
+                    <a class="nav-link active" href="@Url.Action("Create", "Material")" style="border-radius: 4px 4px 0 0; font-weight: bold;">Create</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="@Url.Action("GetMaterialList", "Material", new { area = "Main_Controller" })">List</a>
+                    <a class="nav-link" href="@Url.Action("GetMaterialList", "Material")">List</a>
                 </li>
                 <li class="nav-item"><a class="nav-link disabled" href="#">Update</a></li>
                 <li class="nav-item"><a class="nav-link disabled" href="#">Delete</a></li>
@@ -316,11 +309,11 @@
 
             <div class="status-bar" id="statusBar">Ready</div>
         }
-    </div>
+</div>
 
+@section Scripts {
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
     <script>
     let uomIndex = 0;
 
@@ -358,8 +351,7 @@
         if (statusBox) statusBox.innerText = "⏳ Fetching next material number...";
 
         $.ajax({
-            // Path updated to include the Main_Controller folder/area
-          url: '@Url.Action("GetNextMaterialNumber", "Material", new { area = "Main_Controller" })',
+            url: '@Url.Action("GetNextMaterialNumber", "Material")',
             type: 'GET',
             data: { materialTypeCode: typeCode },
             success: function (response) {
@@ -424,5 +416,4 @@
         }
     });
     </script>
-</body>
-</html>
+}

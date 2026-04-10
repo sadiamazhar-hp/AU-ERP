@@ -74,13 +74,14 @@ namespace AU_ERP.Main_Controller
                     }
                 }
 
-                // Update range
-                var range = await _context.MaterialNumberRanges
-                    .FirstOrDefaultAsync(x => x.MaterialTypeCode == material.MrpTypeCode);
-
-                if (range != null)
+                // Update range (keyed by material type, not MRP type)
+                if (!string.IsNullOrEmpty(material.MaterialTypeCode))
                 {
-                    range.CurrentNumber = material.MaterialNumber;
+                    var range = await _context.MaterialNumberRanges
+                        .FirstOrDefaultAsync(x => x.MaterialTypeCode == material.MaterialTypeCode);
+
+                    if (range != null)
+                        range.CurrentNumber = material.MaterialNumber;
                 }
 
                 await _context.SaveChangesAsync();
@@ -110,10 +111,10 @@ namespace AU_ERP.Main_Controller
                     .FirstOrDefaultAsync(x => x.MaterialTypeCode == materialTypeCode);
 
                 if (range == null)
-                    return Json(new { success = false, message = "No range found" });
+                    return Json(new { success = false, message = "No number range defined for this type." });
 
                 long fromNum = long.Parse(range.FromNumber);
-                long nextNumber = string.IsNullOrEmpty(range.CurrentNumber)
+                long nextNumber = string.IsNullOrEmpty(range.CurrentNumber) || range.CurrentNumber == "0"
                     ? fromNum
                     : long.Parse(range.CurrentNumber) + 1;
 
@@ -121,7 +122,7 @@ namespace AU_ERP.Main_Controller
                 {
                     long toNum = long.Parse(range.ToNumber);
                     if (nextNumber > toNum)
-                        return Json(new { success = false, message = "Range exhausted" });
+                        return Json(new { success = false, message = "The number range for this material type has been exhausted!" });
                 }
 
                 return Json(new { success = true, nextNumber = nextNumber.ToString() });
@@ -153,37 +154,50 @@ namespace AU_ERP.Main_Controller
             if (ranges == null || ranges.Count == 0)
                 return RedirectToAction("NumberRanges");
 
-            foreach (var item in ranges)
+            try
             {
-                if (string.IsNullOrEmpty(item.MaterialTypeCode)) continue;
-
-                var existing = await _context.MaterialNumberRanges
-                    .FirstOrDefaultAsync(x => x.MaterialTypeCode == item.MaterialTypeCode);
-
-                if (existing != null)
+                foreach (var item in ranges)
                 {
-                    existing.FromNumber = item.FromNumber;
-                    existing.ToNumber = item.ToNumber;
-                    existing.CurrentNumber = item.CurrentNumber;
-                    existing.IsExternal = item.IsExternal;
-                }
-                else
-                {
-                    int count = await _context.MaterialNumberRanges.CountAsync() + 1;
-                    item.RangeID = count.ToString("D2");
+                    if (string.IsNullOrEmpty(item.MaterialTypeCode)) continue;
 
-                    while (await _context.MaterialNumberRanges.AnyAsync(x => x.RangeID == item.RangeID))
+                    var existing = await _context.MaterialNumberRanges
+                        .FirstOrDefaultAsync(x => x.MaterialTypeCode == item.MaterialTypeCode);
+
+                    if (existing != null)
                     {
-                        count++;
-                        item.RangeID = count.ToString("D2");
+                        existing.FromNumber = item.FromNumber;
+                        existing.ToNumber = item.ToNumber;
+                        existing.CurrentNumber = item.CurrentNumber;
+                        existing.IsExternal = item.IsExternal;
                     }
+                    else
+                    {
+                        int count = await _context.MaterialNumberRanges.CountAsync() + 1;
+                        item.RangeID = count.ToString("D2");
 
-                    await _context.MaterialNumberRanges.AddAsync(item);
+                        while (await _context.MaterialNumberRanges.AnyAsync(x => x.RangeID == item.RangeID))
+                        {
+                            count++;
+                            item.RangeID = count.ToString("D2");
+                        }
+
+                        await _context.MaterialNumberRanges.AddAsync(item);
+                    }
                 }
+
+                await _context.SaveChangesAsync();
+                TempData["Success"] = "Data Saved Successfully!";
+            }
+            catch (DbUpdateException ex)
+            {
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                TempData["Error"] = $"Save failed: {msg}";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = "Save failed: " + (ex.InnerException?.Message ?? ex.Message);
             }
 
-            await _context.SaveChangesAsync();
-            TempData["Success"] = "Saved successfully!";
             return RedirectToAction("NumberRanges");
         }
 
@@ -258,6 +272,74 @@ namespace AU_ERP.Main_Controller
 
             return Json(new { success = true });
         }
+
+        [HttpGet]
+        public async Task<IActionResult> MaterialType()
+        {
+            var list = await _context.MaterialTypes.ToListAsync();
+            return View("materialtype", list);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MaterialType(List<MaterialType>? materialTypes)
+        {
+            if (materialTypes == null)
+                return RedirectToAction(nameof(MaterialType));
+
+            try
+            {
+                foreach (var item in materialTypes)
+                {
+                    if (string.IsNullOrEmpty(item.MaterialTypeCode)) continue;
+
+                    var existing = await _context.MaterialTypes.FindAsync(item.MaterialTypeCode);
+                    if (existing != null)
+                    {
+                        existing.Description = item.Description;
+                        existing.FieldReference = item.FieldReference;
+                    }
+                    else
+                    {
+                        await _context.MaterialTypes.AddAsync(item);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(MaterialType));
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", "Save failed: " + ex.Message);
+                return View("materialtype", materialTypes);
+            }
+        }
+
+        [HttpPost]
+        public async Task<JsonResult> DeleteMaterialType(string id)
+        {
+            try
+            {
+                var item = await _context.MaterialTypes.FindAsync(id);
+                if (item == null)
+                    return Json(new { success = false, message = "Record not found" });
+
+                _context.MaterialTypes.Remove(item);
+                await _context.SaveChangesAsync();
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        public IActionResult MaterialGroup() => View("materialgroup");
+
+        public IActionResult UnitOfMeasure() => View("unitofmeasure");
+
+        public IActionResult SampleOfMaterialAndRangeMapping() => View("sampleofmaterialandrangemapping");
+
         //public async Task<IActionResult> GetMaterialList()
         //{
         //    var materials = await _context.CreateMaterialMaster

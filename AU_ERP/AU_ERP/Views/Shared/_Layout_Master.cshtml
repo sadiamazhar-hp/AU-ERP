@@ -19,6 +19,7 @@
     <!-- endinject -->
     <!-- Layout styles -->
     <link rel="stylesheet" href="~/Assets/assets/css/style.css">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <!-- End layout styles -->
     <link rel="shortcut icon" href="~/Assets/assets/images/favicon.png" />
     <style>
@@ -46,6 +47,7 @@
             color: #e0e0e0 !important;
         }
     </style>
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
     <div class="container-scroller">
@@ -143,10 +145,10 @@
                         <div class="collapse" id="masters">
                             <ul class="nav flex-column sub-menu">
                                 <li class="nav-item">
-                                    <a class="nav-link" href="@Url.Action("Index", "Materials")">Materials</a>
+                                    <a class="nav-link" href="@Url.Action("GetMaterialList", "Material")">Materials</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="@Url.Action("Index", "MaterialTypes")">Material Types</a>
+                                    <a class="nav-link" href="@Url.Action("MaterialType", "Material")">Material Types</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="@Url.Action("Index", "Material_Groups")">Material Groups</a>
@@ -173,7 +175,7 @@
                                     <a class="nav-link" href="@Url.Action("Index", "Document_Type")">Document Types</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="@Url.Action("create", "Material", new { area = "Main_Controller" })">
+                                    <a class="nav-link" href="@Url.Action("Create", "Material")">
                                         Create Material Master
                                     </a>
                                 </li>
