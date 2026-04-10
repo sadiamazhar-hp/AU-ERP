@@ -138,10 +138,10 @@ D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\staticwe
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\staticwebassets.build.json.cache
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\staticwebassets.development.json
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\staticwebassets.build.endpoints.json
-D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\AU_ERP.csproj.Up2Date
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\AU_ERP.dll
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\refint\AU_ERP.dll
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\AU_ERP.pdb
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\AU_ERP.genruntimeconfig.cache
 D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\ref\AU_ERP.dll
+D:\My Apps\A&U-Project\AU_Project\AU-ERP\AU_ERP\AU_ERP\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt

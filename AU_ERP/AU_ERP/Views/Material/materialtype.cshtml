@@ -1,9 +1,8 @@
 ﻿@model List<AU_ERP.Models.MaterialType>
-
 @{
-    ViewData["Title"] = "Materials — Material Type";
+    Layout = "~/Views/Shared/_LayoutConfiguration.cshtml";
+    ViewData["Title"] = "Configuration — Material Type";
     ViewBag.Title = "Material Types";
-    // Prevents NullReferenceException if Controller sends a null model
     var safeModel = Model ?? new List<AU_ERP.Models.MaterialType>();
 }
 
@@ -13,7 +12,7 @@
         @Html.AntiForgeryToken()
 
         <div class="sap-toolbar">
-            <div class="view-title">Change View "Material Types": Overview</div>
+            @*<div class="view-title">Change View "Material Types": Overview</div>*@
             <div class="d-flex">
                 <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">✏️ Edit</button>
                 <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>📄 New Entries</button>
@@ -76,6 +75,9 @@
         padding: 12px;
         border-bottom: 2px solid var(--sap-border);
         background: #fff;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
     }
 
     .btn-sap {

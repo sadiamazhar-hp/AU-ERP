@@ -1,0 +1,473 @@
+﻿@* Legacy external assembly: @model AUTiles.Models.BusinessPartnerMasterSample *@
+@model AUTiles.Models.BusinessPartnerMasterSample
+@{
+    ViewBag.Title = "Create";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise ERP - BP Master v3.0</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        :root {
+            --sap-navy: #354a5f;
+            --sap-blue: #0854a0;
+            --sap-border: #d9d9d9;
+            --sap-grey: #6a6d70;
+            --sap-mandatory: #b00;
+        }
+
+        body {
+            background-color: #edeff0;
+            font-family: "72", Arial, sans-serif;
+            font-size: 13px;
+            margin: 0;
+            padding: 10px;
+        }
+
+        .sap-window {
+            background: #fff;
+            border: 1px solid var(--sap-border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .sap-header {
+            background: var(--sap-navy);
+            color: #fff;
+            padding: 10px 15px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .top-nav-bar {
+            background: #fff;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-pills .nav-link {
+            font-size: 13px;
+            color: var(--sap-grey);
+            padding: 6px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+
+            .nav-pills .nav-link.active {
+                background: #e8f0f8 !important;
+                color: var(--sap-blue) !important;
+                border: 1px solid var(--sap-blue) !important;
+            }
+
+        .search-container {
+            position: relative;
+            width: 320px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 6px 12px;
+            border: 1px solid var(--sap-border);
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .itab-bar {
+            background: #f7f7f7;
+            border-bottom: 1px solid var(--sap-border);
+            display: flex;
+            padding: 0 15px;
+            overflow-x: auto;
+        }
+
+        .itab-btn {
+            padding: 12px 18px;
+            border: none;
+            background: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            color: var(--sap-grey);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+            .itab-btn.active {
+                border-bottom-color: var(--sap-blue);
+                color: var(--sap-blue);
+                font-weight: bold;
+            }
+
+        .content-area {
+            padding: 20px;
+            min-height: 520px;
+        }
+
+        .section-box {
+            border: 1px solid var(--sap-border);
+            border-radius: 4px;
+            padding: 25px 20px 15px 20px;
+            margin-bottom: 25px;
+            position: relative;
+            background: #fff;
+        }
+
+            .section-box h3 {
+                position: absolute;
+                top: -10px;
+                left: 15px;
+                background: #fff;
+                padding: 0 10px;
+                font-size: 11px;
+                font-weight: bold;
+                color: var(--sap-blue);
+                text-transform: uppercase;
+            }
+
+        .field-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+            .field-row label {
+                width: 160px;
+                font-weight: 500;
+                color: #333;
+            }
+
+            .field-row input, .field-row select {
+                flex: 1;
+                padding: 5px 10px;
+                border: 1px solid var(--sap-border);
+                border-radius: 2px;
+                outline: none;
+            }
+
+        .mandatory-bar {
+            width: 4px;
+            height: 26px;
+            background-color: var(--sap-mandatory);
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .sap-btn {
+            padding: 5px 15px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .sap-btn-primary {
+            background: var(--sap-blue);
+            color: white;
+            border: none;
+        }
+
+        .sap-btn-danger {
+            color: #b00;
+            border-color: #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sap-window">
+        <div class="sap-header">Maintain Business Partner Master</div>
+
+        <div class="top-nav-bar">
+            <ul class="nav nav-pills">
+                <li class="nav-item"><a class="nav-link active" id="btn-create" onclick="setView('create')">Create</a></li>
+                <li class="nav-item"><a class="nav-link" id="btn-list" onclick="setView('list')">List</a></li>
+            </ul>
+            <div class="search-container hidden" id="searchWrapper">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search BP..." onkeyup="filterData()">
+            </div>
+        </div>
+
+        <div id="view-create">
+            <div class="p-2 border-bottom bg-light">
+                <button class="sap-btn sap-btn-primary" onclick="persistenceAction('save')">💾 Save Partner</button>
+            </div>
+
+
+            <div id="masterLayout">
+                @Html.HiddenFor(m => m.BPID)
+
+                <div class="p-3 border-bottom d-flex flex-wrap gap-4 bg-white align-items-center">
+                    <div class="field-row mb-0">
+                        <div class="mandatory-bar"></div>
+                        <label style="width: 50px;">Role</label>
+                        @Html.DropDownListFor(m => m.BPRole,
+     (SelectList)ViewBag.RoleList,
+     "-- Select BP Role --",
+     new { @class = "f-role", onchange = "handleRoleUI(this)" })
+                    </div>
+                    <div class="field-row mb-0">
+                        <div class="mandatory-bar"></div>
+                        <label style="width: 50px;">Type</label>
+                        @* Using GroupList from ViewBag for dynamic data *@
+                        @Html.DropDownListFor(m => m.BPType,
+                            (SelectList)ViewBag.TypeList,
+                            "-- Select Type --",
+                            new { @class = "f-type", style = "width: 120px;" })
+                    </div>
+
+                    <div class="field-row mb-0">
+                        <div class="mandatory-bar"></div>
+                        <label style="width: 70px;">Grouping</label>
+                        @* Using GroupList from ViewBag for dynamic data *@
+                        @Html.DropDownListFor(m => m.BPGrouping,
+                            (SelectList)ViewBag.GroupList,
+                            "-- Select Grouping --",
+                            new { @class = "f-group", style = "width: 130px;" })
+                    </div>
+                </div>
+
+                <div class="itab-bar">
+                    <button type="button" class="itab-btn active" onclick="switchTab(this, 'address')">Address</button>
+                    <button type="button" class="itab-btn" onclick="switchTab(this, 'comm')">Communication</button>
+                    <button type="button" class="itab-btn" onclick="switchTab(this, 'company')">Company Code</button>
+                    <button type="button" class="itab-btn hidden tab-sales-btn" onclick="switchTab(this, 'sales')">Sales Area</button>
+                    <button type="button" class="itab-btn hidden tab-purch-btn" onclick="switchTab(this, 'purch')">Purchasing</button>
+                </div>
+
+                <div class="content-area">
+                    <div class="tab-pane tab-address">
+                        <div class="section-box">
+                            <h3>General Data</h3>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>Name</label>
+                                @Html.TextBoxFor(m => m.FullName, new { @class = "f-name" })
+                            </div>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>Street / House No.</label>
+                                @Html.TextBoxFor(m => m.Street, new { @class = "f-street", style = "flex:0.7; margin-right:5px;" })
+                                @Html.TextBoxFor(m => m.HouseNo, new { @class = "f-no", style = "flex:0.3;" })
+                            </div>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>City / Postal Code</label>
+                                @Html.TextBoxFor(m => m.City, new { @class = "f-city", style = "flex:0.7; margin-right:5px;" })
+                                @Html.TextBoxFor(m => m.PostalCode, new { @class = "f-zip", style = "flex:0.3;" })
+                            </div>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>Country / Region</label>
+                                @Html.DropDownListFor(m => m.Country, new SelectList(new[] { "Pakistan", "USA" }), new { @class = "f-country", style = "flex:0.5; margin-right:5px;" })
+                                @Html.TextBoxFor(m => m.Region, new { @class = "f-region", placeholder = "Region", style = "flex:0.5;" })
+                            </div>
+                            <div class="field-row">
+                                <label>Language</label>
+                                @Html.DropDownListFor(m => m.Language, new SelectList(new[] { "English", "Urdu" }), new { @class = "f-lang" })
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane hidden tab-comm">
+                        <div class="section-box">
+                            <h3>Communication Details</h3>
+                            <div class="field-row"><label>Telephone</label> @Html.TextBoxFor(m => m.Telephone, new { @class = "f-tel" })</div>
+                            <div class="field-row"><label>Mobile</label> @Html.TextBoxFor(m => m.Mobile, new { @class = "f-mob" })</div>
+                            <div class="field-row"><label>Email</label> @Html.TextBoxFor(m => m.Email, new { @class = "f-email", type = "email" })</div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane hidden tab-company">
+                        <div class="section-box">
+                            <h3>Account Management</h3>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>Recon Account</label>
+                                @Html.TextBoxFor(m => m.ReconAccount, new { @class = "f-recon", placeholder = "e.g. 140000" })
+                            </div>
+                        </div>
+                        <div class="section-box">
+                            <h3>Payment Transactions</h3>
+                            <div class="field-row">
+                                <label>Payment Terms</label>
+                                @Html.DropDownListFor(m => m.PaymentTerms, new SelectList(new[] { "0001", "0002" }), new { @class = "f-payterms" })
+                            </div>
+                            <div class="field-row">
+                                <label>Payment Methods</label>
+                                @Html.TextBoxFor(m => m.PaymentMethods, new { @class = "f-paymeth", placeholder = "C = Cash, T = Transfer" })
+                            </div>
+                        </div>
+                        <div class="section-box">
+                            <h3>Bank Details</h3>
+                            <div class="field-row"><label>Bank Name</label> @Html.TextBoxFor(m => m.BankName, new { @class = "f-bankname" })</div>
+                            <div class="field-row"><label>Account Number</label> @Html.TextBoxFor(m => m.AccountNumber, new { @class = "f-accno" })</div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane hidden tab-sales">
+                        <div class="section-box">
+                            <h3>Sales</h3>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>Dist. Channel</label>
+                                @Html.TextBoxFor(m => m.DistChannel, new { @class = "f-dist" })
+                            </div>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>Sales Schema</label>
+                                @Html.TextBoxFor(m => m.SalesSchema, new { @class = "f-sales-schema" })
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane hidden tab-purch">
+                        <div class="section-box">
+                            <h3>Purchasing</h3>
+                            <div class="field-row">
+                                <div class="mandatory-bar"></div>
+                                <label>Purch. Schema</label>
+                                @Html.TextBoxFor(m => m.PurchSchema, new { @class = "f-purch-schema" })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="view-list" class="hidden p-3">
+                <table class="table table-sm table-hover border bg-white">
+                    <thead class="table-light">
+                        <tr><th>ID</th><th>Name</th><th>Group</th><th>Role</th><th>City</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="listBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="modal fade" id="editModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="sap-header d-flex justify-content-between">
+                        <span>Update Business Partner</span>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0" id="modalContainer"></div>
+                    <div class="modal-footer">
+                        <button class="sap-btn" data-bs-dismiss="modal">Cancel</button>
+                        <button class="sap-btn sap-btn-primary" onclick="persistenceAction('update')">Update</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script>
+        let db = JSON.parse(localStorage.getItem('erp_bp_db_v3')) || [];
+        let editId = null;
+
+        function setView(mode) {
+            document.getElementById('view-create').classList.toggle('hidden', mode !== 'create');
+            document.getElementById('view-list').classList.toggle('hidden', mode !== 'list');
+            document.getElementById('searchWrapper').classList.toggle('hidden', mode !== 'list');
+            document.getElementById('btn-create').classList.toggle('active', mode === 'create');
+            document.getElementById('btn-list').classList.toggle('active', mode === 'list');
+            if (mode === 'list') renderList(db);
+        }
+
+        function handleRoleUI(select) {
+            const root = select.closest('#view-create, #modalContainer');
+            const role = select.value;
+            root.querySelector('.tab-sales-btn').classList.toggle('hidden', role !== 'FLCU01');
+            root.querySelector('.tab-purch-btn').classList.toggle('hidden', role !== 'FLVN01');
+        }
+
+        function switchTab(btn, tab) {
+            const root = btn.closest('#view-create, #modalContainer');
+            root.querySelectorAll('.itab-btn').forEach(b => b.classList.remove('active'));
+            root.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+            btn.classList.add('active');
+            root.querySelector('.tab-' + tab).classList.remove('hidden');
+        }
+
+        function filterData() {
+            const val = document.getElementById('searchInput').value.toLowerCase();
+            renderList(db.filter(i => i.name.toLowerCase().includes(val) || i.id.toLowerCase().includes(val)));
+        }
+
+        function persistenceAction(type) {
+            const scope = type === 'save' ? document.getElementById('view-create') : document.getElementById('editModal');
+            const name = scope.querySelector('.f-name').value;
+            if (!name) { Swal.fire('Error', 'Name is required', 'error'); return; }
+
+            const data = {
+                id: type === 'save' ? 'BP-' + (1000 + db.length) : editId,
+                role: scope.querySelector('.f-role').value,
+                type: scope.querySelector('.f-type').value,
+                group: scope.querySelector('.f-group').value,
+                name: name,
+                street: scope.querySelector('.f-street').value,
+                no: scope.querySelector('.f-no').value,
+                city: scope.querySelector('.f-city').value,
+                zip: scope.querySelector('.f-zip').value,
+                country: scope.querySelector('.f-country').value,
+                region: scope.querySelector('.f-region').value,
+                tel: scope.querySelector('.f-tel').value,
+                mob: scope.querySelector('.f-mob').value,
+                email: scope.querySelector('.f-email').value,
+                recon: scope.querySelector('.f-recon').value,
+                paymeth: scope.querySelector('.f-paymeth').value,
+                bankname: scope.querySelector('.f-bankname').value,
+                accno: scope.querySelector('.f-accno').value,
+                dist: scope.querySelector('.f-dist').value,
+                salesSchema: scope.querySelector('.f-sales-schema')?.value || "",
+                purchSchema: scope.querySelector('.f-purch-schema')?.value || ""
+            };
+
+            if (type === 'save') db.push(data);
+            else db[db.findIndex(x => x.id === editId)] = data;
+
+            localStorage.setItem('erp_bp_db_v3', JSON.stringify(db));
+            Swal.fire('Success', type === 'save' ? 'Partner Created' : 'Partner Updated', 'success');
+            if (type === 'update') bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+            renderList(db);
+        }
+
+        function renderList(data) {
+            document.getElementById('listBody').innerHTML = data.map(i => `
+                <tr><td>${i.id}</td><td>${i.name}</td><td>${i.group}</td><td>${i.role}</td><td>${i.city}</td>
+                <td><button class="sap-btn btn-sm" onclick="openEdit('${i.id}')">Edit</button></td></tr>`).join('');
+        }
+
+        function openEdit(id) {
+            editId = id;
+            const item = db.find(x => x.id === id);
+            const container = document.getElementById('modalContainer');
+            container.innerHTML = document.getElementById('masterLayout').innerHTML;
+
+            // Auto-fill all fields
+            container.querySelector('.f-role').value = item.role;
+            container.querySelector('.f-name').value = item.name;
+            container.querySelector('.f-street').value = item.street;
+            container.querySelector('.f-city').value = item.city;
+            container.querySelector('.f-email').value = item.email;
+            container.querySelector('.f-recon').value = item.recon;
+
+            handleRoleUI(container.querySelector('.f-role'));
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+        </script>
+</body>
+</html>

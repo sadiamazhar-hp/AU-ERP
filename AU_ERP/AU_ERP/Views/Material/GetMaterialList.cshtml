@@ -1,7 +1,8 @@
 ﻿@model List<AU_ERP.Models.CreateMaterialMaster>
+@using Microsoft.AspNetCore.Mvc.ViewFeatures
 
 @{
-    ViewData["Title"] = "Materials — List";
+    ViewData["Title"] = "Materials";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.CreateMaterialMaster>();
 }
@@ -44,6 +45,7 @@
         border: 1px solid var(--au-primary-dark, #388087);
         border-radius: 0.25rem;
         text-decoration: none;
+        cursor: pointer;
     }
 
     .sap-actions .btn-add-classic:hover {
@@ -97,6 +99,7 @@
         background: #fff;
     }
 
+    /* Sel column removed — keep styles commented for reference
     .col-sel {
         width: 35px;
         background: #f0f0f0;
@@ -115,49 +118,92 @@
     .table-sap tr.row-selected .sap-select {
         background-color: transparent;
     }
+    */
+
+    .table-sap th.col-no,
+    .table-sap td.col-no {
+        padding-left: 14px;
+        padding-right: 8px;
+    }
+
+    .table-sap td.col-action {
+        padding: 4px 8px;
+        vertical-align: middle;
+        text-align: center;
+    }
 
     .sap-select:disabled {
         background: var(--sap-readonly);
         color: #666;
         cursor: not-allowed;
     }
+
+    .materials-module-tabstrip {
+        border-bottom: 1px solid var(--sap-border);
+        padding: 0 0.25rem;
+        background: #fff;
+    }
+
+    .materials-module-tabstrip .nav-link {
+        color: var(--au-primary-dark, #388087);
+        font-weight: 500;
+        border: 1px solid transparent;
+        border-radius: 0.35rem 0.35rem 0 0;
+    }
+
+    .materials-module-tabstrip .nav-link:hover {
+        border-color: rgba(56, 128, 135, 0.25);
+    }
+
+    .materials-module-tabstrip .nav-link.active {
+        color: var(--au-black, #171717);
+        background: #fff;
+        border-color: var(--sap-border);
+        border-bottom-color: #fff;
+        margin-bottom: -1px;
+    }
+
+    .materials-module-tab-content {
+        border: 1px solid var(--sap-border);
+        border-top: none;
+        background: #fff;
+    }
 </style>
-<div class="sap-window" id="app">
+
+<div class="materials-module">
+    <ul class="nav nav-tabs materials-module-tabstrip" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="materialsTabCreateBtn" data-bs-toggle="tab" data-bs-target="#materialsPaneCreate" type="button" role="tab" aria-controls="materialsPaneCreate" aria-selected="true">Create</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="materialsTabListBtn" data-bs-toggle="tab" data-bs-target="#materialsPaneList" type="button" role="tab" aria-controls="materialsPaneList" aria-selected="false">List</button>
+        </li>
+    </ul>
+    <div class="tab-content materials-module-tab-content">
+        <div class="tab-pane fade show active p-2 p-md-3" id="materialsPaneCreate" role="tabpanel" aria-labelledby="materialsTabCreateBtn">
+            @await Html.PartialAsync("CreateV2", new AU_ERP.Models.CreateMaterialMaster(), new ViewDataDictionary(ViewData)
+            {
+                ["CreateV2Embedded"] = true,
+                ["CreateV2IdSuffix"] = ""
+            })
+        </div>
+        <div class="tab-pane fade" id="materialsPaneList" role="tabpanel" aria-labelledby="materialsTabListBtn">
+            <div class="sap-window" id="app">
 
     <form id="materialForm" method="post" action="@Url.Action("GetMaterialList", "Material")">
 
-        <!-- TOP TOOLBAR -->
-        <div class="sap-toolbar">
-
-            <div class="sap-actions">
-                <!--
-                <button type="button" class="btn-sap" onclick="setMode(true)">✏️ Edit</button>
-                <button type="button" class="btn-sap" onclick="addNewRow()" disabled id="btnNew">📄 New</button>
-                <button type="submit" class="btn-sap" onclick="saveAll()" disabled id="btnSave">
-                    💾 Save
-                </button>
-                <button type="button" class="btn-sap text-danger" onclick="handleDelete()" disabled id="btnDelete">🗑️ Delete</button>
-                -->
-                <a class="btn-add-classic" asp-controller="Material" asp-action="Create">
-                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                    Add
-                </a>
-            </div>
-
-        </div>
-
-        <!-- CENTER TABLE WRAPPER -->
         <div class="table-wrapper">
 
             <table class="table-sap">
                 <thead>
                     <tr>
-                        <th style="width:40px;">Sel</th>
-                        <th>No</th>
+                        @*<th style="width:40px;">Sel</th>*@
+                        <th class="col-no">No</th>
                         <th>Material Number</th>
                         <th>Description</th>
                         <th>Type Code</th>
                         <th>Base Unit</th>
+                        <th style="width:72px;">Action</th>
                     </tr>
                 </thead>
 
@@ -169,14 +215,14 @@
 
                     @foreach (var item in safeModel)
                     {
-                        <tr>
-                            <td class="col-sel" onclick="selectRow(this)">
+                        <tr data-material-number="@item.MaterialNumber">
+                            @*<td class="col-sel" onclick="selectRow(this)">
                                 <input type="hidden" name="[@i].MaterialNumber"
                                        value="@item.MaterialNumber"
                                        class="row-id"/>
-                            </td>
+                            </td>*@
 
-                            <td>@(i + 1)</td>
+                            <td class="col-no">@(i + 1)</td>
 
                             <td>
                                 <input name="[@i].MaterialNumber"
@@ -192,12 +238,11 @@
                                        readonly />
                             </td>
 
-                            <td>
-                                <select name="[@i].MaterialTypeCode"
+                            <td class="align-middle ps-2 pe-2">
+                                @*<select name="[@i].MaterialTypeCode"
                                         class="sap-input sap-select"
                                         disabled
                                         onchange="onTypeChange(this)">
-                             
                                     @foreach (var opt in mTypes)
                                     {
                                         if (opt.Value == item.MaterialTypeCode)
@@ -209,7 +254,9 @@
                                             <option value="@opt.Value">@opt.Text</option>
                                         }
                                     }
-                                </select>
+                                </select>*@
+                                @(item.MaterialTypeCode ?? "—")
+                                <input type="hidden" name="[@i].MaterialTypeCode" value="@item.MaterialTypeCode" />
                             </td>
 
                             <td>
@@ -217,6 +264,17 @@
                                        class="sap-input"
                                        value="@item.BaseUnitCode"
                                        readonly />
+                            </td>
+                            <td class="col-action">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-link text-secondary p-0" type="button" id="rowActions@(i)" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
+                                        <i class="bi bi-three-dots-vertical fs-5"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="rowActions@(i)">
+                                        <li><button type="button" class="dropdown-item" data-mat="@item.MaterialNumber" onclick="window.openMaterialEditV2(this.getAttribute('data-mat'))">Edit</button></li>
+                                        <li><button type="button" class="dropdown-item text-danger" data-mat="@item.MaterialNumber" onclick="deleteMaterialFromList(this.getAttribute('data-mat'))">Delete</button></li>
+                                    </ul>
+                                </div>
                             </td>
                         </tr>
                         i++;
@@ -228,11 +286,139 @@
         </div>
 
     </form>
+            </div>
+        </div>
+    </div>
 </div>
+
+<div class="modal" id="materialCreateV2Modal" tabindex="-1" aria-labelledby="materialCreateV2ModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        @await Html.PartialAsync("CreateV2", new AU_ERP.Models.CreateMaterialMaster(), new ViewDataDictionary(ViewData)
+        {
+            ["CreateV2Embedded"] = false,
+            ["CreateV2IdSuffix"] = "modal"
+        })
+    </div>
+</div>
+
 <script>
        let isEditMode = false;
     let selectedRow = null;
     let rowCount = @safeModel.Count;
+
+    window.openMaterialEditV2 = function (materialNumber) {
+        if (!materialNumber) return;
+        var url = '@Url.Action("GetMaterialForEditV2", "Material")' + "?id=" + encodeURIComponent(materialNumber);
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    alert(data.message || "Could not load material.");
+                    return;
+                }
+                var form = document.getElementById("createMaterialV2Form-modal");
+                if (!form) {
+                    alert("Material editor is not available.");
+                    return;
+                }
+                var m = data.material;
+                var conversions = data.conversions || [];
+                function pick(obj, camel, pascal) {
+                    if (obj[camel] !== undefined && obj[camel] !== null) return obj[camel];
+                    if (obj[pascal] !== undefined && obj[pascal] !== null) return obj[pascal];
+                    return "";
+                }
+                function setVal(name, value) {
+                    var el = form.querySelector('[name="' + name + '"]');
+                    if (!el) return;
+                    el.value = value != null && value !== undefined ? value : "";
+                }
+                function escapeAttr(s) {
+                    if (s == null || s === undefined) return "";
+                    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+                }
+                setVal("MaterialNumber", pick(m, "materialNumber", "MaterialNumber"));
+                setVal("IndustrySectorCode", pick(m, "industrySectorCode", "IndustrySectorCode"));
+                setVal("MaterialTypeCode", pick(m, "materialTypeCode", "MaterialTypeCode"));
+                setVal("Description", pick(m, "description", "Description"));
+                setVal("BaseUnitCode", pick(m, "baseUnitCode", "BaseUnitCode"));
+                setVal("MaterialGroupCode", pick(m, "materialGroupCode", "MaterialGroupCode"));
+                setVal("EAN", pick(m, "ean", "EAN"));
+                setVal("DeliveringPlantCode", pick(m, "deliveringPlantCode", "DeliveringPlantCode"));
+                setVal("ItemCategoryGroup", pick(m, "itemCategoryGroup", "ItemCategoryGroup"));
+                setVal("PurchasingGroupCode", pick(m, "purchasingGroupCode", "PurchasingGroupCode"));
+                var gr = pick(m, "grProcessingTime", "GrProcessingTime");
+                setVal("GrProcessingTime", gr !== "" && gr != null ? gr : "");
+                setVal("MrpTypeCode", pick(m, "mrpTypeCode", "MrpTypeCode"));
+                setVal("ProcurementTypeCode", pick(m, "procurementTypeCode", "ProcurementTypeCode"));
+                setVal("StrategyGroup", pick(m, "strategyGroup", "StrategyGroup"));
+                setVal("AvailabilityCheckCode", pick(m, "availabilityCheckCode", "AvailabilityCheckCode"));
+                setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
+                var tbody = document.querySelector("#uomTableV2-modal tbody");
+                if (tbody) tbody.innerHTML = "";
+                var uomIdx = 0;
+                var baseUom = pick(m, "baseUnitCode", "BaseUnitCode") || "PC";
+                (conversions || []).forEach(function (c) {
+                    if (!c) return;
+                    var alt = c.altUnitCode != null ? c.altUnitCode : c.AltUnitCode;
+                    if (!alt) return;
+                    var num = c.numerator != null ? c.numerator : c.Numerator;
+                    var den = c.denominator != null ? c.denominator : c.Denominator;
+                    var numStr = num !== undefined && num !== null && num !== "" ? String(num) : "";
+                    var denStr = den !== undefined && den !== null && den !== "" ? String(den) : "1";
+                    var rowId = "v2row_modal_" + uomIdx;
+                    var html =
+                        '<tr id="' + rowId + '">' +
+                        '<td><input name="Conversions[' + uomIdx + '].AltUnitCode" class="form-control form-control-sm" maxlength="3" value="' + escapeAttr(alt) + '" /></td>' +
+                        '<td><input name="Conversions[' + uomIdx + '].Numerator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(numStr) + '" /></td>' +
+                        '<td class="text-center align-middle">=</td>' +
+                        '<td><input name="Conversions[' + uomIdx + '].Denominator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(denStr) + '" /></td>' +
+                        '<td><input class="form-control form-control-sm sap-readonly" value="' + escapeAttr(baseUom) + '" readonly /></td>' +
+                        '<td><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'' + rowId + '\').remove()">X</button></td>' +
+                        '</tr>';
+                    if (tbody) tbody.insertAdjacentHTML("beforeend", html);
+                    uomIdx++;
+                });
+                var origNum = pick(m, "materialNumber", "MaterialNumber");
+                var origH = document.getElementById("createV2OriginalMaterialNumber-modal");
+                if (origH) origH.value = origNum || "";
+                if (typeof window.setCreateV2ModalCommittedFromLoaded === "function")
+                    window.setCreateV2ModalCommittedFromLoaded(
+                        pick(m, "materialTypeCode", "MaterialTypeCode") || "",
+                        origNum || ""
+                    );
+                var sb = document.getElementById("statusBarV2-modal");
+                if (sb) sb.innerText = "Loaded for edit.";
+                var titleEl = document.getElementById("materialCreateV2Title-modal");
+                if (titleEl) titleEl.textContent = "Edit material";
+                var saveBtn = document.getElementById("btnCreateV2Save-modal");
+                if (saveBtn) saveBtn.textContent = "Update";
+                var matType = document.getElementById("matTypeV2-modal");
+                if (matType) matType.disabled = false;
+                var numEl = document.getElementById("txtMaterialNumberV2-modal");
+                if (numEl) numEl.readOnly = true;
+                var type = matType && matType.value;
+                var salesLi = document.getElementById("nav-sales-v2-modal");
+                var purchLi = document.getElementById("nav-purch-v2-modal");
+                if (salesLi) salesLi.style.display = "";
+                if (purchLi) purchLi.style.display = "";
+                if (type === "ROH" && salesLi) salesLi.style.display = "none";
+                if (type === "FERT" && purchLi) purchLi.style.display = "none";
+                if (typeof window.setCreateV2ModalEditState === "function")
+                    window.setCreateV2ModalEditState(true);
+                var firstTabBtn = document.getElementById("v2info-tab-modal");
+                if (firstTabBtn && typeof bootstrap !== "undefined" && bootstrap.Tab)
+                    bootstrap.Tab.getOrCreateInstance(firstTabBtn).show();
+                var modalEl = document.getElementById("materialCreateV2Modal");
+                if (modalEl && modalEl.parentElement !== document.body)
+                    document.body.appendChild(modalEl);
+                if (typeof window.moveCreateV2ModalToBody === "function")
+                    window.moveCreateV2ModalToBody();
+                if (typeof bootstrap !== "undefined" && modalEl)
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            })
+            .catch(function () { alert("Request failed"); });
+    };
 
            function setMode(edit) {
         isEditMode = edit;
@@ -278,33 +464,31 @@
         const tr = document.createElement("tr");
 
         tr.innerHTML = `
-            <td class="col-sel" onclick="selectRow(this)">
-                <input type="hidden" name="[${rowCount}].MaterialNumber" class="row-id" />
-            </td>
+            <td class="col-no">${rowCount + 1}</td>
 
-            <td>${rowCount + 1}</td>
-
-            <td><input name="[${rowCount}].MaterialNumber" class="sap-input"></td>
+            <td><input name="[${rowCount}].MaterialNumber" class="sap-input mat-number"></td>
             <td><input name="[${rowCount}].Description" class="sap-input"></td>
 
-            <td>
-                <select name="[${rowCount}].MaterialTypeCode" class="sap-input sap-select" onchange="onTypeChange(this)">
-                    <option value="">Select Type</option>
-                    @foreach (var opt in mTypes)
-                    {
-                            <text>
-                                <option value="@opt.Value">@opt.Text</option>
-                            </text>
-                    }
-                </select>
+            <td class="align-middle ps-2 pe-2">
+                —
+                <input type="hidden" name="[${rowCount}].MaterialTypeCode" value="" />
             </td>
 
             <td><input name="[${rowCount}].BaseUnitCode" class="sap-input"></td>
+            <td class="col-action">
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-link text-secondary p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Actions">
+                        <i class="bi bi-three-dots-vertical fs-5"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                        <li><button type="button" class="dropdown-item" disabled>Edit</button></li>
+                        <li><button type="button" class="dropdown-item text-danger" disabled>Delete</button></li>
+                    </ul>
+                </div>
+            </td>
         `;
 
         body.appendChild(tr);
-        const newSel = tr.querySelector("select.sap-select");
-        if (newSel && !isEditMode) newSel.disabled = true;
         rowCount++;
     }
 
@@ -344,7 +528,7 @@
         document.querySelectorAll("#gridBody tr").forEach(row => {
 
             let obj = {
-                MaterialNumber: row.querySelector("[name$='.MaterialNumber']")?.value,
+                MaterialNumber: row.querySelector(".mat-number")?.value,
                 Description: row.querySelector("[name$='.Description']")?.value,
                 MaterialTypeCode: row.querySelector("[name$='.MaterialTypeCode']")?.value,
                 BaseUnitCode: row.querySelector("[name$='.BaseUnitCode']")?.value
@@ -412,7 +596,37 @@
         fetchNextMaterialNumber(typeCode, "statusBar", materialInput);
     }
 
+    function deleteMaterialFromList(materialNumber) {
+        if (!materialNumber || !confirm("Delete this material?")) return;
+        fetch('@Url.Action("DeleteMaterial", "Material")?id=' + encodeURIComponent(materialNumber), { method: "POST" })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res.success) location.reload();
+                else alert(res.message || "Delete failed");
+            })
+            .catch(function () { alert("Delete request failed"); });
+    }
+
+    window.switchMaterialsModuleTab = function (which) {
+        if (typeof bootstrap === "undefined") return;
+        if (which === "create") {
+            var b = document.getElementById("materialsTabCreateBtn");
+            if (b) bootstrap.Tab.getOrCreateInstance(b).show();
+        } else {
+            var l = document.getElementById("materialsTabListBtn");
+            if (l) bootstrap.Tab.getOrCreateInstance(l).show();
+        }
+    };
+
+    window.showMaterialsCreateTab = function () {
+        window.switchMaterialsModuleTab("create");
+    };
+
     document.addEventListener("DOMContentLoaded", function () {
         setMode(false);
+        document.getElementById("materialsTabCreateBtn")?.addEventListener("shown.bs.tab", function () {
+            if (typeof window.resetCreateV2EmbeddedForm === "function")
+                window.resetCreateV2EmbeddedForm();
+        });
     });
 </script>

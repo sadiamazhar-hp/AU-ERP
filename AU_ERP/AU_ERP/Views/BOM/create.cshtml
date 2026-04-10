@@ -1,0 +1,863 @@
+﻿@* Legacy external assembly: @model AUTiles.Models.BomHeadersSample *@
+@model AUTiles.Models.BomHeadersSample
+
+@{
+    Layout = "~/Views/Shared/_Layout_Master.cshtml";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAP BOM Master - Professional Suite</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        :root {
+            --sap-navy: #354a5f;
+            --sap-blue: #0854a0;
+            --sap-border: #bfbfbf;
+            --sap-grid-header: #f2f2f2;
+            --sap-mandatory: #b00;
+        }
+
+        body {
+            background-color: #edeff0;
+            font-family: "72", Arial, sans-serif;
+            font-size: 13px;
+            margin: 0;
+            padding: 10px;
+        }
+
+        .sap-window {
+            background: #fff;
+            border: 1px solid var(--sap-border);
+            border-radius: 2px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            min-height: 90vh;
+        }
+
+        .sap-header {
+            background: var(--sap-navy);
+            color: #fff;
+            padding: 8px 15px;
+            font-weight: bold;
+        }
+
+        .top-nav-bar {
+            background: #fff;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 5px 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-link {
+            color: var(--sap-blue);
+            padding: 5px 15px;
+            cursor: pointer;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+
+            .nav-link.active {
+                background: var(--sap-blue);
+                color: white;
+                font-weight: bold;
+            }
+
+        .toolbar {
+            background: #f7f7f7;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 8px 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .sap-card {
+            padding: 20px;
+        }
+
+        .sap-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .field-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+            .field-group label {
+                width: 110px;
+                font-weight: 500;
+            }
+
+        .sap-input {
+            border: 1px solid var(--sap-border);
+            padding: 4px 8px;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .mandatory-bar {
+            width: 4px;
+            height: 24px;
+            background-color: var(--sap-mandatory);
+            margin-right: 5px;
+        }
+
+        .bom-grid-container {
+            border: 1px solid var(--sap-border);
+            margin: 10px;
+            overflow-x: auto;
+        }
+
+        .bom-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px;
+        }
+
+            .bom-table th {
+                background: var(--sap-grid-header);
+                border: 1px solid var(--sap-border);
+                padding: 8px;
+                text-align: left;
+            }
+
+            .bom-table td {
+                border: 1px solid var(--sap-border);
+                padding: 4px;
+            }
+
+        .grid-input {
+            border: 1px solid transparent;
+            width: 100%;
+            padding: 4px;
+            outline: none;
+        }
+
+            .grid-input:focus {
+                border: 1px solid var(--sap-blue);
+                background: #fff;
+            }
+
+        .sap-btn {
+            border: 1px solid #ababab;
+            background: #fff;
+            padding: 4px 12px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+
+        .sap-btn-primary {
+            background: var(--sap-blue);
+            color: white;
+            border: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .explode-level {
+            color: #888;
+            font-weight: bold;
+            padding-left: 10px;
+        }
+        /* Container for the form fields */
+        .sap-form-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #f0f0f0;
+        }
+
+        /* Horizontal rows */
+        .sap-row {
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
+        }
+
+        /* Field group logic */
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* Proportional widths for columns */
+        .flex-1 {
+            flex: 1;
+        }
+
+        .flex-2 {
+            flex: 2;
+        }
+
+        .field-group label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #555;
+        }
+
+        /* Inputs */
+        .sap-input {
+            width: 100%; /* Important: let the flexbox control the width */
+            height: 32px;
+            border: 1px solid #bfbfbf;
+            padding: 0 8px;
+            font-size: 14px;
+        }
+
+        .readonly-input {
+            background-color: #f5f5f5 !important;
+            border-color: #d9d9d9;
+            color: #666;
+        }
+
+        /* Red mandatory indicator (matches your previous screenshot) */
+        .mandatory-indicator {
+            border-left: 3px solid #d04444;
+            margin-right: 6px;
+            display: inline-block;
+            height: 12px;
+        }
+
+        /* Professional Footer */
+        .modal-footer-bar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 20px;
+            border-top: 1px solid #bfbfbf;
+            background-color: #eff4f9; /* Light blue tint for footer area */
+        }
+
+        .sap-btn-primary {
+            background-color: #0854a0 !important;
+            color: white !important;
+            border: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <datalist id="materialOptions">
+        @if (ViewBag.MaterialList != null)
+        {
+            foreach (var mat in (IEnumerable<AU_ERP.Models.CreateMaterialMaster>)ViewBag.MaterialList)
+            {
+                <option value="@mat.MaterialNumber - @mat.Description">@mat.MaterialNumber (@mat.Description)</option>
+            }
+        }
+    </datalist>
+
+    <div class="sap-window">
+        <div class="sap-header">🛠️ Bill of Material Management - Professional</div>
+
+        <div class="top-nav-bar">
+            <a class="nav-link active" id="tab-create" onclick="toggleView('create')">Create</a>
+            <a class="nav-link" id="tab-list" onclick="toggleView('list')">BOM Lists</a>
+            <a class="nav-link" id="tab-explode" onclick="toggleView('explode')">BOM Explosion</a>
+        </div>
+
+        <div id="create-view">
+            <div class="toolbar">
+                <input type="hidden" id="currentBomID" value="0" />
+                <button class="sap-btn sap-btn-primary" onclick="persistenceAction()">💾 Save Transaction</button>
+                <button class="sap-btn" onclick="addNewRow('bomItemsBody')">➕ Add Component</button>
+                <button class="sap-btn" onclick="clearForm()">🔄 Reset</button>
+            </div>
+
+            <div class="sap-card">
+                <div class="sap-row">
+                    <div class="field-group">
+                        <div class="mandatory-bar"></div>
+                        <label>BOM-Material</label>
+                        <input type="text" id="f-header-mat" class="sap-input" list="materialOptions"
+                               style="width: 350px;" onchange="handleHeaderSelection(this)">
+                    </div>
+
+                    <div class="field-group">
+                        <div class="mandatory-bar"></div>
+                        <label>Material Type</label>
+                        @Html.DropDownList("f-mat-type", (SelectList)ViewBag.MaterialTypes, "-- Select --", new { @class = "sap-input", style = "width: 150px;" })
+                    </div>
+
+                    <div class="field-group">
+                        <div class="mandatory-bar"></div>
+                        <label>BOM Level</label>
+                        @Html.DropDownList("BLevel", (SelectList)ViewBag.BomLevels, "-- Select --", new { @class = "sap-input f-blevel", style = "width: 140px;" })
+                    </div>
+                </div>
+
+                <div class="sap-row">
+                    <div class="field-group"><label>Plant</label><input type="text" id="f-plant" class="sap-input" value="1000" style="width: 80px;"></div>
+                    <div class="field-group"><label>Base Qty</label><input type="number" id="f-baseqty" class="sap-input" value="1" style="width: 80px;"></div>
+                    <div class="field-group"><label>Valid From</label><input type="date" id="f-valid" class="sap-input" style="width: 150px;"></div>
+
+                    <button type="button" class="sap-btn" onclick="unlockMaterial()" style="margin-left: 10px; color: #b00;">🔄 Change</button>
+                </div>
+            </div>
+            <div class="bom-grid-container">
+                <table class="bom-table">
+                    <thead>
+                        <tr>
+                            <th width="60">Pos</th>
+                            <th width="200">Component</th>
+                            <th>Description</th>
+                            <th width="100">Qty</th>
+                            <th width="100">UoM</th>
+                            <th width="100">Scrap %</th>
+                            <th width="50"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="bomItemsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="list-view" class="hidden p-3">
+            <table class="table table-bordered table-hover bg-white shadow-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>BOM ID</th>
+                        <th>Header Material</th>
+                        <th>Plant</th>
+                        <th>Level</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="bomListTableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="explode-view" class="hidden p-3">
+            <div class="sap-card bg-light mb-3">
+                <div class="sap-row">
+                    <div class="field-group">
+                        <label>Explode Material</label>
+                        <input type="text" id="explodeSearch" class="sap-input" list="materialOptions" placeholder="Enter Material Number...">
+                        <button class="sap-btn sap-btn-primary" onclick="runExplosion()">🚀 Explode</button>
+                    </div>
+                </div>
+            </div>
+            <div class="bom-grid-container">
+                <table class="bom-table">
+                    <thead>
+                        <tr>
+                            <th width="100">Level</th>
+                            <th width="200">Material</th>
+                            <th>Description</th>
+                            <th width="100">Qty</th>
+                            <th width="100">UoM</th>
+                        </tr>
+                    </thead>
+                    <tbody id="explodeTableBody">
+                        <tr><td colspan="5" align="center">Enter a material to see its hierarchy.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content sap-window">
+                <div class="sap-header d-flex justify-content-between">
+                    <span>📝 Edit Bill of Material</span>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="toolbar">
+                    <input type="hidden" id="modal-id">
+                    <button class="sap-btn" onclick="addNewRow('modal-bomItemsBody', 'mi')">➕ Add Component</button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="sap-form-grid">
+                        <div class="sap-row">
+                            <div class="field-group flex-2">
+                                <label><span class="mandatory-indicator"></span>Header Material</label>
+                                <input type="text" id="modal-Material" class="sap-input readonly-input" readonly>
+                            </div>
+                            <div class="field-group flex-1">
+                                <label><span class="mandatory-indicator"></span>Material Type</label>
+                                @Html.DropDownList("modal-mat-type", (SelectList)ViewBag.MaterialTypes, "-- Select --", new { @class = "sap-input", @id = "modal-mat-type" })
+                            </div>
+                            <div class="field-group flex-1">
+                                <label><span class="mandatory-indicator"></span>BOM Level</label>
+                                @Html.DropDownList("modal-BLevel", (SelectList)ViewBag.BomLevels, "-- Select --", new { @class = "sap-input", @id = "modal-BLevel" })
+                            </div>
+                        </div>
+
+                        <div class="sap-row">
+                            <div class="field-group flex-1">
+                                <label>Plant</label>
+                                <input type="text" id="modal-plant" class="sap-input">
+                            </div>
+                            <div class="field-group flex-1">
+                                <label>Base Qty</label>
+                                <input type="number" id="modal-baseqty" class="sap-input">
+                            </div>
+                            <div class="field-group flex-2">
+                                <label>Valid From</label>
+                                <input type="date" id="modal-valid" class="sap-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bom-grid-container mt-4">
+                        <table class="bom-table">
+                            <thead>
+                                <tr>
+                                    <th width="60">Pos</th>
+                                    <th width="200">Component</th>
+                                    <th>Description</th>
+                                    <th width="100">Qty</th>
+                                    <th width="100">UoM</th>
+                                    <th width="100">Scrap %</th>
+                                    <th width="50"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-bomItemsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="modal-footer-bar">
+                    <button class="sap-btn sap-btn-primary" onclick="saveEditAction()">💾 Update Changes</button>
+                    <button class="sap-btn" data-bs-dismiss="modal">❌ Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+   
+        </div>
+    </div>
+</div>
+
+    <script>
+        $(document).ready(() => { clearForm(); });
+
+        function toggleView(view) {
+            $('.nav-link').removeClass('active');
+            $(`#tab-${view}`).addClass('active');
+            $('#create-view, #list-view, #explode-view').addClass('hidden');
+            $(`#${view}-view`).removeClass('hidden');
+            if (view === 'list') fetchList();
+        }
+        function handleHeaderSelection(input) {
+            const val = input.value;
+            if (!val) return;
+
+            // Extract the code to fetch data
+            const materialCode = val.includes(" - ") ? val.split(" - ")[0].trim() : val;
+
+            $.getJSON('/BOM/GetMaterialDetails', { id: materialCode }, function (res) {
+                if (res.success) {
+                    // 1. Lock the Header Material input
+                    input.readOnly = true;
+                    input.style.backgroundColor = "#f5f5f5";
+
+                    // 2. Ensure the display shows "Number - Name"
+                    if (!val.includes(" - ")) {
+                        input.value = materialCode + " - " + res.data.Description;
+                    }
+
+                    // 3. Auto-select the Material Type in the dropdown
+                    if (res.data.MaterialTypeCode) {
+                        $('#f-mat-type').val(res.data.MaterialTypeCode);
+                        // Lock the dropdown as well for data integrity
+                        $('#f-mat-type').attr('disabled', true).css('background-color', '#f5f5f5');
+                    }
+                } else {
+                    Swal.fire('Error', 'Material not found in database', 'error');
+                    unlockMaterial();
+                }
+            });
+        }
+
+        function unlockMaterial() {
+            const input = $('#f-header-mat');
+            input.val('').prop('readOnly', false).css('background-color', '#fff');
+
+            // Unlock the Material Type dropdown
+            $('#f-mat-type').val('').attr('disabled', false).css('background-color', '#fff');
+
+            input.focus();
+        }
+        function createRowHtml(pos, mat = "", desc = "", qty = 1, uom = "", scrap = 0, prefix = "i") {
+            return `<tr class="item-row">
+                        <td align="center">${pos}</td>
+                        <td><input type="text" class="grid-input ${prefix}-mat" value="${mat}" list="materialOptions" onchange="fetchMaterialDetails(this)"></td>
+                        <td><input type="text" class="grid-input ${prefix}-desc" value="${desc}"></td>
+                        <td><input type="number" class="grid-input ${prefix}-qty" value="${qty}"></td>
+                        <td><input type="text" class="grid-input ${prefix}-uom" value="${uom}"></td>
+                        <td><input type="number" class="grid-input ${prefix}-scrap" value="${scrap}"></td>
+                        <td align="center"><button class="btn btn-sm text-danger" onclick="$(this).closest('tr').remove()">×</button></td>
+                    </tr>`;
+        }
+
+        function addNewRow(target, prefix = "i") {
+            const pos = ($(`#${target} tr`).length + 1) * 10;
+            $(`#${target}`).append(createRowHtml(pos, "", "", 1, "", 0, prefix));
+        }
+
+        function fetchMaterialDetails(el) {
+            const rawVal = $(el).val();
+            const $row = $(el).closest('tr');
+
+            if (!rawVal) return;
+
+            // ✅ Extract material code only
+            const matCode = rawVal.includes(" - ")
+                ? rawVal.split(" - ")[0].trim()
+                : rawVal.trim();
+
+            // ✅ Set cleaned material code back (optional but recommended)
+            $row.find('.i-mat').val(matCode);
+
+            $.getJSON('/BOM/GetMaterialDetails', { id: matCode }, function (res) {
+                if (res.success && res.data) {
+
+                    console.log("Material Data:", res.data); // debug
+
+                    // ✅ Fill Description
+                    $row.find('.i-desc').val(res.data.Description || '');
+
+                    // ✅ Fill UOM
+                    $row.find('.i-uom').val(res.data.UoM || '');
+
+                } else {
+                    Swal.fire('Error', 'Material not found', 'error');
+
+                    // Optional: clear fields if invalid
+                    $row.find('.i-desc').val('');
+                    $row.find('.i-uom').val('');
+                }
+            }).fail(function () {
+                Swal.fire('Server Error', 'Failed to fetch material details', 'error');
+            });
+        }
+        function handleMaterialSelection(input) {
+            const val = input.value;
+
+            // Check if the value contains the separator " - "
+            if (val.includes(" - ")) {
+                const parts = val.split(" - ");
+                const code = parts[0].trim();
+                const name = parts[1].trim();
+
+                // Optional: If you want to keep ONLY the code in the box after selection:
+                // input.value = code;
+
+                // Optional: If you want to show the name in a separate label or
+                // keep the combined view but only send the code during the Save action.
+                console.log("Selected Code:", code, "Name:", name);
+            }
+        }
+
+        // --- CRUD ACTIONS ---
+        function fetchList() {
+            $.getJSON('/BOM/GetBOMList', data => {
+                let html = data.map(i => `<tr>
+                            <td>${i.BomID}</td><td>${i.MateriallNumber}</td><td>${i.Plant}</td><td>${i.BLevel}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="openEdit(${i.BomID})">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteBom(${i.BomID})">Delete</button>
+                            </td></tr>`).join('');
+                $('#bomListTableBody').html(html || '<tr><td colspan="5">No Records.</td></tr>');
+            });
+        }
+
+        function persistenceAction() {
+            const data = {
+                BomID: $('#currentBomID').val(),
+                MateriallNumber: $('#f-header-mat').val(),
+                BLevel: $('#BLevel').val(),
+                Plant: $('#f-plant').val(),
+                ValidFrom: $('#f-valid').val(),
+                BaseQty: $('#f-baseqty').val(),
+                BomItemsSamples: []
+            };
+
+            $('#bomItemsBody tr').each(function () {
+                const m = $(this).find('.i-mat').val();
+
+                if (m) {
+                    data.BomItemsSamples.push({
+                        MateriallNumber: m,
+                        Description: $(this).find('.i-desc').val(),
+                        Quantity: $(this).find('.i-qty').val(),
+                        UoM: $(this).find('.i-uom').val(),
+                        ScrapPercentage: $(this).find('.i-scrap').val()
+                    });
+                }
+            });
+
+            $.ajax({
+                url: data.BomID > 0 ? '/BOM/Edit' : '/BOM/Create',
+                type: 'POST', contentType: 'application/json', data: JSON.stringify(data),
+                success: res => { if (res.success) { Swal.fire('Success', 'BOM Saved', 'success'); clearForm(); } }
+            });
+        }
+        
+
+        function deleteBom(id) {
+            Swal.fire({
+                title: 'Delete BOM?',
+                text: "Are you sure you want to delete BOM ID: " + id + "? This action cannot be undone.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#b00', // SAP Mandatory/Danger Red
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, delete it!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Proceed with AJAX delete
+                    $.ajax({
+                        url: '/BOM/Delete',
+                        type: 'POST',
+                        data: { id: id },
+                        success: function (res) {
+                            if (res.success) {
+                                Swal.fire(
+                                    'Deleted!',
+                                    'The Bill of Material has been removed.',
+                                    'success'
+                                );
+                                fetchList(); // Refresh the registry table
+                            } else {
+                                Swal.fire(
+                                    'Error!',
+                                    res.message || 'Failed to delete the record.',
+                                    'error'
+                                );
+                            }
+                        },
+                        error: function () {
+                            Swal.fire(
+                                'Server Error',
+                                'Could not reach the server to complete deletion.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+        function lockMaterialInput(input) {
+            const val = input.value;
+            if (!val) return;
+
+            // 1. Extract the code if the format is "Code - Description"
+            const code = val.includes(" - ") ? val.split(" - ")[0].trim() : val;
+
+            // 2. Set the value to just the code and lock the box
+            input.value = code;
+            input.readOnly = true;
+            input.style.backgroundColor = "#f0f0f0"; // Grey out to show it's locked
+
+            // 3. Fetch Material Type and other details
+            $.getJSON('/BOM/GetMaterialDetails', { id: code }, function (res) {
+                if (res.success) {
+                    // Populate the Material Type box we restored
+                    $('#f-mat-type').val(res.data.MaterialTypeCode);
+                    // You can also populate Description elsewhere if needed
+                }
+            });
+        }
+
+        function unlockMaterialInput() {
+            const input = document.getElementById('f-header-mat');
+            input.value = "";
+            input.readOnly = false;
+            input.style.backgroundColor = "#fff";
+            $('#f-mat-type').val("");
+            input.focus();
+        }
+
+        function clearForm() {
+            $('#currentBomID').val(0);
+            $('#f-header-mat, #f-valid').val('');
+            $('#f-plant').val('1000');
+            $('#f-baseqty').val('1');
+            $('#bomItemsBody').empty();
+            for (let i = 0; i < 3; i++) addNewRow('bomItemsBody');
+        }
+
+        // --- EXPLOSION LOGIC ---
+        function runExplosion() {
+            const mat = $('#explodeSearch').val();
+            if (!mat) return;
+            $.getJSON('/BOM/ExplodeBOM', { materialNumber: mat }, res => {
+                let html = '';
+                if (res.success && res.data.length > 0) {
+                    res.data.forEach(item => {
+                        html += `<tr>
+                                    <td><span class="explode-level">${'.'.repeat(item.Level)} ${item.Level}</span></td>
+                                    <td>${item.MateriallNumber}</td>
+                                    <td>${item.Description}</td>
+                                    <td>${item.Quantity}</td>
+                                    <td>${item.UoM}</td>
+                                </tr>`;
+                    });
+                } else { html = '<tr><td colspan="5" align="center">No sub-components found.</td></tr>'; }
+                $('#explodeTableBody').html(html);
+            });
+        }
+        function openEdit(id) {
+            console.log("Attempting to edit BOM ID:", id); // Check F12 console
+
+            $.getJSON('/BOM/GetBOMDetails', { id: id }, function (res) {
+                if (res.success) {
+                    // 1. Fill the Modal Header Fields
+                    $('#modal-id').val(res.data.BomID);
+                    $('#modal-Material').val(res.data.MateriallNumber);
+                    $('#modal-BLevel').val(res.data.BLevel);
+                    $('#modal-plant').val(res.data.Plant);
+                    $('#modal-valid').val(res.data.ValidFrom ? res.data.ValidFrom.split('T')[0] : '');
+                    $('#modal-baseqty').val(res.data.BaseQty);
+
+                    // 2. Fill the Modal Grid
+                    $('#modal-bomItemsBody').empty();
+                    if (res.data.BomItemsSamples && res.data.BomItemsSamples.length > 0) {
+                        res.data.BomItemsSamples.forEach((item, index) => {
+                            // Using 'mi' as prefix for Modal Inputs
+                            const row = createRowHtml((index + 1) * 10, item.MateriallNumber, item.Description, item.Quantity, item.UoM, item.ScrapPercentage, "mi");
+                            $('#modal-bomItemsBody').append(row);
+                        });
+                    }
+
+                    // 3. TRIGGER THE MODAL
+                    // If you are using Bootstrap 5, this is the required syntax:
+                    var editModalEl = document.getElementById('editModal');
+                    var modalInstance = bootstrap.Modal.getOrCreateInstance(editModalEl);
+                    modalInstance.show();
+
+                } else {
+                    Swal.fire('Error', 'Could not retrieve BOM data: ' + res.message, 'error');
+                }
+            }).fail(function () {
+                Swal.fire('Server Error', 'Failed to connect to the server.', 'error');
+            });
+        }
+
+        function saveEditAction() {
+            const data = {
+                BomID: $('#modal-id').val(),
+                MateriallNumber: $('#modal-Material').val(),
+                BLevel: $('#modal-BLevel').val(),
+                Plant: $('#modal-plant').val(),
+                BaseQty: $('#modal-baseqty').val(),
+                ValidFrom: $('#modal-valid').val(),
+                BomItemsSamples: []
+            };
+
+            // Collect rows from the modal grid
+            $('#modal-bomItemsBody tr').each(function () {
+                const mat = $(this).find('.mi-mat').val();
+                if (mat) {
+                    data.BomItemsSamples.push({
+                        MateriallNumber: mat,
+                        Quantity: $(this).find('.mi-qty').val(),
+                        UoM: $(this).find('.mi-uom').val(),
+                        ScrapPercentage: $(this).find('.mi-scrap').val()
+                    });
+                }
+            });
+
+            $.ajax({
+                url: '/BOM/Edit',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function (res) {
+                    if (res.success) {
+                        Swal.fire('Updated', 'BOM changes saved successfully', 'success');
+                        bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+                        fetchList(); // Refresh the registry table
+                    }
+                }
+            });
+        }
+        function runExplosion() {
+            const rawVal = $('#explodeSearch').val();
+
+            if (!rawVal || rawVal.trim() === "") {
+                Swal.fire('Input Required', 'Please enter or select a Material first.', 'warning');
+                return;
+            }
+
+            const matCode = rawVal.includes(" - ")
+                ? rawVal.split(" - ")[0].trim()
+                : rawVal.trim();
+
+            $('#explodeTableBody').html(
+                '<tr><td colspan="5" align="center">Exploding BOM...</td></tr>'
+            );
+
+            $.getJSON('/BOM/ExplodeBOM', { materialNumber: matCode })
+                .done(function (res) {
+
+                    console.log("API Response:", res); // 🔍 DEBUG
+
+                    let html = '';
+
+                    if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+
+                        res.data.forEach(item => {
+
+                            const level = item.Level || 1;
+                            const levelDisplay = '.'.repeat(level) + ' ' + level;
+
+                            html += `<tr>
+                        <td><span class="explode-level">${levelDisplay}</span></td>
+                        <td>${item.MaterialNumber}</td>
+                        <td>${item.Description}</td>
+                        <td>${item.Quantity}</td>
+                        <td>${item.UoM}</td>
+                    </tr>`;
+                        });
+
+                        $('#explodeTableBody').html(html);
+
+                    } else {
+                        $('#explodeTableBody').html(
+                            '<tr><td colspan="5" align="center" class="text-danger">No components found.</td></tr>'
+                        );
+                    }
+                })
+                .fail(function (jqXHR) {
+                    console.error("Server Error Detail:", jqXHR.responseText);
+
+                    $('#explodeTableBody').html(
+                        '<tr><td colspan="5" align="center" class="text-danger">Error loading data</td></tr>'
+                    );
+
+                    Swal.fire(
+                        'Server Error',
+                        'Could not reach the explosion service. Check console.',
+                        'error'
+                    );
+                });
+        }
+    </script>
+</body>
+</html>

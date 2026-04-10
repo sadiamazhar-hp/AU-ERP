@@ -15,6 +15,20 @@ namespace AU_ERP.Main_Controller
             _context = context;
         }
 
+        /// <summary>Form posts bind <see cref="CreateMaterialMaster.MaterialTypeCode"/> only; the EF navigation <see cref="CreateMaterialMaster.MaterialType"/> is not posted and triggers false "required" validation.</summary>
+        private static void RemoveUnboundMaterialTypeNavigation(Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary modelState)
+        {
+            foreach (var key in modelState.Keys.ToList())
+            {
+                if (string.IsNullOrEmpty(key)) continue;
+                if (key.Contains("MaterialTypeCode", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (string.Equals(key, "MaterialType", StringComparison.OrdinalIgnoreCase)
+                    || key.EndsWith(".MaterialType", StringComparison.OrdinalIgnoreCase))
+                    modelState.Remove(key);
+            }
+        }
+
         // GET: Material
         public IActionResult Index()
         {
@@ -50,31 +64,156 @@ namespace AU_ERP.Main_Controller
         {
             if (!ModelState.IsValid)
             {
-                ModelState.Clear(); 
+                ModelState.Clear();
                 PrepareViewBags();
                 return View(material);
             }
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            var (ok, error) = await TryPersistNewMaterialAsync(material, conversions);
+            if (ok)
+            {
+                TempData["SuccessMessage"] = $"Material {material.MaterialNumber} created successfully!";
+                return RedirectToAction("Create");
+            }
 
+            ModelState.Clear();
+            PrepareViewBags();
+            TempData["ErrorMessage"] = error;
+            return View(material);
+        }
+
+        /// <summary>GET partial for Create Material modal (V2) on list page.</summary>
+        public IActionResult CreateV2()
+        {
+            PrepareViewBags();
+            return PartialView("CreateV2", new CreateMaterialMaster());
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateV2(CreateMaterialMaster material, List<UnitConversion> conversions)
+        {
+            RemoveUnboundMaterialTypeNavigation(ModelState);
+            if (!ModelState.IsValid)
+            {
+                var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
+            }
+
+            var (ok, error) = await TryPersistNewMaterialAsync(material, conversions);
+            if (ok)
+                return Json(new { success = true, message = $"Material {material.MaterialNumber} created successfully!" });
+
+            return Json(new { success = false, message = error ?? "Save failed." });
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetMaterialForEditV2(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return Json(new { success = false, message = "Missing material number." });
+
+            var m = await _context.CreateMaterialMaster.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.MaterialNumber == id);
+
+            if (m == null)
+                return Json(new { success = false, message = "Not found." });
+
+            var material = new
+            {
+                m.MaterialNumber,
+                m.IndustrySectorCode,
+                m.MaterialTypeCode,
+                m.Description,
+                m.BaseUnitCode,
+                m.MaterialGroupCode,
+                m.EAN,
+                m.DeliveringPlantCode,
+                m.ItemCategoryGroup,
+                m.PurchasingGroupCode,
+                m.GrProcessingTime,
+                m.MrpTypeCode,
+                m.ProcurementTypeCode,
+                m.StrategyGroup,
+                m.AvailabilityCheckCode,
+                m.ValuationClassCode
+            };
+
+            var conversions = await _context.UnitConversions.AsNoTracking()
+                .Where(u => u.MaterialNumber == id)
+                .OrderBy(u => u.Id)
+                .Select(u => new { u.AltUnitCode, u.Numerator, u.Denominator })
+                .ToListAsync();
+
+            return Json(new { success = true, material, conversions });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, List<UnitConversion> conversions)
+        {
+            RemoveUnboundMaterialTypeNavigation(ModelState);
+            if (!ModelState.IsValid)
+            {
+                var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
+            }
+
+            var original = Request.Form["OriginalMaterialNumber"].ToString();
+            var (ok, error) = !string.IsNullOrWhiteSpace(original)
+                && !string.Equals(original, material.MaterialNumber, StringComparison.Ordinal)
+                ? await TryReplaceMaterialWithRenumberAsync(original, material, conversions)
+                : await TryUpdateMaterialAsync(material, conversions);
+
+            if (ok)
+                return Json(new { success = true, message = $"Material {material.MaterialNumber} updated successfully!" });
+
+            return Json(new { success = false, message = error ?? "Update failed." });
+        }
+
+        /// <summary>Delete material originally stored under <paramref name="originalMaterialNumber"/> and insert the posted row under the new <see cref="CreateMaterialMaster.MaterialNumber"/> (e.g. after type change + next number).</summary>
+        private async Task<(bool Success, string? ErrorMessage)> TryReplaceMaterialWithRenumberAsync(
+            string originalMaterialNumber,
+            CreateMaterialMaster material,
+            List<UnitConversion>? conversions)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Add material
+                var old = await _context.CreateMaterialMaster.FindAsync(originalMaterialNumber);
+                if (old == null)
+                    return (false, "Original material not found.");
+
+                if (await _context.CreateMaterialMaster.AnyAsync(x => x.MaterialNumber == material.MaterialNumber))
+                    return (false, "Material number already in use.");
+
+                var oldUom = await _context.UnitConversions
+                    .Where(u => u.MaterialNumber == originalMaterialNumber)
+                    .ToListAsync();
+                _context.UnitConversions.RemoveRange(oldUom);
+                _context.CreateMaterialMaster.Remove(old);
+                await _context.SaveChangesAsync();
+
                 await _context.CreateMaterialMaster.AddAsync(material);
 
-                // Add conversions
                 if (conversions != null && conversions.Any())
                 {
                     foreach (var uom in conversions)
                     {
                         if (string.IsNullOrEmpty(uom.AltUnitCode)) continue;
 
-                        uom.MaterialNumber = material.MaterialNumber;
-                        await _context.UnitConversions.AddAsync(uom);
+                        await _context.UnitConversions.AddAsync(new UnitConversion
+                        {
+                            MaterialNumber = material.MaterialNumber,
+                            AltUnitCode = uom.AltUnitCode,
+                            Numerator = uom.Numerator,
+                            Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator
+                        });
                     }
                 }
 
-                // Update range (keyed by material type, not MRP type)
                 if (!string.IsNullOrEmpty(material.MaterialTypeCode))
                 {
                     var range = await _context.MaterialNumberRanges
@@ -86,19 +225,112 @@ namespace AU_ERP.Main_Controller
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
-
-                TempData["SuccessMessage"] = $"Material {material.MaterialNumber} created successfully!";
-                return RedirectToAction("Create");
+                return (true, null);
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
+                return (false, ex.Message);
+            }
+        }
 
-                ModelState.Clear();
-                PrepareViewBags();
+        private async Task<(bool Success, string? ErrorMessage)> TryUpdateMaterialAsync(
+            CreateMaterialMaster material,
+            List<UnitConversion>? conversions)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var existing = await _context.CreateMaterialMaster.FindAsync(material.MaterialNumber);
+                if (existing == null)
+                    return (false, "Material not found.");
 
-                TempData["ErrorMessage"] = ex.Message;
-                return View(material);
+                existing.IndustrySectorCode = material.IndustrySectorCode;
+                existing.MaterialTypeCode = material.MaterialTypeCode;
+                existing.Description = material.Description;
+                existing.BaseUnitCode = material.BaseUnitCode;
+                existing.MaterialGroupCode = material.MaterialGroupCode;
+                existing.EAN = material.EAN;
+                existing.DeliveringPlantCode = material.DeliveringPlantCode;
+                existing.ItemCategoryGroup = material.ItemCategoryGroup;
+                existing.PurchasingGroupCode = material.PurchasingGroupCode;
+                existing.GrProcessingTime = material.GrProcessingTime;
+                existing.MrpTypeCode = material.MrpTypeCode;
+                existing.ProcurementTypeCode = material.ProcurementTypeCode;
+                existing.StrategyGroup = material.StrategyGroup;
+                existing.AvailabilityCheckCode = material.AvailabilityCheckCode;
+                existing.ValuationClassCode = material.ValuationClassCode;
+
+                var oldUom = await _context.UnitConversions
+                    .Where(u => u.MaterialNumber == material.MaterialNumber)
+                    .ToListAsync();
+                _context.UnitConversions.RemoveRange(oldUom);
+
+                if (conversions != null && conversions.Any())
+                {
+                    foreach (var uom in conversions)
+                    {
+                        if (string.IsNullOrEmpty(uom.AltUnitCode)) continue;
+
+                        uom.MaterialNumber = material.MaterialNumber;
+                        await _context.UnitConversions.AddAsync(new UnitConversion
+                        {
+                            MaterialNumber = material.MaterialNumber,
+                            AltUnitCode = uom.AltUnitCode,
+                            Numerator = uom.Numerator,
+                            Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return (false, ex.Message);
+            }
+        }
+
+        private async Task<(bool Success, string? ErrorMessage)> TryPersistNewMaterialAsync(
+            CreateMaterialMaster material,
+            List<UnitConversion>? conversions)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                await _context.CreateMaterialMaster.AddAsync(material);
+
+                if (conversions != null && conversions.Any())
+                {
+                    foreach (var uom in conversions)
+                    {
+                        if (string.IsNullOrEmpty(uom.AltUnitCode)) continue;
+
+                        uom.MaterialNumber = material.MaterialNumber;
+                        await _context.UnitConversions.AddAsync(uom);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(material.MaterialTypeCode))
+                {
+                    var range = await _context.MaterialNumberRanges
+                        .FirstOrDefaultAsync(x => x.MaterialTypeCode == material.MaterialTypeCode);
+
+                    if (range != null)
+                        range.CurrentNumber = material.MaterialNumber;
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return (false, ex.Message);
             }
         }
    
@@ -216,6 +448,8 @@ namespace AU_ERP.Main_Controller
         //List Page Methods
         public async Task<IActionResult> GetMaterialList()
         {
+            PrepareViewBags();
+
             var data = await _context.CreateMaterialMaster.ToListAsync();
 
             ViewBag.MaterialTypes = await _context.MaterialTypes
@@ -237,6 +471,8 @@ namespace AU_ERP.Main_Controller
             if (item == null)
                 return Json(new { success = false, message = "Not found" });
 
+            var uoms = await _context.UnitConversions.Where(u => u.MaterialNumber == id).ToListAsync();
+            _context.UnitConversions.RemoveRange(uoms);
             _context.CreateMaterialMaster.Remove(item);
             await _context.SaveChangesAsync();
 

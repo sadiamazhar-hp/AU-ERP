@@ -112,6 +112,10 @@ body.au-shell-body {
   border-color: var(--au-primary);
 }
 
+a.au-icon-btn {
+  text-decoration: none;
+}
+
 .au-body-row {
   flex: 1;
   display: flex;
@@ -229,6 +233,59 @@ body.au-shell-body {
   filter: brightness(1.03);
 }
 
+/* Configuration module (gear): secondary sidebar + content (no material tabs) */
+.au-configuration-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.au-settings-sidebar {
+  width: 14rem;
+  flex-shrink: 0;
+  padding: 1rem 0.75rem;
+  background: rgba(23, 23, 23, 0.72);
+  backdrop-filter: blur(14px);
+  border-right: 1px solid rgba(111, 179, 184, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.au-settings-sidebar-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(246, 246, 242, 0.45);
+  padding: 0.35rem 0.75rem 0.15rem;
+}
+
+.au-settings-back {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.45rem;
+  color: var(--au-primary-light);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: 1px solid rgba(111, 179, 184, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  margin-bottom: 0.25rem;
+}
+
+.au-settings-back:hover {
+  background: rgba(186, 223, 231, 0.15);
+  color: var(--au-white);
+}
+
+.au-settings-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .au-card {
   flex: 1;
   min-height: 0;
@@ -239,4 +296,21 @@ body.au-shell-body {
   box-shadow: 0 12px 40px rgba(23, 23, 23, 0.18);
   padding: 1rem 1.1rem;
   overflow: auto;
+}
+
+/* Create V2 modal: must stack above .modal-backdrop. Keep modal on document.body (see moveCreateV2ModalToBody) so it is not trapped
+   under .au-card (backdrop-filter creates a stacking context and can let a body-level backdrop paint above an in-card fixed modal).
+   Outer modal has no .fade so Bootstrap does not wait for the backdrop opacity transition before showing the dialog. */
+#materialCreateV2Modal.modal {
+  z-index: 100050 !important;
+}
+
+/* Backdrops that follow this modal in the DOM (Bootstrap appends backdrop after the modal node). */
+#materialCreateV2Modal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* If another element sits between modal and backdrop, any .modal-backdrop while this modal is open should stay under it. */
+body.modal-open:has(#materialCreateV2Modal.show) .modal-backdrop {
+  z-index: 100040 !important;
 }

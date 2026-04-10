@@ -1,0 +1,514 @@
+﻿@* Legacy external assembly: @model AUTiles.Models.RoutingHeadersSample *@
+@model AUTiles.Models.RoutingHeadersSample
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tile ERP - Routing Master (UoM Edition)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --sap-navy: #354a5f;
+            --sap-blue: #0854a0;
+            --sap-border: #bfbfbf;
+            --sap-grid-header: #f2f2f2;
+            --sap-mandatory: #b00;
+            --sap-bg: #edeff0;
+            --sap-success: #2b7d2b;
+        }
+
+        body {
+            background-color: var(--sap-bg);
+            font-family: "72", Arial, sans-serif;
+            font-size: 13px;
+            margin: 0;
+            padding: 10px;
+        }
+
+        .sap-window {
+            background: #fff;
+            border: 1px solid var(--sap-border);
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            min-height: 90vh;
+        }
+
+        .sap-header {
+            background: var(--sap-navy);
+            color: #fff;
+            padding: 8px 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .top-nav-bar {
+            background: #fff;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 5px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-link {
+            font-size: 13px;
+            color: var(--sap-blue);
+            padding: 6px 18px;
+            cursor: pointer;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+
+            .nav-link.active {
+                background: var(--sap-blue);
+                color: white;
+            }
+
+        .toolbar {
+            background: #f7f7f7;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 8px 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .sap-card {
+            padding: 20px;
+            background: #fff;
+        }
+
+        .section-title {
+            font-weight: bold;
+            color: var(--sap-blue);
+            border-bottom: 1px solid #ddd;
+            margin: 15px 0 10px 0;
+            padding-bottom: 5px;
+        }
+
+        .field-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+            .field-group label {
+                width: 140px;
+                color: #555;
+                font-weight: 500;
+            }
+
+        .sap-input {
+            border: 1px solid var(--sap-border);
+            padding: 4px 8px;
+            border-radius: 2px;
+            outline: none;
+            background: #fff;
+        }
+
+            .sap-input:disabled {
+                background: #f2f2f2;
+                color: #666;
+                cursor: not-allowed;
+            }
+
+        .mandatory-bar {
+            width: 4px;
+            height: 24px;
+            background-color: var(--sap-mandatory);
+            margin-right: 5px;
+        }
+
+        .routing-grid-container {
+            border: 1px solid var(--sap-border);
+            margin-top: 15px;
+            overflow-x: auto;
+        }
+
+        .routing-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1100px;
+        }
+
+            .routing-table th {
+                background: var(--sap-grid-header);
+                border: 1px solid var(--sap-border);
+                padding: 6px;
+                font-size: 11px;
+                text-transform: uppercase;
+                color: #666;
+            }
+
+            .routing-table td {
+                border: 1px solid var(--sap-border);
+                padding: 2px;
+            }
+
+        .grid-input {
+            border: none;
+            width: 100%;
+            outline: none;
+            padding: 4px;
+            font-size: 12px;
+            background: transparent;
+        }
+
+        .sap-btn {
+            border: 1px solid #ababab;
+            background: #fff;
+            padding: 4px 15px;
+            cursor: pointer;
+            border-radius: 2px;
+            font-size: 12px;
+            transition: 0.2s;
+        }
+
+        .sap-btn-primary {
+            background: var(--sap-blue);
+            color: white;
+            border: none;
+        }
+
+        .sap-btn-success {
+            background: var(--sap-success);
+            color: white;
+            border: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .status-1 {
+            background: #e5e5e5;
+            color: #444;
+        }
+
+        .status-2 {
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sap-window">
+        <div class="sap-header">🛠️ CA01 - Routing Master Data Management</div>
+
+        <div class="top-nav-bar">
+            <div class="d-flex gap-2">
+                <a class="nav-link active" id="tab-create" onclick="toggleView('create')">Create Routing</a>
+                <a class="nav-link" id="tab-list" onclick="toggleView('list')">Routing List</a>
+            </div>
+            <div id="search-container" class="hidden">
+                <input type="text" id="routingSearch" class="sap-input" placeholder="Search Material..." onkeyup="searchRoutings()" style="width: 250px;">
+            </div>
+        </div>
+
+        <div id="create-view">
+            @* We wrap the content in a form for proper MVC Posting *@
+            @using (Html.BeginForm("Create", "Route", FormMethod.Post, new { id = "routingForm" }))
+            {
+                <div class="toolbar">
+                    <button type="submit" class="sap-btn sap-btn-primary">💾 Save Routing</button>
+                    <button type="button" class="sap-btn" onclick="addNewRow('routingBody')">➕ New Entries</button>
+                    <button type="button" class="sap-btn" onclick="clearForm()">🔄 Reset</button>
+                </div>
+
+                <div class="sap-card" id="routingFormLayout">
+                    @Html.HiddenFor(m => m.RoutingID)
+
+                    <div class="section-title">Routing Header Data</div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="field-group">
+                                <div class="mandatory-bar"></div>
+                                <label>Material</label>
+                                @* Corrected: MaterialNumber property *@
+                                @Html.DropDownListFor(m => m.MaterialNumber, (SelectList)ViewBag.MaterialList, "-- Select Material --", new { @class = "sap-input f-material", style = "width: 220px;" })
+                            </div>
+                            <div class="field-group">
+                                <div class="mandatory-bar"></div>
+                                <label>Plant</label>
+                                @* Corrected: PlantID property *@
+                                @Html.DropDownListFor(m => m.PlantID, (SelectList)ViewBag.PlantList, new { @class = "sap-input f-plant", style = "width: 220px;" })
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="field-group">
+                                <label>Status</label>
+                                @* Corrected: StatusID property *@
+                                @Html.DropDownListFor(m => m.StatusID, (SelectList)ViewBag.StatusList, new { @class = "sap-input f-status", style = "width: 220px;", @readonly = "readonly" })
+                            </div>
+                            <div class="field-group">
+                                <label>Valid From</label>
+                                @* Corrected: ValidFrom property *@
+                                @Html.TextBoxFor(m => m.ValidFrom, "{0:yyyy-MM-dd}", new { @class = "sap-input f-validfrom", style = "width: 220px;", type = "date" })
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Operations Grid</div>
+                    <div class="routing-grid-container">
+                        <table class="routing-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 70px;">Op No.</th>
+                                    <th style="width: 180px;">Work Center</th>
+                                    <th>Description</th>
+                                    <th style="width: 110px;">Machine Time</th>
+                                    <th style="width: 110px;">Labor Time</th>
+                                    <th style="width: 90px;">Unit (UoM)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="routingBody">
+                                @if (Model.RoutingOperationsSamples != null)
+                                {
+                                    @* Corrected: Logic to use RoutingOperationsSamples and handle index binding *@
+                                    var operationsList = Model.RoutingOperationsSamples.ToList();
+
+                                    for (int i = 0; i < operationsList.Count; i++)
+                                    {
+                                        <tr class="op-row">
+                                            <td align="center">
+                                                @Html.HiddenFor(m => operationsList[i].OpID)
+                                                @Html.TextBoxFor(m => operationsList[i].OperationNo, new { @class = "grid-input", style = "font-weight:bold; text-align:center;", @readonly = "readonly" })
+                                            </td>
+                                            <td>
+                                                @* Using EditorFor or DropDownList depending on your UI preference *@
+                                                @Html.EditorFor(m => operationsList[i].WorkCenterID, new { htmlAttributes = new { @class = "grid-input i-wc" } })
+                                            </td>
+                                            <td>
+                                                @Html.EditorFor(m => operationsList[i].Description, new { htmlAttributes = new { @class = "grid-input i-desc" } })
+                                            </td>
+                                            <td>
+                                                @Html.TextBoxFor(m => operationsList[i].MachineTime, new { @class = "grid-input i-machine", type = "number", step = "0.01" })
+                                            </td>
+                                            <td>
+                                                @Html.TextBoxFor(m => operationsList[i].LaborTime, new { @class = "grid-input i-labor", type = "number", step = "0.01" })
+                                            </td>
+                                            <td>
+                                                @Html.EditorFor(m => operationsList[i].UoM, new { htmlAttributes = new { @class = "grid-input i-uom" } })
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+        <div id="list-view" class="hidden p-4">
+            <table class="table table-bordered table-hover bg-white shadow-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>Material</th>
+                        <th>Plant</th>
+                        <th>Status</th>
+                        <th>Valid From</th>
+                        <th style="width: 250px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="routingMasterList"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="sap-header d-flex justify-content-between">
+                    <span>📝 Update Routing Master</span>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" id="modalContainer"></div>
+                <div class="modal-footer">
+                    <button class="sap-btn" onclick="addNewRow('modalRoutingBody')">➕ Add Row</button>
+                    <button class="sap-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button class="sap-btn sap-btn-primary" onclick="persistenceAction('update')">Update Routing</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let db = JSON.parse(localStorage.getItem('tile_routing_db')) || [];
+        let editId = null;
+
+        window.onload = () => {
+            document.querySelector('.f-validfrom').valueAsDate = new Date();
+            for (let i = 0; i < 5; i++) addNewRow('routingBody');
+        };
+
+        const wcOpts = `
+            <option value="">-- Select --</option>
+            <option value="Mixing Unit">Mixing Unit</option>
+            <option value="Ball Mill">Ball Mill</option>
+            <option value="Spray Dryer">Spray Dryer</option>
+            <option value="Press Machine">Press Machine</option>
+            <option value="Kiln">Kiln</option>
+            <option value="Glazing Line">Glazing Line</option>
+            <option value="Quality Inspection">Quality Inspection</option>
+            <option value="Packing Area">Packing Area</option>`;
+
+        const unitOpts = `
+            <option value="MIN">MIN (Minutes)</option>
+            <option value="HR">HR (Hours)</option>
+            <option value="DAY">DAY (Days)</option>`;
+
+        function addNewRow(targetId) {
+            const tbody = document.getElementById(targetId);
+            const opNum = ((tbody.rows.length + 1) * 10).toString().padStart(4, '0');
+            const row = tbody.insertRow();
+            row.className = "op-row";
+            row.innerHTML = `
+                <td align="center"><b>${opNum}</b></td>
+                <td><select class="grid-input i-wc">${wcOpts}</select></td>
+                <td><input type="text" class="grid-input i-desc" placeholder="Enter activity..."></td>
+                <td><input type="number" class="grid-input i-machine" value="0"></td>
+                <td><input type="number" class="grid-input i-labor" value="0"></td>
+                <td><select class="grid-input i-uom">${unitOpts}</select></td>`;
+        }
+
+        function toggleView(mode) {
+            document.getElementById('create-view').classList.toggle('hidden', mode !== 'create');
+            document.getElementById('list-view').classList.toggle('hidden', mode !== 'list');
+            document.getElementById('search-container').classList.toggle('hidden', mode !== 'list');
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.id === 'tab-' + mode));
+            if (mode === 'list') renderList(db);
+        }
+
+        function persistenceAction(type) {
+            const scope = type === 'save' ? document.getElementById('create-view') : document.getElementById('editModal');
+            const material = scope.querySelector('.f-material').value;
+            if (!material) return Swal.fire('Error', 'Please select a Material', 'error');
+
+            const operations = [];
+            scope.querySelectorAll('.op-row').forEach(row => {
+                const wc = row.querySelector('.i-wc').value;
+                if (wc) operations.push({
+                    wc: wc,
+                    desc: row.querySelector('.i-desc').value,
+                    machine: row.querySelector('.i-machine').value,
+                    labor: row.querySelector('.i-labor').value,
+                    uom: row.querySelector('.i-uom').value
+                });
+            });
+
+            const data = {
+                id: type === 'save' ? Date.now() : editId,
+                material,
+                plant: scope.querySelector('.f-plant').value,
+                status: type === 'save' ? '1' : scope.querySelector('.f-status').value,
+                validFrom: scope.querySelector('.f-validfrom').value,
+                operations
+            };
+
+            if (type === 'save') db.push(data);
+            else db[db.findIndex(x => x.id == editId)] = data;
+
+            localStorage.setItem('tile_routing_db', JSON.stringify(db));
+            Swal.fire('Success', type === 'save' ? 'Routing Created' : 'Routing Updated', 'success');
+            if (type === 'update') bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+            clearForm();
+            renderList(db);
+        }
+
+        function releaseStatus(id) {
+            Swal.fire({
+                title: 'Release Routing?',
+                text: "Move to 'Released' status for production?",
+                icon: 'info',
+                showCancelButton: true
+            }).then(res => {
+                if (res.isConfirmed) {
+                    const idx = db.findIndex(x => x.id == id);
+                    db[idx].status = '2';
+                    localStorage.setItem('tile_routing_db', JSON.stringify(db));
+                    renderList(db);
+                }
+            });
+        }
+
+        function renderList(data) {
+            document.getElementById('routingMasterList').innerHTML = data.map(r => `
+                <tr>
+                    <td><b>${r.material}</b></td>
+                    <td>${r.plant}</td>
+                    <td><span class="status-badge status-${r.status}">${r.status == '1' ? 'Created' : 'Released'}</span></td>
+                    <td>${r.validFrom}</td>
+                    <td>
+                        ${r.status == '1' ? `<button class="sap-btn sap-btn-success btn-sm" onclick="releaseStatus(${r.id})">🚀 Release</button>` : ''}
+                        <button class="sap-btn btn-sm" onclick="openEdit(${r.id})">Edit</button>
+                        <button class="sap-btn btn-sm text-danger" onclick="deleteRouting(${r.id})">Delete</button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        function openEdit(id) {
+            editId = id;
+            const record = db.find(x => x.id == id);
+            const modalContainer = document.getElementById('modalContainer');
+            modalContainer.innerHTML = document.getElementById('routingFormLayout').innerHTML;
+
+            modalContainer.querySelector('.f-material').value = record.material;
+            modalContainer.querySelector('.f-plant').value = record.plant;
+            modalContainer.querySelector('.f-status').disabled = false;
+            modalContainer.querySelector('.f-status').value = record.status;
+            modalContainer.querySelector('.f-validfrom').value = record.validFrom;
+
+            const tbody = modalContainer.querySelector('#routingBody');
+            tbody.id = 'modalRoutingBody';
+            tbody.innerHTML = '';
+            record.operations.forEach(op => {
+                addNewRow('modalRoutingBody');
+                const row = tbody.rows[tbody.rows.length - 1];
+                row.querySelector('.i-wc').value = op.wc;
+                row.querySelector('.i-desc').value = op.desc;
+                row.querySelector('.i-machine').value = op.machine;
+                row.querySelector('.i-labor').value = op.labor;
+                row.querySelector('.i-uom').value = op.uom;
+            });
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        function deleteRouting(id) {
+            Swal.fire({ title: 'Delete?', icon: 'warning', showCancelButton: true }).then(res => {
+                if (res.isConfirmed) {
+                    db = db.filter(x => x.id != id);
+                    localStorage.setItem('tile_routing_db', JSON.stringify(db));
+                    renderList(db);
+                }
+            });
+        }
+
+        function searchRoutings() {
+            const val = document.getElementById('routingSearch').value.toLowerCase();
+            renderList(db.filter(r => r.material.toLowerCase().includes(val)));
+        }
+
+        function clearForm() {
+            document.querySelectorAll('#create-view select, #create-view input').forEach(i => {
+                if (!['f-status', 'f-validfrom', 'f-plant'].some(cls => i.classList.contains(cls))) i.value = "";
+            });
+            document.getElementById('routingBody').innerHTML = '';
+            for (let i = 0; i < 5; i++) addNewRow('routingBody');
+        }
+    </script>
+</body>
+</html>

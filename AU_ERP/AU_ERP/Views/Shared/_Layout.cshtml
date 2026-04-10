@@ -2,7 +2,7 @@
     var ctrl = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var act = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
     var isMaterial = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase);
-    var showMaterialTabs = isMaterial && !string.Equals(act, "Create", StringComparison.OrdinalIgnoreCase);
+    // Material Type / Number Ranges: use Configuration layout (gear), not tabs on this shell.
     var materialsNavActive = isMaterial;
 }
 <!DOCTYPE html>
@@ -28,9 +28,9 @@
                 <button type="button" class="au-icon-btn" title="Profile" aria-label="Profile">
                     <i class="bi bi-person"></i>
                 </button>
-                <button type="button" class="au-icon-btn" title="Settings" aria-label="Settings">
+                <a class="au-icon-btn" asp-controller="Material" asp-action="MaterialType" title="Configuration" aria-label="Configuration">
                     <i class="bi bi-gear"></i>
-                </button>
+                </a>
             </div>
         </header>
 
@@ -44,16 +44,17 @@
             </aside>
 
             <main class="au-main">
-                @if (showMaterialTabs)
+                @* Materials: only material table on this shell; Material Type & Number Ranges are under Configuration (gear). *@
+                @*@if (showMaterialTabs)
                 {
                     <div class="au-material-tabs-wrap">
                         <nav class="au-material-tabs" aria-label="Materials">
-                            <a class="au-tab @(string.Equals(act, "GetMaterialList", StringComparison.OrdinalIgnoreCase) ? "active" : null)" asp-controller="Material" asp-action="GetMaterialList">List</a>
+                            <a class="au-tab @(string.Equals(act, "GetMaterialList", StringComparison.OrdinalIgnoreCase) ? "active" : null)" asp-controller="Material" asp-action="GetMaterialList">Material List</a>
                             <a class="au-tab @(string.Equals(act, "MaterialType", StringComparison.OrdinalIgnoreCase) ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Type</a>
                             <a class="au-tab @(string.Equals(act, "NumberRanges", StringComparison.OrdinalIgnoreCase) ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Number Ranges</a>
                         </nav>
                     </div>
-                }
+                }*@
                 <div class="au-card">
                     @RenderBody()
                 </div>

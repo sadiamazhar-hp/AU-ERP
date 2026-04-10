@@ -1,6 +1,7 @@
 ﻿@model List<AU_ERP.Models.MaterialNumberRange>
 @{
-    ViewData["Title"] = "Materials — Number Ranges";
+    Layout = "~/Views/Shared/_LayoutConfiguration.cshtml";
+    ViewData["Title"] = "Configuration — Number Ranges";
     ViewBag.Title = "Number Ranges Configuration";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.MaterialNumberRange>();
@@ -20,7 +21,7 @@
     {
         @Html.AntiForgeryToken()
         <div class="sap-toolbar">
-            <div class="view-title">Change View "Material Number Ranges": Overview</div>
+            @*<div class="view-title">Change View "Material Number Ranges": Overview</div>*@
             <div class="d-flex">
                 <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">✏️ Edit</button>
                 <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>📄 New Entries</button>
@@ -101,7 +102,7 @@
         border-bottom: 2px solid var(--sap-border);
         background: #fff;
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-end;
         align-items: center;
     }
 

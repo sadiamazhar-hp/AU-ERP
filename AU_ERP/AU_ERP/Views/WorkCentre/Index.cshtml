@@ -1,0 +1,370 @@
+﻿@* Legacy external assembly: @model AUTiles.Models.WorkCenterMasterSample *@
+@model AUTiles.Models.WorkCenterMasterSample
+@{
+    var wcList = ViewBag.WorkCenterList as List<AUTiles.Models.WorkCenterMasterSample>;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Center Master - Tile ERP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --sap-navy: #354a5f;
+            --sap-blue: #0854a0;
+            --sap-border: #bfbfbf;
+            --sap-mandatory: #b00;
+            --sap-bg: #edeff0;
+        }
+
+        body {
+            background-color: var(--sap-bg);
+            font-family: "72", Arial, sans-serif;
+            font-size: 13px;
+            margin: 0;
+            padding: 10px;
+        }
+
+        .sap-window {
+            background: #fff;
+            border: 1px solid var(--sap-border);
+            min-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .sap-header {
+            background: var(--sap-navy);
+            color: #fff;
+            padding: 10px 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .top-nav-bar {
+            background: #fff;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 5px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-link {
+            font-size: 13px;
+            color: var(--sap-blue);
+            padding: 8px 20px;
+            cursor: pointer;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+
+            .nav-link.active {
+                background: var(--sap-blue);
+                color: white;
+                font-weight: bold;
+            }
+
+        .inner-tabs {
+            display: flex;
+            background: #f0f0f0;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 5px 10px 0 10px;
+            gap: 2px;
+        }
+
+        .inner-tab {
+            padding: 8px 20px;
+            border: 1px solid var(--sap-border);
+            border-bottom: none;
+            background: #e0e0e0;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            color: #555;
+        }
+
+            .inner-tab.active {
+                background: #fff;
+                color: var(--sap-blue);
+                font-weight: bold;
+                position: relative;
+                top: 1px;
+            }
+
+        .toolbar {
+            background: #f7f7f7;
+            border-bottom: 1px solid var(--sap-border);
+            padding: 10px 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .sap-card {
+            padding: 25px;
+            background: #fff;
+            flex-grow: 1;
+        }
+
+        .section-title {
+            font-weight: bold;
+            color: var(--sap-blue);
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+            padding-bottom: 5px;
+        }
+
+        .field-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 12px;
+        }
+
+            .field-group label {
+                width: 180px; /* Fixed width ensures all inputs start at the same point */
+                color: #555;
+                font-weight: 500;
+                text-align: left;
+            }
+
+        .sap-input {
+            border: 1px solid #bfbfbf;
+            padding: 6px 10px;
+            border-radius: 2px;
+            outline: none;
+            width: 350px; /* Adjust width to match your preferred UI size */
+            box-sizing: border-box;
+        }
+
+        /* Standardizes the red mandatory bar width */
+        .mandatory-bar {
+            width: 4px;
+            height: 28px;
+            background-color: #b00;
+            margin-right: 5px;
+        }
+
+        .sap-btn {
+            border: 1px solid #ababab;
+            background: #fff;
+            padding: 6px 20px;
+            cursor: pointer;
+            border-radius: 2px;
+            font-size: 12px;
+        }
+
+        .sap-btn-primary {
+            background: var(--sap-blue);
+            color: white;
+            border: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+        .sap-input:focus {
+            background-color: #ffffff !important; /* Forces it to stay white */
+            outline: 2px solid var(--sap-blue); /* Standard SAP Fiori focus ring */
+            border: 1px solid var(--sap-blue);
+            color: #000; /* Ensures text is visible */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sap-window">
+        <div class="sap-header">🏗️ CR01 - Work Center Master Management</div>
+
+        <div class="top-nav-bar">
+            <div class="d-flex gap-2">
+                <a class="nav-link active" id="main-tab-create" onclick="toggleMainView('create')">Create Work Center</a>
+                <a class="nav-link" id="main-tab-list" onclick="toggleMainView('list')">Work Center List</a>
+            </div>
+            <div id="search-container" class="hidden">
+                <input type="text" id="wcSearch" class="sap-input" placeholder="Search Work Center..." onkeyup="searchWC()">
+            </div>
+        </div>
+
+        @using (Html.BeginForm("numberranges", "WorkCenter", FormMethod.Post, new { id = "mainForm" }))
+        {
+            @Html.AntiForgeryToken()
+            @Html.HiddenFor(m => m.ID, new { id = "hf_ID" })
+
+            <div id="create-view">
+                <div class="toolbar">
+                    <button type="submit" class="sap-btn sap-btn-primary">💾 Save Master Data</button>
+                    <button type="button" class="sap-btn" onclick="window.location.reload()">🔄 Reset Form</button>
+                </div>
+
+                <div class="inner-tabs">
+                    <div class="inner-tab active" id="itab-basic" onclick="showInnerTab('basic')">Basic Data</div>
+                    <div class="inner-tab" id="itab-capacity" onclick="showInnerTab('capacity')">Capacity</div>
+                    <div class="inner-tab" id="itab-scheduling" onclick="showInnerTab('scheduling')">Scheduling / Time</div>
+                </div>
+
+                <div class="sap-card">
+                    <div id="section-basic" class="inner-section">
+                        <div class="section-title">General Information</div>
+                        <div class="field-group">
+                            <div class="mandatory-bar"></div>
+                            <label>Work Center</label>
+                            @Html.TextBoxFor(m => m.WorkCenterName, new { @class = "sap-input", required = "required", id = "txt_WC" })
+                        </div>
+                        <div class="field-group">
+                            <div class="mandatory-bar"></div>
+                            <label>Plant</label>
+                            @Html.DropDownListFor(m => m.PlantID, new SelectList(new[] { "1000", "2000" }), new { @class = "sap-input", id = "ddl_Plant" })
+                        </div>
+                        <div class="field-group">
+                            <div class="mandatory-bar"></div>
+                          
+                            <label>Description</label>
+                            @Html.TextBoxFor(m => m.Description, new { @class = "sap-input", id = "txt_Desc" })
+                        </div>
+                    </div>
+
+                    <div id="section-capacity" class="inner-section hidden">
+                        <div class="section-title">Capacity Management</div>
+                        <div class="field-group">
+                            <label>Available Capacity (Mins)</label>
+                            @Html.TextBoxFor(m => m.AvailableCapacity, new { @class = "sap-input", type = "number", id = "txt_Cap" })
+                        </div>
+                        <div class="field-group">
+                            <label>Utilization %</label>
+                            @Html.TextBoxFor(m => m.UtilizationPercentage, new { @class = "sap-input", type = "number", id = "txt_Util" })
+                        </div>
+                    </div>
+
+                    <div id="section-scheduling" class="inner-section hidden">
+                        <div class="section-title">Standard Value Units</div>
+
+                        <div class="field-group">
+                            <label>Setup Time</label>
+                            @Html.TextBoxFor(m => m.SetupTime, new { @class = "sap-input", type = "number", id = "txt_Setup" })
+                            @Html.DropDownListFor(m => m.SetupUOM, new SelectList(new[] { "MIN", "HR" }), new { @class = "sap-input uom-select", id = "ddl_SetupUOM" })
+                        </div>
+
+                        <div class="field-group">
+                            <label>Machine Time</label>
+                            @Html.TextBoxFor(m => m.MachineTime, new { @class = "sap-input", type = "number", id = "txt_Machine" })
+                            @Html.DropDownListFor(m => m.MachineUOM, new SelectList(new[] { "MIN", "HR" }), new { @class = "sap-input uom-select", id = "ddl_MachineUOM" })
+                        </div>
+
+                        <div class="field-group">
+                            <label>Labor Time</label>
+                            @Html.TextBoxFor(m => m.LaborTime, new { @class = "sap-input", type = "number", id = "txt_Labor" })
+                            @Html.DropDownListFor(m => m.LaborUOM, new SelectList(new[] { "MIN", "HR" }), new { @class = "sap-input uom-select", id = "ddl_LaborUOM" })
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+
+        <div id="list-view" class="hidden p-4">
+            <table class="table table-bordered table-hover bg-white shadow-sm">
+                <thead class="table-light">
+                    <tr><th>Work Center</th><th>Plant</th><th>Description</th><th style="width: 180px;">Actions</th></tr>
+                </thead>
+                <tbody id="wcMasterList">
+                    @if (wcList != null)
+                    {
+                        foreach (var item in wcList)
+                        {
+                            <tr>
+                                <td><b>@item.WorkCenterName</b></td>
+                                <td>@item.PlantID</td>
+                                <td>@item.Description</td>
+                                <td>
+                                    <button class="sap-btn btn-sm" onclick="editRecord(@item.ID)">Edit</button>
+                                    <button class="sap-btn btn-sm text-danger" onclick="deleteRecord(@item.ID)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+    // Tab Switching Logic
+    function showInnerTab(tab) {
+        document.querySelectorAll('.inner-section').forEach(s => s.classList.add('hidden'));
+        document.querySelectorAll('.inner-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('section-' + tab).classList.remove('hidden');
+        document.getElementById('itab-' + tab).classList.add('active');
+    }
+
+    function toggleMainView(mode) {
+        document.getElementById('create-view').classList.toggle('hidden', mode !== 'create');
+        document.getElementById('list-view').classList.toggle('hidden', mode !== 'list');
+        document.getElementById('search-container').classList.toggle('hidden', mode !== 'list');
+        document.getElementById('main-tab-create').classList.toggle('active', mode === 'create');
+        document.getElementById('main-tab-list').classList.toggle('active', mode === 'list');
+    }
+
+    // CRUD: Edit Logic
+    function editRecord(id) {
+        $.get('/WorkCenter/GetWorkCenter/' + id, function (data) {
+            $('#hf_ID').val(data.id);
+            $('#txt_WC').val(data.workCenterCode);
+            $('#ddl_Plant').val(data.plant);
+            $('#txt_Desc').val(data.description);
+            $('#txt_Cap').val(data.availableCapacity);
+            $('#txt_Util').val(data.utilizationPercentage);
+            $('#txt_Setup').val(data.setupTime);
+            $('#ddl_SetupUom').val(data.setupUom);
+            $('#txt_Machine').val(data.machineTime);
+            $('#ddl_MachineUom').val(data.machineUom);
+            $('#txt_Labor').val(data.laborTime);
+            $('#ddl_LaborUom').val(data.laborUom);
+
+            toggleMainView('create');
+            showInnerTab('basic');
+        });
+    }
+
+    // CRUD: Delete Logic
+    function deleteRecord(id) {
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "This action cannot be undone!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#0854a0',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post('/WorkCenter/Delete/' + id, function (res) {
+                    if (res.success) {
+                        location.reload();
+                    }
+                });
+            }
+        });
+    }
+
+    // Search logic
+    function searchWC() {
+        const val = $('#wcSearch').val().toLowerCase();
+        $("#wcMasterList tr").filter(function() {
+            $(this).toggle($(this).text().toLowerCase().indexOf(val) > -1)
+        });
+    }
+
+    // Display Success Popups from TempData
+    @if (TempData["Success"] != null) {
+        <text>Swal.fire('Success', '@TempData["Success"]', 'success');</text>
+    }
+    </script>
+
+</body>
+</html>

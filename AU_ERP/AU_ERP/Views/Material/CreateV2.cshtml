@@ -1,0 +1,570 @@
+@model AU_ERP.Models.CreateMaterialMaster
+@{
+    Layout = null;
+    var createV2Embedded = ViewBag.CreateV2Embedded as bool? == true;
+    var v2IdSuffixRaw = (ViewBag.CreateV2IdSuffix as string ?? "").Trim();
+    var V2IdAffix = string.IsNullOrEmpty(v2IdSuffixRaw) ? "" : ("-" + v2IdSuffixRaw);
+    var v2HandlerKey = string.IsNullOrEmpty(V2IdAffix) ? "Main" : "Modal";
+}
+<style>
+    .au-create-v2-modal .modal-header {
+        border-bottom: 1px solid rgba(56, 128, 135, 0.25);
+        background: var(--au-white, #f6f6f2);
+    }
+    .au-create-v2-modal .modal-title {
+        font-weight: 600;
+        color: var(--au-black, #171717);
+    }
+    .au-create-v2-modal .nav-tabs {
+        border-bottom: 1px solid rgba(56, 128, 135, 0.35);
+        flex-wrap: wrap;
+        gap: 0.15rem;
+    }
+    .au-create-v2-modal .nav-tabs .nav-link {
+        color: var(--au-primary-dark, #388087);
+        border: 1px solid transparent;
+        border-radius: 0.35rem 0.35rem 0 0;
+    }
+    .au-create-v2-modal .nav-tabs .nav-link:hover {
+        border-color: rgba(56, 128, 135, 0.25);
+    }
+    .au-create-v2-modal .nav-tabs .nav-link.active {
+        color: var(--au-black, #171717);
+        font-weight: 600;
+        background: #fff;
+        border-color: rgba(56, 128, 135, 0.35);
+        border-bottom-color: #fff;
+        margin-bottom: -1px;
+    }
+    .au-create-v2-modal .tab-content {
+        padding: 1rem 0 0;
+    }
+    .au-create-v2-modal .v2-frame {
+        border: 1px solid rgba(56, 128, 135, 0.28);
+        border-radius: 0.35rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: rgba(255, 255, 255, 0.9);
+    }
+    .au-create-v2-modal .v2-frame-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--au-primary-dark, #388087);
+        margin-bottom: 0.75rem;
+    }
+    .au-create-v2-modal .form-label {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--au-black, #171717);
+        margin-bottom: 0.25rem;
+    }
+    .au-create-v2-modal .form-control {
+        font-size: 0.875rem;
+        border-radius: 0.25rem;
+        border-color: rgba(56, 128, 135, 0.35);
+    }
+    .au-create-v2-modal .sap-readonly {
+        background-color: #f0f0f0 !important;
+    }
+    .au-create-v2-modal .req {
+        border-left: 3px solid #c62828;
+    }
+    .au-create-v2-modal .v2-status {
+        font-size: 0.75rem;
+        color: var(--au-primary-dark, #388087);
+        margin-top: 0.5rem;
+        min-height: 1.25rem;
+    }
+    .au-create-v2-modal .modal-footer {
+        border-top: 1px solid rgba(56, 128, 135, 0.25);
+        background: var(--au-white, #f6f6f2);
+    }
+    .au-create-v2-embedded {
+        border-radius: 0.5rem;
+        max-height: min(78vh, 900px);
+        display: flex;
+        flex-direction: column;
+    }
+    .au-create-v2-embedded .modal-body {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+    }
+</style>
+
+@using (Html.BeginForm("CreateV2", "Material", FormMethod.Post, new { id = "createMaterialV2Form" + V2IdAffix, @class = createV2Embedded ? "card border-0 shadow-sm au-create-v2-modal au-create-v2-embedded" : "modal-content au-create-v2-modal" }))
+{
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="OriginalMaterialNumber" id="@("createV2OriginalMaterialNumber" + V2IdAffix)" value="" />
+    <div class="modal-header">
+        <h5 class="modal-title" id="@("materialCreateV2Title" + V2IdAffix)">Create material</h5>
+        @if (!createV2Embedded)
+        {
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        }
+    </div>
+    <div class="modal-body">
+        @Html.ValidationSummary(false, "", new { @class = "text-danger small mb-2" })
+
+        <ul class="nav nav-tabs flex-wrap" id="@("createV2Tabs" + V2IdAffix)" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="@("v2info-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2info" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2info" + V2IdAffix)" aria-selected="true">Info</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="@("v2basic-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2basic" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2basic" + V2IdAffix)" aria-selected="false">Basic Data</button>
+            </li>
+            <li class="nav-item" role="presentation" id="@("nav-sales-v2" + V2IdAffix)">
+                <button class="nav-link" id="@("v2sales-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2sales" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2sales" + V2IdAffix)" aria-selected="false">Sales</button>
+            </li>
+            <li class="nav-item" role="presentation" id="@("nav-purch-v2" + V2IdAffix)">
+                <button class="nav-link" id="@("v2purch-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2purch" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2purch" + V2IdAffix)" aria-selected="false">Purchasing</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="@("v2mrp-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2mrp" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2mrp" + V2IdAffix)" aria-selected="false">MRP</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="@("v2uom-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2uom" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2uom" + V2IdAffix)" aria-selected="false">Units of Measure</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="@("v2acc-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2acc" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2acc" + V2IdAffix)" aria-selected="false">Accounting</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="@("v2info" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2info-tab" + V2IdAffix)">
+                <div class="row g-3 mt-1">
+                    <div class="col-12">
+                        <label class="form-label">Material Number</label>
+                        @Html.TextBoxFor(m => m.MaterialNumber, new { @class = "form-control sap-readonly", @readonly = "readonly", id = "txtMaterialNumberV2" + V2IdAffix })
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Industry Sector</label>
+                        @Html.DropDownListFor(m => m.IndustrySectorCode, new List<SelectListItem> {
+                            new SelectListItem { Text = "Mechanical Engineering", Value = "M" },
+                            new SelectListItem { Text = "Chemical Industry", Value = "C" }
+                        }, "Select Sector", new { @class = "form-control req" })
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Material Type</label>
+                        @Html.DropDownListFor(m => m.MaterialTypeCode,
+                            ViewBag.MaterialTypeList as IEnumerable<SelectListItem>,
+                            "Select Type",
+                            new { @class = "form-control req", id = "matTypeV2" + V2IdAffix, onchange = "window.onMaterialTypeChangeV2" + v2HandlerKey + "()" })
+                    </div>
+                </div>
+                <div class="v2-status" id="@("statusBarV2" + V2IdAffix)">Ready</div>
+            </div>
+
+            <div class="tab-pane fade" id="@("v2basic" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2basic-tab" + V2IdAffix)">
+                <div class="v2-frame">
+                    <div class="v2-frame-title">Basic Data 1 &amp; 2</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Description</label>
+                            @Html.EditorFor(m => m.Description, new { htmlAttributes = new { @class = "form-control req" } })
+                            <label class="form-label">Base Unit</label>
+                            @Html.EditorFor(m => m.BaseUnitCode, new { htmlAttributes = new { @class = "form-control req", maxlength = "3", id = "BaseUnitCodeV2" + V2IdAffix } })
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Material Group</label>
+                            @Html.EditorFor(m => m.MaterialGroupCode, new { htmlAttributes = new { @class = "form-control" } })
+                            <label class="form-label">EAN/UPC</label>
+                            @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control" } })
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="@("v2sales" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2sales-tab" + V2IdAffix)">
+                <div class="v2-frame">
+                    <div class="v2-frame-title">Sales Organization Data</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Delivering Plant</label>
+                            @Html.EditorFor(m => m.DeliveringPlantCode, new { htmlAttributes = new { @class = "form-control" } })
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Item Category Group</label>
+                            @Html.EditorFor(m => m.ItemCategoryGroup, new { htmlAttributes = new { @class = "form-control" } })
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="@("v2purch" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2purch-tab" + V2IdAffix)">
+                <div class="v2-frame">
+                    <div class="v2-frame-title">Purchasing Data</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Purchasing Group</label>
+                            @Html.EditorFor(m => m.PurchasingGroupCode, new { htmlAttributes = new { @class = "form-control", maxlength = "3" } })
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">GR Processing Time</label>
+                            @Html.EditorFor(m => m.GrProcessingTime, new { htmlAttributes = new { @class = "form-control", type = "number" } })
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="@("v2mrp" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2mrp-tab" + V2IdAffix)">
+                <div class="v2-frame">
+                    <div class="v2-frame-title">MRP Data</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">MRP Type</label>
+                            @Html.EditorFor(m => m.MrpTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
+                            <label class="form-label">Procurement Type</label>
+                            @Html.EditorFor(m => m.ProcurementTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "1" } })
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Strategy Group</label>
+                            @Html.EditorFor(m => m.StrategyGroup, new { htmlAttributes = new { @class = "form-control" } })
+                            <label class="form-label">Availability Check</label>
+                            @Html.EditorFor(m => m.AvailabilityCheckCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="@("v2uom" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2uom-tab" + V2IdAffix)">
+                <div class="v2-frame">
+                    <div class="v2-frame-title">Unit Conversions</div>
+                    <table class="table table-bordered table-sm" id="@("uomTableV2" + V2IdAffix)">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Alt. Unit</th>
+                                <th>Numerator</th>
+                                <th>=</th>
+                                <th>Denominator</th>
+                                <th>Base Unit</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.addUomRowV2@(v2HandlerKey)()">+ Add Row</button>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="@("v2acc" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2acc-tab" + V2IdAffix)">
+                <div class="v2-frame">
+                    <div class="v2-frame-title">Valuation</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Valuation Class</label>
+                            @Html.EditorFor(m => m.ValuationClassCode, new { htmlAttributes = new { @class = "form-control req" } })
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        @if (!createV2Embedded)
+        {
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        }
+        <button type="button" class="btn btn-primary" id="@("btnCreateV2Save" + V2IdAffix)" style="background: var(--au-primary, #6FB3B8); border-color: var(--au-primary-dark, #388087);">Save</button>
+    </div>
+}
+
+<script>
+    (function () {
+        var createV2Embedded = @(createV2Embedded ? "true" : "false");
+        var V2_ID_AFFIX = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(V2IdAffix));
+        var v2IsModalCopy = V2_ID_AFFIX !== "";
+        let uomIndexV2 = 0;
+        let createV2IsEdit = false;
+        let createV2CommittedTypeCode = "";
+        let createV2CommittedMaterialNumber = "";
+
+        if (v2IsModalCopy) {
+            window.setCreateV2ModalEditState = function (v) {
+                createV2IsEdit = !!v;
+            };
+            window.setCreateV2ModalCommittedFromLoaded = function (typeCode, materialNumber) {
+                createV2CommittedTypeCode = typeCode || "";
+                createV2CommittedMaterialNumber = materialNumber || "";
+            };
+        }
+
+        function v2id(base) {
+            return base + V2_ID_AFFIX;
+        }
+
+        function handleTabVisibilityV2() {
+            const typeEl = document.getElementById(v2id("matTypeV2"));
+            if (!typeEl) return;
+            const type = typeEl.value;
+            const salesLi = document.getElementById(v2id("nav-sales-v2"));
+            const purchLi = document.getElementById(v2id("nav-purch-v2"));
+            if (salesLi) salesLi.style.display = "";
+            if (purchLi) purchLi.style.display = "";
+            if (type === "ROH" && salesLi) salesLi.style.display = "none";
+            if (type === "FERT" && purchLi) purchLi.style.display = "none";
+        }
+
+        window.onMaterialTypeChangeV2@v2HandlerKey = function () {
+            handleTabVisibilityV2();
+            if (createV2IsEdit)
+                fetchNextMaterialNumberV2ForEdit();
+            else
+                fetchNextMaterialNumberV2();
+        };
+
+        if (!createV2Embedded) {
+            window.moveCreateV2ModalToBody = function () {
+                var el = document.getElementById("materialCreateV2Modal");
+                if (el && el.parentElement !== document.body)
+                    document.body.appendChild(el);
+            };
+        }
+
+        function fetchNextMaterialNumberV2() {
+            const typeCode = document.getElementById(v2id("matTypeV2"))?.value;
+            const statusBox = document.getElementById(v2id("statusBarV2"));
+            const numInput = document.getElementById(v2id("txtMaterialNumberV2"));
+            if (!typeCode) {
+                if (numInput) numInput.value = "";
+                return;
+            }
+            if (statusBox) statusBox.innerText = "Fetching next material number...";
+            const url = '@Url.Action("GetNextMaterialNumber", "Material")' + '?materialTypeCode=' + encodeURIComponent(typeCode);
+            fetch(url)
+                .then(r => r.json())
+                .then(function (response) {
+                    if (response.success) {
+                        if (numInput) numInput.value = response.nextNumber;
+                        if (statusBox) statusBox.innerText = "Assigned: " + response.nextNumber;
+                    } else {
+                        if (numInput) numInput.value = "";
+                        if (statusBox) statusBox.innerText = "Error: " + response.message;
+                    }
+                })
+                .catch(function () {
+                    if (statusBox) statusBox.innerText = "Communication error.";
+                });
+        }
+
+        function fetchNextMaterialNumberV2ForEdit() {
+            const matType = document.getElementById(v2id("matTypeV2"));
+            const statusBox = document.getElementById(v2id("statusBarV2"));
+            const numInput = document.getElementById(v2id("txtMaterialNumberV2"));
+            if (!matType || !numInput) return;
+
+            const newType = matType.value;
+            const prevType = createV2CommittedTypeCode || "";
+            const prevNum = createV2CommittedMaterialNumber || "";
+
+            if (!newType) {
+                matType.value = prevType;
+                numInput.value = prevNum;
+                if (statusBox) statusBox.innerText = "Select a material type.";
+                return;
+            }
+
+            if (newType === prevType && numInput.value === prevNum)
+                return;
+
+            if (statusBox) statusBox.innerText = "Fetching next material number...";
+            const url = '@Url.Action("GetNextMaterialNumber", "Material")' + "?materialTypeCode=" + encodeURIComponent(newType);
+            fetch(url)
+                .then(function (r) { return r.json(); })
+                .then(function (response) {
+                    if (response.success) {
+                        numInput.value = response.nextNumber;
+                        createV2CommittedTypeCode = newType;
+                        createV2CommittedMaterialNumber = response.nextNumber;
+                        if (statusBox) statusBox.innerText = "Assigned: " + response.nextNumber;
+                    } else {
+                        matType.value = prevType;
+                        numInput.value = prevNum;
+                        if (statusBox) statusBox.innerText = "Ready";
+                        alert(response.message || "Could not assign the next material number.");
+                    }
+                })
+                .catch(function () {
+                    matType.value = prevType;
+                    numInput.value = prevNum;
+                    if (statusBox) statusBox.innerText = "Ready";
+                    alert("Communication error while fetching the next material number.");
+                });
+        }
+
+        function escapeAttr(s) {
+            if (s == null || s === undefined) return "";
+            return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+        }
+
+        function addUomRowV2WithValues(altUnit, numerator, denominator, baseUom) {
+            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
+            if (!tbody) return;
+            const baseUomValue = baseUom || (document.getElementById(v2id("BaseUnitCodeV2"))?.value || "PC");
+            const numStr = numerator !== undefined && numerator !== null && numerator !== "" ? String(numerator) : "";
+            const denStr = denominator !== undefined && denominator !== null && denominator !== "" ? String(denominator) : "1";
+            const rowId = "v2row" + V2_ID_AFFIX.replace(/-/g, "_") + "_" + uomIndexV2;
+            const html =
+                '<tr id="' + rowId + '">' +
+                '<td><input name="Conversions[' + uomIndexV2 + '].AltUnitCode" class="form-control form-control-sm" maxlength="3" value="' + escapeAttr(altUnit) + '" /></td>' +
+                '<td><input name="Conversions[' + uomIndexV2 + '].Numerator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(numStr) + '" /></td>' +
+                '<td class="text-center align-middle">=</td>' +
+                '<td><input name="Conversions[' + uomIndexV2 + '].Denominator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(denStr) + '" /></td>' +
+                '<td><input class="form-control form-control-sm sap-readonly" value="' + escapeAttr(baseUomValue) + '" readonly /></td>' +
+                '<td><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'' + rowId + '\').remove()">X</button></td>' +
+                '</tr>';
+            tbody.insertAdjacentHTML("beforeend", html);
+            uomIndexV2++;
+        }
+
+        window.addUomRowV2@v2HandlerKey = function () {
+            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
+            if (!tbody) return;
+            const baseUomField = document.getElementById(v2id("BaseUnitCodeV2"));
+            const baseUomValue = (baseUomField && baseUomField.value) ? baseUomField.value : "PC";
+            addUomRowV2WithValues("", "", "1", baseUomValue);
+            const sb = document.getElementById(v2id("statusBarV2"));
+            if (sb) sb.innerText = "Row added to conversion table.";
+        };
+
+        function applyCreateV2EditData(m, conversions) {
+            const form = document.getElementById(v2id("createMaterialV2Form"));
+            if (!form || !m) return;
+            function pick(obj, camel, pascal) {
+                if (obj[camel] !== undefined && obj[camel] !== null) return obj[camel];
+                if (obj[pascal] !== undefined && obj[pascal] !== null) return obj[pascal];
+                return "";
+            }
+            function setVal(name, value) {
+                const el = form.querySelector('[name="' + name + '"]');
+                if (!el) return;
+                el.value = value != null && value !== undefined ? value : "";
+            }
+            setVal("MaterialNumber", pick(m, "materialNumber", "MaterialNumber"));
+            setVal("IndustrySectorCode", pick(m, "industrySectorCode", "IndustrySectorCode"));
+            setVal("MaterialTypeCode", pick(m, "materialTypeCode", "MaterialTypeCode"));
+            setVal("Description", pick(m, "description", "Description"));
+            setVal("BaseUnitCode", pick(m, "baseUnitCode", "BaseUnitCode"));
+            setVal("MaterialGroupCode", pick(m, "materialGroupCode", "MaterialGroupCode"));
+            setVal("EAN", pick(m, "ean", "EAN"));
+            setVal("DeliveringPlantCode", pick(m, "deliveringPlantCode", "DeliveringPlantCode"));
+            setVal("ItemCategoryGroup", pick(m, "itemCategoryGroup", "ItemCategoryGroup"));
+            setVal("PurchasingGroupCode", pick(m, "purchasingGroupCode", "PurchasingGroupCode"));
+            var gr = pick(m, "grProcessingTime", "GrProcessingTime");
+            setVal("GrProcessingTime", gr !== "" && gr != null ? gr : "");
+            setVal("MrpTypeCode", pick(m, "mrpTypeCode", "MrpTypeCode"));
+            setVal("ProcurementTypeCode", pick(m, "procurementTypeCode", "ProcurementTypeCode"));
+            setVal("StrategyGroup", pick(m, "strategyGroup", "StrategyGroup"));
+            setVal("AvailabilityCheckCode", pick(m, "availabilityCheckCode", "AvailabilityCheckCode"));
+            setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
+
+            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
+            if (tbody) tbody.innerHTML = "";
+            uomIndexV2 = 0;
+            const baseUom = pick(m, "baseUnitCode", "BaseUnitCode") || "PC";
+            (conversions || []).forEach(function (c) {
+                if (!c) return;
+                var alt = c.altUnitCode != null ? c.altUnitCode : c.AltUnitCode;
+                if (!alt) return;
+                var num = c.numerator != null ? c.numerator : c.Numerator;
+                var den = c.denominator != null ? c.denominator : c.Denominator;
+                addUomRowV2WithValues(alt, num, den, baseUom);
+            });
+            const sb = document.getElementById(v2id("statusBarV2"));
+            if (sb) sb.innerText = "Loaded for edit.";
+
+            var origNum = pick(m, "materialNumber", "MaterialNumber");
+            var origH = document.getElementById(v2id("createV2OriginalMaterialNumber"));
+            if (origH) origH.value = origNum || "";
+            createV2CommittedTypeCode = pick(m, "materialTypeCode", "MaterialTypeCode") || "";
+            createV2CommittedMaterialNumber = origNum || "";
+        }
+
+        function resetThisInstance() {
+            createV2IsEdit = false;
+            createV2CommittedTypeCode = "";
+            createV2CommittedMaterialNumber = "";
+            const origH = document.getElementById(v2id("createV2OriginalMaterialNumber"));
+            if (origH) origH.value = "";
+            const form = document.getElementById(v2id("createMaterialV2Form"));
+            if (form) form.reset();
+            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
+            if (tbody) tbody.innerHTML = "";
+            uomIndexV2 = 0;
+            const num = document.getElementById(v2id("txtMaterialNumberV2"));
+            if (num) num.value = "";
+            const matType = document.getElementById(v2id("matTypeV2"));
+            if (matType) matType.disabled = false;
+            if (num) num.readOnly = true;
+            const titleEl = document.getElementById(v2id("materialCreateV2Title"));
+            if (titleEl) titleEl.textContent = "Create material";
+            const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
+            if (saveBtn) saveBtn.textContent = "Save";
+            const sb = document.getElementById(v2id("statusBarV2"));
+            if (sb) sb.innerText = "Ready";
+            var firstTabBtn = document.getElementById(v2id("v2info-tab"));
+            if (firstTabBtn && typeof bootstrap !== "undefined" && bootstrap.Tab)
+                bootstrap.Tab.getOrCreateInstance(firstTabBtn).show();
+            handleTabVisibilityV2();
+        }
+
+        if (createV2Embedded)
+            window.resetCreateV2EmbeddedForm = resetThisInstance;
+
+        if (v2IsModalCopy)
+            window.resetCreateV2Modal = resetThisInstance;
+
+        document.addEventListener("DOMContentLoaded", function () {
+            if (!createV2Embedded && typeof window.moveCreateV2ModalToBody === "function")
+                window.moveCreateV2ModalToBody();
+            handleTabVisibilityV2();
+            const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
+            if (saveBtn) {
+                saveBtn.addEventListener("click", function () {
+                    const form = document.getElementById(v2id("createMaterialV2Form"));
+                    if (!form) return;
+                    const fd = new FormData(form);
+                    const origH = document.getElementById(v2id("createV2OriginalMaterialNumber"));
+                    const hasOriginal = !!(origH && origH.value);
+                    const url = (createV2IsEdit || hasOriginal)
+                        ? '@Url.Action("UpdateMaterialV2", "Material")'
+                        : '@Url.Action("CreateV2", "Material")';
+                    fetch(url, {
+                        method: "POST",
+                        body: fd,
+                        headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" }
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                if (v2IsModalCopy) {
+                                    const el = document.getElementById("materialCreateV2Modal");
+                                    if (el && typeof bootstrap !== "undefined") {
+                                        const modal = bootstrap.Modal.getInstance(el);
+                                        if (modal) modal.hide();
+                                    }
+                                } else if (typeof window.switchMaterialsModuleTab === "function")
+                                    window.switchMaterialsModuleTab("list");
+                                location.reload();
+                            } else {
+                                alert(data.message || "Save failed");
+                            }
+                        })
+                        .catch(function () { alert("Request failed"); });
+                });
+            }
+            const modalEl = document.getElementById("materialCreateV2Modal");
+            if (modalEl && v2IsModalCopy) {
+                modalEl.addEventListener("shown.bs.modal", function () {
+                    if (!createV2IsEdit && typeof window.resetCreateV2Modal === "function")
+                        window.resetCreateV2Modal();
+                });
+                modalEl.addEventListener("hidden.bs.modal", function () {
+                    createV2IsEdit = false;
+                    if (typeof window.resetCreateV2Modal === "function")
+                        window.resetCreateV2Modal();
+                });
+            }
+        });
+    })();
+</script>
