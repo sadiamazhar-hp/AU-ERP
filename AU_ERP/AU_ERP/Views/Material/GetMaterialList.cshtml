@@ -1,6 +1,7 @@
 ﻿@model List<AU_ERP.Models.CreateMaterialMaster>
 
 @{
+    ViewData["Title"] = "Materials — List";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.CreateMaterialMaster>();
 }
@@ -12,13 +13,6 @@
         --sap-header-bg: #dee6ef;
         --sap-readonly: #f4f4f4;
         --sap-selected: #b3d7ff;
-    }
-
-    body {
-        background-color: var(--sap-bg);
-        font-family: Arial;
-        font-size: 13px;
-        padding: 10px;
     }
 
     .sap-window {
@@ -34,8 +28,27 @@
         border-bottom: 2px solid var(--sap-border);
         background: #fff;
         display: flex;
-        justify-content: space-between;
+        justify-content: flex-end;
         align-items: center;
+    }
+
+    .sap-actions .btn-add-classic {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: #fff;
+        background: var(--au-primary, #6FB3B8);
+        border: 1px solid var(--au-primary-dark, #388087);
+        border-radius: 0.25rem;
+        text-decoration: none;
+    }
+
+    .sap-actions .btn-add-classic:hover {
+        color: #fff;
+        filter: brightness(0.95);
     }
 
     .btn-sap {
@@ -94,6 +107,15 @@
         background-color: var(--sap-selected) !important;
     }
 
+    .table-sap tr.row-selected td {
+        background-color: var(--sap-selected);
+    }
+
+    .table-sap tr.row-selected .sap-input,
+    .table-sap tr.row-selected .sap-select {
+        background-color: transparent;
+    }
+
     .sap-select:disabled {
         background: var(--sap-readonly);
         color: #666;
@@ -102,23 +124,24 @@
 </style>
 <div class="sap-window" id="app">
 
-    <form id="materialForm" method="post" action="/Material/GetMaterialList">
+    <form id="materialForm" method="post" action="@Url.Action("GetMaterialList", "Material")">
 
         <!-- TOP TOOLBAR -->
         <div class="sap-toolbar">
 
-            <div class="view-title">
-                Material Master Overview
-            </div>
-
-            <!-- RIGHT SIDE BUTTONS -->
             <div class="sap-actions">
+                <!--
                 <button type="button" class="btn-sap" onclick="setMode(true)">✏️ Edit</button>
                 <button type="button" class="btn-sap" onclick="addNewRow()" disabled id="btnNew">📄 New</button>
                 <button type="submit" class="btn-sap" onclick="saveAll()" disabled id="btnSave">
                     💾 Save
                 </button>
                 <button type="button" class="btn-sap text-danger" onclick="handleDelete()" disabled id="btnDelete">🗑️ Delete</button>
+                -->
+                <a class="btn-add-classic" asp-controller="Material" asp-action="Create">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                    Add
+                </a>
             </div>
 
         </div>
@@ -172,7 +195,8 @@
                             <td>
                                 <select name="[@i].MaterialTypeCode"
                                         class="sap-input sap-select"
-                                        onchange="onTypeChange(this)" readonly>
+                                        disabled
+                                        onchange="onTypeChange(this)">
                              
                                     @foreach (var opt in mTypes)
                                     {
@@ -234,12 +258,14 @@
             }
         });
 
-        document.getElementById('btnNew').disabled = !edit;
-        document.getElementById('btnSave').disabled = !edit;
+        var btnNew = document.getElementById('btnNew');
+        if (btnNew) btnNew.disabled = !edit;
+        var btnSave = document.getElementById('btnSave');
+        if (btnSave) btnSave.disabled = !edit;
     }
 
     document.getElementById('materialForm').onsubmit = function () {
-        document.querySelectorAll('.sap-input').forEach(el => {
+        document.querySelectorAll('.sap-input, .sap-select').forEach(el => {
             el.disabled = false;
             el.readOnly = false;
         });
@@ -262,7 +288,7 @@
             <td><input name="[${rowCount}].Description" class="sap-input"></td>
 
             <td>
-                <select name="[${rowCount}].MaterialTypeCode" class="sap-input">
+                <select name="[${rowCount}].MaterialTypeCode" class="sap-input sap-select" onchange="onTypeChange(this)">
                     <option value="">Select Type</option>
                     @foreach (var opt in mTypes)
                     {
@@ -277,12 +303,12 @@
         `;
 
         body.appendChild(tr);
+        const newSel = tr.querySelector("select.sap-select");
+        if (newSel && !isEditMode) newSel.disabled = true;
         rowCount++;
     }
 
     function selectRow(cell) {
-        if (!isEditMode) return;
-
         document.querySelectorAll("#gridBody tr").forEach(r => {
             r.classList.remove("row-selected");
         });
@@ -290,7 +316,8 @@
         selectedRow = cell.parentElement;
         selectedRow.classList.add("row-selected");
 
-        document.getElementById("btnDelete").disabled = false;
+        var btnDel = document.getElementById("btnDelete");
+        if (btnDel) btnDel.disabled = false;
     }
 
     function handleDelete() {
@@ -384,4 +411,8 @@
 
         fetchNextMaterialNumber(typeCode, "statusBar", materialInput);
     }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        setMode(false);
+    });
 </script>

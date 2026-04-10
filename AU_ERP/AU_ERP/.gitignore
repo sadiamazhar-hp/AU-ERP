@@ -1,1 +1,30 @@
+# Build folders
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+
+# Visual Studio
+.vs/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Optional: ignore compiled files explicitly
 *.dll
+*.exe
+*.pdb
+
+# KEEP important config files
+!appsettings.json
+!appsettings.*.json

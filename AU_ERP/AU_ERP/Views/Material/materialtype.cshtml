@@ -1,6 +1,7 @@
 ﻿@model List<AU_ERP.Models.MaterialType>
 
 @{
+    ViewData["Title"] = "Materials — Material Type";
     ViewBag.Title = "Material Types";
     // Prevents NullReferenceException if Controller sends a null model
     var safeModel = Model ?? new List<AU_ERP.Models.MaterialType>();
@@ -63,20 +64,12 @@
         --sap-focus: #fff9c4;
     }
 
-    body {
-        background-color: var(--sap-bg);
-        font-family: Arial, sans-serif;
-        font-size: 13px;
-        padding: 10px;
-        height: 100vh;
-    }
-
     .sap-window {
         background: white;
         border: 1px solid var(--sap-border);
         display: flex;
         flex-direction: column;
-        height: 100%;
+        min-height: 420px;
     }
 
     .sap-toolbar {

@@ -1,5 +1,6 @@
 ﻿@model List<AU_ERP.Models.MaterialNumberRange>
 @{
+    ViewData["Title"] = "Materials — Number Ranges";
     ViewBag.Title = "Number Ranges Configuration";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.MaterialNumberRange>();
@@ -85,13 +86,6 @@
         --sap-header-bg: #dee6ef;
         --sap-readonly: #f4f4f4;
         --sap-selected: #b3d7ff;
-    }
-
-    body {
-        background-color: var(--sap-bg);
-        font-family: Arial;
-        font-size: 13px;
-        padding: 10px;
     }
 
     .sap-window {
