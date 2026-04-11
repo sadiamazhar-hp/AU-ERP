@@ -5,7 +5,8 @@ namespace AU_ERP.Models
     public class BPTypeSample
     {
         [Key]
-        public string BPTypeID { get; set; } = null!;
+        public int Id { get; set; }
+
         public string TypeName { get; set; } = null!;
         public bool? IsActive { get; set; }
         public DateTime? CreatedAt { get; set; }

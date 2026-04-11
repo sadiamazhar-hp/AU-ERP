@@ -1,14 +1,13 @@
 @model AU_ERP.Models.BusinessPartnerMasterSample
 @using Microsoft.AspNetCore.Mvc.Rendering
 @{
-    var roleList = ViewBag.RoleList as SelectList;
-    var typeList = ViewBag.TypeList as SelectList;
-    var groupList = ViewBag.GroupList as SelectList;
+    var roleOptions = ViewBag.RoleOptions as List<AU_ERP.Models.BPRole> ?? new List<AU_ERP.Models.BPRole>();
+    var typeOptions = ViewBag.TypeOptions as List<AU_ERP.Models.BPTypeSample> ?? new List<AU_ERP.Models.BPTypeSample>();
+    var groupOptions = ViewBag.GroupOptions as List<AU_ERP.Models.BPGrouping> ?? new List<AU_ERP.Models.BPGrouping>();
 }
-<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot">
+<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")">
     @Html.AntiForgeryToken()
     <input type="hidden" name="returnTo" value="@(ViewBag.FormReturnTo ?? "Index")" />
-    @Html.HiddenFor(m => m.BPID)
 
     <div class="bp-toolbar border-bottom bg-white py-2 px-3 d-flex flex-wrap gap-2 align-items-center">
         <button type="submit" class="btn btn-sm text-white bp-btn-save">Save partner</button>
@@ -19,17 +18,60 @@
             <div class="bp-field-row mb-0">
                 <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">Role</label>
-                @Html.DropDownListFor(m => m.BPRole, roleList, "-- Select BP role --", new { @class = "form-select form-select-sm f-role", style = "min-width:11rem;", onchange = "bpHandleRoleUI(this)" })
+                <select name="BPRoleId" class="form-select form-select-sm f-role" style="min-width:11rem;" onchange="bpHandleRoleUI(this)">
+                    <option value="">-- Select BP role --</option>
+                    @foreach (var r in roleOptions)
+                    {
+                        if (Model.BPRoleId == r.Id)
+                        {
+                            <option value="@r.Id" data-code="@r.RoleCode" selected>@r.RoleCode — @r.RoleName</option>
+                        }
+                        else
+                        {
+                            <option value="@r.Id" data-code="@r.RoleCode">@r.RoleCode — @r.RoleName</option>
+                        }
+                    }
+                </select>
             </div>
             <div class="bp-field-row mb-0">
                 <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">Type</label>
-                @Html.DropDownListFor(m => m.BPType, typeList, "-- Select type --", new { @class = "form-select form-select-sm f-type", style = "min-width:11rem;" })
+                <select name="BPTypeId" class="form-select form-select-sm f-type" style="min-width:11rem;">
+                    <option value="">-- Select type --</option>
+                    @foreach (var t in typeOptions)
+                    {
+                        if (Model.BPTypeId == t.Id)
+                        {
+                            <option value="@t.Id" selected>@t.TypeName</option>
+                        }
+                        else
+                        {
+                            <option value="@t.Id">@t.TypeName</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="bp-field-row mb-0">
+                <label class="bp-label-compact">BPID</label>
+                <input asp-for="BPID" class="form-control form-control-sm f-bpid bg-light" style="min-width:12rem;" readonly autocomplete="off" placeholder="Select type for number" />
             </div>
             <div class="bp-field-row mb-0">
                 <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">Grouping</label>
-                @Html.DropDownListFor(m => m.BPGrouping, groupList, "-- Select grouping --", new { @class = "form-select form-select-sm f-group", style = "min-width:12rem;" })
+                <select name="BPGroupingId" class="form-select form-select-sm f-group" style="min-width:12rem;">
+                    <option value="">-- Select grouping --</option>
+                    @foreach (var g in groupOptions)
+                    {
+                        if (Model.BPGroupingId == g.Id)
+                        {
+                            <option value="@g.Id" selected>@g.GroupName</option>
+                        }
+                        else
+                        {
+                            <option value="@g.Id">@g.GroupName</option>
+                        }
+                    }
+                </select>
             </div>
         </div>
 
@@ -150,15 +192,28 @@
     </div>
 </form>
 
+<div class="modal fade" id="bpRangeErrorModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="bpRangeErrorModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered au-bp-error-modal-dialog">
+        <div class="modal-content au-bp-error-modal-content shadow-none">
+            <div class="au-bp-error-modal-inner">
+                <h2 class="au-bp-error-modal-title" id="bpRangeErrorModalTitle">ERROR</h2>
+                <p class="au-bp-error-modal-message" id="bpRangeErrorModalBody"></p>
+                <button type="button" class="au-bp-error-modal-ok" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script type="text/javascript">
     function bpHandleRoleUI(select) {
         const root = select.closest('#bpCreateRoot');
         if (!root) return;
-        const role = select.value;
+        const opt = select.options[select.selectedIndex];
+        const roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
         const sales = root.querySelector('.tab-sales-btn');
         const purch = root.querySelector('.tab-purch-btn');
-        if (sales) sales.classList.toggle('d-none', role !== 'FLCU01');
-        if (purch) purch.classList.toggle('d-none', role !== 'FLVN01');
+        if (sales) sales.classList.toggle('d-none', roleCode !== 'FLCU01');
+        if (purch) purch.classList.toggle('d-none', roleCode !== 'FLVN01');
     }
     function bpSwitchTab(btn, tab) {
         const root = btn.closest('#bpCreateRoot');
@@ -171,5 +226,63 @@
     }
     document.querySelectorAll('#bpCreateRoot .f-role').forEach(function (el) {
         bpHandleRoleUI(el);
+    });
+
+    function bpShowRangeErrorModal(message) {
+        var body = document.getElementById('bpRangeErrorModalBody');
+        if (body) body.textContent = message || 'An error occurred.';
+        var el = document.getElementById('bpRangeErrorModal');
+        if (el && el.parentElement !== document.body)
+            document.body.appendChild(el);
+        if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        } else {
+            window.alert(message || 'An error occurred.');
+        }
+    }
+
+    function bpFetchNextBPID(root, refetchDepth) {
+        if (!root) return;
+        refetchDepth = refetchDepth || 0;
+        const typeSel = root.querySelector('.f-type');
+        const bpInput = root.querySelector('.f-bpid');
+        if (!typeSel || !bpInput) return;
+        const id = typeSel.value;
+        if (!id) {
+            bpInput.value = '';
+            root.dataset.bpTypeCommitted = '';
+            return;
+        }
+        const url = '@Url.Action("GetNextBPTypeNumber", "BP")' + '?bpTypeId=' + encodeURIComponent(id);
+        function bpRangeFetchFailed(message) {
+            bpInput.value = '';
+            bpShowRangeErrorModal(message);
+            const committed = root.dataset.bpTypeCommitted || '';
+            if (id !== committed) {
+                typeSel.value = committed;
+                if (committed && refetchDepth < 1)
+                    bpFetchNextBPID(root, refetchDepth + 1);
+            }
+        }
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (response) {
+                if (response.success) {
+                    bpInput.value = response.nextBPID;
+                    root.dataset.bpTypeCommitted = String(id);
+                } else {
+                    bpRangeFetchFailed(response.message || 'No number range available for this type.');
+                }
+            })
+            .catch(function () {
+                bpRangeFetchFailed('Could not load the next BPID. Check your connection and try again.');
+            });
+    }
+    document.querySelectorAll('#bpCreateRoot .f-type').forEach(function (el) {
+        el.addEventListener('change', function () {
+            bpFetchNextBPID(el.closest('#bpCreateRoot'));
+        });
+        if (el.value)
+            bpFetchNextBPID(el.closest('#bpCreateRoot'));
     });
 </script>

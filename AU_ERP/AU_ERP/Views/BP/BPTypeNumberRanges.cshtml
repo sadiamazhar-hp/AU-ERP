@@ -1,0 +1,246 @@
+@model List<AU_ERP.Models.BPTypeNumberRanges>
+@using System.Text.Json
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "BP Type Number Ranges";
+    var typeList = ViewBag.TypeList as List<SelectListItem> ?? new List<SelectListItem>();
+    var safeModel = Model ?? new List<AU_ERP.Models.BPTypeNumberRanges>();
+    var typeOptsJson = JsonSerializer.Serialize(typeList.Select(t => new { value = t.Value ?? "", text = t.Text ?? "" }));
+}
+
+<div class="sap-window" id="app">
+    @using (Html.BeginForm("BPTypeNumberRanges", "BP", FormMethod.Post, new { id = "bpTypeNrForm" }))
+    {
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(false, "", new { @class = "text-danger px-3 pt-2" })
+
+        <div class="sap-toolbar">
+            <div class="d-flex">
+                <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">Edit</button>
+                <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>New entries</button>
+                <button type="submit" id="btnSave" class="btn btn-sap" disabled>Save</button>
+                <button type="button" id="btnDelete" class="btn btn-sap text-danger" onclick="handleDelete()" disabled>Delete</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table-sap">
+                <thead>
+                    <tr>
+                        <th style="width: 35px;">Sel</th>
+                        <th style="width: 220px;">BP type</th>
+                        <th style="width: 120px;">Prefix</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Current</th>
+                        <th style="width: 90px;">Active</th>
+                    </tr>
+                </thead>
+                <tbody id="gridBody">
+                    @for (int i = 0; i < safeModel.Count; i++)
+                    {
+                        <tr>
+                            <td class="col-sel" onclick="selectRow(this)">
+                                <input type="hidden" name="[@i].RangeID" value="@safeModel[i].RangeID" class="row-id" />
+                            </td>
+                            <td>
+                                <select name="[@i].BPTypeId" class="sap-input" disabled>
+                                    <option value="">Select type</option>
+                                    @foreach (var opt in typeList)
+                                    {
+                                        var sel = safeModel[i].BPTypeId is int tid && opt.Value == tid.ToString();
+                                        if (sel)
+                                        {
+                                            <option value="@opt.Value" selected>@opt.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@opt.Value">@opt.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </td>
+                            <td><input name="[@i].Prefix" class="sap-input" value="@safeModel[i].Prefix" readonly /></td>
+                            <td><input type="number" name="[@i].StartNumber" class="sap-input" value="@safeModel[i].StartNumber" readonly /></td>
+                            <td><input type="number" name="[@i].EndNumber" class="sap-input" value="@safeModel[i].EndNumber" readonly /></td>
+                            <td><input type="number" name="[@i].CurrentNumber" class="sap-input" value="@safeModel[i].CurrentNumber" readonly /></td>
+                            <td class="text-center align-middle px-2">
+                                <input type="checkbox" name="[@i].IsActive" value="true" class="sap-check" disabled @(safeModel[i].IsActive != false ? "checked=\"checked\"" : null) />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<style>
+    :root {
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+        --sap-selected: #b3d7ff;
+        --sap-focus: #fff9c4;
+    }
+    .sap-window {
+        background: white;
+        border: 1px solid var(--sap-border);
+        display: flex;
+        flex-direction: column;
+        min-height: 420px;
+    }
+    .sap-toolbar {
+        padding: 12px;
+        border-bottom: 2px solid var(--sap-border);
+        background: #fff;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+    }
+    .btn-sap {
+        border-radius: 2px;
+        font-size: 12px;
+        border: 1px solid #bbb;
+        margin-right: 5px;
+        background: #fdfdfd;
+        cursor: pointer;
+    }
+    .btn-sap:disabled { opacity: 0.4; cursor: default; }
+    .table-container { overflow-y: auto; flex-grow: 1; }
+    .table-sap { width: 100%; border-collapse: collapse; }
+    .table-sap th {
+        background: var(--sap-header-bg);
+        border: 1px solid #ccc;
+        padding: 6px 10px;
+        font-weight: normal;
+        text-align: left;
+    }
+    .table-sap td { border: 1px solid #ccc; padding: 0; height: 30px; }
+    .sap-input {
+        width: 100%;
+        height: 100%;
+        border: none;
+        padding: 0 10px;
+        background: var(--sap-readonly);
+        outline: none;
+        box-sizing: border-box;
+    }
+    .edit-mode .sap-input:not([readonly]):not([disabled]) { background: #fff; }
+    .edit-mode .sap-input:not([readonly]):not([disabled]):focus { background: var(--sap-focus); outline: 1px solid orange; }
+    .sap-check:disabled { opacity: 0.5; cursor: default; }
+    .col-sel { width: 35px; background: #f0f0f0; cursor: pointer; }
+    .row-selected { background-color: var(--sap-selected) !important; }
+    .row-selected .sap-input { background-color: transparent !important; }
+</style>
+<script>
+    let isEditMode = false;
+    let selectedRow = null;
+    let rowCount = @(safeModel.Count);
+
+    const typeOptionsList = @Html.Raw(typeOptsJson);
+    function buildTypeSelectOptionsHtml() {
+        let html = '<option value="">Select type</option>';
+        typeOptionsList.forEach(function (o) {
+            const v = String(o.value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            const t = String(o.text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            html += '<option value="' + v + '">' + t + '</option>';
+        });
+        return html;
+    }
+
+    function setMode(edit) {
+        isEditMode = edit;
+        document.getElementById('app').classList.toggle('edit-mode', edit);
+        document.querySelectorAll('.sap-input').forEach(input => {
+            if (input.tagName === 'SELECT') input.disabled = !edit;
+            else input.readOnly = !edit;
+        });
+        document.querySelectorAll('.sap-check').forEach(c => { c.disabled = !edit; });
+        document.getElementById('btnEdit').disabled = edit;
+        document.getElementById('btnNew').disabled = !edit;
+        document.getElementById('btnSave').disabled = !edit;
+    }
+
+    document.getElementById('bpTypeNrForm').onsubmit = function () {
+        document.querySelectorAll('.sap-input, .sap-check, select').forEach(input => {
+            input.disabled = false;
+            input.readOnly = false;
+        });
+        return true;
+    };
+
+    function addNewRow() {
+        const body = document.getElementById('gridBody');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="col-sel" onclick="selectRow(this)">
+                <input type="hidden" name="[${rowCount}].RangeID" value="0" class="row-id" />
+            </td>
+            <td><select name="[${rowCount}].BPTypeId" class="sap-input">${buildTypeSelectOptionsHtml()}</select></td>
+            <td><input name="[${rowCount}].Prefix" class="sap-input" /></td>
+            <td><input type="number" name="[${rowCount}].StartNumber" class="sap-input" value="0" /></td>
+            <td><input type="number" name="[${rowCount}].EndNumber" class="sap-input" value="0" /></td>
+            <td><input type="number" name="[${rowCount}].CurrentNumber" class="sap-input" value="0" /></td>
+            <td class="text-center align-middle px-2">
+                <input type="checkbox" name="[${rowCount}].IsActive" value="true" class="sap-check" checked />
+            </td>`;
+        body.appendChild(tr);
+        rowCount++;
+        if (isEditMode) {
+            tr.querySelectorAll('.sap-check').forEach(c => { c.disabled = false; });
+            tr.querySelectorAll('select.sap-input').forEach(s => { s.disabled = false; });
+            tr.querySelectorAll('input.sap-input').forEach(inp => { inp.readOnly = false; });
+        }
+        tr.querySelector('select.sap-input')?.focus();
+    }
+
+    function selectRow(cell) {
+        if (!isEditMode) return;
+        if (selectedRow) selectedRow.classList.remove('row-selected');
+        selectedRow = cell.parentElement;
+        selectedRow.classList.add('row-selected');
+        document.getElementById('btnDelete').disabled = false;
+    }
+
+    function handleDelete() {
+        if (selectedRow && confirm("Are you sure you want to delete this entry?")) {
+            const hid = selectedRow.querySelector('.row-id');
+            const rangeId = hid ? parseInt(hid.value, 10) : 0;
+            if (rangeId > 0) {
+                $.post('@Url.Action("DeleteBPTypeNumberRange", "BP")', { id: rangeId }, function (response) {
+                    if (response.success) {
+                        selectedRow.remove();
+                        selectedRow = null;
+                        document.getElementById('btnDelete').disabled = true;
+                        reIndexAllRows();
+                    } else {
+                        alert("Error: " + response.message);
+                    }
+                });
+            } else {
+                selectedRow.remove();
+                selectedRow = null;
+                document.getElementById('btnDelete').disabled = true;
+                reIndexAllRows();
+            }
+        }
+    }
+
+    function reIndexAllRows() {
+        const rows = document.querySelectorAll('#gridBody tr');
+        rows.forEach((row, idx) => {
+            row.querySelectorAll('[name]').forEach(el => {
+                const name = el.name;
+                if (name.includes('.')) {
+                    const property = name.split('.').slice(1).join('.');
+                    el.name = `[${idx}].${property}`;
+                }
+            });
+        });
+        rowCount = rows.length;
+    }
+
+    document.querySelectorAll('.sap-check').forEach(function (c) { c.disabled = true; });
+    document.querySelectorAll('select.sap-input').forEach(function (s) { s.disabled = true; });
+</script>

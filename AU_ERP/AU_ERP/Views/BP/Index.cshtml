@@ -50,11 +50,13 @@
                         <tbody>
                             @foreach (var p in Model.Partners)
                             {
-                                <tr data-bp-filter="@($"{p.BPID} {p.FullName} {p.City} {p.BPRole} {p.BPGrouping}")">
+                                var roleTxt = p.Role != null ? $"{p.Role.RoleCode} {p.Role.RoleName}" : "";
+                                var groupTxt = p.Grouping?.GroupName ?? "";
+                                <tr data-bp-filter="@($"{p.BPID} {p.FullName} {p.City} {roleTxt} {groupTxt}")">
                                     <td>@p.BPID</td>
                                     <td>@p.FullName</td>
-                                    <td>@p.BPGrouping</td>
-                                    <td>@p.BPRole</td>
+                                    <td>@groupTxt</td>
+                                    <td>@roleTxt</td>
                                     <td>@p.City</td>
                                 </tr>
                             }

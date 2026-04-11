@@ -280,6 +280,83 @@ body.modal-open:has(#materialCreateV2Modal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+/* BP range error modal: same stacking issue as Create V2 when markup lives under .au-card (backdrop-filter). */
+#bpRangeErrorModal.modal {
+  z-index: 100050 !important;
+}
+
+#bpRangeErrorModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#bpRangeErrorModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* BP range error modal — compact maroon dialog (square corners, centered copy). */
+#bpRangeErrorModal .au-bp-error-modal-dialog {
+  max-width: 22rem;
+}
+
+#bpRangeErrorModal .au-bp-error-modal-content {
+  border-radius: 0;
+  border: 1px solid #5a2323;
+  background: #f4f2ef;
+  color: #5a2323;
+  overflow: hidden;
+}
+
+#bpRangeErrorModal .au-bp-error-modal-inner {
+  padding: 1.75rem 1.85rem 1.65rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+#bpRangeErrorModal .au-bp-error-modal-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #5a2323;
+  text-transform: uppercase;
+}
+
+#bpRangeErrorModal .au-bp-error-modal-message {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: #5a2323;
+  max-width: 100%;
+}
+
+#bpRangeErrorModal .au-bp-error-modal-ok {
+  margin-top: 0.25rem;
+  min-width: 5.5rem;
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 0;
+  background: #5a2323;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#bpRangeErrorModal .au-bp-error-modal-ok:hover {
+  filter: brightness(1.08);
+}
+
+#bpRangeErrorModal .au-bp-error-modal-ok:focus-visible {
+  outline: 2px solid #5a2323;
+  outline-offset: 2px;
+}
+
 /* Business partners module (aligned with Materials shell) */
 .bp-module .sap-window {
   background: #fff;

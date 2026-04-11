@@ -3,7 +3,17 @@
     var act = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
     var materialsListActive = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "GetMaterialList", StringComparison.OrdinalIgnoreCase);
-    var bpActive = string.Equals(ctrl, "BP", StringComparison.OrdinalIgnoreCase);
+    var bpPartnersActive = string.Equals(ctrl, "BP", StringComparison.OrdinalIgnoreCase)
+        && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(act, "Create", StringComparison.OrdinalIgnoreCase));
+    var bpRolesActive = string.Equals(ctrl, "BP", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "BPRoles", StringComparison.OrdinalIgnoreCase);
+    var bpTypesActive = string.Equals(ctrl, "BP", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "BPTypeSamples", StringComparison.OrdinalIgnoreCase);
+    var bpGroupingsActive = string.Equals(ctrl, "BP", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "BPGroupings", StringComparison.OrdinalIgnoreCase);
+    var bpTypeNumberRangesActive = string.Equals(ctrl, "BP", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "BPTypeNumberRanges", StringComparison.OrdinalIgnoreCase);
     var materialTypeActive = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "MaterialType", StringComparison.OrdinalIgnoreCase);
     var numberRangesActive = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase)
@@ -39,11 +49,15 @@
             <aside class="au-sidebar" aria-label="Main navigation">
                 <div class="au-sidebar-section-title">Master data</div>
                 <a class="au-sidebar-link @(materialsListActive ? "active" : null)" asp-controller="Material" asp-action="GetMaterialList">Materials</a>
-                <a class="au-sidebar-link @(bpActive ? "active" : null)" asp-controller="BP" asp-action="Index">Business Partners</a>
+                <a class="au-sidebar-link @(bpPartnersActive ? "active" : null)" asp-controller="BP" asp-action="Index">Business Partners</a>
 
                 <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Configuration</div>
                 <a class="au-sidebar-link @(materialTypeActive ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Types</a>
                 <a class="au-sidebar-link @(numberRangesActive ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Material Number Ranges</a>
+                <a class="au-sidebar-link @(bpRolesActive ? "active" : null)" asp-controller="BP" asp-action="BPRoles">BP Roles</a>
+                <a class="au-sidebar-link @(bpTypesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeSamples">BP Types</a>
+                <a class="au-sidebar-link @(bpGroupingsActive ? "active" : null)" asp-controller="BP" asp-action="BPGroupings">BP Groupings</a>
+                <a class="au-sidebar-link @(bpTypeNumberRangesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeNumberRanges">BP Type Number Ranges</a>
 
                 <span class="au-sidebar-placeholder au-sidebar-placeholder-spaced">Inventory</span>
                 <span class="au-sidebar-placeholder">Sales</span>

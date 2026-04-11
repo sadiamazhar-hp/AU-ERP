@@ -6,7 +6,7 @@ namespace AU_ERP.Models
     {
         [Key]
         public int RangeID { get; set; }
-        public string? BPType { get; set; }
+        public int? BPTypeId { get; set; }
         public string? Prefix { get; set; }
         public int StartNumber { get; set; }
         public int EndNumber { get; set; }

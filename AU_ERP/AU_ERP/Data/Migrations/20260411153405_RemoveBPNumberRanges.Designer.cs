@@ -4,6 +4,7 @@ using AU_ERP.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AU_ERP.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260411153405_RemoveBPNumberRanges")]
+    partial class RemoveBPNumberRanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -41,42 +44,28 @@ namespace AU_ERP.Data.Migrations
 
             modelBuilder.Entity("AU_ERP.Models.BPGrouping", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<string>("GroupID")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("GroupName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.HasKey("Id");
+                    b.HasKey("GroupID");
 
                     b.ToTable("BPGroupings");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BPRole", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("RoleCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                    b.Property<string>("RoleID")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("RoleName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("RoleCode")
-                        .IsUnique();
+                    b.HasKey("RoleID");
 
                     b.ToTable("BPRoles");
                 });
@@ -89,8 +78,8 @@ namespace AU_ERP.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("RangeID"));
 
-                    b.Property<int?>("BPTypeId")
-                        .HasColumnType("int");
+                    b.Property<string>("BPType")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("CurrentNumber")
                         .HasColumnType("int");
@@ -109,18 +98,15 @@ namespace AU_ERP.Data.Migrations
 
                     b.HasKey("RangeID");
 
-                    b.HasIndex("BPTypeId");
+                    b.HasIndex("BPType");
 
                     b.ToTable("BPTypeNumberRanges");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BPTypeSample", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<string>("BPTypeID")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -132,7 +118,7 @@ namespace AU_ERP.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.HasKey("Id");
+                    b.HasKey("BPTypeID");
 
                     b.ToTable("BPTypeSamples");
                 });
@@ -222,14 +208,14 @@ namespace AU_ERP.Data.Migrations
                     b.Property<string>("AccountNumber")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("BPGroupingId")
-                        .HasColumnType("int");
+                    b.Property<string>("BPGrouping")
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("BPRoleId")
-                        .HasColumnType("int");
+                    b.Property<string>("BPRole")
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<int?>("BPTypeId")
-                        .HasColumnType("int");
+                    b.Property<string>("BPType")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("BankName")
                         .HasColumnType("nvarchar(max)");
@@ -290,11 +276,11 @@ namespace AU_ERP.Data.Migrations
 
                     b.HasKey("BPID");
 
-                    b.HasIndex("BPGroupingId");
+                    b.HasIndex("BPGrouping");
 
-                    b.HasIndex("BPRoleId");
+                    b.HasIndex("BPRole");
 
-                    b.HasIndex("BPTypeId");
+                    b.HasIndex("BPType");
 
                     b.ToTable("BusinessPartnerMasterSamples");
                 });
@@ -639,7 +625,7 @@ namespace AU_ERP.Data.Migrations
                 {
                     b.HasOne("AU_ERP.Models.BPTypeSample", "TypeSample")
                         .WithMany("BPTypeNumberRanges")
-                        .HasForeignKey("BPTypeId")
+                        .HasForeignKey("BPType")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("TypeSample");
@@ -697,17 +683,17 @@ namespace AU_ERP.Data.Migrations
                 {
                     b.HasOne("AU_ERP.Models.BPGrouping", "Grouping")
                         .WithMany("BusinessPartnerMasterSamples")
-                        .HasForeignKey("BPGroupingId")
+                        .HasForeignKey("BPGrouping")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("AU_ERP.Models.BPRole", "Role")
                         .WithMany("BusinessPartnerMasterSamples")
-                        .HasForeignKey("BPRoleId")
+                        .HasForeignKey("BPRole")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("AU_ERP.Models.BPTypeSample", "TypeSample")
                         .WithMany("BusinessPartnerMasterSamples")
-                        .HasForeignKey("BPTypeId")
+                        .HasForeignKey("BPType")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Grouping");

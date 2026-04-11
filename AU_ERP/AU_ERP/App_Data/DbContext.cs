@@ -19,7 +19,6 @@ namespace AU_ERP.Models
         public DbSet<BPTypeSample> BPTypeSamples { get; set; }
         public DbSet<BPGrouping> BPGroupings { get; set; }
         public DbSet<BPTypeNumberRanges> BPTypeNumberRanges { get; set; }
-        public DbSet<BPNumberRanges> BPNumberRanges { get; set; }
         public DbSet<PlantsSample> PlantsSamples { get; set; }
         public DbSet<WorkCenterMasterSample> WorkCenterMasterSamples { get; set; }
         public DbSet<RoutingHeadersSample> RoutingHeadersSamples { get; set; }
@@ -99,22 +98,38 @@ namespace AU_ERP.Models
                 .HasForeignKey(h => h.AlternativeBOM)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<BPRole>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<BPRole>()
+                .HasIndex(e => e.RoleCode)
+                .IsUnique();
+
+            modelBuilder.Entity<BPTypeSample>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<BPGrouping>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
             modelBuilder.Entity<BusinessPartnerMasterSample>()
                 .HasOne(m => m.Role)
                 .WithMany(r => r.BusinessPartnerMasterSamples)
-                .HasForeignKey(m => m.BPRole)
+                .HasForeignKey(m => m.BPRoleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BusinessPartnerMasterSample>()
                 .HasOne(m => m.TypeSample)
                 .WithMany(t => t.BusinessPartnerMasterSamples)
-                .HasForeignKey(m => m.BPType)
+                .HasForeignKey(m => m.BPTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BusinessPartnerMasterSample>()
                 .HasOne(m => m.Grouping)
                 .WithMany(g => g.BusinessPartnerMasterSamples)
-                .HasForeignKey(m => m.BPGrouping)
+                .HasForeignKey(m => m.BPGroupingId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BPTypeNumberRanges>()
@@ -124,17 +139,7 @@ namespace AU_ERP.Models
             modelBuilder.Entity<BPTypeNumberRanges>()
                 .HasOne(r => r.TypeSample)
                 .WithMany(t => t.BPTypeNumberRanges)
-                .HasForeignKey(r => r.BPType)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<BPNumberRanges>()
-                .Property(e => e.RangeID)
-                .ValueGeneratedOnAdd();
-
-            modelBuilder.Entity<BPNumberRanges>()
-                .HasOne(r => r.BusinessPartner)
-                .WithMany(m => m.BPNumberRanges)
-                .HasForeignKey(r => r.BPID)
+                .HasForeignKey(r => r.BPTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<WorkCenterMasterSample>()

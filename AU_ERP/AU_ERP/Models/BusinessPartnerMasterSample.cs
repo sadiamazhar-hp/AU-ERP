@@ -6,9 +6,9 @@ namespace AU_ERP.Models
     {
         [Key]
         public string BPID { get; set; } = null!;
-        public string? BPRole { get; set; }
-        public string? BPType { get; set; }
-        public string? BPGrouping { get; set; }
+        public int? BPRoleId { get; set; }
+        public int? BPTypeId { get; set; }
+        public int? BPGroupingId { get; set; }
         public string? FullName { get; set; }
         public string? Street { get; set; }
         public string? HouseNo { get; set; }
@@ -33,6 +33,5 @@ namespace AU_ERP.Models
         public virtual BPRole? Role { get; set; }
         public virtual BPTypeSample? TypeSample { get; set; }
         public virtual BPGrouping? Grouping { get; set; }
-        public ICollection<BPNumberRanges> BPNumberRanges { get; set; } = null!;
     }
 }
