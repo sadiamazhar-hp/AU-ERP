@@ -1,7 +1,7 @@
 ﻿@model List<AU_ERP.Models.MaterialNumberRange>
 @{
-    Layout = "~/Views/Shared/_LayoutConfiguration.cshtml";
-    ViewData["Title"] = "Configuration — Number Ranges";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Material Number Ranges";
     ViewBag.Title = "Number Ranges Configuration";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.MaterialNumberRange>();

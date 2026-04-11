@@ -1,9 +1,13 @@
 ﻿@{
     var ctrl = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var act = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
-    var isMaterial = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase);
-    // Material Type / Number Ranges: use Configuration layout (gear), not tabs on this shell.
-    var materialsNavActive = isMaterial;
+    var materialsListActive = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "GetMaterialList", StringComparison.OrdinalIgnoreCase);
+    var bpActive = string.Equals(ctrl, "BP", StringComparison.OrdinalIgnoreCase);
+    var materialTypeActive = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "MaterialType", StringComparison.OrdinalIgnoreCase);
+    var numberRangesActive = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "NumberRanges", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -28,33 +32,26 @@
                 <button type="button" class="au-icon-btn" title="Profile" aria-label="Profile">
                     <i class="bi bi-person"></i>
                 </button>
-                <a class="au-icon-btn" asp-controller="Material" asp-action="MaterialType" title="Configuration" aria-label="Configuration">
-                    <i class="bi bi-gear"></i>
-                </a>
             </div>
         </header>
 
         <div class="au-body-row">
             <aside class="au-sidebar" aria-label="Main navigation">
-                <a class="au-sidebar-link @(materialsNavActive ? "active" : null)" asp-controller="Material" asp-action="GetMaterialList">Materials</a>
-                <span class="au-sidebar-placeholder">Inventory</span>
+                <div class="au-sidebar-section-title">Master data</div>
+                <a class="au-sidebar-link @(materialsListActive ? "active" : null)" asp-controller="Material" asp-action="GetMaterialList">Materials</a>
+                <a class="au-sidebar-link @(bpActive ? "active" : null)" asp-controller="BP" asp-action="Index">Business Partners</a>
+
+                <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Configuration</div>
+                <a class="au-sidebar-link @(materialTypeActive ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Types</a>
+                <a class="au-sidebar-link @(numberRangesActive ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Material Number Ranges</a>
+
+                <span class="au-sidebar-placeholder au-sidebar-placeholder-spaced">Inventory</span>
                 <span class="au-sidebar-placeholder">Sales</span>
                 <span class="au-sidebar-placeholder">Purchasing</span>
                 <span class="au-sidebar-placeholder">Reports</span>
             </aside>
 
             <main class="au-main">
-                @* Materials: only material table on this shell; Material Type & Number Ranges are under Configuration (gear). *@
-                @*@if (showMaterialTabs)
-                {
-                    <div class="au-material-tabs-wrap">
-                        <nav class="au-material-tabs" aria-label="Materials">
-                            <a class="au-tab @(string.Equals(act, "GetMaterialList", StringComparison.OrdinalIgnoreCase) ? "active" : null)" asp-controller="Material" asp-action="GetMaterialList">Material List</a>
-                            <a class="au-tab @(string.Equals(act, "MaterialType", StringComparison.OrdinalIgnoreCase) ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Type</a>
-                            <a class="au-tab @(string.Equals(act, "NumberRanges", StringComparison.OrdinalIgnoreCase) ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Number Ranges</a>
-                        </nav>
-                    </div>
-                }*@
                 <div class="au-card">
                     @RenderBody()
                 </div>

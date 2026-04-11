@@ -1,0 +1,175 @@
+@model AU_ERP.Models.BusinessPartnerMasterSample
+@using Microsoft.AspNetCore.Mvc.Rendering
+@{
+    var roleList = ViewBag.RoleList as SelectList;
+    var typeList = ViewBag.TypeList as SelectList;
+    var groupList = ViewBag.GroupList as SelectList;
+}
+<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="returnTo" value="@(ViewBag.FormReturnTo ?? "Index")" />
+    @Html.HiddenFor(m => m.BPID)
+
+    <div class="bp-toolbar border-bottom bg-white py-2 px-3 d-flex flex-wrap gap-2 align-items-center">
+        <button type="submit" class="btn btn-sm text-white bp-btn-save">Save partner</button>
+    </div>
+
+    <div id="bpMasterLayout" class="bp-master-layout">
+        <div class="p-3 border-bottom bg-white d-flex flex-wrap gap-4 align-items-center">
+            <div class="bp-field-row mb-0">
+                <div class="bp-mandatory-bar"></div>
+                <label class="bp-label-compact">Role</label>
+                @Html.DropDownListFor(m => m.BPRole, roleList, "-- Select BP role --", new { @class = "form-select form-select-sm f-role", style = "min-width:11rem;", onchange = "bpHandleRoleUI(this)" })
+            </div>
+            <div class="bp-field-row mb-0">
+                <div class="bp-mandatory-bar"></div>
+                <label class="bp-label-compact">Type</label>
+                @Html.DropDownListFor(m => m.BPType, typeList, "-- Select type --", new { @class = "form-select form-select-sm f-type", style = "min-width:11rem;" })
+            </div>
+            <div class="bp-field-row mb-0">
+                <div class="bp-mandatory-bar"></div>
+                <label class="bp-label-compact">Grouping</label>
+                @Html.DropDownListFor(m => m.BPGrouping, groupList, "-- Select grouping --", new { @class = "form-select form-select-sm f-group", style = "min-width:12rem;" })
+            </div>
+        </div>
+
+        <div class="bp-itab-bar d-flex flex-wrap border-bottom bg-light px-2">
+            <button type="button" class="bp-itab-btn active" onclick="bpSwitchTab(this, 'address')">Address</button>
+            <button type="button" class="bp-itab-btn" onclick="bpSwitchTab(this, 'comm')">Communication</button>
+            <button type="button" class="bp-itab-btn" onclick="bpSwitchTab(this, 'company')">Company code</button>
+            <button type="button" class="bp-itab-btn d-none tab-sales-btn" onclick="bpSwitchTab(this, 'sales')">Sales area</button>
+            <button type="button" class="bp-itab-btn d-none tab-purch-btn" onclick="bpSwitchTab(this, 'purch')">Purchasing</button>
+        </div>
+
+        <div class="bp-content-area p-3">
+            <div class="tab-pane tab-address">
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">General data</h3>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Name</label>
+                        <div class="flex-grow-1">
+                            @Html.TextBoxFor(m => m.FullName, new { @class = "form-control form-control-sm f-name" })
+                            @Html.ValidationMessageFor(m => m.FullName, "", new { @class = "text-danger small d-block mt-1" })
+                        </div>
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Street / House no.</label>
+                        <div class="d-flex gap-2 flex-grow-1">
+                            @Html.TextBoxFor(m => m.Street, new { @class = "form-control form-control-sm f-street flex-grow-1" })
+                            @Html.TextBoxFor(m => m.HouseNo, new { @class = "form-control form-control-sm f-no", style = "max-width:8rem;" })
+                        </div>
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>City / Postal code</label>
+                        <div class="d-flex gap-2 flex-grow-1">
+                            @Html.TextBoxFor(m => m.City, new { @class = "form-control form-control-sm f-city flex-grow-1" })
+                            @Html.TextBoxFor(m => m.PostalCode, new { @class = "form-control form-control-sm f-zip", style = "max-width:8rem;" })
+                        </div>
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Country / Region</label>
+                        <div class="d-flex gap-2 flex-grow-1">
+                            @Html.DropDownListFor(m => m.Country, new SelectList(new[] { "Pakistan", "USA" }), new { @class = "form-select form-select-sm f-country flex-grow-1" })
+                            @Html.TextBoxFor(m => m.Region, new { @class = "form-control form-control-sm f-region flex-grow-1", placeholder = "Region" })
+                        </div>
+                    </div>
+                    <div class="bp-field-row">
+                        <label>Language</label>
+                        @Html.DropDownListFor(m => m.Language, new SelectList(new[] { "English", "Urdu" }), new { @class = "form-select form-select-sm f-lang" })
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane tab-comm d-none">
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">Communication</h3>
+                    <div class="bp-field-row"><label>Telephone</label> @Html.TextBoxFor(m => m.Telephone, new { @class = "form-control form-control-sm f-tel" })</div>
+                    <div class="bp-field-row"><label>Mobile</label> @Html.TextBoxFor(m => m.Mobile, new { @class = "form-control form-control-sm f-mob" })</div>
+                    <div class="bp-field-row"><label>Email</label> @Html.TextBoxFor(m => m.Email, new { @class = "form-control form-control-sm f-email", type = "email" })</div>
+                </div>
+            </div>
+
+            <div class="tab-pane tab-company d-none">
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">Account management</h3>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Recon account</label>
+                        @Html.TextBoxFor(m => m.ReconAccount, new { @class = "form-control form-control-sm f-recon", placeholder = "e.g. 140000" })
+                    </div>
+                </div>
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">Payment</h3>
+                    <div class="bp-field-row">
+                        <label>Payment terms</label>
+                        @Html.DropDownListFor(m => m.PaymentTerms, new SelectList(new[] { "0001", "0002" }), new { @class = "form-select form-select-sm f-payterms" })
+                    </div>
+                    <div class="bp-field-row">
+                        <label>Payment methods</label>
+                        @Html.TextBoxFor(m => m.PaymentMethods, new { @class = "form-control form-control-sm f-paymeth", placeholder = "C = Cash, T = Transfer" })
+                    </div>
+                </div>
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">Bank details</h3>
+                    <div class="bp-field-row"><label>Bank name</label> @Html.TextBoxFor(m => m.BankName, new { @class = "form-control form-control-sm f-bankname" })</div>
+                    <div class="bp-field-row"><label>Account number</label> @Html.TextBoxFor(m => m.AccountNumber, new { @class = "form-control form-control-sm f-accno" })</div>
+                </div>
+            </div>
+
+            <div class="tab-pane tab-sales d-none">
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">Sales</h3>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Dist. channel</label>
+                        @Html.TextBoxFor(m => m.DistChannel, new { @class = "form-control form-control-sm f-dist" })
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Sales schema</label>
+                        @Html.TextBoxFor(m => m.SalesSchema, new { @class = "form-control form-control-sm f-sales-schema" })
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane tab-purch d-none">
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">Purchasing</h3>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Purch. schema</label>
+                        @Html.TextBoxFor(m => m.PurchSchema, new { @class = "form-control form-control-sm f-purch-schema" })
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script type="text/javascript">
+    function bpHandleRoleUI(select) {
+        const root = select.closest('#bpCreateRoot');
+        if (!root) return;
+        const role = select.value;
+        const sales = root.querySelector('.tab-sales-btn');
+        const purch = root.querySelector('.tab-purch-btn');
+        if (sales) sales.classList.toggle('d-none', role !== 'FLCU01');
+        if (purch) purch.classList.toggle('d-none', role !== 'FLVN01');
+    }
+    function bpSwitchTab(btn, tab) {
+        const root = btn.closest('#bpCreateRoot');
+        if (!root) return;
+        root.querySelectorAll('.bp-itab-btn').forEach(b => b.classList.remove('active'));
+        root.querySelectorAll('.tab-pane').forEach(p => p.classList.add('d-none'));
+        btn.classList.add('active');
+        const pane = root.querySelector('.tab-' + tab);
+        if (pane) pane.classList.remove('d-none');
+    }
+    document.querySelectorAll('#bpCreateRoot .f-role').forEach(function (el) {
+        bpHandleRoleUI(el);
+    });
+</script>

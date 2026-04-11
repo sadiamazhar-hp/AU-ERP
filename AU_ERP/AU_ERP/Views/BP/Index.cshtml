@@ -1,0 +1,87 @@
+@model AU_ERP.Models.BPIndexViewModel
+@{
+    ViewData["Title"] = "Business Partners";
+}
+
+@if (TempData["BpSuccess"] != null)
+{
+    <div class="alert alert-success py-2 small mb-3" role="alert">@TempData["BpSuccess"]</div>
+}
+
+@Html.ValidationSummary(false, "", new { @class = "text-danger small mb-2" })
+
+<div class="bp-module">
+    <div class="bp-module-header border-bottom pb-2 mb-3">
+        <h1 class="h5 mb-0 fw-semibold" style="color: var(--au-primary-dark, #388087);">Business partners</h1>
+        <p class="small text-secondary mb-0">Create and maintain partner master data.</p>
+    </div>
+
+    <ul class="nav nav-tabs bp-module-tabs mb-0" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="bpTabCreate" data-bs-toggle="tab" data-bs-target="#bpPaneCreate" type="button" role="tab" aria-controls="bpPaneCreate" aria-selected="true">Create</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="bpTabList" data-bs-toggle="tab" data-bs-target="#bpPaneList" type="button" role="tab" aria-controls="bpPaneList" aria-selected="false">List</button>
+        </li>
+    </ul>
+
+    <div class="tab-content border border-top-0 rounded-bottom bg-white">
+        <div class="tab-pane fade show active" id="bpPaneCreate" role="tabpanel" aria-labelledby="bpTabCreate">
+            <div class="sap-window border-0 rounded-0">
+                @await Html.PartialAsync("_BPCreateForm", Model.Draft)
+            </div>
+        </div>
+        <div class="tab-pane fade" id="bpPaneList" role="tabpanel" aria-labelledby="bpTabList">
+            <div class="p-3">
+                <div class="mb-2">
+                    <input type="search" class="form-control form-control-sm" id="bpListFilter" placeholder="Filter by ID, name, city…" style="max-width:22rem;" />
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-bordered bg-white mb-0" id="bpListTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Grouping</th>
+                                <th>Role</th>
+                                <th>City</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in Model.Partners)
+                            {
+                                <tr data-bp-filter="@($"{p.BPID} {p.FullName} {p.City} {p.BPRole} {p.BPGrouping}")">
+                                    <td>@p.BPID</td>
+                                    <td>@p.FullName</td>
+                                    <td>@p.BPGrouping</td>
+                                    <td>@p.BPRole</td>
+                                    <td>@p.City</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (Model.Partners.Count == 0)
+                {
+                    <p class="text-secondary small mb-0 mt-2">No business partners yet. Use the Create tab to add one.</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var inp = document.getElementById("bpListFilter");
+            if (!inp) return;
+            inp.addEventListener("input", function () {
+                var q = (inp.value || "").toLowerCase().trim();
+                document.querySelectorAll("#bpListTable tbody tr").forEach(function (tr) {
+                    var hay = (tr.getAttribute("data-bp-filter") || "").toLowerCase();
+                    tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
+                });
+            });
+        })();
+    </script>
+}

@@ -166,6 +166,24 @@ a.au-icon-btn {
   user-select: none;
 }
 
+.au-sidebar-section-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(246, 246, 242, 0.48);
+  padding: 0.25rem 0.75rem 0.35rem;
+  margin-top: 0.15rem;
+}
+
+.au-sidebar-section-title-spaced {
+  margin-top: 1rem;
+}
+
+.au-sidebar-placeholder-spaced {
+  margin-top: 0.85rem;
+}
+
 .au-main {
   flex: 1;
   min-width: 0;
@@ -233,59 +251,6 @@ a.au-icon-btn {
   filter: brightness(1.03);
 }
 
-/* Configuration module (gear): secondary sidebar + content (no material tabs) */
-.au-configuration-body {
-  flex: 1;
-  min-height: 0;
-}
-
-.au-settings-sidebar {
-  width: 14rem;
-  flex-shrink: 0;
-  padding: 1rem 0.75rem;
-  background: rgba(23, 23, 23, 0.72);
-  backdrop-filter: blur(14px);
-  border-right: 1px solid rgba(111, 179, 184, 0.35);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.au-settings-sidebar-title {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(246, 246, 242, 0.45);
-  padding: 0.35rem 0.75rem 0.15rem;
-}
-
-.au-settings-back {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.45rem;
-  color: var(--au-primary-light);
-  text-decoration: none;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border: 1px solid rgba(111, 179, 184, 0.35);
-  background: rgba(255, 255, 255, 0.06);
-  margin-bottom: 0.25rem;
-}
-
-.au-settings-back:hover {
-  background: rgba(186, 223, 231, 0.15);
-  color: var(--au-white);
-}
-
-.au-settings-main {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
 .au-card {
   flex: 1;
   min-height: 0;
@@ -313,4 +278,118 @@ a.au-icon-btn {
 /* If another element sits between modal and backdrop, any .modal-backdrop while this modal is open should stay under it. */
 body.modal-open:has(#materialCreateV2Modal.show) .modal-backdrop {
   z-index: 100040 !important;
+}
+
+/* Business partners module (aligned with Materials shell) */
+.bp-module .sap-window {
+  background: #fff;
+  border: 1px solid rgba(159, 178, 197, 0.95);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.bp-module-tabs .nav-link {
+  color: var(--au-primary-dark, #388087);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-color: rgba(56, 128, 135, 0.35);
+}
+
+.bp-module-tabs .nav-link.active {
+  color: var(--au-black, #171717);
+  font-weight: 600;
+  border-color: rgba(56, 128, 135, 0.35);
+  border-bottom-color: #fff;
+}
+
+.bp-btn-save {
+  background: var(--au-primary, #6FB3B8);
+  border: 1px solid var(--au-primary-dark, #388087);
+}
+
+.bp-btn-save:hover {
+  filter: brightness(0.96);
+  color: #fff;
+}
+
+.bp-field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.bp-field-row label {
+  min-width: 9rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #444;
+}
+
+.bp-label-compact {
+  min-width: auto !important;
+  width: 3.25rem;
+}
+
+.bp-mandatory-bar {
+  width: 4px;
+  min-height: 1.75rem;
+  background: #c62828;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.bp-itab-bar {
+  gap: 0.15rem;
+}
+
+.bp-itab-btn {
+  padding: 0.55rem 0.9rem;
+  border: none;
+  background: none;
+  border-bottom: 3px solid transparent;
+  color: #666;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.bp-itab-btn:hover {
+  color: var(--au-primary-dark, #388087);
+}
+
+.bp-itab-btn.active {
+  border-bottom-color: var(--au-primary-dark, #388087);
+  color: var(--au-primary-dark, #388087);
+  font-weight: 600;
+}
+
+.bp-section-box {
+  border: 1px solid rgba(159, 178, 197, 0.9);
+  border-radius: 0.35rem;
+  padding: 1.25rem 1rem 0.75rem;
+  margin-bottom: 1rem;
+  position: relative;
+  background: #fff;
+}
+
+.bp-section-title {
+  position: absolute;
+  top: -0.65rem;
+  left: 0.75rem;
+  background: #fff;
+  padding: 0 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--au-primary-dark, #388087);
+  margin: 0;
+}
+
+.bp-content-area {
+  min-height: 12rem;
 }
