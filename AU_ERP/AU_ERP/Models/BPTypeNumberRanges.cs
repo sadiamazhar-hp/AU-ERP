@@ -11,7 +11,6 @@ namespace AU_ERP.Models
         public int StartNumber { get; set; }
         public int EndNumber { get; set; }
         public int CurrentNumber { get; set; }
-        public bool? IsActive { get; set; }
 
         public virtual BPTypeSample? TypeSample { get; set; }
     }

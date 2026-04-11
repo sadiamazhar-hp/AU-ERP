@@ -2,23 +2,22 @@
 @using System.Text.Json
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "BP Type Number Ranges";
+    ViewData["Title"] = "BP Number Ranges";
     var typeList = ViewBag.TypeList as List<SelectListItem> ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.BPTypeNumberRanges>();
     var typeOptsJson = JsonSerializer.Serialize(typeList.Select(t => new { value = t.Value ?? "", text = t.Text ?? "" }));
+    var existingBPTypeIdsJson = JsonSerializer.Serialize(safeModel.Where(r => r.BPTypeId != null && r.BPTypeId > 0).Select(r => r.BPTypeId.ToString()).Distinct());
 }
 
 <div class="sap-window" id="app">
-    @using (Html.BeginForm("BPTypeNumberRanges", "BP", FormMethod.Post, new { id = "bpTypeNrForm" }))
-    {
+    <form id="bpTypeNrForm" method="post" action="@Url.Action("BPTypeNumberRanges", "BP")">
         @Html.AntiForgeryToken()
-        @Html.ValidationSummary(false, "", new { @class = "text-danger px-3 pt-2" })
 
         <div class="sap-toolbar">
             <div class="d-flex">
                 <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">Edit</button>
                 <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>New entries</button>
-                <button type="submit" id="btnSave" class="btn btn-sap" disabled>Save</button>
+                <button type="button" id="btnSave" class="btn btn-sap" onclick="handleSave()" disabled>Save</button>
                 <button type="button" id="btnDelete" class="btn btn-sap text-danger" onclick="handleDelete()" disabled>Delete</button>
             </div>
         </div>
@@ -33,7 +32,6 @@
                         <th>Start</th>
                         <th>End</th>
                         <th>Current</th>
-                        <th style="width: 90px;">Active</th>
                     </tr>
                 </thead>
                 <tbody id="gridBody">
@@ -44,7 +42,7 @@
                                 <input type="hidden" name="[@i].RangeID" value="@safeModel[i].RangeID" class="row-id" />
                             </td>
                             <td>
-                                <select name="[@i].BPTypeId" class="sap-input" disabled>
+                                <select name="[@i].BPTypeId" class="sap-input" disabled data-required="true">
                                     <option value="">Select type</option>
                                     @foreach (var opt in typeList)
                                     {
@@ -61,18 +59,15 @@
                                 </select>
                             </td>
                             <td><input name="[@i].Prefix" class="sap-input" value="@safeModel[i].Prefix" readonly /></td>
-                            <td><input type="number" name="[@i].StartNumber" class="sap-input" value="@safeModel[i].StartNumber" readonly /></td>
-                            <td><input type="number" name="[@i].EndNumber" class="sap-input" value="@safeModel[i].EndNumber" readonly /></td>
-                            <td><input type="number" name="[@i].CurrentNumber" class="sap-input" value="@safeModel[i].CurrentNumber" readonly /></td>
-                            <td class="text-center align-middle px-2">
-                                <input type="checkbox" name="[@i].IsActive" value="true" class="sap-check" disabled @(safeModel[i].IsActive != false ? "checked=\"checked\"" : null) />
-                            </td>
+                            <td><input name="[@i].StartNumber" class="sap-input sap-range-input" value="@safeModel[i].StartNumber" readonly maxlength="10" data-required="true" /></td>
+                            <td><input name="[@i].EndNumber" class="sap-input sap-range-input" value="@safeModel[i].EndNumber" readonly maxlength="10" data-required="true" /></td>
+                            <td><input name="[@i].CurrentNumber" class="sap-input sap-always-readonly" value="@safeModel[i].CurrentNumber" readonly /></td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
-    }
+    </form>
 </div>
 
 <style>
@@ -83,55 +78,25 @@
         --sap-selected: #b3d7ff;
         --sap-focus: #fff9c4;
     }
-    .sap-window {
-        background: white;
-        border: 1px solid var(--sap-border);
-        display: flex;
-        flex-direction: column;
-        min-height: 420px;
-    }
-    .sap-toolbar {
-        padding: 12px;
-        border-bottom: 2px solid var(--sap-border);
-        background: #fff;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-    }
-    .btn-sap {
-        border-radius: 2px;
-        font-size: 12px;
-        border: 1px solid #bbb;
-        margin-right: 5px;
-        background: #fdfdfd;
-        cursor: pointer;
-    }
+    .sap-window { background: white; border: 1px solid var(--sap-border); display: flex; flex-direction: column; min-height: 420px; }
+    .sap-toolbar { padding: 12px; border-bottom: 2px solid var(--sap-border); background: #fff; display: flex; justify-content: flex-end; align-items: center; }
+    .btn-sap { border-radius: 2px; font-size: 12px; border: 1px solid #bbb; margin-right: 5px; background: #fdfdfd; cursor: pointer; }
     .btn-sap:disabled { opacity: 0.4; cursor: default; }
     .table-container { overflow-y: auto; flex-grow: 1; }
     .table-sap { width: 100%; border-collapse: collapse; }
-    .table-sap th {
-        background: var(--sap-header-bg);
-        border: 1px solid #ccc;
-        padding: 6px 10px;
-        font-weight: normal;
-        text-align: left;
-    }
+    .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; text-align: left; }
     .table-sap td { border: 1px solid #ccc; padding: 0; height: 30px; }
-    .sap-input {
-        width: 100%;
-        height: 100%;
-        border: none;
-        padding: 0 10px;
-        background: var(--sap-readonly);
-        outline: none;
-        box-sizing: border-box;
-    }
+    .sap-input { width: 100%; height: 100%; border: none; padding: 0 10px; background: var(--sap-readonly); outline: none; box-sizing: border-box; }
     .edit-mode .sap-input:not([readonly]):not([disabled]) { background: #fff; }
     .edit-mode .sap-input:not([readonly]):not([disabled]):focus { background: var(--sap-focus); outline: 1px solid orange; }
-    .sap-check:disabled { opacity: 0.5; cursor: default; }
+    .sap-always-readonly { background: var(--sap-readonly) !important; }
     .col-sel { width: 35px; background: #f0f0f0; cursor: pointer; }
     .row-selected { background-color: var(--sap-selected) !important; }
     .row-selected .sap-input { background-color: transparent !important; }
+    .row-validation-error td { background-color: #fce4e4 !important; }
+    .row-validation-error .sap-input { background-color: transparent !important; }
+    .row-validation-error .sap-input[data-required].sap-invalid,
+    .row-validation-error select[data-required].sap-invalid { outline: 2px solid #c62828 !important; background: #fff0f0 !important; }
 </style>
 <script>
     let isEditMode = false;
@@ -153,22 +118,21 @@
         isEditMode = edit;
         document.getElementById('app').classList.toggle('edit-mode', edit);
         document.querySelectorAll('.sap-input').forEach(input => {
+            if (input.classList.contains('sap-always-readonly')) return;
             if (input.tagName === 'SELECT') input.disabled = !edit;
             else input.readOnly = !edit;
         });
-        document.querySelectorAll('.sap-check').forEach(c => { c.disabled = !edit; });
         document.getElementById('btnEdit').disabled = edit;
         document.getElementById('btnNew').disabled = !edit;
         document.getElementById('btnSave').disabled = !edit;
     }
 
-    document.getElementById('bpTypeNrForm').onsubmit = function () {
-        document.querySelectorAll('.sap-input, .sap-check, select').forEach(input => {
-            input.disabled = false;
-            input.readOnly = false;
+    function enforceDigitLimit(input) {
+        input.addEventListener('input', function () {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
         });
-        return true;
-    };
+    }
+    document.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
 
     function addNewRow() {
         const body = document.getElementById('gridBody');
@@ -177,20 +141,28 @@
             <td class="col-sel" onclick="selectRow(this)">
                 <input type="hidden" name="[${rowCount}].RangeID" value="0" class="row-id" />
             </td>
-            <td><select name="[${rowCount}].BPTypeId" class="sap-input">${buildTypeSelectOptionsHtml()}</select></td>
+            <td><select name="[${rowCount}].BPTypeId" class="sap-input" data-required="true">${buildTypeSelectOptionsHtml()}</select></td>
             <td><input name="[${rowCount}].Prefix" class="sap-input" /></td>
-            <td><input type="number" name="[${rowCount}].StartNumber" class="sap-input" value="0" /></td>
-            <td><input type="number" name="[${rowCount}].EndNumber" class="sap-input" value="0" /></td>
-            <td><input type="number" name="[${rowCount}].CurrentNumber" class="sap-input" value="0" /></td>
-            <td class="text-center align-middle px-2">
-                <input type="checkbox" name="[${rowCount}].IsActive" value="true" class="sap-check" checked />
-            </td>`;
+            <td><input name="[${rowCount}].StartNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
+            <td><input name="[${rowCount}].EndNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
+            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" readonly></td>`;
         body.appendChild(tr);
         rowCount++;
+
+        tr.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
+
+        var startInp = tr.querySelector('[name$=".StartNumber"]');
+        var curInp = tr.querySelector('[name$=".CurrentNumber"]');
+        if (startInp && curInp) {
+            startInp.addEventListener('input', function () {
+                var v = parseInt(startInp.value, 10);
+                curInp.value = isNaN(v) ? '' : (v + 1);
+            });
+        }
+
         if (isEditMode) {
-            tr.querySelectorAll('.sap-check').forEach(c => { c.disabled = false; });
             tr.querySelectorAll('select.sap-input').forEach(s => { s.disabled = false; });
-            tr.querySelectorAll('input.sap-input').forEach(inp => { inp.readOnly = false; });
+            tr.querySelectorAll('input.sap-input:not(.sap-always-readonly)').forEach(inp => { inp.readOnly = false; });
         }
         tr.querySelector('select.sap-input')?.focus();
     }
@@ -203,37 +175,116 @@
         document.getElementById('btnDelete').disabled = false;
     }
 
+    function clearValidation() {
+        document.querySelectorAll('.row-validation-error').forEach(r => r.classList.remove('row-validation-error'));
+        document.querySelectorAll('.sap-invalid').forEach(i => i.classList.remove('sap-invalid'));
+    }
+
+    function validateRows() {
+        clearValidation();
+        let valid = true, firstBad = null;
+        document.querySelectorAll('#gridBody tr').forEach(tr => {
+            tr.querySelectorAll('[data-required]').forEach(inp => {
+                var val = inp.value ? inp.value.trim() : '';
+                if (!val) {
+                    tr.classList.add('row-validation-error');
+                    inp.classList.add('sap-invalid');
+                    valid = false;
+                    if (!firstBad) firstBad = inp;
+                }
+            });
+        });
+        if (firstBad) firstBad.focus();
+        return valid;
+    }
+
+    function showErrorAlert(msg) {
+        var body = document.getElementById('bpRangeErrorModalBody');
+        var el = document.getElementById('bpRangeErrorModal');
+        if (body && el) {
+            body.textContent = msg;
+            if (el.parentElement !== document.body) document.body.appendChild(el);
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        } else { alert(msg); }
+    }
+
+    var existingBPTypeSet = new Set(@Html.Raw(existingBPTypeIdsJson));
+
+    function checkDuplicateTypes() {
+        var dupes = [];
+        document.querySelectorAll('#gridBody tr').forEach(tr => {
+            var rid = tr.querySelector('.row-id');
+            var isNew = !rid || !rid.value || rid.value === '0';
+            if (!isNew) return;
+            var sel = tr.querySelector('select[name$=".BPTypeId"]');
+            var code = sel ? sel.value : '';
+            if (code && existingBPTypeSet.has(code)) {
+                var opt = sel.options[sel.selectedIndex];
+                dupes.push(opt ? opt.text : code);
+            }
+        });
+        return dupes;
+    }
+
+    function submitSave() {
+        var form = document.getElementById('bpTypeNrForm');
+        document.querySelectorAll('.sap-input, select').forEach(i => { i.disabled = false; i.readOnly = false; });
+        var fd = new FormData(form);
+        fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) { location.reload(); }
+                else { showErrorAlert(data.message || 'Save failed'); }
+            })
+            .catch(() => showErrorAlert('Request failed'));
+    }
+
+    function handleSave() {
+        if (!validateRows()) {
+            showErrorAlert('Please fill in all required fields (highlighted in red).');
+            return;
+        }
+        var dupes = checkDuplicateTypes();
+        if (dupes.length > 0) {
+            var msg = 'A range for the following type(s) already exists:\n' + dupes.join(', ') + '\n\nDo you still want to save?';
+            if (typeof window.materialShowDeleteConfirmModalThen === 'function')
+                window.materialShowDeleteConfirmModalThen(msg, submitSave);
+            else if (confirm(msg)) submitSave();
+        } else {
+            submitSave();
+        }
+    }
+
     function handleDelete() {
-        if (selectedRow && confirm("Are you sure you want to delete this entry?")) {
-            const hid = selectedRow.querySelector('.row-id');
-            const rangeId = hid ? parseInt(hid.value, 10) : 0;
+        if (!selectedRow) return;
+        const hid = selectedRow.querySelector('.row-id');
+        const rangeId = hid ? parseInt(hid.value, 10) : 0;
+        function doDelete() {
             if (rangeId > 0) {
                 $.post('@Url.Action("DeleteBPTypeNumberRange", "BP")', { id: rangeId }, function (response) {
                     if (response.success) {
-                        selectedRow.remove();
-                        selectedRow = null;
+                        selectedRow.remove(); selectedRow = null;
                         document.getElementById('btnDelete').disabled = true;
                         reIndexAllRows();
-                    } else {
-                        alert("Error: " + response.message);
-                    }
+                    } else { showErrorAlert(response.message || 'Delete failed'); }
                 });
             } else {
-                selectedRow.remove();
-                selectedRow = null;
+                selectedRow.remove(); selectedRow = null;
                 document.getElementById('btnDelete').disabled = true;
                 reIndexAllRows();
             }
         }
+        if (typeof window.materialShowDeleteConfirmModalThen === 'function')
+            window.materialShowDeleteConfirmModalThen('Do you want to delete this BP Number Range?', doDelete);
+        else if (confirm('Delete this entry?')) doDelete();
     }
 
     function reIndexAllRows() {
         const rows = document.querySelectorAll('#gridBody tr');
         rows.forEach((row, idx) => {
             row.querySelectorAll('[name]').forEach(el => {
-                const name = el.name;
-                if (name.includes('.')) {
-                    const property = name.split('.').slice(1).join('.');
+                if (el.name.includes('.')) {
+                    const property = el.name.split('.').slice(1).join('.');
                     el.name = `[${idx}].${property}`;
                 }
             });
@@ -241,6 +292,5 @@
         rowCount = rows.length;
     }
 
-    document.querySelectorAll('.sap-check').forEach(function (c) { c.disabled = true; });
     document.querySelectorAll('select.sap-input').forEach(function (s) { s.disabled = true; });
 </script>

@@ -9,10 +9,6 @@
     @Html.AntiForgeryToken()
     <input type="hidden" name="returnTo" value="@(ViewBag.FormReturnTo ?? "Index")" />
 
-    <div class="bp-toolbar border-bottom bg-white py-2 px-3 d-flex flex-wrap gap-2 align-items-center">
-        <button type="submit" class="btn btn-sm text-white bp-btn-save">Save partner</button>
-    </div>
-
     <div id="bpMasterLayout" class="bp-master-layout">
         <div class="p-3 border-bottom bg-white d-flex flex-wrap gap-4 align-items-center">
             <div class="bp-field-row mb-0">
@@ -52,6 +48,7 @@
                 </select>
             </div>
             <div class="bp-field-row mb-0">
+                <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">BPID</label>
                 <input asp-for="BPID" class="form-control form-control-sm f-bpid bg-light" style="min-width:12rem;" readonly autocomplete="off" placeholder="Select type for number" />
             </div>
@@ -190,19 +187,11 @@
             </div>
         </div>
     </div>
-</form>
 
-<div class="modal fade" id="bpRangeErrorModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="bpRangeErrorModalTitle" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered au-bp-error-modal-dialog">
-        <div class="modal-content au-bp-error-modal-content shadow-none">
-            <div class="au-bp-error-modal-inner">
-                <h2 class="au-bp-error-modal-title" id="bpRangeErrorModalTitle">ERROR</h2>
-                <p class="au-bp-error-modal-message" id="bpRangeErrorModalBody"></p>
-                <button type="button" class="au-bp-error-modal-ok" data-bs-dismiss="modal">OK</button>
-            </div>
-        </div>
+    <div class="border-top bg-white py-2 px-3 d-flex justify-content-end">
+        <button type="submit" class="btn btn-sm text-white bp-btn-save">Save</button>
     </div>
-</div>
+</form>
 
 <script type="text/javascript">
     function bpHandleRoleUI(select) {

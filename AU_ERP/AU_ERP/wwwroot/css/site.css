@@ -357,6 +357,19 @@ body.modal-open:has(#bpRangeErrorModal.show) .modal-backdrop {
   outline-offset: 2px;
 }
 
+/* BP edit modal — stack above backdrop inside .au-card */
+#bpEditModal.modal {
+  z-index: 100050 !important;
+}
+
+#bpEditModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#bpEditModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
 /* Material success modal — teal dialog; stack above backdrop when inside .au-card. */
 #materialSuccessModal.modal {
   z-index: 100050 !important;
@@ -647,4 +660,78 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
 
 .bp-content-area {
   min-height: 12rem;
+}
+
+/* ===== CreateV2-style modal (shared between Material & BP) ===== */
+.au-create-v2-modal .modal-header {
+    border-bottom: 1px solid rgba(56, 128, 135, 0.25);
+    background: var(--au-white, #f6f6f2);
+}
+.au-create-v2-modal .modal-title {
+    font-weight: 600;
+    color: var(--au-black, #171717);
+}
+.au-create-v2-modal .nav-tabs {
+    border-bottom: 1px solid rgba(56, 128, 135, 0.35);
+    flex-wrap: wrap;
+    gap: 0.15rem;
+}
+.au-create-v2-modal .nav-tabs .nav-link {
+    color: var(--au-primary-dark, #388087);
+    border: 1px solid transparent;
+    border-radius: 0.35rem 0.35rem 0 0;
+}
+.au-create-v2-modal .nav-tabs .nav-link:hover {
+    border-color: rgba(56, 128, 135, 0.25);
+}
+.au-create-v2-modal .nav-tabs .nav-link.active {
+    color: var(--au-black, #171717);
+    font-weight: 600;
+    background: #fff;
+    border-color: rgba(56, 128, 135, 0.35);
+    border-bottom-color: #fff;
+    margin-bottom: -1px;
+}
+.au-create-v2-modal .tab-content {
+    padding: 1rem 0 0;
+}
+.au-create-v2-modal .v2-frame {
+    border: 1px solid rgba(56, 128, 135, 0.28);
+    border-radius: 0.35rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.9);
+}
+.au-create-v2-modal .v2-frame-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--au-primary-dark, #388087);
+    margin-bottom: 0.75rem;
+}
+.au-create-v2-modal .form-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--au-black, #171717);
+    margin-bottom: 0.25rem;
+}
+.au-create-v2-modal .form-control {
+    font-size: 0.875rem;
+    border-radius: 0.25rem;
+    border-color: rgba(56, 128, 135, 0.35);
+}
+.au-create-v2-modal .sap-readonly {
+    background-color: #f0f0f0 !important;
+}
+.au-create-v2-modal .req {
+    border-left: 3px solid #c62828;
+}
+.au-create-v2-modal .v2-status {
+    font-size: 0.75rem;
+    color: var(--au-primary-dark, #388087);
+    margin-top: 0.5rem;
+    min-height: 1.25rem;
+}
+.au-create-v2-modal .modal-footer {
+    border-top: 1px solid rgba(56, 128, 135, 0.25);
+    background: var(--au-white, #f6f6f2);
 }

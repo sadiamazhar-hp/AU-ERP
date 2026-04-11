@@ -57,12 +57,7 @@
                 <a class="au-sidebar-link @(bpRolesActive ? "active" : null)" asp-controller="BP" asp-action="BPRoles">BP Roles</a>
                 <a class="au-sidebar-link @(bpTypesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeSamples">BP Types</a>
                 <a class="au-sidebar-link @(bpGroupingsActive ? "active" : null)" asp-controller="BP" asp-action="BPGroupings">BP Groupings</a>
-                <a class="au-sidebar-link @(bpTypeNumberRangesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeNumberRanges">BP Type Number Ranges</a>
-
-                <span class="au-sidebar-placeholder au-sidebar-placeholder-spaced">Inventory</span>
-                <span class="au-sidebar-placeholder">Sales</span>
-                <span class="au-sidebar-placeholder">Purchasing</span>
-                <span class="au-sidebar-placeholder">Reports</span>
+                <a class="au-sidebar-link @(bpTypeNumberRangesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeNumberRanges">BP Number Ranges</a>
             </aside>
 
             <main class="au-main">
@@ -75,6 +70,7 @@
 
     @await Html.PartialAsync("_MaterialSuccessModal")
     @await Html.PartialAsync("_MaterialDeleteConfirmModal")
+    @await Html.PartialAsync("_ErrorModal")
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

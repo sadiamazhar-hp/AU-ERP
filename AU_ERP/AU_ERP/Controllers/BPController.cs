@@ -76,8 +76,7 @@ namespace AU_ERP.Main_Controller
         }
 
         private IQueryable<BPTypeNumberRanges> ActiveRangeQuery(int bpTypeId) =>
-            _db.BPTypeNumberRanges.Where(r =>
-                r.BPTypeId == bpTypeId && (r.IsActive == null || r.IsActive == true))
+            _db.BPTypeNumberRanges.Where(r => r.BPTypeId == bpTypeId)
                 .OrderBy(r => r.RangeID);
 
         /// <summary>Prefer active range; if none, use any range for this BP type (inactive still defines numbers).</summary>
@@ -159,7 +158,7 @@ namespace AU_ERP.Main_Controller
                 var cntActiveFilter = await ActiveRangeQuery(bpTypeId).AsNoTracking().CountAsync(ct);
                 var probe = await _db.BPTypeNumberRanges.AsNoTracking()
                     .Where(r => r.BPTypeId == bpTypeId)
-                    .Select(r => new { r.RangeID, r.BPTypeId, r.IsActive, r.StartNumber, r.EndNumber })
+                    .Select(r => new { r.RangeID, r.BPTypeId, r.StartNumber, r.EndNumber })
                     .FirstOrDefaultAsync(ct);
                 AgentDebugNdjson("H1-H5", "BPController.GetNextBPTypeNumber:beforeActiveQuery", "BPTypeNumberRanges probe",
                     new { bpTypeId, cntByTypeId, cntActiveFilter, probe, contentRootPath = _env.ContentRootPath });
@@ -248,6 +247,13 @@ namespace AU_ERP.Main_Controller
 
             if (!ModelState.IsValid)
             {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                    return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
+                }
+
                 var ret = Request.Form["returnTo"].ToString();
                 if (string.Equals(ret, "Index", StringComparison.OrdinalIgnoreCase))
                 {
@@ -281,8 +287,109 @@ namespace AU_ERP.Main_Controller
                 throw;
             }
 
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                return Json(new { success = true, message = "Partner Added Successfully !" });
+
             TempData["BpSuccess"] = $"Business partner {model.BPID} saved.";
             return RedirectToAction(nameof(Index));
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetPartnerForEdit(string id, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return Json(new { success = false, message = "Missing partner ID." });
+
+            var p = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.BPID == id, ct);
+            if (p == null)
+                return Json(new { success = false, message = "Partner not found." });
+
+            return Json(new
+            {
+                success = true,
+                partner = new
+                {
+                    p.BPID,
+                    p.BPRoleId,
+                    p.BPTypeId,
+                    p.BPGroupingId,
+                    p.FullName,
+                    p.Street,
+                    p.HouseNo,
+                    p.City,
+                    p.PostalCode,
+                    p.Country,
+                    p.Region,
+                    p.Language,
+                    p.Telephone,
+                    p.Mobile,
+                    p.Email,
+                    p.ReconAccount,
+                    p.PaymentTerms,
+                    p.PaymentMethods,
+                    p.BankName,
+                    p.AccountNumber,
+                    p.DistChannel,
+                    p.SalesSchema,
+                    p.PurchSchema
+                }
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<JsonResult> UpdatePartner(BusinessPartnerMasterSample model, CancellationToken ct = default)
+        {
+            NormalizePartnerFkIds(model);
+
+            if (string.IsNullOrWhiteSpace(model.BPID))
+                return Json(new { success = false, message = "Missing partner ID." });
+
+            var existing = await _db.BusinessPartnerMasterSamples.FindAsync(new object[] { model.BPID }, ct);
+            if (existing == null)
+                return Json(new { success = false, message = "Partner not found." });
+
+            existing.BPRoleId = model.BPRoleId;
+            existing.BPTypeId = model.BPTypeId;
+            existing.BPGroupingId = model.BPGroupingId;
+            existing.FullName = model.FullName;
+            existing.Street = model.Street;
+            existing.HouseNo = model.HouseNo;
+            existing.City = model.City;
+            existing.PostalCode = model.PostalCode;
+            existing.Country = model.Country;
+            existing.Region = model.Region;
+            existing.Language = model.Language;
+            existing.Telephone = model.Telephone;
+            existing.Mobile = model.Mobile;
+            existing.Email = model.Email;
+            existing.ReconAccount = model.ReconAccount;
+            existing.PaymentTerms = model.PaymentTerms;
+            existing.PaymentMethods = model.PaymentMethods;
+            existing.BankName = model.BankName;
+            existing.AccountNumber = model.AccountNumber;
+            existing.DistChannel = model.DistChannel;
+            existing.SalesSchema = model.SalesSchema;
+            existing.PurchSchema = model.PurchSchema;
+
+            await _db.SaveChangesAsync(ct);
+            return Json(new { success = true, message = "Partner Updated Successfully !" });
+        }
+
+        [HttpPost]
+        public async Task<JsonResult> DeletePartner(string id, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return Json(new { success = false, message = "Missing partner ID." });
+
+            var partner = await _db.BusinessPartnerMasterSamples.FindAsync(new object[] { id }, ct);
+            if (partner == null)
+                return Json(new { success = false, message = "Partner not found." });
+
+            _db.BusinessPartnerMasterSamples.Remove(partner);
+            await _db.SaveChangesAsync(ct);
+            return Json(new { success = true, message = "Partner Deleted Successfully !" });
         }
 
         public IActionResult BPgroup()
@@ -300,8 +407,13 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> BPRoles(List<BPRole>? roles, CancellationToken ct = default)
         {
-            if (roles == null)
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
+            if (roles == null || roles.Count == 0)
+            {
+                if (isAjax) return Json(new { success = false, message = "No data received." });
                 return RedirectToAction(nameof(BPRoles));
+            }
 
             try
             {
@@ -335,10 +447,12 @@ namespace AU_ERP.Main_Controller
                     }
                 }
                 await _db.SaveChangesAsync(ct);
+                if (isAjax) return Json(new { success = true, message = "BP Roles Saved Successfully !" });
                 return RedirectToAction(nameof(BPRoles));
             }
             catch (Exception ex)
             {
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + ex.Message });
                 ModelState.AddModelError("", "Save failed: " + ex.Message);
                 return View("BPRoles", roles);
             }
@@ -354,7 +468,7 @@ namespace AU_ERP.Main_Controller
                     return Json(new { success = false, message = "Record not found" });
                 _db.BPRoles.Remove(item);
                 await _db.SaveChangesAsync(ct);
-                return Json(new { success = true });
+                return Json(new { success = true, message = "BP Role Deleted Successfully !" });
             }
             catch (Exception ex)
             {
@@ -372,8 +486,13 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> BPTypeSamples(List<BPTypeSample>? types, CancellationToken ct = default)
         {
-            if (types == null)
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
+            if (types == null || types.Count == 0)
+            {
+                if (isAjax) return Json(new { success = false, message = "No data received." });
                 return RedirectToAction(nameof(BPTypeSamples));
+            }
 
             try
             {
@@ -406,10 +525,12 @@ namespace AU_ERP.Main_Controller
                     }
                 }
                 await _db.SaveChangesAsync(ct);
+                if (isAjax) return Json(new { success = true, message = "BP Types Saved Successfully !" });
                 return RedirectToAction(nameof(BPTypeSamples));
             }
             catch (Exception ex)
             {
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + ex.Message });
                 ModelState.AddModelError("", "Save failed: " + ex.Message);
                 return View("BPTypeSamples", types);
             }
@@ -425,7 +546,7 @@ namespace AU_ERP.Main_Controller
                     return Json(new { success = false, message = "Record not found" });
                 _db.BPTypeSamples.Remove(item);
                 await _db.SaveChangesAsync(ct);
-                return Json(new { success = true });
+                return Json(new { success = true, message = "BP Type Deleted Successfully !" });
             }
             catch (Exception ex)
             {
@@ -443,8 +564,13 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> BPGroupings(List<BPGrouping>? groups, CancellationToken ct = default)
         {
-            if (groups == null)
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
+            if (groups == null || groups.Count == 0)
+            {
+                if (isAjax) return Json(new { success = false, message = "No data received." });
                 return RedirectToAction(nameof(BPGroupings));
+            }
 
             try
             {
@@ -470,10 +596,12 @@ namespace AU_ERP.Main_Controller
                     }
                 }
                 await _db.SaveChangesAsync(ct);
+                if (isAjax) return Json(new { success = true, message = "BP Groupings Saved Successfully !" });
                 return RedirectToAction(nameof(BPGroupings));
             }
             catch (Exception ex)
             {
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + ex.Message });
                 ModelState.AddModelError("", "Save failed: " + ex.Message);
                 return View("BPGroupings", groups);
             }
@@ -489,7 +617,7 @@ namespace AU_ERP.Main_Controller
                     return Json(new { success = false, message = "Record not found" });
                 _db.BPGroupings.Remove(item);
                 await _db.SaveChangesAsync(ct);
-                return Json(new { success = true });
+                return Json(new { success = true, message = "BP Grouping Deleted Successfully !" });
             }
             catch (Exception ex)
             {
@@ -511,19 +639,23 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> BPTypeNumberRanges(List<BPTypeNumberRanges>? ranges, CancellationToken ct = default)
         {
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
             ViewBag.TypeList = await _db.BPTypeSamples.AsNoTracking()
                 .OrderBy(t => t.Id)
                 .Select(t => new SelectListItem { Value = t.Id.ToString(), Text = t.Id + " — " + t.TypeName })
                 .ToListAsync(ct);
 
-            if (ranges == null)
+            if (ranges == null || ranges.Count == 0)
+            {
+                if (isAjax) return Json(new { success = false, message = "No data received." });
                 return RedirectToAction(nameof(BPTypeNumberRanges));
+            }
 
             try
             {
                 foreach (var item in ranges)
                 {
-                    item.IsActive = item.IsActive == true;
                     item.Prefix = string.IsNullOrWhiteSpace(item.Prefix) ? null : item.Prefix.Trim();
 
                     if (item.RangeID > 0)
@@ -536,7 +668,6 @@ namespace AU_ERP.Main_Controller
                             existing.StartNumber = item.StartNumber;
                             existing.EndNumber = item.EndNumber;
                             existing.CurrentNumber = item.CurrentNumber;
-                            existing.IsActive = item.IsActive;
                         }
                     }
                     else
@@ -551,16 +682,17 @@ namespace AU_ERP.Main_Controller
                             Prefix = item.Prefix,
                             StartNumber = item.StartNumber,
                             EndNumber = item.EndNumber,
-                            CurrentNumber = item.CurrentNumber,
-                            IsActive = item.IsActive
+                            CurrentNumber = item.CurrentNumber
                         }, ct);
                     }
                 }
                 await _db.SaveChangesAsync(ct);
+                if (isAjax) return Json(new { success = true, message = "BP Number Ranges Saved Successfully !" });
                 return RedirectToAction(nameof(BPTypeNumberRanges));
             }
             catch (Exception ex)
             {
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + ex.Message });
                 ModelState.AddModelError("", "Save failed: " + ex.Message);
                 return View("BPTypeNumberRanges", ranges);
             }
@@ -576,7 +708,7 @@ namespace AU_ERP.Main_Controller
                     return Json(new { success = false, message = "Record not found" });
                 _db.BPTypeNumberRanges.Remove(item);
                 await _db.SaveChangesAsync(ct);
-                return Json(new { success = true });
+                return Json(new { success = true, message = "BP Number Range Deleted Successfully !" });
             }
             catch (Exception ex)
             {

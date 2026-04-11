@@ -367,8 +367,13 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> NumberRanges(List<MaterialNumberRange> ranges)
         {
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
             if (ranges == null || ranges.Count == 0)
+            {
+                if (isAjax) return Json(new { success = false, message = "No data received." });
                 return RedirectToAction("NumberRanges");
+            }
 
             try
             {
@@ -402,16 +407,20 @@ namespace AU_ERP.Main_Controller
                 }
 
                 await _context.SaveChangesAsync();
+                if (isAjax) return Json(new { success = true, message = "Number Ranges Saved Successfully !" });
                 TempData["Success"] = "Data Saved Successfully!";
             }
             catch (DbUpdateException ex)
             {
                 var msg = ex.InnerException?.Message ?? ex.Message;
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + msg });
                 TempData["Error"] = $"Save failed: {msg}";
             }
             catch (Exception ex)
             {
-                TempData["Error"] = "Save failed: " + (ex.InnerException?.Message ?? ex.Message);
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + msg });
+                TempData["Error"] = "Save failed: " + msg;
             }
 
             return RedirectToAction("NumberRanges");
@@ -420,14 +429,20 @@ namespace AU_ERP.Main_Controller
         [HttpPost]
         public async Task<JsonResult> DeleteNumberRange(string id)
         {
-            var item = await _context.MaterialNumberRanges.FindAsync(id);
-            if (item == null)
-                return Json(new { success = false });
+            try
+            {
+                var item = await _context.MaterialNumberRanges.FindAsync(id);
+                if (item == null)
+                    return Json(new { success = false, message = "Record not found" });
 
-            _context.MaterialNumberRanges.Remove(item);
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true });
+                _context.MaterialNumberRanges.Remove(item);
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, message = "Number Range Deleted Successfully !" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
         }
         //List Page Methods
         public async Task<IActionResult> GetMaterialList()
@@ -504,8 +519,13 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MaterialType(List<MaterialType>? materialTypes)
         {
-            if (materialTypes == null)
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
+            if (materialTypes == null || materialTypes.Count == 0)
+            {
+                if (isAjax) return Json(new { success = false, message = "No data received." });
                 return RedirectToAction(nameof(MaterialType));
+            }
 
             try
             {
@@ -526,10 +546,12 @@ namespace AU_ERP.Main_Controller
                 }
 
                 await _context.SaveChangesAsync();
+                if (isAjax) return Json(new { success = true, message = "Material Types Saved Successfully !" });
                 return RedirectToAction(nameof(MaterialType));
             }
             catch (Exception ex)
             {
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + ex.Message });
                 ModelState.AddModelError("", "Save failed: " + ex.Message);
                 return View("materialtype", materialTypes);
             }
@@ -546,7 +568,7 @@ namespace AU_ERP.Main_Controller
 
                 _context.MaterialTypes.Remove(item);
                 await _context.SaveChangesAsync();
-                return Json(new { success = true });
+                return Json(new { success = true, message = "Material Type Deleted Successfully !" });
             }
             catch (Exception ex)
             {

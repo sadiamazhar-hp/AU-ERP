@@ -1,79 +1,355 @@
 @model AU_ERP.Models.BPIndexViewModel
 @{
     ViewData["Title"] = "Business Partners";
-}
-
-@if (TempData["BpSuccess"] != null)
-{
-    <div class="alert alert-success py-2 small mb-3" role="alert">@TempData["BpSuccess"]</div>
+    var bpTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
 }
 
 @Html.ValidationSummary(false, "", new { @class = "text-danger small mb-2" })
 
-<div class="bp-module">
-    <div class="bp-module-header border-bottom pb-2 mb-3">
-        <h1 class="h5 mb-0 fw-semibold" style="color: var(--au-primary-dark, #388087);">Business partners</h1>
-        <p class="small text-secondary mb-0">Create and maintain partner master data.</p>
-    </div>
+<style>
+    .bp-module .table-sap {
+        width: 100%;
+        border-collapse: collapse;
+    }
 
-    <ul class="nav nav-tabs bp-module-tabs mb-0" role="tablist">
+    .bp-module .table-sap th {
+        background: #dee6ef;
+        border: 1px solid #ccc;
+        padding: 6px 10px;
+        font-weight: normal;
+    }
+
+    .bp-module .table-sap td {
+        border: 1px solid #ccc;
+        padding: 0;
+        height: 32px;
+    }
+
+    .bp-module .sap-input {
+        width: 100%;
+        height: 100%;
+        border: none;
+        padding: 0 10px;
+        background: #f4f4f4;
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .bp-module .table-sap th.col-no,
+    .bp-module .table-sap td.col-no {
+        padding-left: 14px;
+        padding-right: 8px;
+    }
+
+    .bp-module .table-sap td.col-action {
+        padding: 4px 8px;
+        vertical-align: middle;
+        text-align: center;
+    }
+</style>
+
+<div class="bp-module">
+    <ul class="nav nav-tabs bp-module-tabs mb-0 mt-1" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="bpTabCreate" data-bs-toggle="tab" data-bs-target="#bpPaneCreate" type="button" role="tab" aria-controls="bpPaneCreate" aria-selected="true">Create</button>
+            <button class="nav-link @(bpTabList ? "" : "active")" id="bpTabCreate" data-bs-toggle="tab" data-bs-target="#bpPaneCreate" type="button" role="tab" aria-controls="bpPaneCreate" aria-selected="@(!bpTabList ? "true" : "false")">Create</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="bpTabList" data-bs-toggle="tab" data-bs-target="#bpPaneList" type="button" role="tab" aria-controls="bpPaneList" aria-selected="false">List</button>
+            <button class="nav-link @(bpTabList ? "active" : "")" id="bpTabList" data-bs-toggle="tab" data-bs-target="#bpPaneList" type="button" role="tab" aria-controls="bpPaneList" aria-selected="@(bpTabList ? "true" : "false")">List</button>
         </li>
     </ul>
 
     <div class="tab-content border border-top-0 rounded-bottom bg-white">
-        <div class="tab-pane fade show active" id="bpPaneCreate" role="tabpanel" aria-labelledby="bpTabCreate">
+        <div class="tab-pane fade @(bpTabList ? "" : "show active")" id="bpPaneCreate" role="tabpanel" aria-labelledby="bpTabCreate">
             <div class="sap-window border-0 rounded-0">
                 @await Html.PartialAsync("_BPCreateForm", Model.Draft)
             </div>
         </div>
-        <div class="tab-pane fade" id="bpPaneList" role="tabpanel" aria-labelledby="bpTabList">
-            <div class="p-3">
-                <div class="mb-2">
+        <div class="tab-pane fade @(bpTabList ? "show active" : "")" id="bpPaneList" role="tabpanel" aria-labelledby="bpTabList">
+            <div class="sap-window border-0 rounded-0">
+                <div class="p-2 px-3">
                     <input type="search" class="form-control form-control-sm" id="bpListFilter" placeholder="Filter by ID, name, city…" style="max-width:22rem;" />
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover table-bordered bg-white mb-0" id="bpListTable">
-                        <thead class="table-light">
+                <div class="table-wrapper">
+                    <table class="table-sap" id="bpListTable">
+                        <thead>
                             <tr>
-                                <th>ID</th>
+                                <th class="col-no">No</th>
+                                <th>BPID</th>
                                 <th>Name</th>
                                 <th>Grouping</th>
                                 <th>Role</th>
                                 <th>City</th>
+                                <th style="width:72px;">Action</th>
                             </tr>
                         </thead>
                         <tbody>
+                            @{ int bpIdx = 0; }
                             @foreach (var p in Model.Partners)
                             {
                                 var roleTxt = p.Role != null ? $"{p.Role.RoleCode} {p.Role.RoleName}" : "";
                                 var groupTxt = p.Grouping?.GroupName ?? "";
-                                <tr data-bp-filter="@($"{p.BPID} {p.FullName} {p.City} {roleTxt} {groupTxt}")">
-                                    <td>@p.BPID</td>
-                                    <td>@p.FullName</td>
-                                    <td>@groupTxt</td>
-                                    <td>@roleTxt</td>
-                                    <td>@p.City</td>
+                                <tr data-bp-filter="@($"{p.BPID} {p.FullName} {p.City} {roleTxt} {groupTxt}")" data-bp-id="@p.BPID">
+                                    <td class="col-no">@(bpIdx + 1)</td>
+                                    <td><input class="sap-input" value="@p.BPID" readonly /></td>
+                                    <td><input class="sap-input" value="@p.FullName" readonly /></td>
+                                    <td><input class="sap-input" value="@groupTxt" readonly /></td>
+                                    <td><input class="sap-input" value="@roleTxt" readonly /></td>
+                                    <td><input class="sap-input" value="@p.City" readonly /></td>
+                                    <td class="col-action">
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-link text-secondary p-0" type="button" id="bpRowActions@(bpIdx)" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
+                                                <i class="bi bi-three-dots-vertical fs-5"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="bpRowActions@(bpIdx)">
+                                                <li><button type="button" class="dropdown-item" data-bp="@p.BPID" onclick="openBPEdit(this.getAttribute('data-bp'))">Edit</button></li>
+                                                <li><button type="button" class="dropdown-item text-danger" data-bp="@p.BPID" onclick="deleteBPFromList(this.getAttribute('data-bp'))">Delete</button></li>
+                                            </ul>
+                                        </div>
+                                    </td>
                                 </tr>
+                                bpIdx++;
                             }
                         </tbody>
                     </table>
                 </div>
                 @if (Model.Partners.Count == 0)
                 {
-                    <p class="text-secondary small mb-0 mt-2">No business partners yet. Use the Create tab to add one.</p>
+                    <p class="text-secondary small mb-0 mt-2 px-3">No business partners yet. Use the Create tab to add one.</p>
                 }
             </div>
         </div>
     </div>
 </div>
 
+@{
+    var editRoleOptions = ViewBag.RoleOptions as List<AU_ERP.Models.BPRole> ?? new List<AU_ERP.Models.BPRole>();
+    var editTypeOptions = ViewBag.TypeOptions as List<AU_ERP.Models.BPTypeSample> ?? new List<AU_ERP.Models.BPTypeSample>();
+    var editGroupOptions = ViewBag.GroupOptions as List<AU_ERP.Models.BPGrouping> ?? new List<AU_ERP.Models.BPGrouping>();
+}
+<div class="modal fade" id="bpEditModal" tabindex="-1" aria-labelledby="bpEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content au-create-v2-modal">
+            <form id="bpEditForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="bpEditBPID" name="BPID" />
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="bpEditModalLabel">Edit Business Partner</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <ul class="nav nav-tabs flex-wrap" id="bpEditTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="bpEditTab-info" data-bs-toggle="tab" data-bs-target="#bpEditPane-info" type="button" role="tab">Info</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="bpEditTab-address" data-bs-toggle="tab" data-bs-target="#bpEditPane-address" type="button" role="tab">Address</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="bpEditTab-comm" data-bs-toggle="tab" data-bs-target="#bpEditPane-comm" type="button" role="tab">Communication</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="bpEditTab-company" data-bs-toggle="tab" data-bs-target="#bpEditPane-company" type="button" role="tab">Company Code</button>
+                        </li>
+                        <li class="nav-item" role="presentation" id="bpEditNavSales">
+                            <button class="nav-link" id="bpEditTab-sales" data-bs-toggle="tab" data-bs-target="#bpEditPane-sales" type="button" role="tab">Sales</button>
+                        </li>
+                        <li class="nav-item" role="presentation" id="bpEditNavPurch">
+                            <button class="nav-link" id="bpEditTab-purch" data-bs-toggle="tab" data-bs-target="#bpEditPane-purch" type="button" role="tab">Purchasing</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="bpEditPane-info" role="tabpanel">
+                            <div class="row g-3 mt-1">
+                                <div class="col-md-6">
+                                    <label class="form-label">BPID</label>
+                                    <input id="bpEditBPIDDisplay" class="form-control sap-readonly" readonly />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Role</label>
+                                    <select name="BPRoleId" id="bpEditRole" class="form-control" onchange="bpEditHandleRoleUI()">
+                                        <option value="">-- Select --</option>
+                                        @foreach (var r in editRoleOptions)
+                                        {
+                                            <option value="@r.Id" data-code="@r.RoleCode">@r.RoleCode — @r.RoleName</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Type</label>
+                                    <select name="BPTypeId" id="bpEditType" class="form-control sap-readonly" disabled>
+                                        <option value="">-- Select --</option>
+                                        @foreach (var t in editTypeOptions)
+                                        {
+                                            <option value="@t.Id">@t.TypeName</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Grouping</label>
+                                    <select name="BPGroupingId" id="bpEditGroup" class="form-control">
+                                        <option value="">-- Select --</option>
+                                        @foreach (var g in editGroupOptions)
+                                        {
+                                            <option value="@g.Id">@g.GroupName</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="bpEditPane-address" role="tabpanel">
+                            <div class="v2-frame">
+                                <div class="v2-frame-title">General Data</div>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <label class="form-label">Name</label>
+                                        <input name="FullName" id="bpEditFullName" class="form-control req" />
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Street</label>
+                                        <input name="Street" id="bpEditStreet" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">House No.</label>
+                                        <input name="HouseNo" id="bpEditHouseNo" class="form-control" />
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">City</label>
+                                        <input name="City" id="bpEditCity" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Postal Code</label>
+                                        <input name="PostalCode" id="bpEditPostalCode" class="form-control" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Country</label>
+                                        <select name="Country" id="bpEditCountry" class="form-control"><option>Pakistan</option><option>USA</option></select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Region</label>
+                                        <input name="Region" id="bpEditRegion" class="form-control" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Language</label>
+                                        <select name="Language" id="bpEditLanguage" class="form-control"><option>English</option><option>Urdu</option></select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="bpEditPane-comm" role="tabpanel">
+                            <div class="v2-frame">
+                                <div class="v2-frame-title">Communication</div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Telephone</label>
+                                        <input name="Telephone" id="bpEditTelephone" class="form-control" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Mobile</label>
+                                        <input name="Mobile" id="bpEditMobile" class="form-control" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Email</label>
+                                        <input name="Email" id="bpEditEmail" class="form-control" type="email" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="bpEditPane-company" role="tabpanel">
+                            <div class="v2-frame">
+                                <div class="v2-frame-title">Account Management</div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Recon Account</label>
+                                        <input name="ReconAccount" id="bpEditReconAccount" class="form-control req" placeholder="e.g. 140000" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="v2-frame">
+                                <div class="v2-frame-title">Payment</div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Payment Terms</label>
+                                        <select name="PaymentTerms" id="bpEditPaymentTerms" class="form-control"><option>0001</option><option>0002</option></select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Payment Methods</label>
+                                        <input name="PaymentMethods" id="bpEditPaymentMethods" class="form-control" placeholder="C = Cash, T = Transfer" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="v2-frame">
+                                <div class="v2-frame-title">Bank Details</div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Bank Name</label>
+                                        <input name="BankName" id="bpEditBankName" class="form-control" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Account Number</label>
+                                        <input name="AccountNumber" id="bpEditAccountNumber" class="form-control" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="bpEditPane-sales" role="tabpanel">
+                            <div class="v2-frame">
+                                <div class="v2-frame-title">Sales Data</div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Dist. Channel</label>
+                                        <input name="DistChannel" id="bpEditDistChannel" class="form-control req" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Sales Schema</label>
+                                        <input name="SalesSchema" id="bpEditSalesSchema" class="form-control req" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="bpEditPane-purch" role="tabpanel">
+                            <div class="v2-frame">
+                                <div class="v2-frame-title">Purchasing Data</div>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Purch. Schema</label>
+                                        <input name="PurchSchema" id="bpEditPurchSchema" class="form-control req" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="bpEditSaveBtn" style="background:var(--au-primary,#6FB3B8);border-color:var(--au-primary-dark,#388087);">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
+        function bpReloadToListTab() {
+            try {
+                var u = new URL(window.location.href);
+                u.searchParams.set("tab", "list");
+                var q = u.searchParams.toString();
+                window.location.assign(u.pathname + (q ? "?" + q : ""));
+            } catch (e) {
+                window.location.reload();
+            }
+        }
+
         (function () {
             var inp = document.getElementById("bpListFilter");
             if (!inp) return;
@@ -85,5 +361,158 @@
                 });
             });
         })();
+
+        function deleteBPFromList(bpId) {
+            if (!bpId) return;
+            function doDelete() {
+                fetch('@Url.Action("DeletePartner", "BP")?id=' + encodeURIComponent(bpId), { method: "POST" })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (res.success) {
+                            var msg = res.message || "Partner Deleted Successfully !";
+                            if (typeof window.materialShowSuccessModalThen === "function")
+                                window.materialShowSuccessModalThen(msg, function () { bpReloadToListTab(); });
+                            else
+                                bpReloadToListTab();
+                        } else
+                            alert(res.message || "Delete failed");
+                    })
+                    .catch(function () { alert("Delete request failed"); });
+            }
+            if (typeof window.materialShowDeleteConfirmModalThen === "function")
+                window.materialShowDeleteConfirmModalThen("Do you want to Delete this Partner?", doDelete);
+            else if (confirm("Delete this partner?"))
+                doDelete();
+        }
+
+        /* ---- AJAX Create form submit ---- */
+        (function () {
+            var form = document.getElementById("bpCreateRoot");
+            if (!form) return;
+            form.addEventListener("submit", function (e) {
+                e.preventDefault();
+                var fd = new FormData(form);
+                fetch(form.action, {
+                    method: "POST",
+                    body: fd,
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        var msg = data.message || "Partner Added Successfully !";
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(msg, function () { location.reload(); });
+                        else
+                            location.reload();
+                    } else {
+                        alert(data.message || "Save failed");
+                    }
+                })
+                .catch(function () { alert("Request failed"); });
+            });
+        })();
+
+        /* ---- Edit modal helpers ---- */
+        function bpEditHandleRoleUI() {
+            var sel = document.getElementById("bpEditRole");
+            if (!sel) return;
+            var opt = sel.options[sel.selectedIndex];
+            var code = opt ? (opt.getAttribute("data-code") || "") : "";
+            var salesNav = document.getElementById("bpEditNavSales");
+            var purchNav = document.getElementById("bpEditNavPurch");
+            if (salesNav) salesNav.style.display = (code === "FLCU01") ? "" : "none";
+            if (purchNav) purchNav.style.display = (code === "FLVN01") ? "" : "none";
+        }
+
+        function setEditField(id, val) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.value = val || "";
+        }
+
+        function openBPEdit(bpId) {
+            if (!bpId) return;
+            fetch('@Url.Action("GetPartnerForEdit", "BP")?id=' + encodeURIComponent(bpId))
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res.success) { alert(res.message || "Load failed"); return; }
+                    var p = res.partner;
+                    setEditField("bpEditBPID", p.bpid || p.BPID);
+                    setEditField("bpEditBPIDDisplay", p.bpid || p.BPID);
+                    setEditField("bpEditRole", p.bpRoleId || p.BPRoleId || "");
+                    setEditField("bpEditType", p.bpTypeId || p.BPTypeId || "");
+                    setEditField("bpEditGroup", p.bpGroupingId || p.BPGroupingId || "");
+                    setEditField("bpEditFullName", p.fullName || p.FullName);
+                    setEditField("bpEditStreet", p.street || p.Street);
+                    setEditField("bpEditHouseNo", p.houseNo || p.HouseNo);
+                    setEditField("bpEditCity", p.city || p.City);
+                    setEditField("bpEditPostalCode", p.postalCode || p.PostalCode);
+                    setEditField("bpEditCountry", p.country || p.Country);
+                    setEditField("bpEditRegion", p.region || p.Region);
+                    setEditField("bpEditLanguage", p.language || p.Language);
+                    setEditField("bpEditTelephone", p.telephone || p.Telephone);
+                    setEditField("bpEditMobile", p.mobile || p.Mobile);
+                    setEditField("bpEditEmail", p.email || p.Email);
+                    setEditField("bpEditReconAccount", p.reconAccount || p.ReconAccount);
+                    setEditField("bpEditPaymentTerms", p.paymentTerms || p.PaymentTerms);
+                    setEditField("bpEditPaymentMethods", p.paymentMethods || p.PaymentMethods);
+                    setEditField("bpEditBankName", p.bankName || p.BankName);
+                    setEditField("bpEditAccountNumber", p.accountNumber || p.AccountNumber);
+                    setEditField("bpEditDistChannel", p.distChannel || p.DistChannel);
+                    setEditField("bpEditSalesSchema", p.salesSchema || p.SalesSchema);
+                    setEditField("bpEditPurchSchema", p.purchSchema || p.PurchSchema);
+                    bpEditHandleRoleUI();
+
+                    var firstTab = document.getElementById("bpEditTab-info");
+                    if (firstTab && typeof bootstrap !== "undefined" && bootstrap.Tab)
+                        bootstrap.Tab.getOrCreateInstance(firstTab).show();
+
+                    var el = document.getElementById("bpEditModal");
+                    if (el && el.parentElement !== document.body)
+                        document.body.appendChild(el);
+                    if (el && typeof bootstrap !== "undefined" && bootstrap.Modal)
+                        bootstrap.Modal.getOrCreateInstance(el).show();
+                })
+                .catch(function () { alert("Request failed"); });
+        }
+
+        /* ---- Edit modal Save ---- */
+        document.getElementById("bpEditSaveBtn").addEventListener("click", function () {
+            var form = document.getElementById("bpEditForm");
+            if (!form) return;
+            var fd = new FormData(form);
+            fetch('@Url.Action("UpdatePartner", "BP")', {
+                method: "POST",
+                body: fd,
+                headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" }
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    var el = document.getElementById("bpEditModal");
+                    if (el && typeof bootstrap !== "undefined") {
+                        var m = bootstrap.Modal.getInstance(el) || bootstrap.Modal.getOrCreateInstance(el);
+                        var onHidden = function () {
+                            el.removeEventListener("hidden.bs.modal", onHidden);
+                            if (typeof window.materialShowSuccessModalThen === "function")
+                                window.materialShowSuccessModalThen(data.message || "Partner Updated Successfully !", function () { bpReloadToListTab(); });
+                            else
+                                bpReloadToListTab();
+                        };
+                        el.addEventListener("hidden.bs.modal", onHidden);
+                        m.hide();
+                    } else {
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(data.message || "Partner Updated Successfully !", function () { bpReloadToListTab(); });
+                        else
+                            bpReloadToListTab();
+                    }
+                } else {
+                    alert(data.message || "Update failed");
+                }
+            })
+            .catch(function () { alert("Request failed"); });
+        });
     </script>
 }
