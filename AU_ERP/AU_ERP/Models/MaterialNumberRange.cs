@@ -11,5 +11,7 @@ namespace AU_ERP.Models
         public string ToNumber { get; set; }
         public string CurrentNumber { get; set; } // Nullable
         public bool IsExternal { get; set; } // bit column
+
+        public virtual MaterialType? MaterialType { get; set; }
     }
 }

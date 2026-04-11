@@ -12,5 +12,7 @@ namespace AU_ERP.Models
 
         //Reverse Navigation
         public ICollection<CreateMaterialMaster> CreateMaterialMasters { get; set; }
+        public ICollection<MaterialNumberRange> MaterialNumberRanges { get; set; } = null!;
+        public ICollection<BomHeadersSample> BomHeadersSamples { get; set; } = null!;
     }
 }

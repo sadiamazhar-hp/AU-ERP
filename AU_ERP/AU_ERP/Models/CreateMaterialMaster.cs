@@ -26,6 +26,9 @@ namespace AU_ERP.Models
 
         //Nav property
         public MaterialType MaterialType { get; set; }
+        public MaterialGroup? MaterialGroup { get; set; }
+        public ICollection<BomItemsSample> BomItemsSamples { get; set; } = null!;
+        public ICollection<RoutingHeadersSample> RoutingHeadersSamples { get; set; } = null!;
 
     }
     
