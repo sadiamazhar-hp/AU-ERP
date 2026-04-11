@@ -539,15 +539,33 @@
                         .then(function (r) { return r.json(); })
                         .then(function (data) {
                             if (data.success) {
+                                var msg = data.message || (createV2IsEdit ? "Material Updated Successfully !" : "Material Added Successfully !");
+                                var afterListOrReload = function () {
+                                    if (typeof window.materialsReloadToListTab === "function")
+                                        window.materialsReloadToListTab();
+                                    else
+                                        location.reload();
+                                };
                                 if (v2IsModalCopy) {
-                                    const el = document.getElementById("materialCreateV2Modal");
+                                    var el = document.getElementById("materialCreateV2Modal");
                                     if (el && typeof bootstrap !== "undefined") {
-                                        const modal = bootstrap.Modal.getInstance(el);
-                                        if (modal) modal.hide();
+                                        var m = bootstrap.Modal.getInstance(el) || bootstrap.Modal.getOrCreateInstance(el);
+                                        var onCreateHidden = function () {
+                                            el.removeEventListener("hidden.bs.modal", onCreateHidden);
+                                            if (typeof window.materialShowSuccessModalThen === "function")
+                                                window.materialShowSuccessModalThen(msg, afterListOrReload);
+                                            else
+                                                afterListOrReload();
+                                        };
+                                        el.addEventListener("hidden.bs.modal", onCreateHidden);
+                                        m.hide();
+                                        return;
                                     }
-                                } else if (typeof window.switchMaterialsModuleTab === "function")
-                                    window.switchMaterialsModuleTab("list");
-                                location.reload();
+                                }
+                                if (typeof window.materialShowSuccessModalThen === "function")
+                                    window.materialShowSuccessModalThen(msg, afterListOrReload);
+                                else
+                                    afterListOrReload();
                             } else {
                                 alert(data.message || "Save failed");
                             }

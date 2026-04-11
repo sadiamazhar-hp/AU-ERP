@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace AU_ERP.Models
 {
@@ -24,11 +25,14 @@ namespace AU_ERP.Models
         public string? AvailabilityCheckCode { get; set; }
         public string? ValuationClassCode { get; set; }
 
-        //Nav property
-        public MaterialType MaterialType { get; set; }
+        // Nav properties: not posted with forms; [ValidateNever] avoids false "required" validation.
+        [ValidateNever]
+        public MaterialType MaterialType { get; set; } = null!;
         public MaterialGroup? MaterialGroup { get; set; }
-        public ICollection<BomItemsSample> BomItemsSamples { get; set; } = null!;
-        public ICollection<RoutingHeadersSample> RoutingHeadersSamples { get; set; } = null!;
+        [ValidateNever]
+        public ICollection<BomItemsSample> BomItemsSamples { get; set; } = new List<BomItemsSample>();
+        [ValidateNever]
+        public ICollection<RoutingHeadersSample> RoutingHeadersSamples { get; set; } = new List<RoutingHeadersSample>();
 
     }
     

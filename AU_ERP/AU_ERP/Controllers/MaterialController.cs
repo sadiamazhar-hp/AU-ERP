@@ -15,20 +15,6 @@ namespace AU_ERP.Main_Controller
             _context = context;
         }
 
-        /// <summary>Form posts bind <see cref="CreateMaterialMaster.MaterialTypeCode"/> only; the EF navigation <see cref="CreateMaterialMaster.MaterialType"/> is not posted and triggers false "required" validation.</summary>
-        private static void RemoveUnboundMaterialTypeNavigation(Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary modelState)
-        {
-            foreach (var key in modelState.Keys.ToList())
-            {
-                if (string.IsNullOrEmpty(key)) continue;
-                if (key.Contains("MaterialTypeCode", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (string.Equals(key, "MaterialType", StringComparison.OrdinalIgnoreCase)
-                    || key.EndsWith(".MaterialType", StringComparison.OrdinalIgnoreCase))
-                    modelState.Remove(key);
-            }
-        }
-
         // GET: Material
         public IActionResult Index()
         {
@@ -72,7 +58,7 @@ namespace AU_ERP.Main_Controller
             var (ok, error) = await TryPersistNewMaterialAsync(material, conversions);
             if (ok)
             {
-                TempData["SuccessMessage"] = $"Material {material.MaterialNumber} created successfully!";
+                TempData["SuccessMessage"] = "Material Added Successfully !";
                 return RedirectToAction("Create");
             }
 
@@ -93,7 +79,6 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateV2(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
-            RemoveUnboundMaterialTypeNavigation(ModelState);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -103,7 +88,7 @@ namespace AU_ERP.Main_Controller
 
             var (ok, error) = await TryPersistNewMaterialAsync(material, conversions);
             if (ok)
-                return Json(new { success = true, message = $"Material {material.MaterialNumber} created successfully!" });
+                return Json(new { success = true, message = "Material Added Successfully !" });
 
             return Json(new { success = false, message = error ?? "Save failed." });
         }
@@ -153,7 +138,6 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
-            RemoveUnboundMaterialTypeNavigation(ModelState);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -168,7 +152,7 @@ namespace AU_ERP.Main_Controller
                 : await TryUpdateMaterialAsync(material, conversions);
 
             if (ok)
-                return Json(new { success = true, message = $"Material {material.MaterialNumber} updated successfully!" });
+                return Json(new { success = true, message = "Material Updated Successfully !" });
 
             return Json(new { success = false, message = error ?? "Update failed." });
         }
@@ -476,7 +460,7 @@ namespace AU_ERP.Main_Controller
             _context.CreateMaterialMaster.Remove(item);
             await _context.SaveChangesAsync();
 
-            return Json(new { success = true });
+            return Json(new { success = true, message = "Material Deleted Successfully !" });
         }
 
         [HttpPost]
@@ -506,7 +490,7 @@ namespace AU_ERP.Main_Controller
 
             await _context.SaveChangesAsync();
 
-            return Json(new { success = true });
+            return Json(new { success = true, message = "Material Updated Successfully !" });
         }
 
         [HttpGet]

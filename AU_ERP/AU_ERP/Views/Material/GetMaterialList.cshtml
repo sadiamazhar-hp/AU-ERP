@@ -5,6 +5,7 @@
     ViewData["Title"] = "Materials";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.CreateMaterialMaster>();
+    var materialsTabList = string.Equals(Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
 }
 
 <style>
@@ -173,21 +174,21 @@
 <div class="materials-module">
     <ul class="nav nav-tabs materials-module-tabstrip" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="materialsTabCreateBtn" data-bs-toggle="tab" data-bs-target="#materialsPaneCreate" type="button" role="tab" aria-controls="materialsPaneCreate" aria-selected="true">Create</button>
+            <button class="nav-link @(materialsTabList ? "" : "active")" id="materialsTabCreateBtn" data-bs-toggle="tab" data-bs-target="#materialsPaneCreate" type="button" role="tab" aria-controls="materialsPaneCreate" aria-selected="@(materialsTabList ? "false" : "true")">Create</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="materialsTabListBtn" data-bs-toggle="tab" data-bs-target="#materialsPaneList" type="button" role="tab" aria-controls="materialsPaneList" aria-selected="false">List</button>
+            <button class="nav-link @(materialsTabList ? "active" : "")" id="materialsTabListBtn" data-bs-toggle="tab" data-bs-target="#materialsPaneList" type="button" role="tab" aria-controls="materialsPaneList" aria-selected="@(materialsTabList ? "true" : "false")">List</button>
         </li>
     </ul>
     <div class="tab-content materials-module-tab-content">
-        <div class="tab-pane fade show active p-2 p-md-3" id="materialsPaneCreate" role="tabpanel" aria-labelledby="materialsTabCreateBtn">
+        <div class="tab-pane fade p-2 p-md-3 @(materialsTabList ? "" : "show active")" id="materialsPaneCreate" role="tabpanel" aria-labelledby="materialsTabCreateBtn">
             @await Html.PartialAsync("CreateV2", new AU_ERP.Models.CreateMaterialMaster(), new ViewDataDictionary(ViewData)
             {
                 ["CreateV2Embedded"] = true,
                 ["CreateV2IdSuffix"] = ""
             })
         </div>
-        <div class="tab-pane fade" id="materialsPaneList" role="tabpanel" aria-labelledby="materialsTabListBtn">
+        <div class="tab-pane fade @(materialsTabList ? "show active" : "")" id="materialsPaneList" role="tabpanel" aria-labelledby="materialsTabListBtn">
             <div class="sap-window" id="app">
 
     <form id="materialForm" method="post" action="@Url.Action("GetMaterialList", "Material")">
@@ -507,19 +508,32 @@
     function handleDelete() {
         if (!selectedRow) return;
 
-        const id = selectedRow.querySelector(".row-id").value;
+        const id = selectedRow.querySelector(".row-id")?.value;
 
-        if (!confirm("Delete this material?")) return;
-
+        function runDeleteRequest() {
         if (id) {
+            var rowToRemove = selectedRow;
             fetch('/Material/DeleteMaterial?id=' + id, { method: 'POST' })
                 .then(r => r.json())
                 .then(res => {
-                    if (res.success) selectedRow.remove();
+                    if (res.success) {
+                        var msg = res.message || "Material Deleted Successfully !";
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(msg, function () {
+                                if (rowToRemove) rowToRemove.remove();
+                            });
+                        else if (rowToRemove) rowToRemove.remove();
+                    }
                 });
         } else {
             selectedRow.remove();
         }
+        }
+
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Do you want to Delete this Material?", runDeleteRequest);
+        else if (confirm("Delete this material?"))
+            runDeleteRequest();
     }
         function saveAll() {
 
@@ -547,8 +561,18 @@
         .then(res => res.json())
         .then(res => {
             if (res.success) {
-                alert("Saved successfully!");
-                location.reload();
+                var msg = res.message || "Material Updated Successfully !";
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(msg, function () {
+                        if (typeof window.materialsReloadToListTab === "function")
+                            window.materialsReloadToListTab();
+                        else
+                            location.reload();
+                    });
+                else if (typeof window.materialsReloadToListTab === "function")
+                    window.materialsReloadToListTab();
+                else
+                    location.reload();
             } else {
                 alert(res.message || "Save failed");
             }
@@ -597,14 +621,33 @@
     }
 
     function deleteMaterialFromList(materialNumber) {
-        if (!materialNumber || !confirm("Delete this material?")) return;
-        fetch('@Url.Action("DeleteMaterial", "Material")?id=' + encodeURIComponent(materialNumber), { method: "POST" })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (res.success) location.reload();
-                else alert(res.message || "Delete failed");
-            })
-            .catch(function () { alert("Delete request failed"); });
+        if (!materialNumber) return;
+        function doDelete() {
+            fetch('@Url.Action("DeleteMaterial", "Material")?id=' + encodeURIComponent(materialNumber), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        var msg = res.message || "Material Deleted Successfully !";
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(msg, function () {
+                                if (typeof window.materialsReloadToListTab === "function")
+                                    window.materialsReloadToListTab();
+                                else
+                                    location.reload();
+                            });
+                        else if (typeof window.materialsReloadToListTab === "function")
+                            window.materialsReloadToListTab();
+                        else
+                            location.reload();
+                    } else
+                        alert(res.message || "Delete failed");
+                })
+                .catch(function () { alert("Delete request failed"); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Do you want to Delete this Material?", doDelete);
+        else if (confirm("Delete this material?"))
+            doDelete();
     }
 
     window.switchMaterialsModuleTab = function (which) {
