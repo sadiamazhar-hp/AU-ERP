@@ -243,7 +243,7 @@
                         </thead>
                         <tbody></tbody>
                     </table>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.addUomRowV2@(v2HandlerKey)()">+ Add Row</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window['addUomRowV2@(v2HandlerKey)']()">+ Add Row</button>
                 </div>
             </div>
 
@@ -305,7 +305,7 @@
             if (type === "FERT" && purchLi) purchLi.style.display = "none";
         }
 
-        window.onMaterialTypeChangeV2@v2HandlerKey = function () {
+        window['onMaterialTypeChangeV2@(v2HandlerKey)'] = function () {
             handleTabVisibilityV2();
             if (createV2IsEdit)
                 fetchNextMaterialNumberV2ForEdit();
@@ -400,6 +400,8 @@
         function addUomRowV2WithValues(altUnit, numerator, denominator, baseUom) {
             const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
             if (!tbody) return;
+            const existingRowCount = tbody.querySelectorAll("tr").length;
+            if (uomIndexV2 < existingRowCount) uomIndexV2 = existingRowCount;
             const baseUomValue = baseUom || (document.getElementById(v2id("BaseUnitCodeV2"))?.value || "PC");
             const numStr = numerator !== undefined && numerator !== null && numerator !== "" ? String(numerator) : "";
             const denStr = denominator !== undefined && denominator !== null && denominator !== "" ? String(denominator) : "1";
@@ -417,7 +419,7 @@
             uomIndexV2++;
         }
 
-        window.addUomRowV2@v2HandlerKey = function () {
+        window['addUomRowV2@(v2HandlerKey)'] = function () {
             const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
             if (!tbody) return;
             const baseUomField = document.getElementById(v2id("BaseUnitCodeV2"));
