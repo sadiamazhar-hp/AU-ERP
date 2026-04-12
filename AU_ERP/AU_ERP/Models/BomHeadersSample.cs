@@ -13,7 +13,7 @@ namespace AU_ERP.Models
         [Key]
         public int BomID { get; set; }
 
-        [MaxLength(5)]
+        [MaxLength(20)]
         public string? BOMCode { get; set; }
         public string? BOMTitle { get; set; }
 

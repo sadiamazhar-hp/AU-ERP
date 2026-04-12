@@ -1,4 +1,5 @@
 @model List<AU_ERP.Models.RoutingHeadersSample>
+@using System.Text.Json
 @{
     ViewData["Title"] = "Routing";
     var safeModel = Model ?? new List<AU_ERP.Models.RoutingHeadersSample>();
@@ -6,6 +7,7 @@
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
     var materialList = ViewBag.MaterialList as List<AU_ERP.Models.CreateMaterialMaster> ?? new List<AU_ERP.Models.CreateMaterialMaster>();
     var workCentres = ViewBag.WorkCentres as List<AU_ERP.Models.WorkCenterMasterSample> ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
+    var rtWcJson = JsonSerializer.Serialize(workCentres.Select(w => new { id = w.ID, name = w.WorkCenterName ?? "", uomId = w.UomId, uomCode = w.Uom?.Code ?? "" }));
 }
 
 <style>
@@ -275,12 +277,7 @@
 
 @section Scripts {
 <script>
-    var rtAllWorkCentres = [
-        @foreach (var wc in workCentres)
-        {
-            <text>{ id: @wc.ID, name: "@Html.Raw((wc.WorkCenterName ?? "").Replace("\"", "\\\""))" },</text>
-        }
-    ];
+    var rtAllWorkCentres = @Html.Raw(rtWcJson);
 
     function escRtAttr(s) {
         if (s == null || s === undefined) return "";
@@ -289,11 +286,33 @@
 
     function rtBuildWcSelectHtml(selectedId) {
         var html = '<option value="">-- Select --</option>';
-        rtAllWorkCentres.forEach(function (wc) {
-            var sel = (wc.id == selectedId) ? ' selected' : '';
+        (rtAllWorkCentres || []).forEach(function (wc) {
+            var sel = (String(wc.id) === String(selectedId) || wc.id === selectedId) ? ' selected' : '';
             html += '<option value="' + wc.id + '"' + sel + '>' + escRtAttr(wc.name) + '</option>';
         });
         return html;
+    }
+
+    function rtFindWcMeta(idStr) {
+        var n = parseInt(idStr, 10);
+        if (isNaN(n)) return null;
+        for (var i = 0; i < (rtAllWorkCentres || []).length; i++) {
+            if (rtAllWorkCentres[i].id === n) return rtAllWorkCentres[i];
+        }
+        return null;
+    }
+
+    function rtSyncOpRowUomFromWc(tr) {
+        if (!tr) return;
+        var sel = tr.querySelector(".rt-op-wc");
+        var disp = tr.querySelector(".rt-op-uom-display");
+        if (!disp) return;
+        var meta = sel ? rtFindWcMeta(sel.value) : null;
+        if (meta && meta.uomId != null && meta.uomId !== "") {
+            disp.value = meta.uomCode || "";
+        } else {
+            disp.value = "";
+        }
     }
 
     function rtAddOpRow(tbodyId, data) {
@@ -307,7 +326,6 @@
         var desc = data ? (data.description || data.Description || "") : "";
         var mt = data ? (data.machineTime != null ? data.machineTime : (data.MachineTime || "")) : "";
         var lt = data ? (data.laborTime != null ? data.laborTime : (data.LaborTime || "")) : "";
-        var uom = data ? (data.uoM || data.UoM || "") : "";
         if (data && (data.operationSequence || data.OperationSequence)) {
             opSeq = data.operationSequence || data.OperationSequence;
         }
@@ -318,9 +336,10 @@
             '<td><input type="text" class="form-control form-control-sm rt-op-desc" value="' + escRtAttr(desc) + '" /></td>' +
             '<td><input type="number" class="form-control form-control-sm rt-op-machine" step="0.01" value="' + escRtAttr(mt) + '" /></td>' +
             '<td><input type="number" class="form-control form-control-sm rt-op-labor" step="0.01" value="' + escRtAttr(lt) + '" /></td>' +
-            '<td><select class="form-select form-select-sm rt-op-uom"><option value="">--</option><option value="MIN"' + (uom === "MIN" ? " selected" : "") + '>MIN</option><option value="HR"' + (uom === "HR" ? " selected" : "") + '>HR</option><option value="DAY"' + (uom === "DAY" ? " selected" : "") + '>DAY</option></select></td>' +
+            '<td><input type="text" class="form-control form-control-sm rt-op-uom-display" readonly tabindex="-1" style="background:#f4f4f4;" value="" /></td>' +
             '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
         tbody.appendChild(tr);
+        rtSyncOpRowUomFromWc(tr);
     }
 
     function rtCollectOps(tbodyId) {
@@ -332,8 +351,7 @@
                 WorkCenterID: wcVal ? parseInt(wcVal) : null,
                 Description: (tr.querySelector(".rt-op-desc")?.value || "").trim() || null,
                 MachineTime: parseFloat(tr.querySelector(".rt-op-machine")?.value) || null,
-                LaborTime: parseFloat(tr.querySelector(".rt-op-labor")?.value) || null,
-                UoM: tr.querySelector(".rt-op-uom")?.value || null
+                LaborTime: parseFloat(tr.querySelector(".rt-op-labor")?.value) || null
             });
         });
         return ops;
@@ -373,12 +391,12 @@
             var desc = tr.querySelector(".rt-op-desc");
             var mach = tr.querySelector(".rt-op-machine");
             var lab = tr.querySelector(".rt-op-labor");
-            var uom = tr.querySelector(".rt-op-uom");
             if (!wc || !(wc.value || "").trim()) bad.push(wc);
             if (!desc || !(desc.value || "").trim()) bad.push(desc);
             if (!rtNumFieldOk(mach)) bad.push(mach);
             if (!rtNumFieldOk(lab)) bad.push(lab);
-            if (!uom || !(uom.value || "").trim()) bad.push(uom);
+            var meta = wc ? rtFindWcMeta(wc.value) : null;
+            if (!meta || meta.uomId == null || meta.uomId === "") bad.push(wc);
         });
         return bad;
     }
@@ -570,5 +588,13 @@
             });
         });
     })();
+
+    document.addEventListener("change", function (e) {
+        var t = e.target;
+        if (t && t.classList && t.classList.contains("rt-op-wc")) {
+            var tr = t.closest("tr");
+            if (tr) rtSyncOpRowUomFromWc(tr);
+        }
+    });
 </script>
 }

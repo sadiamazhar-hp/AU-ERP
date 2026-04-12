@@ -10,6 +10,8 @@ namespace AU_ERP.Models
         public string? Prefix { get; set; }
         public int StartNumber { get; set; }
         public int EndNumber { get; set; }
+
+        /// <summary>Last issued number; 0 means next issue will be <see cref="StartNumber"/>.</summary>
         public int CurrentNumber { get; set; }
 
         public virtual BPTypeSample? TypeSample { get; set; }

@@ -17,6 +17,8 @@ namespace AU_ERP.Models
         public string? EAN { get; set; }
         public string? DeliveringPlantCode { get; set; }
         public string? ItemCategoryGroup { get; set; }
+
+        [MaxLength(20)]
         public string? PurchasingGroupCode { get; set; }
         public int? GrProcessingTime { get; set; }
         public string? MrpTypeCode { get; set; }

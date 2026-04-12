@@ -1,11 +1,16 @@
 @model AU_ERP.Models.CreateMaterialMaster
 @using Microsoft.AspNetCore.Mvc.Rendering
+@using System.Linq
+@using System.Text.Json
 @{
     Layout = null;
     var createV2Embedded = ViewBag.CreateV2Embedded as bool? == true;
     var v2IdSuffixRaw = (ViewBag.CreateV2IdSuffix as string ?? "").Trim();
     var V2IdAffix = string.IsNullOrEmpty(v2IdSuffixRaw) ? "" : ("-" + v2IdSuffixRaw);
     var v2HandlerKey = string.IsNullOrEmpty(V2IdAffix) ? "Main" : "Modal";
+    var uomAltOptsJson = JsonSerializer.Serialize(
+        (ViewBag.UomIdList as IEnumerable<SelectListItem> ?? Enumerable.Empty<SelectListItem>())
+        .Select(x => new { value = x.Value ?? "", text = x.Text ?? "" }));
 }
 <style>
     .au-create-v2-modal .modal-header {
@@ -172,7 +177,10 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Material Group</label>
-                            @Html.EditorFor(m => m.MaterialGroupCode, new { htmlAttributes = new { @class = "form-control" } })
+                            @{
+                                var materialGroupItemsV2 = (ViewBag.MaterialGroupList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+                            }
+                            @Html.DropDownListFor(m => m.MaterialGroupCode, materialGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm", id = "MaterialGroupCodeV2" + V2IdAffix })
                             <label class="form-label">EAN/UPC</label>
                             @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control" } })
                         </div>
@@ -202,7 +210,7 @@
                     <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label">Purchasing Group</label>
-                            @Html.EditorFor(m => m.PurchasingGroupCode, new { htmlAttributes = new { @class = "form-control", maxlength = "3" } })
+                            @Html.EditorFor(m => m.PurchasingGroupCode, new { htmlAttributes = new { @class = "form-control", maxlength = "20" } })
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">GR Processing Time</label>
@@ -283,6 +291,7 @@
         let createV2IsEdit = false;
         let createV2CommittedTypeCode = "";
         let createV2CommittedMaterialNumber = "";
+        const uomAltOptionList = @Html.Raw(uomAltOptsJson);
 
         if (v2IsModalCopy) {
             window.setCreateV2ModalEditState = function (v) {
@@ -402,6 +411,17 @@
             return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
         }
 
+        function buildUomAltSelectHtmlV2(index, selectedVal) {
+            var sel = selectedVal != null && selectedVal !== undefined ? String(selectedVal) : "";
+            var opts = '<option value="0">-- Select UOM --</option>';
+            (uomAltOptionList || []).forEach(function (o) {
+                var v = String(o.value ?? "");
+                var isSel = v !== "" && v === sel ? " selected" : "";
+                opts += '<option value="' + escapeAttr(v) + '"' + isSel + '>' + escapeAttr(String(o.text ?? "")) + '</option>';
+            });
+            return '<select name="Conversions[' + index + '].AltUnitId" class="form-select form-select-sm">' + opts + '</select>';
+        }
+
         function v2CollectValidationInvalid() {
             var bad = [];
             var form = document.getElementById(v2id("createMaterialV2Form"));
@@ -415,10 +435,10 @@
             var tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
             if (tbody) {
                 tbody.querySelectorAll("tr").forEach(function (tr) {
-                    var alt = tr.querySelector('input[name$=".AltUnitCode"]');
+                    var alt = tr.querySelector('select[name$=".AltUnitId"]');
                     var num = tr.querySelector('input[name$=".Numerator"]');
                     var den = tr.querySelector('input[name$=".Denominator"]');
-                    if (!alt || !String(alt.value || "").trim()) add(alt);
+                    if (!alt || !String(alt.value || "").trim() || alt.value === "0") add(alt);
                     if (!num || String(num.value || "").trim() === "" || isNaN(parseFloat(num.value))) add(num);
                     if (!den || String(den.value || "").trim() === "" || isNaN(parseFloat(den.value))) add(den);
                 });
@@ -431,13 +451,16 @@
             if (!tbody) return;
             const existingRowCount = tbody.querySelectorAll("tr").length;
             if (uomIndexV2 < existingRowCount) uomIndexV2 = existingRowCount;
-            const baseUomValue = baseUom || (document.getElementById(v2id("BaseUnitCodeV2"))?.value || "PC");
+            const fromField = document.getElementById(v2id("BaseUnitCodeV2"));
+            const fromFieldVal = fromField && String(fromField.value || "").trim();
+            const baseUomValue = (baseUom != null && String(baseUom).trim() !== "") ? String(baseUom).trim() : (fromFieldVal || "");
             const numStr = numerator !== undefined && numerator !== null && numerator !== "" ? String(numerator) : "";
             const denStr = denominator !== undefined && denominator !== null && denominator !== "" ? String(denominator) : "1";
             const rowId = "v2row" + V2_ID_AFFIX.replace(/-/g, "_") + "_" + uomIndexV2;
+            const idx = uomIndexV2;
             const html =
                 '<tr id="' + rowId + '">' +
-                '<td><input name="Conversions[' + uomIndexV2 + '].AltUnitCode" class="form-control form-control-sm" maxlength="3" value="' + escapeAttr(altUnit) + '" /></td>' +
+                '<td>' + buildUomAltSelectHtmlV2(idx, altUnit) + '</td>' +
                 '<td><input name="Conversions[' + uomIndexV2 + '].Numerator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(numStr) + '" /></td>' +
                 '<td class="mat-uom-eq">=</td>' +
                 '<td><input name="Conversions[' + uomIndexV2 + '].Denominator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(denStr) + '" /></td>' +
@@ -452,8 +475,18 @@
             const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
             if (!tbody) return;
             const baseUomField = document.getElementById(v2id("BaseUnitCodeV2"));
-            const baseUomValue = (baseUomField && baseUomField.value) ? baseUomField.value : "PC";
+            const baseUomValue = baseUomField && String(baseUomField.value || "").trim();
+            if (!baseUomValue) {
+                const form = document.getElementById(v2id("createMaterialV2Form"));
+                const msg = "Select a base unit of measure (Basic Data) before adding a conversion row.";
+                if (form && typeof window.auShowInlineValidation === "function")
+                    window.auShowInlineValidation(form, [], msg);
+                return;
+            }
             addUomRowV2WithValues("", "", "1", baseUomValue);
+            const formAfter = document.getElementById(v2id("createMaterialV2Form"));
+            if (formAfter && typeof window.auClearInlineValidation === "function")
+                window.auClearInlineValidation(formAfter);
             const sb = document.getElementById(v2id("statusBarV2"));
             if (sb) sb.innerText = "Row added to conversion table.";
         };
@@ -492,11 +525,11 @@
             const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
             if (tbody) tbody.innerHTML = "";
             uomIndexV2 = 0;
-            const baseUom = pick(m, "baseUnitCode", "BaseUnitCode") || "PC";
+            const baseUom = pick(m, "baseUnitCode", "BaseUnitCode") || "";
             (conversions || []).forEach(function (c) {
                 if (!c) return;
-                var alt = c.altUnitCode != null ? c.altUnitCode : c.AltUnitCode;
-                if (!alt) return;
+                var alt = c.altUnitId != null ? c.altUnitId : c.AltUnitId;
+                if (alt === undefined || alt === null || alt === "" || alt === 0) return;
                 var num = c.numerator != null ? c.numerator : c.Numerator;
                 var den = c.denominator != null ? c.denominator : c.Denominator;
                 addUomRowV2WithValues(alt, num, den, baseUom);

@@ -48,6 +48,16 @@ namespace AU_ERP.Models
                 .HasForeignKey(r => r.MaterialTypeCode)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<MaterialNumberRange>()
+                .Property(r => r.RangeID)
+                .UseIdentityColumn();
+
+            modelBuilder.Entity<UnitConversion>()
+                .HasOne(u => u.AltUnit)
+                .WithMany()
+                .HasForeignKey(u => u.AltUnitId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<BomItemsSample>()
                 .Property(e => e.ItemID)
                 .ValueGeneratedOnAdd();
@@ -76,6 +86,12 @@ namespace AU_ERP.Models
                 .HasForeignKey(i => i.MaterialNumber)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<BomItemsSample>()
+                .HasOne(i => i.Uom)
+                .WithMany()
+                .HasForeignKey(i => i.UomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<BomHeadersSample>()
                 .HasOne(h => h.BOMLevel)
                 .WithMany(l => l.BomHeadersSamples)
@@ -84,7 +100,7 @@ namespace AU_ERP.Models
 
             modelBuilder.Entity<BomHeadersSample>()
                 .Property(h => h.BOMCode)
-                .HasMaxLength(5);
+                .HasMaxLength(20);
 
             // modelBuilder.Entity<BomHeadersSample>()
             //     .HasOne(h => h.MaterialType)
@@ -176,6 +192,12 @@ namespace AU_ERP.Models
                 .HasForeignKey(w => w.PlantID)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<WorkCenterMasterSample>()
+                .HasOne(w => w.Uom)
+                .WithMany()
+                .HasForeignKey(w => w.UomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<RoutingHeadersSample>()
                 .Property(e => e.RoutingID)
                 .ValueGeneratedOnAdd();
@@ -214,6 +236,12 @@ namespace AU_ERP.Models
                 .HasOne(o => o.WorkCenter)
                 .WithMany(w => w.RoutingOperations)
                 .HasForeignKey(o => o.WorkCenterID)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RoutingOperationsSample>()
+                .HasOne(o => o.Uom)
+                .WithMany()
+                .HasForeignKey(o => o.UomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<DocumentType>()
@@ -262,11 +290,9 @@ namespace AU_ERP.Models
             );
 
             modelBuilder.Entity<PlantsSample>().HasData(
-                new PlantsSample { PlantID = "1", PlantName = "Pressing" },
-                new PlantsSample { PlantID = "2", PlantName = "Kiln" },
-                new PlantsSample { PlantID = "3", PlantName = "Polishing" },
-                new PlantsSample { PlantID = "4", PlantName = "Cutting" },
-                new PlantsSample { PlantID = "5", PlantName = "Packing" }
+                new PlantsSample { PlantID = "Emp101", PlantName = "Emporium" },
+                new PlantsSample { PlantID = "Man102", PlantName = "Manufacturing Plant" }
+             
             );
         }
     }

@@ -5,7 +5,6 @@
     ViewBag.Title = "Material Ranges";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.MaterialNumberRange>();
-    var existingTypesJson = System.Text.Json.JsonSerializer.Serialize(safeModel.Where(r => !string.IsNullOrEmpty(r.MaterialTypeCode)).Select(r => r.MaterialTypeCode).Distinct());
 }
 
 <div class="sap-window" id="app">
@@ -129,6 +128,22 @@
     }
     document.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
 
+    /** Current = last issued; 0 = next issue From. Changing From/To resets current (server also normalizes on save). */
+    function wireMaterialRangeFromToCurrent(tr) {
+        if (!tr || tr.dataset.materialRangeSync === '1') return;
+        tr.dataset.materialRangeSync = '1';
+        var fromInp = tr.querySelector('[name$=".FromNumber"]');
+        var toInp = tr.querySelector('[name$=".ToNumber"]');
+        var curInp = tr.querySelector('[name$=".CurrentNumber"]');
+        if (!fromInp || !toInp || !curInp) return;
+        function resetCurrent() { curInp.value = '0'; }
+        fromInp.addEventListener('input', resetCurrent);
+        fromInp.addEventListener('change', resetCurrent);
+        toInp.addEventListener('input', resetCurrent);
+        toInp.addEventListener('change', resetCurrent);
+    }
+    document.querySelectorAll('#gridBody tr').forEach(wireMaterialRangeFromToCurrent);
+
     function addNewRow() {
         const body = document.getElementById('gridBody');
         const tr = document.createElement('tr');
@@ -140,12 +155,12 @@
 
         tr.innerHTML = `
             <td class="col-sel" onclick="selectRow(this)">
-                <input type="hidden" name="[${rowCount}].RangeID" value="" class="row-id" />
+                <input type="hidden" name="[${rowCount}].RangeID" value="0" class="row-id" />
             </td>
             <td><select name="[${rowCount}].MaterialTypeCode" class="sap-input" data-required="true">${opts}</select></td>
-            <td><input name="[${rowCount}].FromNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
-            <td><input name="[${rowCount}].ToNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
-            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" readonly></td>
+                            <td><input name="[${rowCount}].FromNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
+                            <td><input name="[${rowCount}].ToNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
+                            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" value="0" readonly title="Last issued; 0 = next will be From"></td>
             <td style="text-align: center;">
                 <input type="checkbox" name="[${rowCount}].IsExternal" value="true" class="sap-check">
                 <input type="hidden" name="[${rowCount}].IsExternal" value="false">
@@ -154,14 +169,7 @@
         rowCount++;
 
         tr.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
-        var fromInp = tr.querySelector('[name$=".FromNumber"]');
-        var curInp = tr.querySelector('[name$=".CurrentNumber"]');
-        if (fromInp && curInp) {
-            fromInp.addEventListener('input', function () {
-                var v = parseInt(fromInp.value, 10);
-                curInp.value = isNaN(v) ? '' : (v + 1);
-            });
-        }
+        wireMaterialRangeFromToCurrent(tr);
         tr.querySelector('select.sap-input')?.focus();
     }
 
@@ -182,24 +190,6 @@
             });
         });
         return bad;
-    }
-
-    var existingTypeSet = new Set(@Html.Raw(existingTypesJson));
-
-    function checkDuplicateTypes() {
-        var dupes = [];
-        document.querySelectorAll('#gridBody tr').forEach(tr => {
-            var rid = tr.querySelector('.row-id');
-            var isNew = !rid || !rid.value || rid.value === '0' || rid.value === '';
-            if (!isNew) return;
-            var sel = tr.querySelector('select[name$=".MaterialTypeCode"]');
-            var code = sel ? sel.value : '';
-            if (code && existingTypeSet.has(code)) {
-                var opt = sel.options[sel.selectedIndex];
-                dupes.push(opt ? opt.text : code);
-            }
-        });
-        return dupes;
     }
 
     function submitSave() {
@@ -227,15 +217,7 @@
             if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, bad);
             return;
         }
-        var dupes = checkDuplicateTypes();
-        if (dupes.length > 0) {
-            var msg = 'A range for the following type(s) already exists:\n' + dupes.join(', ') + '\n\nDo you still want to save?';
-            if (typeof window.materialShowDeleteConfirmModalThen === 'function')
-                window.materialShowDeleteConfirmModalThen(msg, submitSave);
-            else if (confirm(msg)) submitSave();
-        } else {
-            submitSave();
-        }
+        submitSave();
     }
 
     function handleDelete() {

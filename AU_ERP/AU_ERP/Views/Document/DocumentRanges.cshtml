@@ -123,19 +123,19 @@
     }
     document.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
 
-    /** From Range → Current Status = From + 1 (same behaviour as BP Ranges Start → Current). */
+    /** Current = last issued; empty = next will be From. Changing From/To clears current (server normalizes on save). */
     function wireDocRangeFromToCurrent(tr) {
         if (!tr || tr.dataset.docRangeFromSync === '1') return;
         var fromInp = tr.querySelector('[name$=".FromNumber"]');
+        var toInp = tr.querySelector('[name$=".ToNumber"]');
         var curInp = tr.querySelector('[name$=".CurrentNumber"]');
-        if (!fromInp || !curInp) return;
+        if (!fromInp || !toInp || !curInp) return;
         tr.dataset.docRangeFromSync = '1';
-        function sync() {
-            var v = parseInt(fromInp.value, 10);
-            curInp.value = isNaN(v) ? '' : String(v + 1);
-        }
-        fromInp.addEventListener('input', sync);
-        fromInp.addEventListener('change', sync);
+        function resetCurrent() { curInp.value = ''; }
+        fromInp.addEventListener('input', resetCurrent);
+        fromInp.addEventListener('change', resetCurrent);
+        toInp.addEventListener('input', resetCurrent);
+        toInp.addEventListener('change', resetCurrent);
     }
 
     document.querySelectorAll('#gridBody tr').forEach(wireDocRangeFromToCurrent);
@@ -156,7 +156,7 @@
             <td><select name="[${rowCount}].DocumentTypeID" class="sap-input" data-required="true">${opts}</select></td>
             <td><input name="[${rowCount}].FromNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
             <td><input name="[${rowCount}].ToNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
-            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" readonly></td>`;
+            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" value="" readonly title="Last issued; empty = next will be From"></td>`;
         body.appendChild(tr);
         rowCount++;
 

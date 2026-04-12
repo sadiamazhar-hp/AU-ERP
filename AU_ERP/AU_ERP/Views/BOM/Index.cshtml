@@ -1,10 +1,13 @@
 @model List<AU_ERP.Models.BomHeadersSample>
+@using System.Text.Json
 @{
     ViewData["Title"] = "Bill Of Materials";
     var safeModel = Model ?? new List<AU_ERP.Models.BomHeadersSample>();
     var bomTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
     var bomLevels = ViewBag.BomLevels as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
+    var bomUoms = ViewBag.UomList as List<AU_ERP.Models.UnitOfMeasurement> ?? new List<AU_ERP.Models.UnitOfMeasurement>();
+    var bomUomsJson = JsonSerializer.Serialize(bomUoms.Select(u => new { id = u.Id, code = u.Code ?? "" }));
 }
 
 <style>
@@ -173,8 +176,8 @@
                     <legend>Header</legend>
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <label class="form-label"><span class="mandatory-bar"></span> BOM Code</label>
-                            <input type="text" id="bomCreateCode" class="form-control form-control-sm" maxlength="5" />
+                            <label class="form-label">BOM Code</label>
+                            <input type="text" id="bomCreateCode" class="form-control form-control-sm" maxlength="20" placeholder="Optional; next from 100000" />
                         </div>
                         <div class="col-md-5">
                             <label class="form-label"><span class="mandatory-bar"></span> BOM Title</label>
@@ -320,7 +323,7 @@
                     <div class="row g-3">
                         <div class="col-md-3">
                             <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> BOM Code</label>
-                            <input type="text" id="bomEditCode" class="form-control form-control-sm" maxlength="5" />
+                            <input type="text" id="bomEditCode" class="form-control form-control-sm" maxlength="20" />
                         </div>
                         <div class="col-md-5">
                             <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> BOM Title</label>
@@ -401,6 +404,8 @@
         }
     ];
 
+    var bomAllUoms = @Html.Raw(bomUomsJson);
+
     function escBomAttr(s) {
         if (s == null || s === undefined) return "";
         return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -416,6 +421,16 @@
         return html;
     }
 
+    function bomBuildUomSelectHtml(selectedId) {
+        var html = '<option value="">-- Select --</option>';
+        (bomAllUoms || []).forEach(function (u) {
+            var sel = (String(u.id) === String(selectedId) || u.id === selectedId) ? ' selected' : '';
+            var c = u.code != null ? String(u.code) : "";
+            html += '<option value="' + escBomAttr(String(u.id)) + '"' + sel + '>' + escBomAttr(c) + '</option>';
+        });
+        return html;
+    }
+
     function bomAddItemRow(tbodyId) {
         var tbody = document.getElementById(tbodyId);
         if (!tbody) return;
@@ -426,7 +441,7 @@
             '<td class="text-center">' + pos + '</td>' +
             '<td><select class="form-select form-select-sm bom-comp-mat">' + bomBuildCompSelectHtml("") + '</select></td>' +
             '<td><input type="number" class="form-control form-control-sm bom-comp-qty" step="any" value="1" /></td>' +
-            '<td><input type="text" class="form-control form-control-sm bom-comp-uom" maxlength="3" /></td>' +
+            '<td><select class="form-select form-select-sm bom-comp-uom">' + bomBuildUomSelectHtml("") + '</select></td>' +
             '<td><input type="number" class="form-control form-control-sm bom-comp-scrap" step="any" value="0" /></td>' +
             '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
         tbody.appendChild(tr);
@@ -438,10 +453,12 @@
         rows.forEach(function (tr) {
             var matVal = (tr.querySelector(".bom-comp-mat")?.value || "").trim();
             if (!matVal) return;
+            var uomSel = tr.querySelector(".bom-comp-uom");
+            var uomId = uomSel ? parseInt(uomSel.value, 10) : NaN;
             items.push({
                 MaterialNumber: matVal,
                 Quantity: parseFloat(tr.querySelector(".bom-comp-qty")?.value) || 0,
-                UoM: (tr.querySelector(".bom-comp-uom")?.value || "").trim(),
+                UomId: isNaN(uomId) ? null : uomId,
                 ScrapPercentage: parseFloat(tr.querySelector(".bom-comp-scrap")?.value) || 0
             });
         });
@@ -474,8 +491,7 @@
         var t = document.getElementById("bomCreateTitle");
         var lv = document.getElementById("bomCreateBLevel");
         var code = (c && c.value || "").trim();
-        if (!code) bad.push(c);
-        else if (code.length > 5) bad.push(c);
+        if (code && code.length > 20) bad.push(c);
         if (!(t && (t.value || "").trim())) bad.push(t);
         if (!(lv && (lv.value || "").trim())) bad.push(lv);
         return bad;
@@ -487,7 +503,7 @@
         var t = document.getElementById("bomEditTitle");
         var code = (c && c.value || "").trim();
         if (!code) bad.push(c);
-        else if (code.length > 5) bad.push(c);
+        else if (code.length > 20) bad.push(c);
         if (!(t && (t.value || "").trim())) bad.push(t);
         return bad;
     }
@@ -604,14 +620,14 @@
                 items.forEach(function (item, idx) {
                     var matNum = item.materialNumber || item.MaterialNumber || "";
                     var qty = item.quantity != null ? item.quantity : (item.Quantity || "");
-                    var uom = item.uoM || item.UoM || "";
+                    var uomId = item.uomId != null ? item.uomId : (item.UomId != null ? item.UomId : "");
                     var scrap = item.scrapPercentage != null ? item.scrapPercentage : (item.ScrapPercentage || 0);
                     var tr = document.createElement("tr");
                     tr.innerHTML =
                         '<td class="text-center">' + (idx + 1) + '</td>' +
                         '<td><select class="form-select form-select-sm bom-comp-mat">' + bomBuildCompSelectHtml(matNum) + '</select></td>' +
                         '<td><input type="number" class="form-control form-control-sm bom-comp-qty" step="any" value="' + escBomAttr(qty) + '" /></td>' +
-                        '<td><input type="text" class="form-control form-control-sm bom-comp-uom" maxlength="3" value="' + escBomAttr(uom) + '" /></td>' +
+                        '<td><select class="form-select form-select-sm bom-comp-uom">' + bomBuildUomSelectHtml(uomId) + '</select></td>' +
                         '<td><input type="number" class="form-control form-control-sm bom-comp-scrap" step="any" value="' + escBomAttr(scrap) + '" /></td>' +
                         '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
                     tbody.appendChild(tr);

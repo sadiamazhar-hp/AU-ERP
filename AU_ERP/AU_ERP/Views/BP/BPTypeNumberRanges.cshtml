@@ -137,6 +137,21 @@
     }
     document.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
 
+    function wireBpRangeStartEndToCurrent(tr) {
+        if (!tr || tr.dataset.bpRangeSync === '1') return;
+        tr.dataset.bpRangeSync = '1';
+        var startInp = tr.querySelector('[name$=".StartNumber"]');
+        var endInp = tr.querySelector('[name$=".EndNumber"]');
+        var curInp = tr.querySelector('[name$=".CurrentNumber"]');
+        if (!startInp || !endInp || !curInp) return;
+        function resetCurrent() { curInp.value = '0'; }
+        startInp.addEventListener('input', resetCurrent);
+        startInp.addEventListener('change', resetCurrent);
+        endInp.addEventListener('input', resetCurrent);
+        endInp.addEventListener('change', resetCurrent);
+    }
+    document.querySelectorAll('#gridBody tr').forEach(wireBpRangeStartEndToCurrent);
+
     function addNewRow() {
         const body = document.getElementById('gridBody');
         const tr = document.createElement('tr');
@@ -148,20 +163,12 @@
             <td><input name="[${rowCount}].Prefix" class="sap-input" /></td>
             <td><input name="[${rowCount}].StartNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
             <td><input name="[${rowCount}].EndNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
-            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" readonly></td>`;
+            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" value="0" readonly title="Last issued; 0 = next will be Start"></td>`;
         body.appendChild(tr);
         rowCount++;
 
         tr.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
-
-        var startInp = tr.querySelector('[name$=".StartNumber"]');
-        var curInp = tr.querySelector('[name$=".CurrentNumber"]');
-        if (startInp && curInp) {
-            startInp.addEventListener('input', function () {
-                var v = parseInt(startInp.value, 10);
-                curInp.value = isNaN(v) ? '' : (v + 1);
-            });
-        }
+        wireBpRangeStartEndToCurrent(tr);
 
         if (isEditMode) {
             tr.querySelectorAll('select.sap-input').forEach(s => { s.disabled = false; });

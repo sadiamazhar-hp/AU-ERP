@@ -21,7 +21,9 @@ namespace AU_ERP.Controllers
                 .OrderBy(m => m.MaterialNumber).ToListAsync(ct);
 
             ViewBag.WorkCentres = await _db.WorkCenterMasterSamples.AsNoTracking()
-                .OrderBy(w => w.WorkCenterName).ToListAsync(ct);
+                .Include(w => w.Uom)
+                .OrderBy(w => w.WorkCenterName)
+                .ToListAsync(ct);
         }
 
         public async Task<IActionResult> Index(CancellationToken ct = default)
@@ -37,6 +39,16 @@ namespace AU_ERP.Controllers
                 .ToListAsync(ct);
 
             return View(list);
+        }
+
+        private async Task<int?> ResolveOpUomFromWorkCentreAsync(int? workCenterId, CancellationToken ct)
+        {
+            if (workCenterId is null or <= 0)
+                return null;
+            return await _db.WorkCenterMasterSamples.AsNoTracking()
+                .Where(w => w.ID == workCenterId.Value)
+                .Select(w => w.UomId)
+                .FirstOrDefaultAsync(ct);
         }
 
         [HttpPost]
@@ -70,6 +82,22 @@ namespace AU_ERP.Controllers
                     int seq = 10;
                     foreach (var op in dto.Operations)
                     {
+                        var uomId = await ResolveOpUomFromWorkCentreAsync(op.WorkCenterID, ct);
+                        if (!uomId.HasValue)
+                        {
+                            var wcName = op.WorkCenterID.HasValue
+                                ? await _db.WorkCenterMasterSamples.AsNoTracking()
+                                    .Where(w => w.ID == op.WorkCenterID.Value)
+                                    .Select(w => w.WorkCenterName)
+                                    .FirstOrDefaultAsync(ct)
+                                : null;
+                            return Json(new
+                            {
+                                success = false,
+                                message = $"Work centre '{wcName ?? "—"}' has no UOM assigned. Set UOM on the work centre before using it in routing."
+                            });
+                        }
+
                         header.RoutingOperationsSamples.Add(new RoutingOperationsSample
                         {
                             WorkCenterID = op.WorkCenterID,
@@ -77,7 +105,7 @@ namespace AU_ERP.Controllers
                             Description = op.Description?.Trim(),
                             MachineTime = op.MachineTime,
                             LaborTime = op.LaborTime,
-                            UoM = op.UoM?.Trim()
+                            UomId = uomId
                         });
                         seq += 10;
                     }
@@ -100,6 +128,7 @@ namespace AU_ERP.Controllers
             var r = await _db.RoutingHeadersSamples
                 .AsNoTracking()
                 .Include(h => h.RoutingOperationsSamples)
+                    .ThenInclude(o => o.Uom)
                 .FirstOrDefaultAsync(h => h.RoutingID == id, ct);
 
             if (r == null)
@@ -126,7 +155,8 @@ namespace AU_ERP.Controllers
                             o.Description,
                             o.MachineTime,
                             o.LaborTime,
-                            o.UoM
+                            o.UomId,
+                            UomCode = o.Uom != null ? o.Uom.Code : null
                         })
                 }
             });
@@ -160,6 +190,22 @@ namespace AU_ERP.Controllers
                     int seq = 10;
                     foreach (var op in dto.Operations)
                     {
+                        var uomId = await ResolveOpUomFromWorkCentreAsync(op.WorkCenterID, ct);
+                        if (!uomId.HasValue)
+                        {
+                            var wcName = op.WorkCenterID.HasValue
+                                ? await _db.WorkCenterMasterSamples.AsNoTracking()
+                                    .Where(w => w.ID == op.WorkCenterID.Value)
+                                    .Select(w => w.WorkCenterName)
+                                    .FirstOrDefaultAsync(ct)
+                                : null;
+                            return Json(new
+                            {
+                                success = false,
+                                message = $"Work centre '{wcName ?? "—"}' has no UOM assigned. Set UOM on the work centre before using it in routing."
+                            });
+                        }
+
                         header.RoutingOperationsSamples.Add(new RoutingOperationsSample
                         {
                             WorkCenterID = op.WorkCenterID,
@@ -167,7 +213,7 @@ namespace AU_ERP.Controllers
                             Description = op.Description?.Trim(),
                             MachineTime = op.MachineTime,
                             LaborTime = op.LaborTime,
-                            UoM = op.UoM?.Trim()
+                            UomId = uomId
                         });
                         seq += 10;
                     }
@@ -224,6 +270,5 @@ namespace AU_ERP.Controllers
         public string? Description { get; set; }
         public decimal? MachineTime { get; set; }
         public decimal? LaborTime { get; set; }
-        public string? UoM { get; set; }
     }
 }

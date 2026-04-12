@@ -16,6 +16,10 @@ namespace AU_ERP.Controllers
             ViewBag.Plants = new SelectList(
                 await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantID).ToListAsync(ct),
                 "PlantID", "PlantName");
+
+            ViewBag.UomList = await _db.UnitOfMeasurements.AsNoTracking()
+                .OrderBy(u => u.Code)
+                .ToListAsync(ct);
         }
 
         public async Task<IActionResult> Index(CancellationToken ct = default)
@@ -25,6 +29,7 @@ namespace AU_ERP.Controllers
             var list = await _db.WorkCenterMasterSamples
                 .AsNoTracking()
                 .Include(w => w.Plant)
+                .Include(w => w.Uom)
                 .OrderByDescending(w => w.ID)
                 .ToListAsync(ct);
 
@@ -40,6 +45,13 @@ namespace AU_ERP.Controllers
                 if (string.IsNullOrEmpty(name))
                     return Json(new { success = false, message = "Work Centre Name is required." });
 
+                if (dto.UomId is { } uid && uid > 0)
+                {
+                    var uomOk = await _db.UnitOfMeasurements.AsNoTracking().AnyAsync(u => u.Id == uid, ct);
+                    if (!uomOk)
+                        return Json(new { success = false, message = "Invalid UOM selected." });
+                }
+
                 var wc = new WorkCenterMasterSample
                 {
                     WorkCenterName = name,
@@ -48,11 +60,9 @@ namespace AU_ERP.Controllers
                     AvailableCapacity = dto.AvailableCapacity,
                     UtilizationPercentage = dto.UtilizationPercentage,
                     SetupTime = dto.SetupTime,
-                    SetupUOM = dto.SetupUOM?.Trim(),
                     MachineTime = dto.MachineTime,
-                    MachineUOM = dto.MachineUOM?.Trim(),
                     LaborTime = dto.LaborTime,
-                    LaborUOM = dto.LaborUOM?.Trim(),
+                    UomId = dto.UomId is > 0 ? dto.UomId : null,
                     CreatedAt = DateTime.Now
                 };
 
@@ -72,6 +82,7 @@ namespace AU_ERP.Controllers
         {
             var wc = await _db.WorkCenterMasterSamples
                 .AsNoTracking()
+                .Include(w => w.Uom)
                 .FirstOrDefaultAsync(w => w.ID == id, ct);
 
             if (wc == null)
@@ -89,11 +100,10 @@ namespace AU_ERP.Controllers
                     wc.AvailableCapacity,
                     wc.UtilizationPercentage,
                     wc.SetupTime,
-                    wc.SetupUOM,
                     wc.MachineTime,
-                    wc.MachineUOM,
                     wc.LaborTime,
-                    wc.LaborUOM
+                    wc.UomId,
+                    UomCode = wc.Uom != null ? wc.Uom.Code : null
                 }
             });
         }
@@ -113,17 +123,22 @@ namespace AU_ERP.Controllers
                 if (string.IsNullOrEmpty(name))
                     return Json(new { success = false, message = "Work Centre Name is required." });
 
+                if (dto.UomId is { } uid && uid > 0)
+                {
+                    var uomOk = await _db.UnitOfMeasurements.AsNoTracking().AnyAsync(u => u.Id == uid, ct);
+                    if (!uomOk)
+                        return Json(new { success = false, message = "Invalid UOM selected." });
+                }
+
                 wc.WorkCenterName = name;
                 wc.PlantID = dto.PlantID;
                 wc.Description = dto.Description?.Trim();
                 wc.AvailableCapacity = dto.AvailableCapacity;
                 wc.UtilizationPercentage = dto.UtilizationPercentage;
                 wc.SetupTime = dto.SetupTime;
-                wc.SetupUOM = dto.SetupUOM?.Trim();
                 wc.MachineTime = dto.MachineTime;
-                wc.MachineUOM = dto.MachineUOM?.Trim();
                 wc.LaborTime = dto.LaborTime;
-                wc.LaborUOM = dto.LaborUOM?.Trim();
+                wc.UomId = dto.UomId is > 0 ? dto.UomId : null;
 
                 await _db.SaveChangesAsync(ct);
                 return Json(new { success = true, message = "Work Centre Updated Successfully !" });
@@ -166,10 +181,8 @@ namespace AU_ERP.Controllers
         public int? AvailableCapacity { get; set; }
         public int? UtilizationPercentage { get; set; }
         public decimal? SetupTime { get; set; }
-        public string? SetupUOM { get; set; }
         public decimal? MachineTime { get; set; }
-        public string? MachineUOM { get; set; }
         public decimal? LaborTime { get; set; }
-        public string? LaborUOM { get; set; }
+        public int? UomId { get; set; }
     }
 }

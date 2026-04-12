@@ -12,14 +12,16 @@ namespace AU_ERP.Models
         public int? AvailableCapacity { get; set; }
         public int? UtilizationPercentage { get; set; }
         public decimal? SetupTime { get; set; }
-        public string? SetupUOM { get; set; }
         public decimal? MachineTime { get; set; }
-        public string? MachineUOM { get; set; }
         public decimal? LaborTime { get; set; }
-        public string? LaborUOM { get; set; }
+
+        /// <summary>FK to <see cref="UnitOfMeasurement.Id"/> for setup, machine, and labor times.</summary>
+        public int? UomId { get; set; }
+
         public DateTime? CreatedAt { get; set; }
 
         public virtual PlantsSample? Plant { get; set; }
+        public virtual UnitOfMeasurement? Uom { get; set; }
         public ICollection<RoutingOperationsSample> RoutingOperations { get; set; } = null!;
     }
 }

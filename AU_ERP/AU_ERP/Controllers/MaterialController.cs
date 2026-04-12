@@ -1,8 +1,10 @@
 ﻿using AU_ERP.Models;
+using AU_ERP.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Linq;
 
 namespace AU_ERP.Main_Controller
 {
@@ -52,12 +54,102 @@ namespace AU_ERP.Main_Controller
                 })
                 .Where(u => !string.IsNullOrEmpty(u.Value))
                 .ToList();
+
+            ViewBag.UomIdList = _context.UnitOfMeasurements.AsNoTracking()
+                .OrderBy(u => u.Code)
+                .Select(u => new SelectListItem
+                {
+                    Value = u.Id.ToString(),
+                    Text = (u.Code ?? "") + " — " + (u.Description ?? "")
+                })
+                .ToList();
+
+            ViewBag.MaterialGroupList = _context.MaterialGroups.AsNoTracking()
+                .OrderBy(g => g.MaterialGroupCode)
+                .Select(g => new SelectListItem
+                {
+                    Value = g.MaterialGroupCode,
+                    Text = g.MaterialGroupCode + " - " + (g.Description ?? "")
+                })
+                .ToList();
+        }
+
+        /// <summary>Bind posted conversions to the material number from the info tab and drop binder noise for server-filled fields.</summary>
+        private void HarmonizeConversionsWithMaterial(string materialNumber, List<UnitConversion>? conversions)
+        {
+            if (conversions == null) return;
+            var mn = materialNumber ?? "";
+            foreach (var c in conversions)
+                c.MaterialNumber = mn;
+
+            foreach (var key in ModelState.Keys.Where(k =>
+                         k.StartsWith("Conversions[", StringComparison.OrdinalIgnoreCase) &&
+                         k.Contains(".MaterialNumber", StringComparison.OrdinalIgnoreCase)).ToList())
+                ModelState.Remove(key);
+        }
+
+        private static string NormalizeMaterialDescription(string? description) => (description ?? "").Trim();
+
+        private async Task<string?> ValidateMaterialDescriptionUniqueAsync(
+            string? description,
+            string? excludeMaterialNumber,
+            CancellationToken ct = default)
+        {
+            var n = NormalizeMaterialDescription(description);
+            if (string.IsNullOrEmpty(n))
+                return null;
+
+            var q = _context.CreateMaterialMaster.AsQueryable();
+            if (!string.IsNullOrEmpty(excludeMaterialNumber))
+                q = q.Where(x => x.MaterialNumber != excludeMaterialNumber);
+
+            if (await q.AnyAsync(x => x.Description != null && x.Description.Trim() == n, ct))
+                return "Another material already uses this description.";
+            return null;
+        }
+
+        private static string? ValidatePurchasingGroupLength(string? purchasingGroupCode)
+        {
+            if (!string.IsNullOrEmpty(purchasingGroupCode) && purchasingGroupCode.Length > 20)
+                return "Purchasing group must be at most 20 characters.";
+            return null;
+        }
+
+        private static string? ValidateConversionsRequireBaseUnit(CreateMaterialMaster material, List<UnitConversion>? conversions)
+        {
+            if (conversions == null || !conversions.Any(c => c != null && c.AltUnitId > 0))
+                return null;
+            if (string.IsNullOrWhiteSpace(material.BaseUnitCode))
+                return "Select a base unit of measure before adding unit conversions.";
+            return null;
+        }
+
+        private async Task TouchMaterialNumberRangeAfterIssueAsync(string? materialTypeCode, string materialNumber)
+        {
+            if (string.IsNullOrEmpty(materialTypeCode))
+                return;
+
+            var ranges = await _context.MaterialNumberRanges
+                .Where(x => x.MaterialTypeCode == materialTypeCode)
+                .OrderBy(x => x.RangeID)
+                .ToListAsync();
+
+            foreach (var range in ranges)
+            {
+                if (NumberRangeMaintenance.IsMaterialRangeExhausted(range.FromNumber, range.ToNumber, range.CurrentNumber))
+                    continue;
+
+                range.CurrentNumber = NumberRangeMaintenance.NormalizeMaterialLastIssued(
+                    range.FromNumber, range.ToNumber, materialNumber);
+                return;
+            }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
+            HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
             if (!ModelState.IsValid)
             {
                 ModelState.Clear();
@@ -89,6 +181,7 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateV2(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
+            HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -138,7 +231,7 @@ namespace AU_ERP.Main_Controller
             var conversions = await _context.UnitConversions.AsNoTracking()
                 .Where(u => u.MaterialNumber == id)
                 .OrderBy(u => u.Id)
-                .Select(u => new { u.AltUnitCode, u.Numerator, u.Denominator })
+                .Select(u => new { u.AltUnitId, u.Numerator, u.Denominator })
                 .ToListAsync();
 
             return Json(new { success = true, material, conversions });
@@ -148,6 +241,7 @@ namespace AU_ERP.Main_Controller
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
+            HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -176,6 +270,17 @@ namespace AU_ERP.Main_Controller
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var vBase = ValidateConversionsRequireBaseUnit(material, conversions);
+                if (vBase != null)
+                    return (false, vBase);
+                var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
+                if (vPur != null)
+                    return (false, vPur);
+
+                var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, originalMaterialNumber);
+                if (vDesc != null)
+                    return (false, vDesc);
+
                 var old = await _context.CreateMaterialMaster.FindAsync(originalMaterialNumber);
                 if (old == null)
                     return (false, "Original material not found.");
@@ -196,26 +301,19 @@ namespace AU_ERP.Main_Controller
                 {
                     foreach (var uom in conversions)
                     {
-                        if (string.IsNullOrEmpty(uom.AltUnitCode)) continue;
+                        if (uom.AltUnitId <= 0) continue;
 
                         await _context.UnitConversions.AddAsync(new UnitConversion
                         {
                             MaterialNumber = material.MaterialNumber,
-                            AltUnitCode = uom.AltUnitCode,
+                            AltUnitId = uom.AltUnitId,
                             Numerator = uom.Numerator,
                             Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator
                         });
                     }
                 }
 
-                if (!string.IsNullOrEmpty(material.MaterialTypeCode))
-                {
-                    var range = await _context.MaterialNumberRanges
-                        .FirstOrDefaultAsync(x => x.MaterialTypeCode == material.MaterialTypeCode);
-
-                    if (range != null)
-                        range.CurrentNumber = material.MaterialNumber;
-                }
+                await TouchMaterialNumberRangeAfterIssueAsync(material.MaterialTypeCode, material.MaterialNumber);
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -235,6 +333,17 @@ namespace AU_ERP.Main_Controller
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var vBase = ValidateConversionsRequireBaseUnit(material, conversions);
+                if (vBase != null)
+                    return (false, vBase);
+                var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
+                if (vPur != null)
+                    return (false, vPur);
+
+                var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, material.MaterialNumber);
+                if (vDesc != null)
+                    return (false, vDesc);
+
                 var existing = await _context.CreateMaterialMaster.FindAsync(material.MaterialNumber);
                 if (existing == null)
                     return (false, "Material not found.");
@@ -264,13 +373,12 @@ namespace AU_ERP.Main_Controller
                 {
                     foreach (var uom in conversions)
                     {
-                        if (string.IsNullOrEmpty(uom.AltUnitCode)) continue;
+                        if (uom.AltUnitId <= 0) continue;
 
-                        uom.MaterialNumber = material.MaterialNumber;
                         await _context.UnitConversions.AddAsync(new UnitConversion
                         {
                             MaterialNumber = material.MaterialNumber,
-                            AltUnitCode = uom.AltUnitCode,
+                            AltUnitId = uom.AltUnitId,
                             Numerator = uom.Numerator,
                             Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator
                         });
@@ -295,27 +403,31 @@ namespace AU_ERP.Main_Controller
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var vBase = ValidateConversionsRequireBaseUnit(material, conversions);
+                if (vBase != null)
+                    return (false, vBase);
+                var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
+                if (vPur != null)
+                    return (false, vPur);
+
+                var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, null);
+                if (vDesc != null)
+                    return (false, vDesc);
+
                 await _context.CreateMaterialMaster.AddAsync(material);
 
                 if (conversions != null && conversions.Any())
                 {
                     foreach (var uom in conversions)
                     {
-                        if (string.IsNullOrEmpty(uom.AltUnitCode)) continue;
+                        if (uom.AltUnitId <= 0) continue;
 
                         uom.MaterialNumber = material.MaterialNumber;
                         await _context.UnitConversions.AddAsync(uom);
                     }
                 }
 
-                if (!string.IsNullOrEmpty(material.MaterialTypeCode))
-                {
-                    var range = await _context.MaterialNumberRanges
-                        .FirstOrDefaultAsync(x => x.MaterialTypeCode == material.MaterialTypeCode);
-
-                    if (range != null)
-                        range.CurrentNumber = material.MaterialNumber;
-                }
+                await TouchMaterialNumberRangeAfterIssueAsync(material.MaterialTypeCode, material.MaterialNumber);
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -333,25 +445,35 @@ namespace AU_ERP.Main_Controller
         {
             try
             {
-                var range = await _context.MaterialNumberRanges
-                    .FirstOrDefaultAsync(x => x.MaterialTypeCode == materialTypeCode);
+                var ranges = await _context.MaterialNumberRanges
+                    .Where(x => x.MaterialTypeCode == materialTypeCode)
+                    .OrderBy(x => x.RangeID)
+                    .ToListAsync();
 
-                if (range == null)
+                if (ranges.Count == 0)
                     return Json(new { success = false, message = "No number range defined for this type." });
 
-                long fromNum = long.Parse(range.FromNumber);
-                long nextNumber = string.IsNullOrEmpty(range.CurrentNumber) || range.CurrentNumber == "0"
-                    ? fromNum
-                    : long.Parse(range.CurrentNumber) + 1;
-
-                if (!string.IsNullOrEmpty(range.ToNumber))
+                foreach (var range in ranges)
                 {
-                    long toNum = long.Parse(range.ToNumber);
-                    if (nextNumber > toNum)
-                        return Json(new { success = false, message = "The number range for this material type has been exhausted!" });
+                    if (NumberRangeMaintenance.IsMaterialRangeExhausted(range.FromNumber, range.ToNumber, range.CurrentNumber))
+                        continue;
+
+                    var fromNum = long.Parse(range.FromNumber);
+                    var nextNumber = string.IsNullOrEmpty(range.CurrentNumber) || range.CurrentNumber == "0"
+                        ? fromNum
+                        : long.Parse(range.CurrentNumber) + 1;
+
+                    if (!string.IsNullOrEmpty(range.ToNumber))
+                    {
+                        var toNum = long.Parse(range.ToNumber);
+                        if (nextNumber > toNum)
+                            continue;
+                    }
+
+                    return Json(new { success = true, nextNumber = nextNumber.ToString() });
                 }
 
-                return Json(new { success = true, nextNumber = nextNumber.ToString() });
+                return Json(new { success = false, message = "The number range for this material type has been exhausted!" });
             }
             catch (Exception ex)
             {
@@ -387,36 +509,70 @@ namespace AU_ERP.Main_Controller
 
             try
             {
-                foreach (var item in ranges)
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    if (string.IsNullOrEmpty(item.MaterialTypeCode)) continue;
-
-                    var existing = await _context.MaterialNumberRanges
-                        .FirstOrDefaultAsync(x => x.MaterialTypeCode == item.MaterialTypeCode);
-
-                    if (existing != null)
+                    foreach (var item in ranges)
                     {
-                        existing.FromNumber = item.FromNumber;
-                        existing.ToNumber = item.ToNumber;
-                        existing.CurrentNumber = item.CurrentNumber;
-                        existing.IsExternal = item.IsExternal;
-                    }
-                    else
-                    {
-                        int count = await _context.MaterialNumberRanges.CountAsync() + 1;
-                        item.RangeID = count.ToString("D2");
+                        if (string.IsNullOrEmpty(item.MaterialTypeCode)) continue;
 
-                        while (await _context.MaterialNumberRanges.AnyAsync(x => x.RangeID == item.RangeID))
+                        var normalizedCurrent = NumberRangeMaintenance.NormalizeMaterialLastIssued(
+                            item.FromNumber, item.ToNumber, item.CurrentNumber);
+
+                        if (item.RangeID > 0)
                         {
-                            count++;
-                            item.RangeID = count.ToString("D2");
+                            var tracked = await _context.MaterialNumberRanges.FindAsync(item.RangeID);
+                            if (tracked != null)
+                            {
+                                tracked.MaterialTypeCode = item.MaterialTypeCode;
+                                tracked.FromNumber = item.FromNumber;
+                                tracked.ToNumber = item.ToNumber;
+                                tracked.CurrentNumber = normalizedCurrent;
+                                tracked.IsExternal = item.IsExternal;
+                            }
                         }
+                        else
+                        {
+                            var live = await _context.MaterialNumberRanges
+                                .Where(x => x.MaterialTypeCode == item.MaterialTypeCode)
+                                .ToListAsync();
 
-                        await _context.MaterialNumberRanges.AddAsync(item);
+                            if (live.Any(x => !NumberRangeMaintenance.IsMaterialRangeExhausted(
+                                    x.FromNumber, x.ToNumber, x.CurrentNumber)))
+                            {
+                                await transaction.RollbackAsync();
+                                _context.ChangeTracker.Clear();
+                                const string msg =
+                                    "This material type already has an active number range that is not exhausted. Add another range only after the current range is exhausted.";
+                                if (isAjax) return Json(new { success = false, message = msg });
+                                TempData["Error"] = msg;
+                                return RedirectToAction("NumberRanges");
+                            }
+
+                            item.RangeID = 0;
+                            item.CurrentNumber = normalizedCurrent;
+                            await _context.MaterialNumberRanges.AddAsync(item);
+                        }
                     }
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync();
+                    }
+                    catch
+                    {
+                        // ignore double-rollback
+                    }
+
+                    _context.ChangeTracker.Clear();
+                    throw;
                 }
 
-                await _context.SaveChangesAsync();
                 if (isAjax) return Json(new { success = true, message = "Material ranges saved successfully !" });
                 TempData["Success"] = "Data Saved Successfully!";
             }
@@ -437,7 +593,7 @@ namespace AU_ERP.Main_Controller
         }
 
         [HttpPost]
-        public async Task<JsonResult> DeleteNumberRange(string id)
+        public async Task<JsonResult> DeleteNumberRange(int id)
         {
             try
             {
@@ -475,17 +631,51 @@ namespace AU_ERP.Main_Controller
         [HttpPost]
         public async Task<JsonResult> DeleteMaterial(string id)
         {
-            var item = await _context.CreateMaterialMaster.FindAsync(id);
+            try
+            {
+                var item = await _context.CreateMaterialMaster.FindAsync(id);
+                if (item == null)
+                    return Json(new { success = false, message = "Not found" });
 
-            if (item == null)
-                return Json(new { success = false, message = "Not found" });
+                var routingIds = await _context.RoutingHeadersSamples
+                    .Where(r => r.MaterialNumber == id)
+                    .Select(r => r.RoutingID)
+                    .ToListAsync();
 
-            var uoms = await _context.UnitConversions.Where(u => u.MaterialNumber == id).ToListAsync();
-            _context.UnitConversions.RemoveRange(uoms);
-            _context.CreateMaterialMaster.Remove(item);
-            await _context.SaveChangesAsync();
+                if (routingIds.Count > 0)
+                {
+                    var productionVersions = await _context.ProductionVersions
+                        .Where(p => p.RoutingId.HasValue && routingIds.Contains(p.RoutingId.Value))
+                        .ToListAsync();
+                    if (productionVersions.Count > 0)
+                        _context.ProductionVersions.RemoveRange(productionVersions);
+                }
 
-            return Json(new { success = true, message = "Material Deleted Successfully !" });
+                var routings = await _context.RoutingHeadersSamples
+                    .Where(r => r.MaterialNumber == id)
+                    .ToListAsync();
+                if (routings.Count > 0)
+                    _context.RoutingHeadersSamples.RemoveRange(routings);
+
+                var bomItems = await _context.BomItemsSamples
+                    .Where(b => b.MaterialNumber == id)
+                    .ToListAsync();
+                if (bomItems.Count > 0)
+                    _context.BomItemsSamples.RemoveRange(bomItems);
+
+                var uoms = await _context.UnitConversions.Where(u => u.MaterialNumber == id).ToListAsync();
+                if (uoms.Count > 0)
+                    _context.UnitConversions.RemoveRange(uoms);
+
+                _context.CreateMaterialMaster.Remove(item);
+                await _context.SaveChangesAsync();
+
+                return Json(new { success = true, message = "Material Deleted Successfully !" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpPost]
@@ -494,21 +684,32 @@ namespace AU_ERP.Main_Controller
             if (model == null || model.Count == 0)
                 return Json(new { success = false, message = "No data received" });
 
+            var nonEmptyDescs = model
+                .Where(i => i != null && !string.IsNullOrWhiteSpace(i.Description))
+                .Select(i => NormalizeMaterialDescription(i.Description))
+                .ToList();
+            if (nonEmptyDescs.GroupBy(d => d).Any(g => g.Count() > 1))
+                return Json(new { success = false, message = "Duplicate descriptions in the list are not allowed." });
+
             foreach (var item in model)
             {
+                if (item == null) continue;
+
+                var descErr = await ValidateMaterialDescriptionUniqueAsync(item.Description, item.MaterialNumber);
+                if (descErr != null)
+                    return Json(new { success = false, message = descErr });
+
                 var existing = await _context.CreateMaterialMaster
                     .FirstOrDefaultAsync(x => x.MaterialNumber == item.MaterialNumber);
 
                 if (existing != null)
                 {
-                    // UPDATE
                     existing.Description = item.Description;
                     existing.MaterialTypeCode = item.MaterialTypeCode;
                     existing.BaseUnitCode = item.BaseUnitCode;
                 }
                 else
                 {
-                    // INSERT (IMPORTANT)
                     _context.CreateMaterialMaster.Add(item);
                 }
             }
@@ -575,6 +776,23 @@ namespace AU_ERP.Main_Controller
                 var item = await _context.MaterialTypes.FindAsync(id);
                 if (item == null)
                     return Json(new { success = false, message = "Record not found" });
+
+                var materialCount = await _context.CreateMaterialMaster
+                    .CountAsync(m => m.MaterialTypeCode == id);
+                if (materialCount > 0)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"Cannot delete this material type: {materialCount} material record(s) still reference it. Update or remove those materials first."
+                    });
+                }
+
+                var ranges = await _context.MaterialNumberRanges
+                    .Where(r => r.MaterialTypeCode == id)
+                    .ToListAsync();
+                if (ranges.Count > 0)
+                    _context.MaterialNumberRanges.RemoveRange(ranges);
 
                 _context.MaterialTypes.Remove(item);
                 await _context.SaveChangesAsync();

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Services;
 
 namespace AU_ERP.Controllers
 {
@@ -119,6 +120,9 @@ namespace AU_ERP.Controllers
                 {
                     if (item.DocumentTypeID == null || item.DocumentTypeID == 0) continue;
 
+                    var normalizedCurrent = NumberRangeMaintenance.NormalizeDocumentLastIssued(
+                        item.FromNumber, item.ToNumber, item.CurrentNumber);
+
                     if (item.RangeID > 0)
                     {
                         var existing = await _context.DocumentRanges.FindAsync(item.RangeID);
@@ -127,11 +131,12 @@ namespace AU_ERP.Controllers
                             existing.DocumentTypeID = item.DocumentTypeID;
                             existing.FromNumber = item.FromNumber;
                             existing.ToNumber = item.ToNumber;
-                            existing.CurrentNumber = item.CurrentNumber;
+                            existing.CurrentNumber = normalizedCurrent;
                         }
                     }
                     else
                     {
+                        item.CurrentNumber = normalizedCurrent;
                         await _context.DocumentRanges.AddAsync(item);
                     }
                 }

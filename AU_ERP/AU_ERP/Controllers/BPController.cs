@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using AU_ERP.Models;
+using AU_ERP.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -658,6 +659,9 @@ namespace AU_ERP.Main_Controller
                 {
                     item.Prefix = string.IsNullOrWhiteSpace(item.Prefix) ? null : item.Prefix.Trim();
 
+                    var normalizedCurrent = NumberRangeMaintenance.NormalizeBpLastIssued(
+                        item.StartNumber, item.EndNumber, item.CurrentNumber);
+
                     if (item.RangeID > 0)
                     {
                         var existing = await _db.BPTypeNumberRanges.FindAsync(new object[] { item.RangeID }, ct);
@@ -667,12 +671,12 @@ namespace AU_ERP.Main_Controller
                             existing.Prefix = item.Prefix;
                             existing.StartNumber = item.StartNumber;
                             existing.EndNumber = item.EndNumber;
-                            existing.CurrentNumber = item.CurrentNumber;
+                            existing.CurrentNumber = normalizedCurrent;
                         }
                     }
                     else
                     {
-                        if (item.StartNumber == 0 && item.EndNumber == 0 && item.CurrentNumber == 0 && (item.BPTypeId == null || item.BPTypeId == 0))
+                        if (item.StartNumber == 0 && item.EndNumber == 0 && normalizedCurrent == 0 && (item.BPTypeId == null || item.BPTypeId == 0))
                             continue;
                         if (item.BPTypeId == 0)
                             item.BPTypeId = null;
@@ -682,7 +686,7 @@ namespace AU_ERP.Main_Controller
                             Prefix = item.Prefix,
                             StartNumber = item.StartNumber,
                             EndNumber = item.EndNumber,
-                            CurrentNumber = item.CurrentNumber
+                            CurrentNumber = normalizedCurrent
                         }, ct);
                     }
                 }

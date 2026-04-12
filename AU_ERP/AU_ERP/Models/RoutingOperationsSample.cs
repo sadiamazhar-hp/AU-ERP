@@ -12,9 +12,12 @@ namespace AU_ERP.Models
         public string? Description { get; set; }
         public decimal? MachineTime { get; set; }
         public decimal? LaborTime { get; set; }
-        public string? UoM { get; set; }
+
+        /// <summary>FK to <see cref="UnitOfMeasurement.Id"/>; mirrors the selected work centre UOM.</summary>
+        public int? UomId { get; set; }
 
         public virtual RoutingHeadersSample? RoutingHeader { get; set; }
         public virtual WorkCenterMasterSample? WorkCenter { get; set; }
+        public virtual UnitOfMeasurement? Uom { get; set; }
     }
 }

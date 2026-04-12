@@ -4,6 +4,7 @@ using AU_ERP.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AU_ERP.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260412050313_seeddata")]
+    partial class seeddata
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -161,8 +164,8 @@ namespace AU_ERP.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("BOMCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
 
                     b.Property<string>("BOMTitle")
                         .HasColumnType("nvarchar(max)");
@@ -210,16 +213,14 @@ namespace AU_ERP.Data.Migrations
                         .HasPrecision(9, 4)
                         .HasColumnType("decimal(9,4)");
 
-                    b.Property<int?>("UomId")
-                        .HasColumnType("int");
+                    b.Property<string>("UoM")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ItemID");
 
                     b.HasIndex("BomID");
 
                     b.HasIndex("MaterialNumber");
-
-                    b.HasIndex("UomId");
 
                     b.ToTable("BomItemsSamples");
                 });
@@ -355,8 +356,7 @@ namespace AU_ERP.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PurchasingGroupCode")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StrategyGroup")
                         .HasColumnType("nvarchar(max)");
@@ -607,8 +607,8 @@ namespace AU_ERP.Data.Migrations
                     b.Property<int?>("RoutingID")
                         .HasColumnType("int");
 
-                    b.Property<int?>("UomId")
-                        .HasColumnType("int");
+                    b.Property<string>("UoM")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("WorkCenterID")
                         .HasColumnType("int");
@@ -616,8 +616,6 @@ namespace AU_ERP.Data.Migrations
                     b.HasKey("OpID");
 
                     b.HasIndex("RoutingID");
-
-                    b.HasIndex("UomId");
 
                     b.HasIndex("WorkCenterID");
 
@@ -632,8 +630,9 @@ namespace AU_ERP.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AltUnitId")
-                        .HasColumnType("int");
+                    b.Property<string>("AltUnitCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<float>("Denominator")
                         .HasColumnType("real");
@@ -646,8 +645,6 @@ namespace AU_ERP.Data.Migrations
                         .HasColumnType("real");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AltUnitId");
 
                     b.ToTable("UnitConversions");
                 });
@@ -693,9 +690,15 @@ namespace AU_ERP.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
 
+                    b.Property<string>("LaborUOM")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal?>("MachineTime")
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("MachineUOM")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PlantID")
                         .HasColumnType("nvarchar(450)");
@@ -704,8 +707,8 @@ namespace AU_ERP.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
 
-                    b.Property<int?>("UomId")
-                        .HasColumnType("int");
+                    b.Property<string>("SetupUOM")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("UtilizationPercentage")
                         .HasColumnType("int");
@@ -717,8 +720,6 @@ namespace AU_ERP.Data.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("PlantID");
-
-                    b.HasIndex("UomId");
 
                     b.ToTable("WorkCenterMasterSamples");
                 });
@@ -769,16 +770,9 @@ namespace AU_ERP.Data.Migrations
                         .HasForeignKey("MaterialNumber")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "Uom")
-                        .WithMany()
-                        .HasForeignKey("UomId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("BomHeadersSample");
 
                     b.Navigation("CreateMaterialMaster");
-
-                    b.Navigation("Uom");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BusinessPartnerMasterSample", b =>
@@ -891,11 +885,6 @@ namespace AU_ERP.Data.Migrations
                         .HasForeignKey("RoutingID")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "Uom")
-                        .WithMany()
-                        .HasForeignKey("UomId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AU_ERP.Models.WorkCenterMasterSample", "WorkCenter")
                         .WithMany("RoutingOperations")
                         .HasForeignKey("WorkCenterID")
@@ -903,20 +892,7 @@ namespace AU_ERP.Data.Migrations
 
                     b.Navigation("RoutingHeader");
 
-                    b.Navigation("Uom");
-
                     b.Navigation("WorkCenter");
-                });
-
-            modelBuilder.Entity("AU_ERP.Models.UnitConversion", b =>
-                {
-                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "AltUnit")
-                        .WithMany()
-                        .HasForeignKey("AltUnitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AltUnit");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.WorkCenterMasterSample", b =>
@@ -926,14 +902,7 @@ namespace AU_ERP.Data.Migrations
                         .HasForeignKey("PlantID")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "Uom")
-                        .WithMany()
-                        .HasForeignKey("UomId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Plant");
-
-                    b.Navigation("Uom");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BOMLevelsSample", b =>

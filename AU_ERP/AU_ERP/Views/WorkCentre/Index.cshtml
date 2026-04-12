@@ -4,6 +4,7 @@
     var safeModel = Model ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
     var wcTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
+    var wcUoms = ViewBag.UomList as List<AU_ERP.Models.UnitOfMeasurement> ?? new List<AU_ERP.Models.UnitOfMeasurement>();
 }
 
 <style>
@@ -97,42 +98,26 @@
                             <label class="form-label">Setup Time</label>
                             <input type="number" id="wcCreateSetup" class="form-control form-control-sm" step="any" />
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label">UoM</label>
-                            <select id="wcCreateSetupUOM" class="form-select form-select-sm">
-                                <option value="">--</option>
-                                <option value="MIN">MIN</option>
-                                <option value="HR">HR</option>
-                                <option value="DAY">DAY</option>
-                            </select>
-                        </div>
                         <div class="col-md-3">
                             <label class="form-label">Machine Time</label>
                             <input type="number" id="wcCreateMachine" class="form-control form-control-sm" step="any" />
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">UoM</label>
-                            <select id="wcCreateMachineUOM" class="form-select form-select-sm">
-                                <option value="">--</option>
-                                <option value="MIN">MIN</option>
-                                <option value="HR">HR</option>
-                                <option value="DAY">DAY</option>
-                            </select>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Labor Time</label>
                             <input type="number" id="wcCreateLabor" class="form-control form-control-sm" step="any" />
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-3">
                             <label class="form-label">UoM</label>
-                            <select id="wcCreateLaborUOM" class="form-select form-select-sm">
-                                <option value="">--</option>
-                                <option value="MIN">MIN</option>
-                                <option value="HR">HR</option>
-                                <option value="DAY">DAY</option>
+                            <select id="wcCreateUomId" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @foreach (var u in wcUoms)
+                                {
+                                    <option value="@u.Id">@(u.Code ?? ("#" + u.Id))</option>
+                                }
                             </select>
                         </div>
                     </div>
+                    <p class="text-secondary small mb-0 mt-2">One UOM applies to setup, machine, and labor times when entered.</p>
                 </fieldset>
 
                 <div class="btn-save-bottom">
@@ -255,42 +240,26 @@
                             <label class="form-label">Setup Time</label>
                             <input type="number" id="wcEditSetup" class="form-control form-control-sm" step="any" />
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label">UoM</label>
-                            <select id="wcEditSetupUOM" class="form-select form-select-sm">
-                                <option value="">--</option>
-                                <option value="MIN">MIN</option>
-                                <option value="HR">HR</option>
-                                <option value="DAY">DAY</option>
-                            </select>
-                        </div>
                         <div class="col-md-3">
                             <label class="form-label">Machine Time</label>
                             <input type="number" id="wcEditMachine" class="form-control form-control-sm" step="any" />
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">UoM</label>
-                            <select id="wcEditMachineUOM" class="form-select form-select-sm">
-                                <option value="">--</option>
-                                <option value="MIN">MIN</option>
-                                <option value="HR">HR</option>
-                                <option value="DAY">DAY</option>
-                            </select>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Labor Time</label>
                             <input type="number" id="wcEditLabor" class="form-control form-control-sm" step="any" />
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-3">
                             <label class="form-label">UoM</label>
-                            <select id="wcEditLaborUOM" class="form-select form-select-sm">
-                                <option value="">--</option>
-                                <option value="MIN">MIN</option>
-                                <option value="HR">HR</option>
-                                <option value="DAY">DAY</option>
+                            <select id="wcEditUomId" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @foreach (var u in wcUoms)
+                                {
+                                    <option value="@u.Id">@(u.Code ?? ("#" + u.Id))</option>
+                                }
                             </select>
                         </div>
                     </div>
+                    <p class="text-secondary small mb-0 mt-2">One UOM applies to setup, machine, and labor times when entered.</p>
                 </fieldset>
             </div>
             <div class="modal-footer">
@@ -335,15 +304,10 @@
         return !isNaN(parseFloat(v));
     }
 
-    function wcValidateFields(getters) {
-        var bad = [];
-        getters.forEach(function (g) {
-            var timeEl = g.time;
-            var uomEl = g.uom;
-            if (wcTimeHasValue(timeEl) && uomEl && !(uomEl.value || "").trim())
-                bad.push(uomEl);
-        });
-        return bad;
+    function wcAnyTimeFilled(prefix) {
+        return wcTimeHasValue(document.getElementById(prefix + "Setup"))
+            || wcTimeHasValue(document.getElementById(prefix + "Machine"))
+            || wcTimeHasValue(document.getElementById(prefix + "Labor"));
     }
 
     function wcValidateCreate() {
@@ -352,11 +316,10 @@
         var p = document.getElementById("wcCreatePlant");
         if (!(n.value || "").trim()) bad.push(n);
         if (!(p.value || "").trim()) bad.push(p);
-        bad = bad.concat(wcValidateFields([
-            { time: document.getElementById("wcCreateSetup"), uom: document.getElementById("wcCreateSetupUOM") },
-            { time: document.getElementById("wcCreateMachine"), uom: document.getElementById("wcCreateMachineUOM") },
-            { time: document.getElementById("wcCreateLabor"), uom: document.getElementById("wcCreateLaborUOM") }
-        ]));
+        if (wcAnyTimeFilled("wcCreate")) {
+            var u = document.getElementById("wcCreateUomId");
+            if (!u || !(u.value || "").trim()) bad.push(u);
+        }
         return bad;
     }
 
@@ -364,11 +327,10 @@
         var bad = [];
         var n = document.getElementById("wcEditName");
         if (!(n.value || "").trim()) bad.push(n);
-        bad = bad.concat(wcValidateFields([
-            { time: document.getElementById("wcEditSetup"), uom: document.getElementById("wcEditSetupUOM") },
-            { time: document.getElementById("wcEditMachine"), uom: document.getElementById("wcEditMachineUOM") },
-            { time: document.getElementById("wcEditLabor"), uom: document.getElementById("wcEditLaborUOM") }
-        ]));
+        if (wcAnyTimeFilled("wcEdit")) {
+            var u = document.getElementById("wcEditUomId");
+            if (!u || !(u.value || "").trim()) bad.push(u);
+        }
         return bad;
     }
 
@@ -381,11 +343,9 @@
         document.getElementById("wcCreateCapacity").value = "";
         document.getElementById("wcCreateUtil").value = "";
         document.getElementById("wcCreateSetup").value = "";
-        document.getElementById("wcCreateSetupUOM").value = "";
         document.getElementById("wcCreateMachine").value = "";
-        document.getElementById("wcCreateMachineUOM").value = "";
         document.getElementById("wcCreateLabor").value = "";
-        document.getElementById("wcCreateLaborUOM").value = "";
+        document.getElementById("wcCreateUomId").value = "";
     }
 
     function wcCollectCreate() {
@@ -396,11 +356,12 @@
             AvailableCapacity: parseInt(document.getElementById("wcCreateCapacity").value) || null,
             UtilizationPercentage: parseInt(document.getElementById("wcCreateUtil").value) || null,
             SetupTime: parseFloat(document.getElementById("wcCreateSetup").value) || null,
-            SetupUOM: document.getElementById("wcCreateSetupUOM").value || null,
             MachineTime: parseFloat(document.getElementById("wcCreateMachine").value) || null,
-            MachineUOM: document.getElementById("wcCreateMachineUOM").value || null,
             LaborTime: parseFloat(document.getElementById("wcCreateLabor").value) || null,
-            LaborUOM: document.getElementById("wcCreateLaborUOM").value || null
+            UomId: (function () {
+                var v = parseInt(document.getElementById("wcCreateUomId").value, 10);
+                return isNaN(v) ? null : v;
+            })()
         };
     }
 
@@ -448,11 +409,10 @@
                 document.getElementById("wcEditCapacity").value = d.availableCapacity != null ? d.availableCapacity : "";
                 document.getElementById("wcEditUtil").value = d.utilizationPercentage != null ? d.utilizationPercentage : "";
                 document.getElementById("wcEditSetup").value = d.setupTime != null ? d.setupTime : "";
-                document.getElementById("wcEditSetupUOM").value = d.setupUOM || "";
                 document.getElementById("wcEditMachine").value = d.machineTime != null ? d.machineTime : "";
-                document.getElementById("wcEditMachineUOM").value = d.machineUOM || "";
                 document.getElementById("wcEditLabor").value = d.laborTime != null ? d.laborTime : "";
-                document.getElementById("wcEditLaborUOM").value = d.laborUOM || "";
+                var uid = d.uomId != null ? d.uomId : (d.UomId != null ? d.UomId : "");
+                document.getElementById("wcEditUomId").value = uid !== "" && uid != null ? String(uid) : "";
 
                 var modalEl = document.getElementById("wcEditModal");
                 if (modalEl) {
@@ -487,11 +447,12 @@
             AvailableCapacity: parseInt(document.getElementById("wcEditCapacity").value) || null,
             UtilizationPercentage: parseInt(document.getElementById("wcEditUtil").value) || null,
             SetupTime: parseFloat(document.getElementById("wcEditSetup").value) || null,
-            SetupUOM: document.getElementById("wcEditSetupUOM").value || null,
             MachineTime: parseFloat(document.getElementById("wcEditMachine").value) || null,
-            MachineUOM: document.getElementById("wcEditMachineUOM").value || null,
             LaborTime: parseFloat(document.getElementById("wcEditLabor").value) || null,
-            LaborUOM: document.getElementById("wcEditLaborUOM").value || null
+            UomId: (function () {
+                var v = parseInt(document.getElementById("wcEditUomId").value, 10);
+                return isNaN(v) ? null : v;
+            })()
         };
 
         fetch('@Url.Action("Update", "WorkCentre")', {

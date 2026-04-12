@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,25 @@ namespace AU_ERP.Controllers
 
         public BOMController(AppDbContext db) => _db = db;
 
+        /// <summary>Next numeric BOM code; first issued code is 100000.</summary>
+        private async Task<string> AllocateNextBomCodeAsync(CancellationToken ct = default)
+        {
+            const long floor = 100000;
+            var codes = await _db.BomHeadersSamples.AsNoTracking()
+                .Where(h => h.BOMCode != null)
+                .Select(h => h.BOMCode!)
+                .ToListAsync(ct);
+
+            var best = floor - 1;
+            foreach (var c in codes)
+            {
+                if (long.TryParse(c.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var v) && v > best)
+                    best = v;
+            }
+
+            return (best + 1).ToString(CultureInfo.InvariantCulture);
+        }
+
         private async Task PrepareViewBags(CancellationToken ct = default)
         {
             ViewBag.BomLevels = new SelectList(
@@ -23,6 +43,10 @@ namespace AU_ERP.Controllers
 
             ViewBag.MaterialList = await _db.CreateMaterialMaster.AsNoTracking()
                 .OrderBy(m => m.MaterialNumber).ToListAsync(ct);
+
+            ViewBag.UomList = await _db.UnitOfMeasurements.AsNoTracking()
+                .OrderBy(u => u.Code)
+                .ToListAsync(ct);
         }
 
         public async Task<IActionResult> Index(CancellationToken ct = default)
@@ -47,10 +71,13 @@ namespace AU_ERP.Controllers
             {
                 var code = dto.BOMCode?.Trim();
                 if (string.IsNullOrEmpty(code))
-                    return Json(new { success = false, message = "BOM Code is required." });
+                    code = await AllocateNextBomCodeAsync(ct);
 
-                if (code.Length > 5)
-                    return Json(new { success = false, message = "BOM Code must be 5 characters or less." });
+                if (code.Length > 20)
+                    return Json(new { success = false, message = "BOM Code must be 20 characters or less." });
+
+                if (await _db.BomHeadersSamples.AnyAsync(h => h.BOMCode == code, ct))
+                    return Json(new { success = false, message = "This BOM code is already in use." });
 
                 var header = new BomHeadersSample
                 {
@@ -75,13 +102,21 @@ namespace AU_ERP.Controllers
 
                             if (!compExists)
                                 return Json(new { success = false, message = $"Component material '{compNum}' does not exist." });
+
+                            if (item.UomId is null || item.UomId <= 0)
+                                return Json(new { success = false, message = "Each component line must have a UOM selected." });
+
+                            var uomOk = await _db.UnitOfMeasurements.AsNoTracking()
+                                .AnyAsync(u => u.Id == item.UomId.Value, ct);
+                            if (!uomOk)
+                                return Json(new { success = false, message = "One or more component UOM values are invalid." });
                         }
 
                         header.BomItemsSamples.Add(new BomItemsSample
                         {
                             MaterialNumber = compNum,
                             Quantity = item.Quantity,
-                            UoM = item.UoM,
+                            UomId = string.IsNullOrEmpty(compNum) ? null : item.UomId,
                             ScrapPercentage = item.ScrapPercentage
                         });
                     }
@@ -104,6 +139,7 @@ namespace AU_ERP.Controllers
             var bom = await _db.BomHeadersSamples
                 .AsNoTracking()
                 .Include(h => h.BomItemsSamples)
+                    .ThenInclude(i => i.Uom)
                 .FirstOrDefaultAsync(h => h.BomID == id, ct);
 
             if (bom == null)
@@ -126,7 +162,8 @@ namespace AU_ERP.Controllers
                         i.ItemID,
                         i.MaterialNumber,
                         i.Quantity,
-                        i.UoM,
+                        i.UomId,
+                        UomCode = i.Uom != null ? i.Uom.Code : null,
                         i.ScrapPercentage
                     })
                 }
@@ -147,10 +184,13 @@ namespace AU_ERP.Controllers
 
                 var code = dto.BOMCode?.Trim();
                 if (string.IsNullOrEmpty(code))
-                    return Json(new { success = false, message = "BOM Code is required." });
+                    code = await AllocateNextBomCodeAsync(ct);
 
-                if (code.Length > 5)
-                    return Json(new { success = false, message = "BOM Code must be 5 characters or less." });
+                if (code.Length > 20)
+                    return Json(new { success = false, message = "BOM Code must be 20 characters or less." });
+
+                if (await _db.BomHeadersSamples.AnyAsync(h => h.BomID != dto.BomID && h.BOMCode == code, ct))
+                    return Json(new { success = false, message = "This BOM code is already in use." });
 
                 header.BOMCode = code;
                 header.BOMTitle = dto.BOMTitle?.Trim();
@@ -174,13 +214,21 @@ namespace AU_ERP.Controllers
 
                             if (!compExists)
                                 return Json(new { success = false, message = $"Component material '{compNum}' does not exist." });
+
+                            if (item.UomId is null || item.UomId <= 0)
+                                return Json(new { success = false, message = "Each component line must have a UOM selected." });
+
+                            var uomOk = await _db.UnitOfMeasurements.AsNoTracking()
+                                .AnyAsync(u => u.Id == item.UomId.Value, ct);
+                            if (!uomOk)
+                                return Json(new { success = false, message = "One or more component UOM values are invalid." });
                         }
 
                         header.BomItemsSamples.Add(new BomItemsSample
                         {
                             MaterialNumber = compNum,
                             Quantity = item.Quantity,
-                            UoM = item.UoM,
+                            UomId = string.IsNullOrEmpty(compNum) ? null : item.UomId,
                             ScrapPercentage = item.ScrapPercentage
                         });
                     }
@@ -236,7 +284,7 @@ namespace AU_ERP.Controllers
     {
         public string? MaterialNumber { get; set; }
         public decimal? Quantity { get; set; }
-        public string? UoM { get; set; }
+        public int? UomId { get; set; }
         public decimal? ScrapPercentage { get; set; }
     }
 }
