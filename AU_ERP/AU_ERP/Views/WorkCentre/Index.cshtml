@@ -1,370 +1,553 @@
-﻿@* Legacy external assembly: @model AUTiles.Models.WorkCenterMasterSample *@
-@model AUTiles.Models.WorkCenterMasterSample
+﻿@model List<AU_ERP.Models.WorkCenterMasterSample>
 @{
-    var wcList = ViewBag.WorkCenterList as List<AUTiles.Models.WorkCenterMasterSample>;
+    ViewData["Title"] = "Work Centres";
+    var safeModel = Model ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
+    var wcTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
+    var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
 }
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Work Center Master - Tile ERP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <style>
-        :root {
-            --sap-navy: #354a5f;
-            --sap-blue: #0854a0;
-            --sap-border: #bfbfbf;
-            --sap-mandatory: #b00;
-            --sap-bg: #edeff0;
-        }
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+    }
 
-        body {
-            background-color: var(--sap-bg);
-            font-family: "72", Arial, sans-serif;
-            font-size: 13px;
-            margin: 0;
-            padding: 10px;
-        }
+    .wc-module .table-sap { width: 100%; border-collapse: collapse; }
+    .wc-module .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; }
+    .wc-module .table-sap td { border: 1px solid #ccc; padding: 0; height: 32px; }
+    .wc-module .sap-input { width: 100%; height: 100%; border: none; padding: 0 10px; background: var(--sap-readonly); outline: none; box-sizing: border-box; }
+    .wc-module .table-sap th.col-no, .wc-module .table-sap td.col-no { padding-left: 14px; padding-right: 8px; }
+    .wc-module .table-sap td.col-action { padding: 4px 8px; vertical-align: middle; text-align: center; }
 
-        .sap-window {
-            background: #fff;
-            border: 1px solid var(--sap-border);
-            min-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
+    .wc-module-tabstrip { border-bottom: 1px solid var(--sap-border); padding: 0 0.25rem; background: #fff; }
+    .wc-module-tabstrip .nav-link { color: var(--au-primary-dark, #388087); font-weight: 500; border: 1px solid transparent; border-radius: 0.35rem 0.35rem 0 0; }
+    .wc-module-tabstrip .nav-link:hover { border-color: rgba(56, 128, 135, 0.25); }
+    .wc-module-tabstrip .nav-link.active { color: var(--au-black, #171717); background: #fff; border-color: var(--sap-border); border-bottom-color: #fff; margin-bottom: -1px; }
+    .wc-module-tab-content { border: 1px solid var(--sap-border); border-top: none; background: #fff; }
 
-        .sap-header {
-            background: var(--sap-navy);
-            color: #fff;
-            padding: 10px 15px;
-            font-weight: bold;
-            font-size: 14px;
-        }
+    .wc-create-form .v2-frame { border: 1px solid #c4c4c4; border-radius: 4px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .wc-create-form .v2-frame legend { font-size: .8rem; font-weight: 600; color: #388087; width: auto; padding: 0 .35rem; float: none; margin-bottom: 0; }
+    .wc-create-form .form-label { font-size: .82rem; font-weight: 500; color: #555; margin-bottom: .2rem; }
+    .wc-create-form .mandatory-bar { display: inline-block; width: 3px; height: 14px; background: #b00; margin-right: 4px; vertical-align: middle; }
+    .wc-create-form .btn-save-bottom { display: flex; justify-content: flex-end; padding: 0.75rem 1.25rem; border-top: 1px solid #c4c4c4; background: #f3f6f8; }
+</style>
 
-        .top-nav-bar {
-            background: #fff;
-            border-bottom: 1px solid var(--sap-border);
-            padding: 5px 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+<div class="wc-module">
+    <ul class="nav nav-tabs wc-module-tabstrip" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(wcTabList ? "" : "active")" id="wcTabCreateBtn" data-bs-toggle="tab" data-bs-target="#wcPaneCreate" type="button" role="tab" aria-selected="@(wcTabList ? "false" : "true")">Create</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(wcTabList ? "active" : "")" id="wcTabListBtn" data-bs-toggle="tab" data-bs-target="#wcPaneList" type="button" role="tab" aria-selected="@(wcTabList ? "true" : "false")">List</button>
+        </li>
+    </ul>
 
-        .nav-link {
-            font-size: 13px;
-            color: var(--sap-blue);
-            padding: 8px 20px;
-            cursor: pointer;
-            text-decoration: none;
-            border-radius: 4px;
-        }
+    <div class="tab-content wc-module-tab-content">
+        <!-- ───── CREATE TAB ───── -->
+        <div class="tab-pane fade p-2 p-md-3 @(wcTabList ? "" : "show active")" id="wcPaneCreate" role="tabpanel">
+            <div class="wc-create-form">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <fieldset class="v2-frame">
+                    <legend>General</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><span class="mandatory-bar"></span> Work Centre Name</label>
+                            <input type="text" id="wcCreateName" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><span class="mandatory-bar"></span> Plant</label>
+                            <select id="wcCreatePlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Description</label>
+                            <input type="text" id="wcCreateDesc" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
 
-            .nav-link.active {
-                background: var(--sap-blue);
-                color: white;
-                font-weight: bold;
-            }
+                <fieldset class="v2-frame">
+                    <legend>Capacity</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Available Capacity</label>
+                            <input type="number" id="wcCreateCapacity" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Utilization %</label>
+                            <input type="number" id="wcCreateUtil" class="form-control form-control-sm" min="0" max="100" />
+                        </div>
+                    </div>
+                </fieldset>
 
-        .inner-tabs {
-            display: flex;
-            background: #f0f0f0;
-            border-bottom: 1px solid var(--sap-border);
-            padding: 5px 10px 0 10px;
-            gap: 2px;
-        }
+                <fieldset class="v2-frame">
+                    <legend>Time Parameters</legend>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Setup Time</label>
+                            <input type="number" id="wcCreateSetup" class="form-control form-control-sm" step="any" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UoM</label>
+                            <select id="wcCreateSetupUOM" class="form-select form-select-sm">
+                                <option value="">--</option>
+                                <option value="MIN">MIN</option>
+                                <option value="HR">HR</option>
+                                <option value="DAY">DAY</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Machine Time</label>
+                            <input type="number" id="wcCreateMachine" class="form-control form-control-sm" step="any" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UoM</label>
+                            <select id="wcCreateMachineUOM" class="form-select form-select-sm">
+                                <option value="">--</option>
+                                <option value="MIN">MIN</option>
+                                <option value="HR">HR</option>
+                                <option value="DAY">DAY</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Labor Time</label>
+                            <input type="number" id="wcCreateLabor" class="form-control form-control-sm" step="any" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UoM</label>
+                            <select id="wcCreateLaborUOM" class="form-select form-select-sm">
+                                <option value="">--</option>
+                                <option value="MIN">MIN</option>
+                                <option value="HR">HR</option>
+                                <option value="DAY">DAY</option>
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
 
-        .inner-tab {
-            padding: 8px 20px;
-            border: 1px solid var(--sap-border);
-            border-bottom: none;
-            background: #e0e0e0;
-            cursor: pointer;
-            border-radius: 4px 4px 0 0;
-            color: #555;
-        }
-
-            .inner-tab.active {
-                background: #fff;
-                color: var(--sap-blue);
-                font-weight: bold;
-                position: relative;
-                top: 1px;
-            }
-
-        .toolbar {
-            background: #f7f7f7;
-            border-bottom: 1px solid var(--sap-border);
-            padding: 10px 15px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .sap-card {
-            padding: 25px;
-            background: #fff;
-            flex-grow: 1;
-        }
-
-        .section-title {
-            font-weight: bold;
-            color: var(--sap-blue);
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 20px;
-            padding-bottom: 5px;
-        }
-
-        .field-group {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 12px;
-        }
-
-            .field-group label {
-                width: 180px; /* Fixed width ensures all inputs start at the same point */
-                color: #555;
-                font-weight: 500;
-                text-align: left;
-            }
-
-        .sap-input {
-            border: 1px solid #bfbfbf;
-            padding: 6px 10px;
-            border-radius: 2px;
-            outline: none;
-            width: 350px; /* Adjust width to match your preferred UI size */
-            box-sizing: border-box;
-        }
-
-        /* Standardizes the red mandatory bar width */
-        .mandatory-bar {
-            width: 4px;
-            height: 28px;
-            background-color: #b00;
-            margin-right: 5px;
-        }
-
-        .sap-btn {
-            border: 1px solid #ababab;
-            background: #fff;
-            padding: 6px 20px;
-            cursor: pointer;
-            border-radius: 2px;
-            font-size: 12px;
-        }
-
-        .sap-btn-primary {
-            background: var(--sap-blue);
-            color: white;
-            border: none;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-        .sap-input:focus {
-            background-color: #ffffff !important; /* Forces it to stay white */
-            outline: 2px solid var(--sap-blue); /* Standard SAP Fiori focus ring */
-            border: 1px solid var(--sap-blue);
-            color: #000; /* Ensures text is visible */
-        }
-    </style>
-</head>
-<body>
-
-    <div class="sap-window">
-        <div class="sap-header">🏗️ CR01 - Work Center Master Management</div>
-
-        <div class="top-nav-bar">
-            <div class="d-flex gap-2">
-                <a class="nav-link active" id="main-tab-create" onclick="toggleMainView('create')">Create Work Center</a>
-                <a class="nav-link" id="main-tab-list" onclick="toggleMainView('list')">Work Center List</a>
-            </div>
-            <div id="search-container" class="hidden">
-                <input type="text" id="wcSearch" class="sap-input" placeholder="Search Work Center..." onkeyup="searchWC()">
+                <div class="btn-save-bottom">
+                    <button type="button" class="btn btn-sm px-4" style="background:#6FB3B8;color:#fff;border:1px solid #388087;" onclick="wcResetForm()">Reset</button>
+                    <button type="button" class="btn btn-sm px-4 ms-2" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="wcSaveCreate()">Save</button>
+                </div>
             </div>
         </div>
 
-        @using (Html.BeginForm("numberranges", "WorkCenter", FormMethod.Post, new { id = "mainForm" }))
-        {
-            @Html.AntiForgeryToken()
-            @Html.HiddenFor(m => m.ID, new { id = "hf_ID" })
-
-            <div id="create-view">
-                <div class="toolbar">
-                    <button type="submit" class="sap-btn sap-btn-primary">💾 Save Master Data</button>
-                    <button type="button" class="sap-btn" onclick="window.location.reload()">🔄 Reset Form</button>
-                </div>
-
-                <div class="inner-tabs">
-                    <div class="inner-tab active" id="itab-basic" onclick="showInnerTab('basic')">Basic Data</div>
-                    <div class="inner-tab" id="itab-capacity" onclick="showInnerTab('capacity')">Capacity</div>
-                    <div class="inner-tab" id="itab-scheduling" onclick="showInnerTab('scheduling')">Scheduling / Time</div>
-                </div>
-
-                <div class="sap-card">
-                    <div id="section-basic" class="inner-section">
-                        <div class="section-title">General Information</div>
-                        <div class="field-group">
-                            <div class="mandatory-bar"></div>
-                            <label>Work Center</label>
-                            @Html.TextBoxFor(m => m.WorkCenterName, new { @class = "sap-input", required = "required", id = "txt_WC" })
-                        </div>
-                        <div class="field-group">
-                            <div class="mandatory-bar"></div>
-                            <label>Plant</label>
-                            @Html.DropDownListFor(m => m.PlantID, new SelectList(new[] { "1000", "2000" }), new { @class = "sap-input", id = "ddl_Plant" })
-                        </div>
-                        <div class="field-group">
-                            <div class="mandatory-bar"></div>
-                          
-                            <label>Description</label>
-                            @Html.TextBoxFor(m => m.Description, new { @class = "sap-input", id = "txt_Desc" })
-                        </div>
-                    </div>
-
-                    <div id="section-capacity" class="inner-section hidden">
-                        <div class="section-title">Capacity Management</div>
-                        <div class="field-group">
-                            <label>Available Capacity (Mins)</label>
-                            @Html.TextBoxFor(m => m.AvailableCapacity, new { @class = "sap-input", type = "number", id = "txt_Cap" })
-                        </div>
-                        <div class="field-group">
-                            <label>Utilization %</label>
-                            @Html.TextBoxFor(m => m.UtilizationPercentage, new { @class = "sap-input", type = "number", id = "txt_Util" })
-                        </div>
-                    </div>
-
-                    <div id="section-scheduling" class="inner-section hidden">
-                        <div class="section-title">Standard Value Units</div>
-
-                        <div class="field-group">
-                            <label>Setup Time</label>
-                            @Html.TextBoxFor(m => m.SetupTime, new { @class = "sap-input", type = "number", id = "txt_Setup" })
-                            @Html.DropDownListFor(m => m.SetupUOM, new SelectList(new[] { "MIN", "HR" }), new { @class = "sap-input uom-select", id = "ddl_SetupUOM" })
-                        </div>
-
-                        <div class="field-group">
-                            <label>Machine Time</label>
-                            @Html.TextBoxFor(m => m.MachineTime, new { @class = "sap-input", type = "number", id = "txt_Machine" })
-                            @Html.DropDownListFor(m => m.MachineUOM, new SelectList(new[] { "MIN", "HR" }), new { @class = "sap-input uom-select", id = "ddl_MachineUOM" })
-                        </div>
-
-                        <div class="field-group">
-                            <label>Labor Time</label>
-                            @Html.TextBoxFor(m => m.LaborTime, new { @class = "sap-input", type = "number", id = "txt_Labor" })
-                            @Html.DropDownListFor(m => m.LaborUOM, new SelectList(new[] { "MIN", "HR" }), new { @class = "sap-input uom-select", id = "ddl_LaborUOM" })
-                        </div>
-                    </div>
-                </div>
+        <!-- ───── LIST TAB ───── -->
+        <div class="tab-pane fade @(wcTabList ? "show active" : "")" id="wcPaneList" role="tabpanel">
+            <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
+            <div class="p-2 px-3">
+                <input type="search" class="form-control form-control-sm" id="wcListFilter" placeholder="Filter by name, plant, description…" style="max-width:22rem;" />
             </div>
-        }
-
-
-        <div id="list-view" class="hidden p-4">
-            <table class="table table-bordered table-hover bg-white shadow-sm">
-                <thead class="table-light">
-                    <tr><th>Work Center</th><th>Plant</th><th>Description</th><th style="width: 180px;">Actions</th></tr>
-                </thead>
-                <tbody id="wcMasterList">
-                    @if (wcList != null)
-                    {
-                        foreach (var item in wcList)
+            <div class="table-wrapper">
+                <table class="table-sap" id="wcListTable">
+                    <thead>
+                        <tr>
+                            <th class="col-no">No</th>
+                            <th>Name</th>
+                            <th>Plant</th>
+                            <th>Description</th>
+                            <th>Capacity</th>
+                            <th>Util %</th>
+                            <th style="width:72px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int wcIdx = 0; }
+                        @foreach (var w in safeModel)
                         {
-                            <tr>
-                                <td><b>@item.WorkCenterName</b></td>
-                                <td>@item.PlantID</td>
-                                <td>@item.Description</td>
-                                <td>
-                                    <button class="sap-btn btn-sm" onclick="editRecord(@item.ID)">Edit</button>
-                                    <button class="sap-btn btn-sm text-danger" onclick="deleteRecord(@item.ID)">Delete</button>
+                            var plantName = w.Plant?.PlantName ?? "";
+                            <tr data-wc-filter="@($"{w.ID} {w.WorkCenterName} {plantName} {w.Description}")" data-wc-id="@w.ID">
+                                <td class="col-no">@(wcIdx + 1)</td>
+                                <td><input class="sap-input" value="@w.WorkCenterName" readonly /></td>
+                                <td><input class="sap-input" value="@plantName" readonly /></td>
+                                <td><input class="sap-input" value="@w.Description" readonly /></td>
+                                <td><input class="sap-input" value="@w.AvailableCapacity" readonly /></td>
+                                <td><input class="sap-input" value="@(w.UtilizationPercentage != null ? w.UtilizationPercentage + "%" : "")" readonly /></td>
+                                <td class="col-action">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-secondary p-0" type="button" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
+                                            <i class="bi bi-three-dots-vertical fs-5"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            <li><button type="button" class="dropdown-item" data-wc-id="@w.ID" onclick="wcOpenEdit(this.getAttribute('data-wc-id'))">Edit</button></li>
+                                            <li><button type="button" class="dropdown-item text-danger" data-wc-id="@w.ID" onclick="wcDeleteFromList(this.getAttribute('data-wc-id'))">Delete</button></li>
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
+                            wcIdx++;
                         }
-                    }
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
+            @if (safeModel.Count == 0)
+            {
+                <p class="text-secondary small mb-0 mt-2 px-3">No work centres yet. Use the Create tab to add one.</p>
+            }
         </div>
     </div>
+</div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-    // Tab Switching Logic
-    function showInnerTab(tab) {
-        document.querySelectorAll('.inner-section').forEach(s => s.classList.add('hidden'));
-        document.querySelectorAll('.inner-tab').forEach(t => t.classList.remove('active'));
-        document.getElementById('section-' + tab).classList.remove('hidden');
-        document.getElementById('itab-' + tab).classList.add('active');
+<!-- ───── EDIT MODAL ───── -->
+<div class="modal fade" id="wcEditModal" tabindex="-1" aria-labelledby="wcEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content au-create-v2-modal">
+            <div class="modal-header">
+                <h5 class="modal-title" id="wcEditModalLabel">Edit Work Centre</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="wcEditID" />
+                <fieldset class="v2-frame">
+                    <legend>General</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Work Centre Name</label>
+                            <input type="text" id="wcEditName" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Plant</label>
+                            <select id="wcEditPlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Description</label>
+                            <input type="text" id="wcEditDesc" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
+                <fieldset class="v2-frame">
+                    <legend>Capacity</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Available Capacity</label>
+                            <input type="number" id="wcEditCapacity" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Utilization %</label>
+                            <input type="number" id="wcEditUtil" class="form-control form-control-sm" min="0" max="100" />
+                        </div>
+                    </div>
+                </fieldset>
+                <fieldset class="v2-frame">
+                    <legend>Time Parameters</legend>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Setup Time</label>
+                            <input type="number" id="wcEditSetup" class="form-control form-control-sm" step="any" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UoM</label>
+                            <select id="wcEditSetupUOM" class="form-select form-select-sm">
+                                <option value="">--</option>
+                                <option value="MIN">MIN</option>
+                                <option value="HR">HR</option>
+                                <option value="DAY">DAY</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Machine Time</label>
+                            <input type="number" id="wcEditMachine" class="form-control form-control-sm" step="any" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UoM</label>
+                            <select id="wcEditMachineUOM" class="form-select form-select-sm">
+                                <option value="">--</option>
+                                <option value="MIN">MIN</option>
+                                <option value="HR">HR</option>
+                                <option value="DAY">DAY</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Labor Time</label>
+                            <input type="number" id="wcEditLabor" class="form-control form-control-sm" step="any" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UoM</label>
+                            <select id="wcEditLaborUOM" class="form-select form-select-sm">
+                                <option value="">--</option>
+                                <option value="MIN">MIN</option>
+                                <option value="HR">HR</option>
+                                <option value="DAY">DAY</option>
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm px-4" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="wcSaveEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function wcReloadToListTab() {
+        var u = new URL(window.location.href);
+        u.searchParams.set("tab", "list");
+        window.location.assign(u.toString());
     }
 
-    function toggleMainView(mode) {
-        document.getElementById('create-view').classList.toggle('hidden', mode !== 'create');
-        document.getElementById('list-view').classList.toggle('hidden', mode !== 'list');
-        document.getElementById('search-container').classList.toggle('hidden', mode !== 'list');
-        document.getElementById('main-tab-create').classList.toggle('active', mode === 'create');
-        document.getElementById('main-tab-list').classList.toggle('active', mode === 'list');
+    function wcCreateFormRoot() {
+        return document.querySelector("#wcPaneCreate .wc-create-form");
     }
 
-    // CRUD: Edit Logic
-    function editRecord(id) {
-        $.get('/WorkCenter/GetWorkCenter/' + id, function (data) {
-            $('#hf_ID').val(data.id);
-            $('#txt_WC').val(data.workCenterCode);
-            $('#ddl_Plant').val(data.plant);
-            $('#txt_Desc').val(data.description);
-            $('#txt_Cap').val(data.availableCapacity);
-            $('#txt_Util').val(data.utilizationPercentage);
-            $('#txt_Setup').val(data.setupTime);
-            $('#ddl_SetupUom').val(data.setupUom);
-            $('#txt_Machine').val(data.machineTime);
-            $('#ddl_MachineUom').val(data.machineUom);
-            $('#txt_Labor').val(data.laborTime);
-            $('#ddl_LaborUom').val(data.laborUom);
+    function wcEditFormRoot() {
+        return document.querySelector("#wcEditModal .modal-body");
+    }
 
-            toggleMainView('create');
-            showInnerTab('basic');
+    function wcListPaneRoot() {
+        return document.getElementById("wcPaneList");
+    }
+
+    function wcShowInline(root, invalidEls, message) {
+        if (!root) root = wcCreateFormRoot() || document.querySelector(".wc-module");
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        if (typeof window.auShowInlineValidation === "function")
+            window.auShowInlineValidation(root, invalidEls || [], message);
+        else alert(message || "Following Fields are Required");
+    }
+
+    function wcTimeHasValue(inp) {
+        if (!inp) return false;
+        var v = (inp.value || "").trim();
+        if (v === "") return false;
+        return !isNaN(parseFloat(v));
+    }
+
+    function wcValidateFields(getters) {
+        var bad = [];
+        getters.forEach(function (g) {
+            var timeEl = g.time;
+            var uomEl = g.uom;
+            if (wcTimeHasValue(timeEl) && uomEl && !(uomEl.value || "").trim())
+                bad.push(uomEl);
         });
+        return bad;
     }
 
-    // CRUD: Delete Logic
-    function deleteRecord(id) {
-        Swal.fire({
-            title: 'Are you sure?',
-            text: "This action cannot be undone!",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#0854a0',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Yes, delete it!'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $.post('/WorkCenter/Delete/' + id, function (res) {
-                    if (res.success) {
-                        location.reload();
-                    }
-                });
+    function wcValidateCreate() {
+        var bad = [];
+        var n = document.getElementById("wcCreateName");
+        var p = document.getElementById("wcCreatePlant");
+        if (!(n.value || "").trim()) bad.push(n);
+        if (!(p.value || "").trim()) bad.push(p);
+        bad = bad.concat(wcValidateFields([
+            { time: document.getElementById("wcCreateSetup"), uom: document.getElementById("wcCreateSetupUOM") },
+            { time: document.getElementById("wcCreateMachine"), uom: document.getElementById("wcCreateMachineUOM") },
+            { time: document.getElementById("wcCreateLabor"), uom: document.getElementById("wcCreateLaborUOM") }
+        ]));
+        return bad;
+    }
+
+    function wcValidateEdit() {
+        var bad = [];
+        var n = document.getElementById("wcEditName");
+        if (!(n.value || "").trim()) bad.push(n);
+        bad = bad.concat(wcValidateFields([
+            { time: document.getElementById("wcEditSetup"), uom: document.getElementById("wcEditSetupUOM") },
+            { time: document.getElementById("wcEditMachine"), uom: document.getElementById("wcEditMachineUOM") },
+            { time: document.getElementById("wcEditLabor"), uom: document.getElementById("wcEditLaborUOM") }
+        ]));
+        return bad;
+    }
+
+    function wcResetForm() {
+        var root = wcCreateFormRoot();
+        if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        document.getElementById("wcCreateName").value = "";
+        document.getElementById("wcCreatePlant").value = "";
+        document.getElementById("wcCreateDesc").value = "";
+        document.getElementById("wcCreateCapacity").value = "";
+        document.getElementById("wcCreateUtil").value = "";
+        document.getElementById("wcCreateSetup").value = "";
+        document.getElementById("wcCreateSetupUOM").value = "";
+        document.getElementById("wcCreateMachine").value = "";
+        document.getElementById("wcCreateMachineUOM").value = "";
+        document.getElementById("wcCreateLabor").value = "";
+        document.getElementById("wcCreateLaborUOM").value = "";
+    }
+
+    function wcCollectCreate() {
+        return {
+            WorkCenterName: (document.getElementById("wcCreateName").value || "").trim(),
+            PlantID: document.getElementById("wcCreatePlant").value || null,
+            Description: (document.getElementById("wcCreateDesc").value || "").trim() || null,
+            AvailableCapacity: parseInt(document.getElementById("wcCreateCapacity").value) || null,
+            UtilizationPercentage: parseInt(document.getElementById("wcCreateUtil").value) || null,
+            SetupTime: parseFloat(document.getElementById("wcCreateSetup").value) || null,
+            SetupUOM: document.getElementById("wcCreateSetupUOM").value || null,
+            MachineTime: parseFloat(document.getElementById("wcCreateMachine").value) || null,
+            MachineUOM: document.getElementById("wcCreateMachineUOM").value || null,
+            LaborTime: parseFloat(document.getElementById("wcCreateLabor").value) || null,
+            LaborUOM: document.getElementById("wcCreateLaborUOM").value || null
+        };
+    }
+
+    function wcSaveCreate() {
+        var root = wcCreateFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var bad = wcValidateCreate();
+        if (bad.length) {
+            wcShowInline(root, bad);
+            return;
+        }
+        var data = wcCollectCreate();
+
+        fetch('@Url.Action("Create", "WorkCentre")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, function () { wcReloadToListTab(); });
+                else { alert(res.message); wcReloadToListTab(); }
+            } else {
+                wcShowInline(root, [], res.message || "Save failed.");
             }
+        })
+        .catch(function () { wcShowInline(root, [], "Request failed."); });
+    }
+
+    function wcOpenEdit(id) {
+        if (!id) return;
+        fetch('@Url.Action("GetForEdit", "WorkCentre")?id=' + encodeURIComponent(id))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) { wcShowInline(wcListPaneRoot(), [], res.message || "Could not load."); return; }
+                var editRoot = wcEditFormRoot();
+                if (editRoot && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(editRoot);
+                var d = res.data;
+                document.getElementById("wcEditID").value = d.id || d.ID;
+                document.getElementById("wcEditName").value = d.workCenterName || "";
+                document.getElementById("wcEditPlant").value = d.plantID || "";
+                document.getElementById("wcEditDesc").value = d.description || "";
+                document.getElementById("wcEditCapacity").value = d.availableCapacity != null ? d.availableCapacity : "";
+                document.getElementById("wcEditUtil").value = d.utilizationPercentage != null ? d.utilizationPercentage : "";
+                document.getElementById("wcEditSetup").value = d.setupTime != null ? d.setupTime : "";
+                document.getElementById("wcEditSetupUOM").value = d.setupUOM || "";
+                document.getElementById("wcEditMachine").value = d.machineTime != null ? d.machineTime : "";
+                document.getElementById("wcEditMachineUOM").value = d.machineUOM || "";
+                document.getElementById("wcEditLabor").value = d.laborTime != null ? d.laborTime : "";
+                document.getElementById("wcEditLaborUOM").value = d.laborUOM || "";
+
+                var modalEl = document.getElementById("wcEditModal");
+                if (modalEl) {
+                    if (modalEl.parentElement !== document.body)
+                        document.body.appendChild(modalEl);
+                    if (typeof bootstrap !== "undefined")
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            })
+            .catch(function () { wcShowInline(wcListPaneRoot(), [], "Failed to load work centre."); });
+    }
+
+    function wcSaveEdit() {
+        var root = wcEditFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var id = parseInt(document.getElementById("wcEditID").value) || 0;
+        if (!id) { wcShowInline(root, [], "Invalid ID."); return; }
+
+        var bad = wcValidateEdit();
+        if (bad.length) {
+            wcShowInline(root, bad);
+            return;
+        }
+
+        var name = (document.getElementById("wcEditName").value || "").trim();
+
+        var payload = {
+            ID: id,
+            WorkCenterName: name,
+            PlantID: document.getElementById("wcEditPlant").value || null,
+            Description: (document.getElementById("wcEditDesc").value || "").trim() || null,
+            AvailableCapacity: parseInt(document.getElementById("wcEditCapacity").value) || null,
+            UtilizationPercentage: parseInt(document.getElementById("wcEditUtil").value) || null,
+            SetupTime: parseFloat(document.getElementById("wcEditSetup").value) || null,
+            SetupUOM: document.getElementById("wcEditSetupUOM").value || null,
+            MachineTime: parseFloat(document.getElementById("wcEditMachine").value) || null,
+            MachineUOM: document.getElementById("wcEditMachineUOM").value || null,
+            LaborTime: parseFloat(document.getElementById("wcEditLabor").value) || null,
+            LaborUOM: document.getElementById("wcEditLaborUOM").value || null
+        };
+
+        fetch('@Url.Action("Update", "WorkCentre")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("wcEditModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, function () { wcReloadToListTab(); });
+                else { alert(res.message); wcReloadToListTab(); }
+            } else {
+                wcShowInline(root, [], res.message || "Update failed.");
+            }
+        })
+        .catch(function () { wcShowInline(root, [], "Update request failed."); });
+    }
+
+    function wcDeleteFromList(id) {
+        if (!id) return;
+        function doDelete() {
+            fetch('@Url.Action("Delete", "WorkCentre")?id=' + encodeURIComponent(id), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(res.message, function () { wcReloadToListTab(); });
+                        else { alert(res.message); wcReloadToListTab(); }
+                    } else {
+                        wcShowInline(wcListPaneRoot(), [], res.message || "Delete failed.");
+                    }
+                })
+                .catch(function () { wcShowInline(wcListPaneRoot(), [], "Delete request failed."); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Do you want to Delete this Work Centre?", doDelete);
+        else if (confirm("Delete this work centre?"))
+            doDelete();
+    }
+
+    (function () {
+        var inp = document.getElementById("wcListFilter");
+        if (!inp) return;
+        inp.addEventListener("input", function () {
+            var q = (inp.value || "").toLowerCase().trim();
+            document.querySelectorAll("#wcListTable tbody tr").forEach(function (tr) {
+                var hay = (tr.getAttribute("data-wc-filter") || "").toLowerCase();
+                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
+            });
         });
-    }
-
-    // Search logic
-    function searchWC() {
-        const val = $('#wcSearch').val().toLowerCase();
-        $("#wcMasterList tr").filter(function() {
-            $(this).toggle($(this).text().toLowerCase().indexOf(val) > -1)
-        });
-    }
-
-    // Display Success Popups from TempData
-    @if (TempData["Success"] != null) {
-        <text>Swal.fire('Success', '@TempData["Success"]', 'success');</text>
-    }
-    </script>
-
-</body>
-</html>
+    })();
+</script>
+}

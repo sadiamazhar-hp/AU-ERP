@@ -4,6 +4,7 @@ using AU_ERP.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AU_ERP.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260412010409_AddDocCodeAndCurrentNumber")]
+    partial class AddDocCodeAndCurrentNumber
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -522,40 +525,6 @@ namespace AU_ERP.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("AU_ERP.Models.ProductionVersion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("BomId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PlantId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int?>("RoutingId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("ValidFrom")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Version")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BomId");
-
-                    b.HasIndex("PlantId");
-
-                    b.HasIndex("RoutingId");
-
-                    b.ToTable("ProductionVersions");
-                });
-
             modelBuilder.Entity("AU_ERP.Models.RoutingHeadersSample", b =>
                 {
                     b.Property<int>("RoutingID")
@@ -575,9 +544,6 @@ namespace AU_ERP.Data.Migrations
 
                     b.Property<int?>("StatusID")
                         .HasColumnType("int");
-
-                    b.Property<string>("Title")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("ValidFrom")
                         .HasColumnType("datetime2");
@@ -656,26 +622,6 @@ namespace AU_ERP.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("UnitConversions");
-                });
-
-            modelBuilder.Entity("AU_ERP.Models.UnitOfMeasurement", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Code")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("UnitOfMeasurements");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.WorkCenterMasterSample", b =>
@@ -844,30 +790,6 @@ namespace AU_ERP.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("MaterialType");
-                });
-
-            modelBuilder.Entity("AU_ERP.Models.ProductionVersion", b =>
-                {
-                    b.HasOne("AU_ERP.Models.BomHeadersSample", "BomHeader")
-                        .WithMany()
-                        .HasForeignKey("BomId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("AU_ERP.Models.PlantsSample", "Plant")
-                        .WithMany()
-                        .HasForeignKey("PlantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("AU_ERP.Models.RoutingHeadersSample", "RoutingHeader")
-                        .WithMany()
-                        .HasForeignKey("RoutingId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("BomHeader");
-
-                    b.Navigation("Plant");
-
-                    b.Navigation("RoutingHeader");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.RoutingHeadersSample", b =>

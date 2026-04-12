@@ -1,15 +1,15 @@
-﻿@model List<AU_ERP.Models.MaterialNumberRange>
+@model List<AU_ERP.Models.DocumentRange>
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Material Ranges";
-    ViewBag.Title = "Material Ranges";
-    var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
-    var safeModel = Model ?? new List<AU_ERP.Models.MaterialNumberRange>();
-    var existingTypesJson = System.Text.Json.JsonSerializer.Serialize(safeModel.Where(r => !string.IsNullOrEmpty(r.MaterialTypeCode)).Select(r => r.MaterialTypeCode).Distinct());
+    ViewData["Title"] = "Document Ranges";
+    ViewBag.Title = "Document Ranges";
+    var docTypes = (List<SelectListItem>)ViewBag.DocumentTypes ?? new List<SelectListItem>();
+    var safeModel = Model ?? new List<AU_ERP.Models.DocumentRange>();
+    var existingTypesJson = System.Text.Json.JsonSerializer.Serialize(safeModel.Where(r => r.DocumentTypeID.HasValue).Select(r => r.DocumentTypeID.Value).Distinct());
 }
 
 <div class="sap-window" id="app">
-    <form id="rangeForm" method="post" action="@Url.Action("NumberRanges", "Material")">
+    <form id="docRangeForm" method="post" action="@Url.Action("DocumentRanges", "Document")">
         @Html.AntiForgeryToken()
         <div class="au-validation-summary" style="display:none;" role="alert"></div>
 
@@ -27,11 +27,10 @@
                 <thead>
                     <tr>
                         <th style="width: 35px;">Sel</th>
-                        <th style="width: 250px;">Material Type</th>
+                        <th style="width: 250px;">Document Type</th>
                         <th>From Range</th>
                         <th>To Range</th>
                         <th>Current Status</th>
-                        <th style="width: 60px; text-align: center;">Ext</th>
                     </tr>
                 </thead>
                 <tbody id="gridBody">
@@ -42,11 +41,11 @@
                                 <input type="hidden" name="[@i].RangeID" value="@safeModel[i].RangeID" class="row-id" />
                             </td>
                             <td>
-                                <select name="[@i].MaterialTypeCode" class="sap-input" disabled data-required="true">
+                                <select name="[@i].DocumentTypeID" class="sap-input" disabled data-required="true">
                                     <option value="">Select Type</option>
-                                    @foreach (var opt in mTypes)
+                                    @foreach (var opt in docTypes)
                                     {
-                                        if (opt.Value == safeModel[i].MaterialTypeCode)
+                                        if (opt.Value == safeModel[i].DocumentTypeID?.ToString())
                                         {
                                             <option value="@opt.Value" selected>@opt.Text</option>
                                         }
@@ -60,10 +59,6 @@
                             <td><input name="[@i].FromNumber" class="sap-input sap-range-input" value="@safeModel[i].FromNumber" readonly maxlength="10" data-required="true" /></td>
                             <td><input name="[@i].ToNumber" class="sap-input sap-range-input" value="@safeModel[i].ToNumber" readonly maxlength="10" data-required="true" /></td>
                             <td><input name="[@i].CurrentNumber" class="sap-input sap-always-readonly" value="@safeModel[i].CurrentNumber" readonly /></td>
-                            <td style="text-align: center;">
-                                <input type="checkbox" name="[@i].IsExternal" value="true" class="sap-check" @(safeModel[i].IsExternal == true ? "checked" : "") disabled />
-                                <input type="hidden" name="[@i].IsExternal" value="false" />
-                            </td>
                         </tr>
                     }
                 </tbody>
@@ -114,11 +109,10 @@
             if (input.tagName === 'SELECT') input.disabled = !edit;
             else input.readOnly = !edit;
         });
-        document.querySelectorAll('.sap-check').forEach(c => { c.disabled = !edit; });
         document.getElementById('btnEdit').disabled = edit;
         document.getElementById('btnNew').disabled = !edit;
         document.getElementById('btnSave').disabled = !edit;
-        var f = document.getElementById('rangeForm');
+        var f = document.getElementById('docRangeForm');
         if (f && typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(f);
     }
 
@@ -129,39 +123,45 @@
     }
     document.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
 
+    /** From Range → Current Status = From + 1 (same behaviour as BP Ranges Start → Current). */
+    function wireDocRangeFromToCurrent(tr) {
+        if (!tr || tr.dataset.docRangeFromSync === '1') return;
+        var fromInp = tr.querySelector('[name$=".FromNumber"]');
+        var curInp = tr.querySelector('[name$=".CurrentNumber"]');
+        if (!fromInp || !curInp) return;
+        tr.dataset.docRangeFromSync = '1';
+        function sync() {
+            var v = parseInt(fromInp.value, 10);
+            curInp.value = isNaN(v) ? '' : String(v + 1);
+        }
+        fromInp.addEventListener('input', sync);
+        fromInp.addEventListener('change', sync);
+    }
+
+    document.querySelectorAll('#gridBody tr').forEach(wireDocRangeFromToCurrent);
+
     function addNewRow() {
         const body = document.getElementById('gridBody');
         const tr = document.createElement('tr');
         let opts = '<option value="">Select Type</option>';
-        @foreach (var item in mTypes)
+        @foreach (var item in docTypes)
         {
             @:opts += '<option value="@item.Value">@item.Text</option>';
         }
 
         tr.innerHTML = `
             <td class="col-sel" onclick="selectRow(this)">
-                <input type="hidden" name="[${rowCount}].RangeID" value="" class="row-id" />
+                <input type="hidden" name="[${rowCount}].RangeID" value="0" class="row-id" />
             </td>
-            <td><select name="[${rowCount}].MaterialTypeCode" class="sap-input" data-required="true">${opts}</select></td>
+            <td><select name="[${rowCount}].DocumentTypeID" class="sap-input" data-required="true">${opts}</select></td>
             <td><input name="[${rowCount}].FromNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
             <td><input name="[${rowCount}].ToNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
-            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" readonly></td>
-            <td style="text-align: center;">
-                <input type="checkbox" name="[${rowCount}].IsExternal" value="true" class="sap-check">
-                <input type="hidden" name="[${rowCount}].IsExternal" value="false">
-            </td>`;
+            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" readonly></td>`;
         body.appendChild(tr);
         rowCount++;
 
         tr.querySelectorAll('.sap-range-input').forEach(enforceDigitLimit);
-        var fromInp = tr.querySelector('[name$=".FromNumber"]');
-        var curInp = tr.querySelector('[name$=".CurrentNumber"]');
-        if (fromInp && curInp) {
-            fromInp.addEventListener('input', function () {
-                var v = parseInt(fromInp.value, 10);
-                curInp.value = isNaN(v) ? '' : (v + 1);
-            });
-        }
+        wireDocRangeFromToCurrent(tr);
         tr.querySelector('select.sap-input')?.focus();
     }
 
@@ -173,7 +173,7 @@
         document.getElementById('btnDelete').disabled = false;
     }
 
-    function collectInvalidNumberRangeRows() {
+    function collectInvalidDocRangeRows() {
         var bad = [];
         document.querySelectorAll('#gridBody tr').forEach(tr => {
             tr.querySelectorAll('[data-required]').forEach(inp => {
@@ -190,21 +190,21 @@
         var dupes = [];
         document.querySelectorAll('#gridBody tr').forEach(tr => {
             var rid = tr.querySelector('.row-id');
-            var isNew = !rid || !rid.value || rid.value === '0' || rid.value === '';
+            var isNew = !rid || !rid.value || rid.value === '0';
             if (!isNew) return;
-            var sel = tr.querySelector('select[name$=".MaterialTypeCode"]');
-            var code = sel ? sel.value : '';
-            if (code && existingTypeSet.has(code)) {
+            var sel = tr.querySelector('select[name$=".DocumentTypeID"]');
+            var typeId = sel ? parseInt(sel.value) : 0;
+            if (typeId && existingTypeSet.has(typeId)) {
                 var opt = sel.options[sel.selectedIndex];
-                dupes.push(opt ? opt.text : code);
+                dupes.push(opt ? opt.text : typeId);
             }
         });
         return dupes;
     }
 
     function submitSave() {
-        var form = document.getElementById('rangeForm');
-        document.querySelectorAll('.sap-input, .sap-check, select').forEach(i => { i.disabled = false; i.readOnly = false; });
+        var form = document.getElementById('docRangeForm');
+        document.querySelectorAll('.sap-input, select').forEach(i => { i.disabled = false; i.readOnly = false; });
         var fd = new FormData(form);
         fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.json())
@@ -220,9 +220,9 @@
     }
 
     function handleSave() {
-        var form = document.getElementById('rangeForm');
+        var form = document.getElementById('docRangeForm');
         if (typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(form);
-        var bad = collectInvalidNumberRangeRows();
+        var bad = collectInvalidDocRangeRows();
         if (bad.length) {
             if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, bad);
             return;
@@ -242,14 +242,24 @@
         if (!selectedRow) return;
         const rangeId = selectedRow.querySelector('.row-id')?.value;
         function doDelete() {
-            if (rangeId) {
-                $.post('/Material/DeleteNumberRange', { id: rangeId }, function (response) {
+            if (rangeId && rangeId !== '0') {
+                fetch('@Url.Action("DeleteDocumentRange", "Document")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'id=' + encodeURIComponent(rangeId)
+                })
+                .then(r => r.json())
+                .then(response => {
                     if (response.success) {
                         selectedRow.remove(); selectedRow = null;
                         document.getElementById('btnDelete').disabled = true;
                         reIndex();
-                    } else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(document.getElementById('rangeForm'), [], response.message || 'Delete failed');
+                    } else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(document.getElementById('docRangeForm'), [], response.message || 'Delete failed');
                     else alert(response.message || 'Delete failed');
+                })
+                .catch(() => {
+                    if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(document.getElementById('docRangeForm'), [], 'Delete request failed');
+                    else alert('Delete request failed');
                 });
             } else {
                 selectedRow.remove(); selectedRow = null;
@@ -258,7 +268,7 @@
             }
         }
         if (typeof window.materialShowDeleteConfirmModalThen === 'function')
-            window.materialShowDeleteConfirmModalThen('Do you want to delete this material range?', doDelete);
+            window.materialShowDeleteConfirmModalThen('Do you want to delete this Document Range?', doDelete);
         else if (confirm('Delete this entry?')) doDelete();
     }
 

@@ -8,6 +8,7 @@
 <form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")">
     @Html.AntiForgeryToken()
     <input type="hidden" name="returnTo" value="@(ViewBag.FormReturnTo ?? "Index")" />
+    <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
 
     <div id="bpMasterLayout" class="bp-master-layout">
         <div class="p-3 border-bottom bg-white d-flex flex-wrap gap-4 align-items-center">
@@ -217,17 +218,48 @@
         bpHandleRoleUI(el);
     });
 
-    function bpShowRangeErrorModal(message) {
-        var body = document.getElementById('bpRangeErrorModalBody');
-        if (body) body.textContent = message || 'An error occurred.';
-        var el = document.getElementById('bpRangeErrorModal');
-        if (el && el.parentElement !== document.body)
-            document.body.appendChild(el);
-        if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            bootstrap.Modal.getOrCreateInstance(el).show();
-        } else {
-            window.alert(message || 'An error occurred.');
+    function bpShowInlineError(root, invalidEls, message) {
+        root = root || document.getElementById('bpCreateRoot');
+        if (!root) return;
+        if (typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(root);
+        if (typeof window.auShowInlineValidation === 'function')
+            window.auShowInlineValidation(root, invalidEls || [], message);
+        else window.alert(message || 'Following Fields are Required');
+    }
+
+    /** Client-side required checks (mirrors mandatory fields on the form). */
+    function bpValidateCreateForm(root) {
+        root = root || document.getElementById('bpCreateRoot');
+        if (!root) return [];
+        var bad = [];
+        function req(sel) {
+            var el = root.querySelector(sel);
+            if (!el) return;
+            if (!(String(el.value || '').trim())) bad.push(el);
         }
+        req('.f-role');
+        req('.f-type');
+        req('.f-bpid');
+        req('.f-group');
+        req('.f-name');
+        req('.f-street');
+        req('.f-no');
+        req('.f-city');
+        req('.f-zip');
+        req('.f-region');
+        req('.f-country');
+        req('.f-recon');
+        var roleSel = root.querySelector('.f-role');
+        var opt = roleSel && roleSel.options[roleSel.selectedIndex];
+        var roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
+        if (roleCode === 'FLCU01') {
+            req('.f-dist');
+            req('.f-sales-schema');
+        }
+        if (roleCode === 'FLVN01') {
+            req('.f-purch-schema');
+        }
+        return bad;
     }
 
     function bpFetchNextBPID(root, refetchDepth) {
@@ -245,7 +277,7 @@
         const url = '@Url.Action("GetNextBPTypeNumber", "BP")' + '?bpTypeId=' + encodeURIComponent(id);
         function bpRangeFetchFailed(message) {
             bpInput.value = '';
-            bpShowRangeErrorModal(message);
+            bpShowInlineError(root, typeSel ? [typeSel] : [], message);
             const committed = root.dataset.bpTypeCommitted || '';
             if (id !== committed) {
                 typeSel.value = committed;

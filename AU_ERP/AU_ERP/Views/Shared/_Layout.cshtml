@@ -18,6 +18,20 @@
         && string.Equals(act, "MaterialType", StringComparison.OrdinalIgnoreCase);
     var numberRangesActive = string.Equals(ctrl, "Material", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "NumberRanges", StringComparison.OrdinalIgnoreCase);
+    var bomActive = string.Equals(ctrl, "BOM", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var wcActive = string.Equals(ctrl, "WorkCentre", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var rtActive = string.Equals(ctrl, "Routing", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var docTypesActive = string.Equals(ctrl, "Document", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "DocumentTypes", StringComparison.OrdinalIgnoreCase);
+    var docRangesActive = string.Equals(ctrl, "Document", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "DocumentRanges", StringComparison.OrdinalIgnoreCase);
+    var uomActive = string.Equals(ctrl, "UOM", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var pvActive = string.Equals(ctrl, "ProductionVersion", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -35,7 +49,9 @@
     <div class="au-shell">
         <header class="au-header">
             <div class="au-header-brand">
-                <a asp-controller="Home" asp-action="Index" class="au-logo-tile" aria-label="Home">A</a>
+                <a asp-controller="Material" asp-action="GetMaterialList" class="au-logo-tile" aria-label="Materials — A&amp;U Tiles">
+                    <img src="@Url.Content("~/AU_Tiles_logo 2.png")" asp-append-version="true" alt="A&amp;U Tiles" />
+                </a>
                 <span class="au-header-title">AU MANUFACTURERS</span>
             </div>
             <div class="au-header-actions">
@@ -50,14 +66,21 @@
                 <div class="au-sidebar-section-title">Master data</div>
                 <a class="au-sidebar-link @(materialsListActive ? "active" : null)" asp-controller="Material" asp-action="GetMaterialList">Materials</a>
                 <a class="au-sidebar-link @(bpPartnersActive ? "active" : null)" asp-controller="BP" asp-action="Index">Business Partners</a>
+                <a class="au-sidebar-link @(bomActive ? "active" : null)" asp-controller="BOM" asp-action="Index">Bill Of Materials</a>
+                <a class="au-sidebar-link @(wcActive ? "active" : null)" asp-controller="WorkCentre" asp-action="Index">Work Centres</a>
+                <a class="au-sidebar-link @(rtActive ? "active" : null)" asp-controller="Routing" asp-action="Index">Routing</a>
+                <a class="au-sidebar-link @(pvActive ? "active" : null)" asp-controller="ProductionVersion" asp-action="Index">Product Version</a>
 
                 <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Configuration</div>
                 <a class="au-sidebar-link @(materialTypeActive ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Types</a>
-                <a class="au-sidebar-link @(numberRangesActive ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Material Number Ranges</a>
+                <a class="au-sidebar-link @(numberRangesActive ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Material Ranges</a>
                 <a class="au-sidebar-link @(bpRolesActive ? "active" : null)" asp-controller="BP" asp-action="BPRoles">BP Roles</a>
                 <a class="au-sidebar-link @(bpTypesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeSamples">BP Types</a>
                 <a class="au-sidebar-link @(bpGroupingsActive ? "active" : null)" asp-controller="BP" asp-action="BPGroupings">BP Groupings</a>
-                <a class="au-sidebar-link @(bpTypeNumberRangesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeNumberRanges">BP Number Ranges</a>
+                <a class="au-sidebar-link @(bpTypeNumberRangesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeNumberRanges">BP Ranges</a>
+                <a class="au-sidebar-link @(docTypesActive ? "active" : null)" asp-controller="Document" asp-action="DocumentTypes">Document Types</a>
+                <a class="au-sidebar-link @(docRangesActive ? "active" : null)" asp-controller="Document" asp-action="DocumentRanges">Document Ranges</a>
+                <a class="au-sidebar-link @(uomActive ? "active" : null)" asp-controller="UOM" asp-action="Index">UOM</a>
             </aside>
 
             <main class="au-main">

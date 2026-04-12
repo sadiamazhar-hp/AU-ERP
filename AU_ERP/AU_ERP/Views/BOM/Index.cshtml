@@ -1,0 +1,715 @@
+@model List<AU_ERP.Models.BomHeadersSample>
+@{
+    ViewData["Title"] = "Bill Of Materials";
+    var safeModel = Model ?? new List<AU_ERP.Models.BomHeadersSample>();
+    var bomTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
+    var bomLevels = ViewBag.BomLevels as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
+    var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
+}
+
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+        --sap-selected: #b3d7ff;
+    }
+
+    .bom-module .table-sap {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .bom-module .table-sap th {
+        background: var(--sap-header-bg);
+        border: 1px solid #ccc;
+        padding: 6px 10px;
+        font-weight: normal;
+    }
+
+    .bom-module .table-sap td {
+        border: 1px solid #ccc;
+        padding: 0;
+        height: 32px;
+    }
+
+    .bom-module .sap-input {
+        width: 100%;
+        height: 100%;
+        border: none;
+        padding: 0 10px;
+        background: var(--sap-readonly);
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .bom-module .table-sap th.col-no,
+    .bom-module .table-sap td.col-no {
+        padding-left: 14px;
+        padding-right: 8px;
+    }
+
+    .bom-module .table-sap td.col-action {
+        padding: 4px 8px;
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .bom-module-tabstrip {
+        border-bottom: 1px solid var(--sap-border);
+        padding: 0 0.25rem;
+        background: #fff;
+    }
+
+    .bom-module-tabstrip .nav-link {
+        color: var(--au-primary-dark, #388087);
+        font-weight: 500;
+        border: 1px solid transparent;
+        border-radius: 0.35rem 0.35rem 0 0;
+    }
+
+    .bom-module-tabstrip .nav-link:hover {
+        border-color: rgba(56, 128, 135, 0.25);
+    }
+
+    .bom-module-tabstrip .nav-link.active {
+        color: var(--au-black, #171717);
+        background: #fff;
+        border-color: var(--sap-border);
+        border-bottom-color: #fff;
+        margin-bottom: -1px;
+    }
+
+    .bom-module-tab-content {
+        border: 1px solid var(--sap-border);
+        border-top: none;
+        background: #fff;
+    }
+
+    .bom-create-form .v2-frame {
+        border: 1px solid #c4c4c4;
+        border-radius: 4px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+    }
+
+    .bom-create-form .v2-frame legend {
+        font-size: .8rem;
+        font-weight: 600;
+        color: #388087;
+        width: auto;
+        padding: 0 .35rem;
+        float: none;
+        margin-bottom: 0;
+    }
+
+    .bom-create-form .form-label {
+        font-size: .82rem;
+        font-weight: 500;
+        color: #555;
+        margin-bottom: .2rem;
+    }
+
+    .bom-create-form .mandatory-bar {
+        display: inline-block;
+        width: 3px;
+        height: 14px;
+        background: #b00;
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+
+    .bom-create-form .btn-save-bottom {
+        display: flex;
+        justify-content: flex-end;
+        padding: 0.75rem 1.25rem;
+        border-top: 1px solid #c4c4c4;
+        background: #f3f6f8;
+    }
+
+    .bom-items-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: .5rem;
+    }
+
+    .bom-items-table th {
+        background: #dee6ef;
+        border: 1px solid #ccc;
+        padding: 6px 10px;
+        font-weight: normal;
+        font-size: .82rem;
+    }
+
+    .bom-items-table td {
+        border: 1px solid #ccc;
+        padding: 2px 4px;
+    }
+
+    .bom-items-table .form-control-sm {
+        border-radius: 2px;
+    }
+</style>
+
+<div class="bom-module">
+    <ul class="nav nav-tabs bom-module-tabstrip" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(bomTabList ? "" : "active")" id="bomTabCreateBtn" data-bs-toggle="tab" data-bs-target="#bomPaneCreate" type="button" role="tab" aria-controls="bomPaneCreate" aria-selected="@(bomTabList ? "false" : "true")">Create</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(bomTabList ? "active" : "")" id="bomTabListBtn" data-bs-toggle="tab" data-bs-target="#bomPaneList" type="button" role="tab" aria-controls="bomPaneList" aria-selected="@(bomTabList ? "true" : "false")">List</button>
+        </li>
+    </ul>
+
+    <div class="tab-content bom-module-tab-content">
+        <!-- ───── CREATE TAB ───── -->
+        <div class="tab-pane fade p-2 p-md-3 @(bomTabList ? "" : "show active")" id="bomPaneCreate" role="tabpanel" aria-labelledby="bomTabCreateBtn">
+            <div class="bom-create-form">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="bomCreateBomID" value="0" />
+
+                <fieldset class="v2-frame">
+                    <legend>Header</legend>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar"></span> BOM Code</label>
+                            <input type="text" id="bomCreateCode" class="form-control form-control-sm" maxlength="5" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label"><span class="mandatory-bar"></span> BOM Title</label>
+                            <input type="text" id="bomCreateTitle" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar"></span> BOM Level</label>
+                            <select id="bomCreateBLevel" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (bomLevels != null)
+                                {
+                                    foreach (var item in bomLevels)
+                                    {
+                                        <option value="@item.Value">@item.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Plant</label>
+                            <select id="bomCreatePlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Base Qty</label>
+                            <input type="number" id="bomCreateBaseQty" class="form-control form-control-sm" value="1" step="any" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valid From</label>
+                            <input type="date" id="bomCreateValidFrom" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="v2-frame">
+                    <legend>
+                        Components
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="bomAddItemRow('bomCreateItemsBody')">+ Add</button>
+                    </legend>
+                    <table class="bom-items-table">
+                        <thead>
+                            <tr>
+                                <th style="width:50px;">Pos</th>
+                                <th>Component Material</th>
+                                <th style="width:100px;">Qty</th>
+                                <th style="width:80px;">UoM</th>
+                                <th style="width:100px;">Scrap %</th>
+                                <th style="width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="bomCreateItemsBody"></tbody>
+                    </table>
+                </fieldset>
+
+                <div class="btn-save-bottom">
+                    <button type="button" class="btn btn-sm px-4" id="bomBtnReset" style="background:#6FB3B8;color:#fff;border:1px solid #388087;" onclick="bomResetCreateForm()">Reset</button>
+                    <button type="button" class="btn btn-sm px-4 ms-2" id="bomBtnSave" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="bomSaveCreate()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───── LIST TAB ───── -->
+        <div class="tab-pane fade @(bomTabList ? "show active" : "")" id="bomPaneList" role="tabpanel" aria-labelledby="bomTabListBtn">
+            <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
+            <div class="p-2 px-3">
+                <input type="search" class="form-control form-control-sm" id="bomListFilter" placeholder="Filter by BOM ID, code, title, level…" style="max-width:22rem;" />
+            </div>
+            <div class="table-wrapper">
+                <table class="table-sap" id="bomListTable">
+                    <thead>
+                        <tr>
+                            <th class="col-no">No</th>
+                            <th>BOM ID</th>
+                            <th>BOM Code</th>
+                            <th>BOM Title</th>
+                            <th>Level</th>
+                            <th>Plant</th>
+                            <th>Base Qty</th>
+                            <th style="width:72px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int bomIdx = 0; }
+                        @foreach (var h in safeModel)
+                        {
+                            var levelName = h.BOMLevel?.LevelName ?? "";
+                            var plantName = h.PlantSample?.PlantName ?? "";
+                            <tr data-bom-filter="@($"{h.BomID} {h.BOMCode} {h.BOMTitle} {levelName} {plantName}")" data-bom-id="@h.BomID">
+                                <td class="col-no">@(bomIdx + 1)</td>
+                                <td><input class="sap-input" value="@h.BomID" readonly /></td>
+                                <td><input class="sap-input" value="@h.BOMCode" readonly /></td>
+                                <td><input class="sap-input" value="@h.BOMTitle" readonly /></td>
+                                <td><input class="sap-input" value="@levelName" readonly /></td>
+                                <td><input class="sap-input" value="@plantName" readonly /></td>
+                                <td><input class="sap-input" value="@(h.BaseQty.HasValue ? (h.BaseQty.Value == Math.Truncate(h.BaseQty.Value) ? h.BaseQty.Value.ToString("0") : h.BaseQty.Value.ToString("0.00")) : "")" readonly /></td>
+                                <td class="col-action">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-secondary p-0" type="button" id="bomRowActions@(bomIdx)" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
+                                            <i class="bi bi-three-dots-vertical fs-5"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="bomRowActions@(bomIdx)">
+                                            <li><button type="button" class="dropdown-item" data-bom-id="@h.BomID" onclick="bomOpenEdit(this.getAttribute('data-bom-id'))">Edit</button></li>
+                                            <li><button type="button" class="dropdown-item text-danger" data-bom-id="@h.BomID" onclick="bomDeleteFromList(this.getAttribute('data-bom-id'))">Delete</button></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            bomIdx++;
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (safeModel.Count == 0)
+            {
+                <p class="text-secondary small mb-0 mt-2 px-3">No BOM records yet. Use the Create tab to add one.</p>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- ───── EDIT MODAL ───── -->
+<div class="modal fade" id="bomEditModal" tabindex="-1" aria-labelledby="bomEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content au-create-v2-modal">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bomEditModalLabel">Edit Bill Of Material</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="bomEditBomID" />
+
+                <fieldset class="v2-frame">
+                    <legend>Header</legend>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> BOM Code</label>
+                            <input type="text" id="bomEditCode" class="form-control form-control-sm" maxlength="5" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> BOM Title</label>
+                            <input type="text" id="bomEditTitle" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">BOM Level</label>
+                            <select id="bomEditBLevel" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (bomLevels != null)
+                                {
+                                    foreach (var item in bomLevels)
+                                    {
+                                        <option value="@item.Value">@item.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Plant</label>
+                            <select id="bomEditPlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Base Qty</label>
+                            <input type="number" id="bomEditBaseQty" class="form-control form-control-sm" step="any" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valid From</label>
+                            <input type="date" id="bomEditValidFrom" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="v2-frame">
+                    <legend>
+                        Components
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="bomAddItemRow('bomEditItemsBody')">+ Add</button>
+                    </legend>
+                    <table class="bom-items-table">
+                        <thead>
+                            <tr>
+                                <th style="width:50px;">Pos</th>
+                                <th>Component Material</th>
+                                <th style="width:100px;">Qty</th>
+                                <th style="width:80px;">UoM</th>
+                                <th style="width:100px;">Scrap %</th>
+                                <th style="width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="bomEditItemsBody"></tbody>
+                    </table>
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm px-4" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="bomSaveEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var bomItemCounter = 0;
+
+    var bomAllMaterials = [
+        @foreach (var mat in ViewBag.MaterialList as List<AU_ERP.Models.CreateMaterialMaster> ?? new List<AU_ERP.Models.CreateMaterialMaster>())
+        {
+            <text>{ n: "@Html.Raw(mat.MaterialNumber)", d: "@Html.Raw((mat.Description ?? "").Replace("\"", "\\\""))" },</text>
+        }
+    ];
+
+    function escBomAttr(s) {
+        if (s == null || s === undefined) return "";
+        return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    }
+
+    function bomBuildCompSelectHtml(selectedVal) {
+        var html = '<option value="">-- Select --</option>';
+        bomAllMaterials.forEach(function (m) {
+            var isSelected = (m.n === selectedVal) ? ' selected' : '';
+            html += '<option value="' + escBomAttr(m.n) + '"' + isSelected + '>'
+                  + escBomAttr(m.n) + ' - ' + escBomAttr(m.d) + '</option>';
+        });
+        return html;
+    }
+
+    function bomAddItemRow(tbodyId) {
+        var tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+        bomItemCounter++;
+        var pos = tbody.rows.length + 1;
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+            '<td class="text-center">' + pos + '</td>' +
+            '<td><select class="form-select form-select-sm bom-comp-mat">' + bomBuildCompSelectHtml("") + '</select></td>' +
+            '<td><input type="number" class="form-control form-control-sm bom-comp-qty" step="any" value="1" /></td>' +
+            '<td><input type="text" class="form-control form-control-sm bom-comp-uom" maxlength="3" /></td>' +
+            '<td><input type="number" class="form-control form-control-sm bom-comp-scrap" step="any" value="0" /></td>' +
+            '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
+        tbody.appendChild(tr);
+    }
+
+    function bomCollectItems(tbodyId) {
+        var items = [];
+        var rows = document.querySelectorAll("#" + tbodyId + " tr");
+        rows.forEach(function (tr) {
+            var matVal = (tr.querySelector(".bom-comp-mat")?.value || "").trim();
+            if (!matVal) return;
+            items.push({
+                MaterialNumber: matVal,
+                Quantity: parseFloat(tr.querySelector(".bom-comp-qty")?.value) || 0,
+                UoM: (tr.querySelector(".bom-comp-uom")?.value || "").trim(),
+                ScrapPercentage: parseFloat(tr.querySelector(".bom-comp-scrap")?.value) || 0
+            });
+        });
+        return items;
+    }
+
+    function bomCreateFormRoot() {
+        return document.querySelector("#bomPaneCreate .bom-create-form");
+    }
+
+    function bomEditFormRoot() {
+        return document.querySelector("#bomEditModal .modal-body");
+    }
+
+    function bomListPaneRoot() {
+        return document.getElementById("bomPaneList");
+    }
+
+    function bomShowInline(root, invalidEls, message) {
+        if (!root) root = bomCreateFormRoot() || document.querySelector(".bom-module");
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        if (typeof window.auShowInlineValidation === "function")
+            window.auShowInlineValidation(root, invalidEls || [], message);
+        else alert(message || "Following Fields are Required");
+    }
+
+    function bomValidateCreateHeader() {
+        var bad = [];
+        var c = document.getElementById("bomCreateCode");
+        var t = document.getElementById("bomCreateTitle");
+        var lv = document.getElementById("bomCreateBLevel");
+        var code = (c && c.value || "").trim();
+        if (!code) bad.push(c);
+        else if (code.length > 5) bad.push(c);
+        if (!(t && (t.value || "").trim())) bad.push(t);
+        if (!(lv && (lv.value || "").trim())) bad.push(lv);
+        return bad;
+    }
+
+    function bomValidateEditHeader() {
+        var bad = [];
+        var c = document.getElementById("bomEditCode");
+        var t = document.getElementById("bomEditTitle");
+        var code = (c && c.value || "").trim();
+        if (!code) bad.push(c);
+        else if (code.length > 5) bad.push(c);
+        if (!(t && (t.value || "").trim())) bad.push(t);
+        return bad;
+    }
+
+    function bomValidateComponentRows(tbodyId) {
+        var bad = [];
+        document.querySelectorAll("#" + tbodyId + " tr").forEach(function (tr) {
+            var mat = tr.querySelector(".bom-comp-mat");
+            var qty = tr.querySelector(".bom-comp-qty");
+            var uom = tr.querySelector(".bom-comp-uom");
+            var scr = tr.querySelector(".bom-comp-scrap");
+            if (!mat || !qty || !uom || !scr) return;
+            var mval = (mat.value || "").trim();
+            var qraw = (qty.value || "").trim();
+            var uval = (uom.value || "").trim();
+            var sraw = (scr.value || "").trim();
+            var qnum = parseFloat(qraw);
+            var snum = parseFloat(sraw);
+            if (!mval) bad.push(mat);
+            if (qraw === "" || isNaN(qnum)) bad.push(qty);
+            if (!uval) bad.push(uom);
+            if (sraw === "" || isNaN(snum)) bad.push(scr);
+        });
+        return bad;
+    }
+
+    function bomResetCreateForm() {
+        var root = bomCreateFormRoot();
+        if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        document.getElementById("bomCreateBomID").value = "0";
+        document.getElementById("bomCreateCode").value = "";
+        document.getElementById("bomCreateTitle").value = "";
+        document.getElementById("bomCreateBLevel").value = "";
+        document.getElementById("bomCreatePlant").value = "";
+        document.getElementById("bomCreateBaseQty").value = "1";
+        document.getElementById("bomCreateValidFrom").value = "";
+        document.getElementById("bomCreateItemsBody").innerHTML = "";
+        document.getElementById("bomBtnSave").textContent = "Save";
+    }
+
+    function bomReloadToListTab() {
+        var u = new URL(window.location.href);
+        u.searchParams.set("tab", "list");
+        window.location.assign(u.toString());
+    }
+
+    function bomSaveCreate() {
+        var root = bomCreateFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var bad = bomValidateCreateHeader().concat(bomValidateComponentRows("bomCreateItemsBody"));
+        if (bad.length) {
+            bomShowInline(root, bad);
+            return;
+        }
+
+        var code = (document.getElementById("bomCreateCode").value || "").trim();
+        var title = (document.getElementById("bomCreateTitle").value || "").trim();
+        var bLevel = document.getElementById("bomCreateBLevel").value;
+
+        var bomId = parseInt(document.getElementById("bomCreateBomID").value) || 0;
+        var isUpdate = bomId > 0;
+        var url = isUpdate ? '@Url.Action("Update", "BOM")' : '@Url.Action("Create", "BOM")';
+
+        var payload = {
+            BomID: bomId,
+            BOMCode: code,
+            BOMTitle: title,
+            BLevel: parseInt(bLevel) || null,
+            Plant: document.getElementById("bomCreatePlant").value || null,
+            BaseQty: parseFloat(document.getElementById("bomCreateBaseQty").value) || null,
+            ValidFrom: document.getElementById("bomCreateValidFrom").value || null,
+            Items: bomCollectItems("bomCreateItemsBody")
+        };
+
+        fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                var msg = res.message || (isUpdate ? "BOM Updated Successfully !" : "BOM Created Successfully !");
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(msg, function () { bomReloadToListTab(); });
+                else { alert(msg); bomReloadToListTab(); }
+            } else {
+                bomShowInline(root, [], res.message || "Save failed.");
+            }
+        })
+        .catch(function () { bomShowInline(root, [], "Request failed."); });
+    }
+
+    function bomOpenEdit(bomId) {
+        if (!bomId) return;
+        fetch('@Url.Action("GetBomForEdit", "BOM")?id=' + encodeURIComponent(bomId))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) { bomShowInline(bomListPaneRoot(), [], data.message || "Could not load BOM."); return; }
+                var editRoot = bomEditFormRoot();
+                if (editRoot && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(editRoot);
+                var b = data.bom;
+                document.getElementById("bomEditBomID").value = b.bomID || b.BomID;
+                document.getElementById("bomEditCode").value = b.bomCode || b.BOMCode || "";
+                document.getElementById("bomEditTitle").value = b.bomTitle || b.BOMTitle || "";
+                document.getElementById("bomEditBLevel").value = b.bLevel != null ? b.bLevel : (b.BLevel || "");
+                document.getElementById("bomEditPlant").value = b.plant || b.Plant || "";
+                document.getElementById("bomEditBaseQty").value = b.baseQty != null ? b.baseQty : (b.BaseQty || "");
+                document.getElementById("bomEditValidFrom").value = b.validFrom || b.ValidFrom || "";
+
+                var tbody = document.getElementById("bomEditItemsBody");
+                tbody.innerHTML = "";
+                var items = b.items || b.Items || [];
+                items.forEach(function (item, idx) {
+                    var matNum = item.materialNumber || item.MaterialNumber || "";
+                    var qty = item.quantity != null ? item.quantity : (item.Quantity || "");
+                    var uom = item.uoM || item.UoM || "";
+                    var scrap = item.scrapPercentage != null ? item.scrapPercentage : (item.ScrapPercentage || 0);
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td class="text-center">' + (idx + 1) + '</td>' +
+                        '<td><select class="form-select form-select-sm bom-comp-mat">' + bomBuildCompSelectHtml(matNum) + '</select></td>' +
+                        '<td><input type="number" class="form-control form-control-sm bom-comp-qty" step="any" value="' + escBomAttr(qty) + '" /></td>' +
+                        '<td><input type="text" class="form-control form-control-sm bom-comp-uom" maxlength="3" value="' + escBomAttr(uom) + '" /></td>' +
+                        '<td><input type="number" class="form-control form-control-sm bom-comp-scrap" step="any" value="' + escBomAttr(scrap) + '" /></td>' +
+                        '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
+                    tbody.appendChild(tr);
+                });
+
+                var modalEl = document.getElementById("bomEditModal");
+                if (modalEl) {
+                    if (modalEl.parentElement !== document.body)
+                        document.body.appendChild(modalEl);
+                    if (typeof bootstrap !== "undefined")
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            })
+            .catch(function () { bomShowInline(bomListPaneRoot(), [], "Failed to load BOM data."); });
+    }
+
+    function bomSaveEdit() {
+        var root = bomEditFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var bomId = parseInt(document.getElementById("bomEditBomID").value) || 0;
+        if (!bomId) { bomShowInline(root, [], "Invalid BOM ID."); return; }
+
+        var bad = bomValidateEditHeader().concat(bomValidateComponentRows("bomEditItemsBody"));
+        if (bad.length) {
+            bomShowInline(root, bad);
+            return;
+        }
+
+        var code = (document.getElementById("bomEditCode").value || "").trim();
+        var title = (document.getElementById("bomEditTitle").value || "").trim();
+
+        var payload = {
+            BomID: bomId,
+            BOMCode: code,
+            BOMTitle: title,
+            BLevel: parseInt(document.getElementById("bomEditBLevel").value) || null,
+            Plant: document.getElementById("bomEditPlant").value || null,
+            BaseQty: parseFloat(document.getElementById("bomEditBaseQty").value) || null,
+            ValidFrom: document.getElementById("bomEditValidFrom").value || null,
+            Items: bomCollectItems("bomEditItemsBody")
+        };
+
+        fetch('@Url.Action("Update", "BOM")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("bomEditModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+
+                var msg = res.message || "BOM Updated Successfully !";
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(msg, function () { bomReloadToListTab(); });
+                else { alert(msg); bomReloadToListTab(); }
+            } else {
+                bomShowInline(root, [], res.message || "Update failed.");
+            }
+        })
+        .catch(function () { bomShowInline(root, [], "Update request failed."); });
+    }
+
+    function bomDeleteFromList(bomId) {
+        if (!bomId) return;
+        function doDelete() {
+            fetch('@Url.Action("Delete", "BOM")?id=' + encodeURIComponent(bomId), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        var msg = res.message || "BOM Deleted Successfully !";
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(msg, function () { bomReloadToListTab(); });
+                        else { alert(msg); bomReloadToListTab(); }
+                    } else {
+                        bomShowInline(bomListPaneRoot(), [], res.message || "Delete failed.");
+                    }
+                })
+                .catch(function () { bomShowInline(bomListPaneRoot(), [], "Delete request failed."); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Do you want to Delete this BOM?", doDelete);
+        else if (confirm("Delete this BOM?"))
+            doDelete();
+    }
+
+    (function () {
+        var inp = document.getElementById("bomListFilter");
+        if (!inp) return;
+        inp.addEventListener("input", function () {
+            var q = (inp.value || "").toLowerCase().trim();
+            document.querySelectorAll("#bomListTable tbody tr").forEach(function (tr) {
+                var hay = (tr.getAttribute("data-bom-filter") || "").toLowerCase();
+                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
+            });
+        });
+    })();
+</script>
+}

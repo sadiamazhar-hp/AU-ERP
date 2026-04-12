@@ -88,4 +88,53 @@
         el.addEventListener("hidden.bs.modal", onHidden, { once: true });
         modal.show();
     };
+
+    /**
+     * Clears inline validation state under root (invalid field borders + summary text).
+     */
+    window.auClearInlineValidation = function (root) {
+        if (!root) return;
+        if (typeof root === "string") root = document.querySelector(root);
+        if (!root) return;
+        root.querySelectorAll(".au-field-invalid").forEach(function (el) {
+            el.classList.remove("au-field-invalid");
+        });
+        root.querySelectorAll(".au-validation-summary").forEach(function (s) {
+            s.style.display = "none";
+            s.textContent = "";
+        });
+    };
+
+    /**
+     * Shows fixed or custom message and red borders on invalid fields (no modal).
+     * @param {HTMLElement|string} root
+     * @param {HTMLElement[]} invalidEls
+     * @param {string} [message] defaults to "Following Fields are Required"
+     */
+    window.auShowInlineValidation = function (root, invalidEls, message) {
+        if (typeof root === "string") root = document.querySelector(root);
+        if (!root) return false;
+        window.auClearInlineValidation(root);
+        var text = message || "Following Fields are Required";
+        var s = root.querySelector(".au-validation-summary");
+        if (!s) {
+            s = document.createElement("div");
+            s.className = "au-validation-summary";
+            s.setAttribute("role", "alert");
+            var tb = root.querySelector(".sap-toolbar");
+            if (tb && tb.parentNode) tb.parentNode.insertBefore(s, tb.nextSibling);
+            else root.insertBefore(s, root.firstChild);
+        }
+        s.textContent = text;
+        s.style.display = "block";
+        (invalidEls || []).forEach(function (el) {
+            if (el && el.classList) el.classList.add("au-field-invalid");
+        });
+        if (invalidEls && invalidEls.length && invalidEls[0]) {
+            try {
+                invalidEls[0].focus();
+            } catch (e) { /* ignore */ }
+        }
+        return false;
+    };
 })();

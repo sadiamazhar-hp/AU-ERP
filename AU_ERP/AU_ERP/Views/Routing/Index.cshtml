@@ -1,0 +1,574 @@
+@model List<AU_ERP.Models.RoutingHeadersSample>
+@{
+    ViewData["Title"] = "Routing";
+    var safeModel = Model ?? new List<AU_ERP.Models.RoutingHeadersSample>();
+    var rtTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
+    var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
+    var materialList = ViewBag.MaterialList as List<AU_ERP.Models.CreateMaterialMaster> ?? new List<AU_ERP.Models.CreateMaterialMaster>();
+    var workCentres = ViewBag.WorkCentres as List<AU_ERP.Models.WorkCenterMasterSample> ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
+}
+
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+    }
+
+    .rt-module .table-sap { width: 100%; border-collapse: collapse; }
+    .rt-module .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; }
+    .rt-module .table-sap td { border: 1px solid #ccc; padding: 0; height: 32px; }
+    .rt-module .sap-input { width: 100%; height: 100%; border: none; padding: 0 10px; background: var(--sap-readonly); outline: none; box-sizing: border-box; }
+    .rt-module .table-sap th.col-no, .rt-module .table-sap td.col-no { padding-left: 14px; padding-right: 8px; }
+    .rt-module .table-sap td.col-action { padding: 4px 8px; vertical-align: middle; text-align: center; }
+
+    .rt-module-tabstrip { border-bottom: 1px solid var(--sap-border); padding: 0 0.25rem; background: #fff; }
+    .rt-module-tabstrip .nav-link { color: var(--au-primary-dark, #388087); font-weight: 500; border: 1px solid transparent; border-radius: 0.35rem 0.35rem 0 0; }
+    .rt-module-tabstrip .nav-link:hover { border-color: rgba(56, 128, 135, 0.25); }
+    .rt-module-tabstrip .nav-link.active { color: var(--au-black, #171717); background: #fff; border-color: var(--sap-border); border-bottom-color: #fff; margin-bottom: -1px; }
+    .rt-module-tab-content { border: 1px solid var(--sap-border); border-top: none; background: #fff; }
+
+    .rt-create-form .v2-frame { border: 1px solid #c4c4c4; border-radius: 4px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .rt-create-form .v2-frame legend { font-size: .8rem; font-weight: 600; color: #388087; width: auto; padding: 0 .35rem; float: none; margin-bottom: 0; }
+    .rt-create-form .form-label { font-size: .82rem; font-weight: 500; color: #555; margin-bottom: .2rem; }
+    .rt-create-form .mandatory-bar { display: inline-block; width: 3px; height: 14px; background: #b00; margin-right: 4px; vertical-align: middle; }
+    .rt-create-form .btn-save-bottom { display: flex; justify-content: flex-end; padding: 0.75rem 1.25rem; border-top: 1px solid #c4c4c4; background: #f3f6f8; }
+
+    .rt-ops-table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+    .rt-ops-table th { background: #dee6ef; border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; font-size: .82rem; }
+    .rt-ops-table td { border: 1px solid #ccc; padding: 2px 4px; }
+    .rt-ops-table .form-control-sm, .rt-ops-table .form-select-sm { border-radius: 2px; }
+</style>
+
+<div class="rt-module">
+    <ul class="nav nav-tabs rt-module-tabstrip" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(rtTabList ? "" : "active")" id="rtTabCreateBtn" data-bs-toggle="tab" data-bs-target="#rtPaneCreate" type="button" role="tab" aria-selected="@(rtTabList ? "false" : "true")">Create</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(rtTabList ? "active" : "")" id="rtTabListBtn" data-bs-toggle="tab" data-bs-target="#rtPaneList" type="button" role="tab" aria-selected="@(rtTabList ? "true" : "false")">List</button>
+        </li>
+    </ul>
+
+    <div class="tab-content rt-module-tab-content">
+        <!-- ───── CREATE TAB ───── -->
+        <div class="tab-pane fade p-2 p-md-3 @(rtTabList ? "" : "show active")" id="rtPaneCreate" role="tabpanel">
+            <div class="rt-create-form">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <fieldset class="v2-frame">
+                    <legend>Header</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Title</label>
+                            <input type="text" id="rtCreateTitle" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><span class="mandatory-bar"></span> Material</label>
+                            <select id="rtCreateMaterial" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @foreach (var m in materialList)
+                                {
+                                    <option value="@m.MaterialNumber">@m.MaterialNumber - @m.Description</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar"></span> Plant</label>
+                            <select id="rtCreatePlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Status</label>
+                            <select id="rtCreateStatus" class="form-select form-select-sm">
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valid From</label>
+                            <input type="date" id="rtCreateValidFrom" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="v2-frame">
+                    <legend>
+                        Operations
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="rtAddOpRow('rtCreateOpsBody')">+ Add</button>
+                    </legend>
+                    <table class="rt-ops-table">
+                        <thead>
+                            <tr>
+                                <th style="width:60px;">Op No.</th>
+                                <th style="width:200px;">Work Centre</th>
+                                <th>Description</th>
+                                <th style="width:110px;">Machine Time</th>
+                                <th style="width:110px;">Labor Time</th>
+                                <th style="width:90px;">UoM</th>
+                                <th style="width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="rtCreateOpsBody"></tbody>
+                    </table>
+                </fieldset>
+
+                <div class="btn-save-bottom">
+                    <button type="button" class="btn btn-sm px-4" style="background:#6FB3B8;color:#fff;border:1px solid #388087;" onclick="rtResetForm()">Reset</button>
+                    <button type="button" class="btn btn-sm px-4 ms-2" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="rtSaveCreate()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───── LIST TAB ───── -->
+        <div class="tab-pane fade @(rtTabList ? "show active" : "")" id="rtPaneList" role="tabpanel">
+            <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
+            <div class="p-2 px-3">
+                <input type="search" class="form-control form-control-sm" id="rtListFilter" placeholder="Filter by material, plant…" style="max-width:22rem;" />
+            </div>
+            <div class="table-wrapper">
+                <table class="table-sap" id="rtListTable">
+                    <thead>
+                        <tr>
+                            <th class="col-no">No</th>
+                            <th>Routing ID</th>
+                            <th>Title</th>
+                            <th>Material</th>
+                            <th>Plant</th>
+                            <th>Status</th>
+                            <th>Valid From</th>
+                            <th>Ops</th>
+                            <th style="width:72px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int rtIdx = 0; }
+                        @foreach (var r in safeModel)
+                        {
+                            var matDesc = r.Material != null ? $"{r.MaterialNumber} - {r.Material.Description}" : (r.MaterialNumber ?? "");
+                            var plantName = r.Plant?.PlantName ?? "";
+                            var statusText = r.StatusID == 1 ? "Active" : "Inactive";
+                            <tr data-rt-filter="@($"{r.RoutingID} {r.Title} {matDesc} {plantName} {statusText}")" data-rt-id="@r.RoutingID">
+                                <td class="col-no">@(rtIdx + 1)</td>
+                                <td><input class="sap-input" value="@r.RoutingID" readonly /></td>
+                                <td><input class="sap-input" value="@r.Title" readonly /></td>
+                                <td><input class="sap-input" value="@matDesc" readonly /></td>
+                                <td><input class="sap-input" value="@plantName" readonly /></td>
+                                <td><input class="sap-input" value="@statusText" readonly /></td>
+                                <td><input class="sap-input" value="@(r.ValidFrom.ToString("yyyy-MM-dd"))" readonly /></td>
+                                <td><input class="sap-input" value="@(r.RoutingOperationsSamples?.Count ?? 0)" readonly /></td>
+                                <td class="col-action">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-secondary p-0" type="button" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
+                                            <i class="bi bi-three-dots-vertical fs-5"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            <li><button type="button" class="dropdown-item" data-rt-id="@r.RoutingID" onclick="rtOpenEdit(this.getAttribute('data-rt-id'))">Edit</button></li>
+                                            <li><button type="button" class="dropdown-item text-danger" data-rt-id="@r.RoutingID" onclick="rtDeleteFromList(this.getAttribute('data-rt-id'))">Delete</button></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            rtIdx++;
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (safeModel.Count == 0)
+            {
+                <p class="text-secondary small mb-0 mt-2 px-3">No routing records yet. Use the Create tab to add one.</p>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- ───── EDIT MODAL ───── -->
+<div class="modal fade" id="rtEditModal" tabindex="-1" aria-labelledby="rtEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content au-create-v2-modal">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rtEditModalLabel">Edit Routing</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="rtEditID" />
+                <fieldset class="v2-frame">
+                    <legend>Header</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Title</label>
+                            <input type="text" id="rtEditTitle" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Material</label>
+                            <select id="rtEditMaterial" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @foreach (var m in materialList)
+                                {
+                                    <option value="@m.MaterialNumber">@m.MaterialNumber - @m.Description</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Plant</label>
+                            <select id="rtEditPlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Status</label>
+                            <select id="rtEditStatus" class="form-select form-select-sm">
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valid From</label>
+                            <input type="date" id="rtEditValidFrom" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="v2-frame">
+                    <legend>
+                        Operations
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="rtAddOpRow('rtEditOpsBody')">+ Add</button>
+                    </legend>
+                    <table class="rt-ops-table">
+                        <thead>
+                            <tr>
+                                <th style="width:60px;">Op No.</th>
+                                <th style="width:200px;">Work Centre</th>
+                                <th>Description</th>
+                                <th style="width:110px;">Machine Time</th>
+                                <th style="width:110px;">Labor Time</th>
+                                <th style="width:90px;">UoM</th>
+                                <th style="width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="rtEditOpsBody"></tbody>
+                    </table>
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm px-4" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="rtSaveEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var rtAllWorkCentres = [
+        @foreach (var wc in workCentres)
+        {
+            <text>{ id: @wc.ID, name: "@Html.Raw((wc.WorkCenterName ?? "").Replace("\"", "\\\""))" },</text>
+        }
+    ];
+
+    function escRtAttr(s) {
+        if (s == null || s === undefined) return "";
+        return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    }
+
+    function rtBuildWcSelectHtml(selectedId) {
+        var html = '<option value="">-- Select --</option>';
+        rtAllWorkCentres.forEach(function (wc) {
+            var sel = (wc.id == selectedId) ? ' selected' : '';
+            html += '<option value="' + wc.id + '"' + sel + '>' + escRtAttr(wc.name) + '</option>';
+        });
+        return html;
+    }
+
+    function rtAddOpRow(tbodyId, data) {
+        var tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+        var pos = tbody.rows.length + 1;
+        var opSeq = pos * 10;
+        var tr = document.createElement("tr");
+
+        var wcId = data ? (data.workCenterID || data.WorkCenterID || "") : "";
+        var desc = data ? (data.description || data.Description || "") : "";
+        var mt = data ? (data.machineTime != null ? data.machineTime : (data.MachineTime || "")) : "";
+        var lt = data ? (data.laborTime != null ? data.laborTime : (data.LaborTime || "")) : "";
+        var uom = data ? (data.uoM || data.UoM || "") : "";
+        if (data && (data.operationSequence || data.OperationSequence)) {
+            opSeq = data.operationSequence || data.OperationSequence;
+        }
+
+        tr.innerHTML =
+            '<td class="text-center"><span class="rt-op-seq">' + opSeq + '</span></td>' +
+            '<td><select class="form-select form-select-sm rt-op-wc">' + rtBuildWcSelectHtml(wcId) + '</select></td>' +
+            '<td><input type="text" class="form-control form-control-sm rt-op-desc" value="' + escRtAttr(desc) + '" /></td>' +
+            '<td><input type="number" class="form-control form-control-sm rt-op-machine" step="0.01" value="' + escRtAttr(mt) + '" /></td>' +
+            '<td><input type="number" class="form-control form-control-sm rt-op-labor" step="0.01" value="' + escRtAttr(lt) + '" /></td>' +
+            '<td><select class="form-select form-select-sm rt-op-uom"><option value="">--</option><option value="MIN"' + (uom === "MIN" ? " selected" : "") + '>MIN</option><option value="HR"' + (uom === "HR" ? " selected" : "") + '>HR</option><option value="DAY"' + (uom === "DAY" ? " selected" : "") + '>DAY</option></select></td>' +
+            '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
+        tbody.appendChild(tr);
+    }
+
+    function rtCollectOps(tbodyId) {
+        var ops = [];
+        var rows = document.querySelectorAll("#" + tbodyId + " tr");
+        rows.forEach(function (tr) {
+            var wcVal = tr.querySelector(".rt-op-wc")?.value;
+            ops.push({
+                WorkCenterID: wcVal ? parseInt(wcVal) : null,
+                Description: (tr.querySelector(".rt-op-desc")?.value || "").trim() || null,
+                MachineTime: parseFloat(tr.querySelector(".rt-op-machine")?.value) || null,
+                LaborTime: parseFloat(tr.querySelector(".rt-op-labor")?.value) || null,
+                UoM: tr.querySelector(".rt-op-uom")?.value || null
+            });
+        });
+        return ops;
+    }
+
+    function rtCreateFormRoot() {
+        return document.querySelector("#rtPaneCreate .rt-create-form");
+    }
+
+    function rtEditFormRoot() {
+        return document.querySelector("#rtEditModal .modal-body");
+    }
+
+    function rtListPaneRoot() {
+        return document.getElementById("rtPaneList");
+    }
+
+    function rtShowInline(root, invalidEls, message) {
+        if (!root) root = rtCreateFormRoot() || document.querySelector(".rt-module");
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        if (typeof window.auShowInlineValidation === "function")
+            window.auShowInlineValidation(root, invalidEls || [], message);
+        else alert(message || "Following Fields are Required");
+    }
+
+    function rtNumFieldOk(inp) {
+        if (!inp) return false;
+        var raw = (inp.value || "").trim();
+        if (raw === "") return false;
+        return !isNaN(parseFloat(raw));
+    }
+
+    function rtValidateOps(tbodyId) {
+        var bad = [];
+        document.querySelectorAll("#" + tbodyId + " tr").forEach(function (tr) {
+            var wc = tr.querySelector(".rt-op-wc");
+            var desc = tr.querySelector(".rt-op-desc");
+            var mach = tr.querySelector(".rt-op-machine");
+            var lab = tr.querySelector(".rt-op-labor");
+            var uom = tr.querySelector(".rt-op-uom");
+            if (!wc || !(wc.value || "").trim()) bad.push(wc);
+            if (!desc || !(desc.value || "").trim()) bad.push(desc);
+            if (!rtNumFieldOk(mach)) bad.push(mach);
+            if (!rtNumFieldOk(lab)) bad.push(lab);
+            if (!uom || !(uom.value || "").trim()) bad.push(uom);
+        });
+        return bad;
+    }
+
+    function rtValidateCreateHeader() {
+        var bad = [];
+        var mat = document.getElementById("rtCreateMaterial");
+        var pl = document.getElementById("rtCreatePlant");
+        if (!(mat.value || "").trim()) bad.push(mat);
+        if (!(pl.value || "").trim()) bad.push(pl);
+        return bad;
+    }
+
+    function rtValidateEditHeader() {
+        var bad = [];
+        var mat = document.getElementById("rtEditMaterial");
+        var pl = document.getElementById("rtEditPlant");
+        if (!(mat.value || "").trim()) bad.push(mat);
+        if (!(pl.value || "").trim()) bad.push(pl);
+        return bad;
+    }
+
+    function rtResetForm() {
+        var root = rtCreateFormRoot();
+        if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        document.getElementById("rtCreateTitle").value = "";
+        document.getElementById("rtCreateMaterial").value = "";
+        document.getElementById("rtCreatePlant").value = "";
+        document.getElementById("rtCreateStatus").value = "1";
+        document.getElementById("rtCreateValidFrom").value = "";
+        document.getElementById("rtCreateOpsBody").innerHTML = "";
+    }
+
+    function rtReloadToListTab() {
+        var u = new URL(window.location.href);
+        u.searchParams.set("tab", "list");
+        window.location.assign(u.toString());
+    }
+
+    function rtSaveCreate() {
+        var root = rtCreateFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var bad = rtValidateCreateHeader().concat(rtValidateOps("rtCreateOpsBody"));
+        if (bad.length) {
+            rtShowInline(root, bad);
+            return;
+        }
+
+        var mat = document.getElementById("rtCreateMaterial").value;
+        var plant = document.getElementById("rtCreatePlant").value;
+
+        var payload = {
+            Title: (document.getElementById("rtCreateTitle").value || "").trim() || null,
+            MaterialNumber: mat,
+            PlantID: plant,
+            StatusID: parseInt(document.getElementById("rtCreateStatus").value) || 1,
+            ValidFrom: document.getElementById("rtCreateValidFrom").value || null,
+            Operations: rtCollectOps("rtCreateOpsBody")
+        };
+
+        fetch('@Url.Action("Create", "Routing")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, function () { rtReloadToListTab(); });
+                else { alert(res.message); rtReloadToListTab(); }
+            } else {
+                rtShowInline(root, [], res.message || "Save failed.");
+            }
+        })
+        .catch(function () { rtShowInline(root, [], "Request failed."); });
+    }
+
+    function rtOpenEdit(id) {
+        if (!id) return;
+        fetch('@Url.Action("GetForEdit", "Routing")?id=' + encodeURIComponent(id))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) { rtShowInline(rtListPaneRoot(), [], res.message || "Could not load."); return; }
+                var editRoot = rtEditFormRoot();
+                if (editRoot && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(editRoot);
+                var d = res.data;
+                document.getElementById("rtEditID").value = d.routingID || d.RoutingID;
+                document.getElementById("rtEditTitle").value = d.title || d.Title || "";
+                document.getElementById("rtEditMaterial").value = d.materialNumber || d.MaterialNumber || "";
+                document.getElementById("rtEditPlant").value = d.plantID || d.PlantID || "";
+                document.getElementById("rtEditStatus").value = d.statusID != null ? d.statusID : "1";
+                document.getElementById("rtEditValidFrom").value = d.validFrom || d.ValidFrom || "";
+
+                var tbody = document.getElementById("rtEditOpsBody");
+                tbody.innerHTML = "";
+                var ops = d.operations || d.Operations || [];
+                ops.forEach(function (op) {
+                    rtAddOpRow("rtEditOpsBody", op);
+                });
+
+                var modalEl = document.getElementById("rtEditModal");
+                if (modalEl) {
+                    if (modalEl.parentElement !== document.body)
+                        document.body.appendChild(modalEl);
+                    if (typeof bootstrap !== "undefined")
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            })
+            .catch(function () { rtShowInline(rtListPaneRoot(), [], "Failed to load routing."); });
+    }
+
+    function rtSaveEdit() {
+        var root = rtEditFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var id = parseInt(document.getElementById("rtEditID").value) || 0;
+        if (!id) { rtShowInline(root, [], "Invalid ID."); return; }
+
+        var bad = rtValidateEditHeader().concat(rtValidateOps("rtEditOpsBody"));
+        if (bad.length) {
+            rtShowInline(root, bad);
+            return;
+        }
+
+        var mat = document.getElementById("rtEditMaterial").value;
+
+        var payload = {
+            RoutingID: id,
+            Title: (document.getElementById("rtEditTitle").value || "").trim() || null,
+            MaterialNumber: mat,
+            PlantID: document.getElementById("rtEditPlant").value || null,
+            StatusID: parseInt(document.getElementById("rtEditStatus").value) || 1,
+            ValidFrom: document.getElementById("rtEditValidFrom").value || null,
+            Operations: rtCollectOps("rtEditOpsBody")
+        };
+
+        fetch('@Url.Action("Update", "Routing")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("rtEditModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, function () { rtReloadToListTab(); });
+                else { alert(res.message); rtReloadToListTab(); }
+            } else {
+                rtShowInline(root, [], res.message || "Update failed.");
+            }
+        })
+        .catch(function () { rtShowInline(root, [], "Update request failed."); });
+    }
+
+    function rtDeleteFromList(id) {
+        if (!id) return;
+        function doDelete() {
+            fetch('@Url.Action("Delete", "Routing")?id=' + encodeURIComponent(id), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(res.message, function () { rtReloadToListTab(); });
+                        else { alert(res.message); rtReloadToListTab(); }
+                    } else {
+                        rtShowInline(rtListPaneRoot(), [], res.message || "Delete failed.");
+                    }
+                })
+                .catch(function () { rtShowInline(rtListPaneRoot(), [], "Delete request failed."); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Do you want to Delete this Routing?", doDelete);
+        else if (confirm("Delete this routing?"))
+            doDelete();
+    }
+
+    (function () {
+        var inp = document.getElementById("rtListFilter");
+        if (!inp) return;
+        inp.addEventListener("input", function () {
+            var q = (inp.value || "").toLowerCase().trim();
+            document.querySelectorAll("#rtListTable tbody tr").forEach(function (tr) {
+                var hay = (tr.getAttribute("data-rt-filter") || "").toLowerCase();
+                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
+            });
+        });
+    })();
+</script>
+}

@@ -25,6 +25,8 @@ namespace AU_ERP.Models
         public DbSet<RoutingOperationsSample> RoutingOperationsSamples { get; set; }
         public DbSet<DocumentType> DocumentTypes { get; set; }
         public DbSet<DocumentRange> DocumentRanges { get; set; }
+        public DbSet<ProductionVersion> ProductionVersions { get; set; }
+        public DbSet<UnitOfMeasurement> UnitOfMeasurements { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -81,15 +83,25 @@ namespace AU_ERP.Models
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BomHeadersSample>()
-                .HasOne(h => h.MaterialType)
-                .WithMany(t => t.BomHeadersSamples)
-                .HasForeignKey(h => h.MaterialTypeCode)
-                .OnDelete(DeleteBehavior.Restrict);
+                .Property(h => h.BOMCode)
+                .HasMaxLength(5);
+
+            // modelBuilder.Entity<BomHeadersSample>()
+            //     .HasOne(h => h.MaterialType)
+            //     .WithMany(t => t.BomHeadersSamples)
+            //     .HasForeignKey(h => h.MaterialTypeCode)
+            //     .OnDelete(DeleteBehavior.Restrict);
+
+            // modelBuilder.Entity<BomHeadersSample>()
+            //     .HasOne(h => h.MaterialMaster)
+            //     .WithMany()
+            //     .HasForeignKey(h => h.MaterialNumber)
+            //     .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BomHeadersSample>()
-                .HasOne(h => h.MaterialMaster)
+                .HasOne(h => h.PlantSample)
                 .WithMany()
-                .HasForeignKey(h => h.MaterialNumber)
+                .HasForeignKey(h => h.Plant)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BomHeadersSample>()
@@ -217,6 +229,45 @@ namespace AU_ERP.Models
                 .WithMany(t => t.DocumentRanges)
                 .HasForeignKey(d => d.DocumentTypeID)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<UnitOfMeasurement>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<ProductionVersion>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<ProductionVersion>()
+                .HasOne(p => p.Plant)
+                .WithMany()
+                .HasForeignKey(p => p.PlantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionVersion>()
+                .HasOne(p => p.BomHeader)
+                .WithMany()
+                .HasForeignKey(p => p.BomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionVersion>()
+                .HasOne(p => p.RoutingHeader)
+                .WithMany()
+                .HasForeignKey(p => p.RoutingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<BOMLevelsSample>().HasData(
+                new BOMLevelsSample { LevelID = 1, LevelName = "FG" },
+                new BOMLevelsSample { LevelID = 2, LevelName = "SFG" }
+            );
+
+            modelBuilder.Entity<PlantsSample>().HasData(
+                new PlantsSample { PlantID = "1", PlantName = "Pressing" },
+                new PlantsSample { PlantID = "2", PlantName = "Kiln" },
+                new PlantsSample { PlantID = "3", PlantName = "Polishing" },
+                new PlantsSample { PlantID = "4", PlantName = "Cutting" },
+                new PlantsSample { PlantID = "5", PlantName = "Packing" }
+            );
         }
     }
 }

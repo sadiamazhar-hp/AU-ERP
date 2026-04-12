@@ -1,15 +1,15 @@
-﻿@model List<AU_ERP.Models.MaterialType>
+@model List<AU_ERP.Models.UnitOfMeasurement>
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Material Types";
-    ViewBag.Title = "Material Types";
-    var safeModel = Model ?? new List<AU_ERP.Models.MaterialType>();
+    ViewData["Title"] = "UOM";
+    ViewBag.Title = "Unit of Measurement";
+    var safeModel = Model ?? new List<AU_ERP.Models.UnitOfMeasurement>();
 }
 
 <div class="sap-window" id="app">
-    <form id="mm01Form" method="post" action="@Url.Action("MaterialType", "Material")">
+    <form id="uomForm" method="post" action="@Url.Action("Index", "UOM")">
         @Html.AntiForgeryToken()
-        <div class="au-validation-summary" style="display:none;" role="alert"></div>
+        <div class="au-validation-summary" id="uomValSummary" style="display:none;" role="alert"></div>
 
         <div class="sap-toolbar">
             <div class="d-flex">
@@ -25,24 +25,22 @@
                 <thead>
                     <tr>
                         <th style="width: 35px;">Sel</th>
-                        <th style="width: 150px;">MTyp</th>
+                        <th style="width: 150px;">Code</th>
                         <th>Description</th>
-                        <th style="width: 200px;">Field Ref</th>
                     </tr>
                 </thead>
                 <tbody id="gridBody">
                     @for (int i = 0; i < safeModel.Count; i++)
                     {
                         <tr>
-                            <td class="col-sel" onclick="selectRow(this)"></td>
+                            <td class="col-sel" onclick="selectRow(this)">
+                                <input type="hidden" name="[@i].Id" value="@safeModel[i].Id" class="row-id" />
+                            </td>
                             <td>
-                                <input name="[@i].MaterialTypeCode" class="sap-input" value="@safeModel[i].MaterialTypeCode" readonly maxlength="4" data-required="true" />
+                                <input name="[@i].Code" class="sap-input" value="@safeModel[i].Code" readonly maxlength="20" data-required="true" />
                             </td>
                             <td>
                                 <input name="[@i].Description" class="sap-input" value="@safeModel[i].Description" readonly data-required="true" />
-                            </td>
-                            <td>
-                                <input name="[@i].FieldReference" class="sap-input" value="@safeModel[i].FieldReference" readonly maxlength="4" />
                             </td>
                         </tr>
                     }
@@ -75,9 +73,6 @@
     .col-sel { width: 35px; background: #f0f0f0; cursor: pointer; }
     .row-selected { background-color: var(--sap-selected) !important; }
     .row-selected .sap-input { background-color: transparent !important; }
-    .row-validation-error td { background-color: #fce4e4 !important; }
-    .row-validation-error .sap-input { background-color: transparent !important; }
-    .row-validation-error .sap-input[data-required].sap-invalid { outline: 2px solid #c62828 !important; background: #fff0f0 !important; }
 </style>
 <script>
     let isEditMode = false;
@@ -87,25 +82,28 @@
     function setMode(edit) {
         isEditMode = edit;
         document.getElementById('app').classList.toggle('edit-mode', edit);
-        document.querySelectorAll('.sap-input').forEach(input => { input.readOnly = !edit; });
+        document.querySelectorAll('.sap-input').forEach(input => {
+            input.readOnly = !edit;
+        });
         document.getElementById('btnEdit').disabled = edit;
         document.getElementById('btnNew').disabled = !edit;
         document.getElementById('btnSave').disabled = !edit;
-        var f = document.getElementById('mm01Form');
-        if (f && typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(f);
+        if (typeof window.auClearInlineValidation === "function")
+            window.auClearInlineValidation(document.getElementById("uomForm"));
     }
 
     function addNewRow() {
         const body = document.getElementById('gridBody');
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="col-sel" onclick="selectRow(this)"></td>
-            <td><input name="[${rowCount}].MaterialTypeCode" class="sap-input" maxlength="4" data-required="true"></td>
-            <td><input name="[${rowCount}].Description" class="sap-input" data-required="true"></td>
-            <td><input name="[${rowCount}].FieldReference" class="sap-input" maxlength="4"></td>`;
+            <td class="col-sel" onclick="selectRow(this)">
+                <input type="hidden" name="[${rowCount}].Id" value="0" class="row-id" />
+            </td>
+            <td><input name="[${rowCount}].Code" class="sap-input" maxlength="20" data-required="true"></td>
+            <td><input name="[${rowCount}].Description" class="sap-input" data-required="true"></td>`;
         body.appendChild(tr);
         rowCount++;
-        tr.querySelector('input').focus();
+        tr.querySelector('input[name$=".Code"]').focus();
     }
 
     function selectRow(cell) {
@@ -116,10 +114,10 @@
         document.getElementById('btnDelete').disabled = false;
     }
 
-    function collectInvalidMaterialTypeRows() {
+    function validateUomRows() {
         var bad = [];
-        document.querySelectorAll('#gridBody tr').forEach(tr => {
-            tr.querySelectorAll('.sap-input[data-required]').forEach(inp => {
+        document.querySelectorAll('#gridBody tr').forEach(function (tr) {
+            tr.querySelectorAll('.sap-input[data-required]').forEach(function (inp) {
                 if (!inp.value.trim()) bad.push(inp);
             });
         });
@@ -127,11 +125,12 @@
     }
 
     function handleSave() {
-        var form = document.getElementById('mm01Form');
-        if (typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(form);
-        var bad = collectInvalidMaterialTypeRows();
+        var form = document.getElementById("uomForm");
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(form);
+        var bad = validateUomRows();
         if (bad.length) {
-            if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, bad);
+            if (typeof window.auShowInlineValidation === "function")
+                window.auShowInlineValidation(form, bad);
             return;
         }
         document.querySelectorAll('.sap-input').forEach(i => { i.readOnly = false; });
@@ -140,48 +139,66 @@
             .then(r => r.json())
             .then(data => {
                 if (data.success) { location.reload(); }
-                else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], data.message || 'Save failed');
-                else alert(data.message || 'Save failed');
+                else {
+                    if (typeof window.auShowInlineValidation === "function")
+                        window.auShowInlineValidation(form, [], data.message || 'Save failed');
+                }
             })
             .catch(() => {
-                if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], 'Request failed');
-                else alert('Request failed');
+                if (typeof window.auShowInlineValidation === "function")
+                    window.auShowInlineValidation(form, [], 'Request failed');
             });
     }
 
     function handleDelete() {
         if (!selectedRow) return;
-        const mTypeCode = selectedRow.querySelector('input[name*="MaterialTypeCode"]').value;
+        const idInput = selectedRow.querySelector('.row-id');
+        const uomId = idInput ? idInput.value : '';
         function doDelete() {
-            if (mTypeCode) {
-                $.post('/Material/DeleteMaterialType', { id: mTypeCode }, function (response) {
+            if (uomId && uomId !== '0') {
+                fetch('@Url.Action("DeleteUOM", "UOM")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'id=' + encodeURIComponent(uomId)
+                })
+                .then(r => r.json())
+                .then(response => {
                     if (response.success) {
                         selectedRow.remove(); selectedRow = null;
                         document.getElementById('btnDelete').disabled = true;
                         reIndexAllRows();
                         if (typeof window.materialShowSuccessModal === 'function')
                             window.materialShowSuccessModal(response.message || 'Deleted !');
-                    } else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(document.getElementById('mm01Form'), [], response.message || 'Delete failed');
-                    else alert(response.message || 'Delete failed');
+                    } else {
+                        var f = document.getElementById("uomForm");
+                        if (typeof window.auShowInlineValidation === "function")
+                            window.auShowInlineValidation(f, [], response.message || 'Delete failed');
+                    }
+                })
+                .catch(() => {
+                    var f = document.getElementById("uomForm");
+                    if (typeof window.auShowInlineValidation === "function")
+                        window.auShowInlineValidation(f, [], 'Delete request failed');
                 });
             } else {
                 selectedRow.remove(); selectedRow = null; reIndexAllRows();
             }
         }
         if (typeof window.materialShowDeleteConfirmModalThen === 'function')
-            window.materialShowDeleteConfirmModalThen('Do you want to delete this Material Type?', doDelete);
+            window.materialShowDeleteConfirmModalThen('Do you want to delete this UOM?', doDelete);
         else if (confirm('Delete this entry?')) doDelete();
     }
 
     function reIndexAllRows() {
         const rows = document.querySelectorAll('#gridBody tr');
         rows.forEach((row, index) => {
-            const inputs = row.querySelectorAll('input');
-            if (inputs.length >= 3) {
-                inputs[0].name = `[${index}].MaterialTypeCode`;
-                inputs[1].name = `[${index}].Description`;
-                inputs[2].name = `[${index}].FieldReference`;
-            }
+            row.querySelectorAll('[name]').forEach(el => {
+                const name = el.name;
+                if (name.includes('.')) {
+                    const property = name.split('.').slice(1).join('.');
+                    el.name = `[${index}].${property}`;
+                }
+            });
         });
         rowCount = rows.length;
     }

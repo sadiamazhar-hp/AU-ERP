@@ -11,6 +11,7 @@ namespace AU_ERP.Models
 
         [Key]
         public int RoutingID { get; set; }
+        public string? Title { get; set; }
         public string? MaterialNumber { get; set; }
         public string? PlantID { get; set; }
         public int? StatusID { get; set; }

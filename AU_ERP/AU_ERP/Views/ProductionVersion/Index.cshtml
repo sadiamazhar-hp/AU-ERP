@@ -1,0 +1,474 @@
+@model List<AU_ERP.Models.ProductionVersion>
+@{
+    ViewData["Title"] = "Production Version";
+    var safeModel = Model ?? new List<AU_ERP.Models.ProductionVersion>();
+    var pvTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
+    var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
+}
+
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+    }
+
+    .pv-module .table-sap { width: 100%; border-collapse: collapse; }
+    .pv-module .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; }
+    .pv-module .table-sap td { border: 1px solid #ccc; padding: 0; height: 32px; }
+    .pv-module .sap-input { width: 100%; height: 100%; border: none; padding: 0 10px; background: var(--sap-readonly); outline: none; box-sizing: border-box; }
+    .pv-module .table-sap th.col-no, .pv-module .table-sap td.col-no { padding-left: 14px; padding-right: 8px; }
+    .pv-module .table-sap td.col-action { padding: 4px 8px; vertical-align: middle; text-align: center; }
+
+    .pv-module-tabstrip { border-bottom: 1px solid var(--sap-border); padding: 0 0.25rem; background: #fff; }
+    .pv-module-tabstrip .nav-link { color: var(--au-primary-dark, #388087); font-weight: 500; border: 1px solid transparent; border-radius: 0.35rem 0.35rem 0 0; }
+    .pv-module-tabstrip .nav-link:hover { border-color: rgba(56, 128, 135, 0.25); }
+    .pv-module-tabstrip .nav-link.active { color: var(--au-black, #171717); background: #fff; border-color: var(--sap-border); border-bottom-color: #fff; margin-bottom: -1px; }
+    .pv-module-tab-content { border: 1px solid var(--sap-border); border-top: none; background: #fff; }
+
+    .pv-create-form .v2-frame { border: 1px solid #c4c4c4; border-radius: 4px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .pv-create-form .v2-frame legend { font-size: .8rem; font-weight: 600; color: #388087; width: auto; padding: 0 .35rem; float: none; margin-bottom: 0; }
+    .pv-create-form .form-label { font-size: .82rem; font-weight: 500; color: #555; margin-bottom: .2rem; }
+    .pv-create-form .mandatory-bar { display: inline-block; width: 3px; height: 14px; background: #b00; margin-right: 4px; vertical-align: middle; }
+    .pv-create-form .btn-save-bottom { display: flex; justify-content: flex-end; padding: 0.75rem 1.25rem; border-top: 1px solid #c4c4c4; background: #f3f6f8; }
+</style>
+
+<div class="pv-module">
+    <ul class="nav nav-tabs pv-module-tabstrip" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(pvTabList ? "" : "active")" id="pvTabCreateBtn" data-bs-toggle="tab" data-bs-target="#pvPaneCreate" type="button" role="tab" aria-selected="@(pvTabList ? "false" : "true")">Create</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(pvTabList ? "active" : "")" id="pvTabListBtn" data-bs-toggle="tab" data-bs-target="#pvPaneList" type="button" role="tab" aria-selected="@(pvTabList ? "true" : "false")">List</button>
+        </li>
+    </ul>
+
+    <div class="tab-content pv-module-tab-content">
+        <!-- ───── CREATE TAB ───── -->
+        <div class="tab-pane fade p-2 p-md-3 @(pvTabList ? "" : "show active")" id="pvPaneCreate" role="tabpanel">
+            <div class="pv-create-form">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <fieldset class="v2-frame">
+                    <legend>General Data</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><span class="mandatory-bar"></span> Plant</label>
+                            <select id="pvCreatePlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar"></span> Version</label>
+                            <input type="text" id="pvCreateVersion" class="form-control form-control-sm" placeholder="0001" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar"></span> Valid From</label>
+                            <input type="date" id="pvCreateValidFrom" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <fieldset class="v2-frame">
+                            <legend>BOM Selection</legend>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Bill of Material</label>
+                                    <select id="pvCreateBom" class="form-select form-select-sm">
+                                        <option value="">-- Select --</option>
+                                        @foreach (var b in ViewBag.Boms as dynamic)
+                                        {
+                                            <option value="@b.BomID">@b.Display</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+                    <div class="col-md-6">
+                        <fieldset class="v2-frame">
+                            <legend>Routing Selection</legend>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Routing</label>
+                                    <select id="pvCreateRouting" class="form-select form-select-sm">
+                                        <option value="">-- Select --</option>
+                                        @foreach (var r in ViewBag.Routings as dynamic)
+                                        {
+                                            <option value="@r.RoutingID">@r.Display</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+                </div>
+
+                <div class="btn-save-bottom">
+                    <button type="button" class="btn btn-sm px-4" style="background:#6FB3B8;color:#fff;border:1px solid #388087;" onclick="pvResetForm()">Reset</button>
+                    <button type="button" class="btn btn-sm px-4 ms-2" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="pvSaveCreate()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ───── LIST TAB ───── -->
+        <div class="tab-pane fade @(pvTabList ? "show active" : "")" id="pvPaneList" role="tabpanel">
+            <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
+            <div class="p-2 px-3">
+                <input type="search" class="form-control form-control-sm" id="pvListFilter" placeholder="Filter by title, plant, version…" style="max-width:22rem;" />
+            </div>
+            <div class="table-wrapper">
+                <table class="table-sap" id="pvListTable">
+                    <thead>
+                        <tr>
+                            <th class="col-no">No</th>
+                            <th>Plant</th>
+                            <th>Version</th>
+                            <th>Valid From</th>
+                            <th>BOM</th>
+                            <th>Routing</th>
+                            <th style="width:72px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int pvIdx = 0; }
+                        @foreach (var pv in safeModel)
+                        {
+                            var plantName = pv.Plant?.PlantName ?? "";
+                            var bomDisplay = pv.BomHeader != null ? $"{pv.BomHeader.BOMCode} - {pv.BomHeader.BOMTitle}" : "";
+                            var rtDisplay = pv.RoutingHeader != null ? $"{pv.RoutingHeader.RoutingID} - {pv.RoutingHeader.Title}" : "";
+                            <tr data-pv-filter="@($"{plantName} {pv.Version} {bomDisplay} {rtDisplay}")" data-pv-id="@pv.Id">
+                                <td class="col-no">@(pvIdx + 1)</td>
+                                <td><input class="sap-input" value="@plantName" readonly /></td>
+                                <td><input class="sap-input" value="@pv.Version" readonly /></td>
+                                <td><input class="sap-input" value="@(pv.ValidFrom?.ToString("yyyy-MM-dd") ?? "")" readonly /></td>
+                                <td><input class="sap-input" value="@bomDisplay" readonly /></td>
+                                <td><input class="sap-input" value="@rtDisplay" readonly /></td>
+                                <td class="col-action">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-secondary p-0" type="button" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
+                                            <i class="bi bi-three-dots-vertical fs-5"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            <li><button type="button" class="dropdown-item" data-pv-id="@pv.Id" onclick="pvOpenEdit(this.getAttribute('data-pv-id'))">Edit</button></li>
+                                            <li><button type="button" class="dropdown-item text-danger" data-pv-id="@pv.Id" onclick="pvDeleteFromList(this.getAttribute('data-pv-id'))">Delete</button></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            pvIdx++;
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (safeModel.Count == 0)
+            {
+                <p class="text-secondary small mb-0 mt-2 px-3">No production versions yet. Use the Create tab to add one.</p>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- ───── EDIT MODAL ───── -->
+<div class="modal fade" id="pvEditModal" tabindex="-1" aria-labelledby="pvEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content au-create-v2-modal">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pvEditModalLabel">Edit Production Version</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="pvEditID" />
+                <fieldset class="v2-frame">
+                    <legend>General Data</legend>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Plant</label>
+                            <select id="pvEditPlant" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                @if (plants != null)
+                                {
+                                    foreach (var p in plants)
+                                    {
+                                        <option value="@p.Value">@p.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Version</label>
+                            <input type="text" id="pvEditVersion" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Valid From</label>
+                            <input type="date" id="pvEditValidFrom" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <fieldset class="v2-frame">
+                            <legend>BOM Selection</legend>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Bill of Material</label>
+                                    <select id="pvEditBom" class="form-select form-select-sm">
+                                        <option value="">-- Select --</option>
+                                        @foreach (var b in ViewBag.Boms as dynamic)
+                                        {
+                                            <option value="@b.BomID">@b.Display</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+                    <div class="col-md-6">
+                        <fieldset class="v2-frame">
+                            <legend>Routing Selection</legend>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Routing</label>
+                                    <select id="pvEditRouting" class="form-select form-select-sm">
+                                        <option value="">-- Select --</option>
+                                        @foreach (var r in ViewBag.Routings as dynamic)
+                                        {
+                                            <option value="@r.RoutingID">@r.Display</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm px-4" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="pvSaveEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function pvReloadToListTab() {
+        var u = new URL(window.location.href);
+        u.searchParams.set("tab", "list");
+        window.location.assign(u.toString());
+    }
+
+    function pvCreateFormRoot() {
+        return document.querySelector("#pvPaneCreate .pv-create-form");
+    }
+
+    function pvEditFormRoot() {
+        return document.querySelector("#pvEditModal .modal-body");
+    }
+
+    function pvListPaneRoot() {
+        return document.getElementById("pvPaneList");
+    }
+
+    function pvShowInline(root, invalidEls, message) {
+        if (!root) root = pvCreateFormRoot() || document.querySelector(".pv-module");
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        if (typeof window.auShowInlineValidation === "function")
+            window.auShowInlineValidation(root, invalidEls || [], message);
+        else alert(message || "Following Fields are Required");
+    }
+
+    function pvValidateCreate() {
+        var bad = [];
+        var pl = document.getElementById("pvCreatePlant");
+        var ver = document.getElementById("pvCreateVersion");
+        var vf = document.getElementById("pvCreateValidFrom");
+        if (!(pl.value || "").trim()) bad.push(pl);
+        if (!(ver.value || "").trim()) bad.push(ver);
+        if (!(vf.value || "").trim()) bad.push(vf);
+        return bad;
+    }
+
+    function pvValidateEdit() {
+        var bad = [];
+        var pl = document.getElementById("pvEditPlant");
+        var ver = document.getElementById("pvEditVersion");
+        var vf = document.getElementById("pvEditValidFrom");
+        if (!(pl.value || "").trim()) bad.push(pl);
+        if (!(ver.value || "").trim()) bad.push(ver);
+        if (!(vf.value || "").trim()) bad.push(vf);
+        return bad;
+    }
+
+    function pvResetForm() {
+        var root = pvCreateFormRoot();
+        if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        document.getElementById("pvCreatePlant").value = "";
+        document.getElementById("pvCreateVersion").value = "";
+        document.getElementById("pvCreateValidFrom").value = "";
+        document.getElementById("pvCreateBom").value = "";
+        document.getElementById("pvCreateRouting").value = "";
+    }
+
+    function pvSaveCreate() {
+        var root = pvCreateFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var bad = pvValidateCreate();
+        if (bad.length) {
+            pvShowInline(root, bad);
+            return;
+        }
+
+        var plant = document.getElementById("pvCreatePlant").value;
+        var ver = (document.getElementById("pvCreateVersion").value || "").trim();
+        var validFrom = document.getElementById("pvCreateValidFrom").value;
+
+        var bomVal = document.getElementById("pvCreateBom").value;
+        var rtVal = document.getElementById("pvCreateRouting").value;
+
+        var payload = {
+            PlantId: plant,
+            Version: ver,
+            ValidFrom: validFrom || null,
+            BomId: bomVal ? parseInt(bomVal) : null,
+            RoutingId: rtVal ? parseInt(rtVal) : null
+        };
+
+        fetch('@Url.Action("Create", "ProductionVersion")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, function () { pvReloadToListTab(); });
+                else { alert(res.message); pvReloadToListTab(); }
+            } else {
+                pvShowInline(root, [], res.message || "Save failed.");
+            }
+        })
+        .catch(function () { pvShowInline(root, [], "Request failed."); });
+    }
+
+    function pvOpenEdit(id) {
+        if (!id) return;
+        fetch('@Url.Action("GetForEdit", "ProductionVersion")?id=' + encodeURIComponent(id))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) { pvShowInline(pvListPaneRoot(), [], res.message || "Could not load."); return; }
+                var editRoot = pvEditFormRoot();
+                if (editRoot && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(editRoot);
+                var d = res.data;
+                document.getElementById("pvEditID").value = d.id;
+                document.getElementById("pvEditPlant").value = d.plantId || "";
+                document.getElementById("pvEditVersion").value = d.version || "";
+                document.getElementById("pvEditValidFrom").value = d.validFrom || "";
+                document.getElementById("pvEditBom").value = d.bomId != null ? d.bomId : "";
+                document.getElementById("pvEditRouting").value = d.routingId != null ? d.routingId : "";
+
+                var modalEl = document.getElementById("pvEditModal");
+                if (modalEl) {
+                    if (modalEl.parentElement !== document.body)
+                        document.body.appendChild(modalEl);
+                    if (typeof bootstrap !== "undefined")
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            })
+            .catch(function () { pvShowInline(pvListPaneRoot(), [], "Failed to load production version."); });
+    }
+
+    function pvSaveEdit() {
+        var root = pvEditFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var id = parseInt(document.getElementById("pvEditID").value) || 0;
+        if (!id) { pvShowInline(root, [], "Invalid ID."); return; }
+
+        var bad = pvValidateEdit();
+        if (bad.length) {
+            pvShowInline(root, bad);
+            return;
+        }
+
+        var ver = (document.getElementById("pvEditVersion").value || "").trim();
+
+        var bomVal = document.getElementById("pvEditBom").value;
+        var rtVal = document.getElementById("pvEditRouting").value;
+
+        var payload = {
+            Id: id,
+            PlantId: document.getElementById("pvEditPlant").value || null,
+            Version: ver,
+            ValidFrom: document.getElementById("pvEditValidFrom").value || null,
+            BomId: bomVal ? parseInt(bomVal) : null,
+            RoutingId: rtVal ? parseInt(rtVal) : null
+        };
+
+        fetch('@Url.Action("Update", "ProductionVersion")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("pvEditModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, function () { pvReloadToListTab(); });
+                else { alert(res.message); pvReloadToListTab(); }
+            } else {
+                pvShowInline(root, [], res.message || "Update failed.");
+            }
+        })
+        .catch(function () { pvShowInline(root, [], "Update request failed."); });
+    }
+
+    function pvDeleteFromList(id) {
+        if (!id) return;
+        function doDelete() {
+            fetch('@Url.Action("Delete", "ProductionVersion")?id=' + encodeURIComponent(id), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(res.message, function () { pvReloadToListTab(); });
+                        else { alert(res.message); pvReloadToListTab(); }
+                    } else {
+                        pvShowInline(pvListPaneRoot(), [], res.message || "Delete failed.");
+                    }
+                })
+                .catch(function () { pvShowInline(pvListPaneRoot(), [], "Delete request failed."); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Do you want to Delete this Production Version?", doDelete);
+        else if (confirm("Delete this production version?"))
+            doDelete();
+    }
+
+    (function () {
+        var inp = document.getElementById("pvListFilter");
+        if (!inp) return;
+        inp.addEventListener("input", function () {
+            var q = (inp.value || "").toLowerCase().trim();
+            document.querySelectorAll("#pvListTable tbody tr").forEach(function (tr) {
+                var hay = (tr.getAttribute("data-pv-filter") || "").toLowerCase();
+                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
+            });
+        });
+    })();
+</script>
+}

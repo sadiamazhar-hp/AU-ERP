@@ -6,6 +6,7 @@ namespace AU_ERP.Models
     {
         [Key]
         public int DocumentTypeID { get; set; }
+        public string? DocCode { get; set; }
         public string Description { get; set; } = null!;
 
         public ICollection<DocumentRange> DocumentRanges { get; set; } = null!;

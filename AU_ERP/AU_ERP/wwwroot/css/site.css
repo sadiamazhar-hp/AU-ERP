@@ -64,20 +64,28 @@ body.au-shell-body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 0.5rem;
-  background: linear-gradient(135deg, var(--au-primary) 0%, var(--au-primary-dark) 100%);
-  color: var(--au-white);
-  font-weight: 700;
-  font-size: 1.15rem;
+  padding: 0.2rem 0.35rem;
+  width: auto;
+  height: auto;
+  max-height: 3.4rem;
+  border-radius: 0.45rem;
+  background: transparent;
   text-decoration: none;
-  box-shadow: 0 4px 14px rgba(23, 23, 23, 0.2);
+  box-shadow: none;
+  line-height: 0;
+}
+
+.au-logo-tile img {
+  display: block;
+  height: 3rem;
+  width: auto;
+  max-width: 13.5rem;
+  object-fit: contain;
 }
 
 .au-logo-tile:hover {
-  color: var(--au-white);
-  filter: brightness(1.05);
+  filter: brightness(1.03);
+  opacity: 0.96;
 }
 
 .au-header-title {
@@ -367,6 +375,135 @@ body.modal-open:has(#bpRangeErrorModal.show) .modal-backdrop {
 }
 
 body.modal-open:has(#bpEditModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+#bomEditModal.modal {
+  z-index: 100050 !important;
+}
+
+#bomEditModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#bomEditModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+#wcEditModal.modal {
+  z-index: 100050 !important;
+}
+
+#wcEditModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#wcEditModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+#rtEditModal.modal {
+  z-index: 100050 !important;
+}
+
+#rtEditModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#rtEditModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Material Create — UOM conversions table (align with Routing rt-ops-table look) */
+.mat-uom-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  background: #fff;
+}
+.mat-uom-table th {
+  background: #dee6ef;
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  font-weight: normal;
+  font-size: 0.82rem;
+  color: #333;
+}
+.mat-uom-table td {
+  border: 1px solid #ccc;
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+.mat-uom-table .form-control-sm,
+.mat-uom-table .form-select-sm {
+  border-radius: 2px;
+}
+.mat-uom-table td .form-control {
+  width: 100%;
+}
+.mat-uom-table td.mat-uom-eq {
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #555;
+  padding: 4px 6px;
+  background: #f8fafc;
+}
+.mat-uom-table td.mat-uom-action {
+  padding: 4px 8px;
+  text-align: center;
+  width: 4.5rem;
+}
+
+/* Materials — Unit conversions: space above “+ Add row” */
+.mat-uom-add-row-btn {
+  margin-top: 10px;
+}
+
+/* Inline form validation (no error modal) — banner style for Configuration / SAP forms */
+.au-validation-summary {
+  display: none;
+  color: #8b1a1a;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.85rem 0.55rem 0.95rem;
+  background: linear-gradient(90deg, rgba(198, 40, 40, 0.1) 0%, rgba(198, 40, 40, 0.03) 55%, rgba(255, 255, 255, 0.6) 100%);
+  border: 1px solid rgba(198, 40, 40, 0.32);
+  border-left: 4px solid #c62828;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.sap-window > form > .au-validation-summary,
+.au-card .au-validation-summary {
+  margin-top: 0.15rem;
+}
+.au-field-invalid,
+.au-field-invalid.form-select,
+select.au-field-invalid,
+textarea.au-field-invalid {
+  border: 2px solid #c62828 !important;
+  box-shadow: none !important;
+}
+
+/* SAP-style grid inputs (borderless cell) still need a visible invalid state */
+.sap-window .au-field-invalid.sap-input,
+.sap-window select.sap-input.au-field-invalid {
+  outline: 2px solid #c62828 !important;
+  outline-offset: -1px;
+  background: #fff0f0 !important;
+}
+
+#pvEditModal.modal {
+  z-index: 100050 !important;
+}
+
+#pvEditModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#pvEditModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 

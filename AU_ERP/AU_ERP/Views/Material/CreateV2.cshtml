@@ -1,4 +1,5 @@
 @model AU_ERP.Models.CreateMaterialMaster
+@using Microsoft.AspNetCore.Mvc.Rendering
 @{
     Layout = null;
     var createV2Embedded = ViewBag.CreateV2Embedded as bool? == true;
@@ -105,6 +106,7 @@
     </div>
     <div class="modal-body">
         @Html.ValidationSummary(false, "", new { @class = "text-danger small mb-2" })
+        <div class="au-validation-summary" id="@("v2AuVal" + V2IdAffix)" style="display:none;" role="alert"></div>
 
         <ul class="nav nav-tabs flex-wrap" id="@("createV2Tabs" + V2IdAffix)" role="tablist">
             <li class="nav-item" role="presentation">
@@ -163,7 +165,10 @@
                             <label class="form-label">Description</label>
                             @Html.EditorFor(m => m.Description, new { htmlAttributes = new { @class = "form-control req" } })
                             <label class="form-label">Base Unit</label>
-                            @Html.EditorFor(m => m.BaseUnitCode, new { htmlAttributes = new { @class = "form-control req", maxlength = "3", id = "BaseUnitCodeV2" + V2IdAffix } })
+                            @{
+                                var uomItems = (ViewBag.UomList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+                            }
+                            @Html.DropDownListFor(m => m.BaseUnitCode, uomItems, "-- Select --", new { @class = "form-select form-select-sm req", id = "BaseUnitCodeV2" + V2IdAffix })
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Material Group</label>
@@ -230,20 +235,20 @@
             <div class="tab-pane fade" id="@("v2uom" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2uom-tab" + V2IdAffix)">
                 <div class="v2-frame">
                     <div class="v2-frame-title">Unit Conversions</div>
-                    <table class="table table-bordered table-sm" id="@("uomTableV2" + V2IdAffix)">
-                        <thead class="table-light">
+                    <table class="mat-uom-table" id="@("uomTableV2" + V2IdAffix)">
+                        <thead>
                             <tr>
                                 <th>Alt. Unit</th>
                                 <th>Numerator</th>
-                                <th>=</th>
+                                <th style="width:3rem;">=</th>
                                 <th>Denominator</th>
                                 <th>Base Unit</th>
-                                <th>Action</th>
+                                <th style="width:4.5rem;">Action</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window['addUomRowV2@(v2HandlerKey)']()">+ Add Row</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mat-uom-add-row-btn" onclick="window['addUomRowV2@(v2HandlerKey)']()">+ Add Row</button>
                 </div>
             </div>
 
@@ -397,6 +402,30 @@
             return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
         }
 
+        function v2CollectValidationInvalid() {
+            var bad = [];
+            var form = document.getElementById(v2id("createMaterialV2Form"));
+            if (!form) return bad;
+            function add(el) {
+                if (el && bad.indexOf(el) < 0) bad.push(el);
+            }
+            form.querySelectorAll(".req").forEach(function (el) {
+                if (!el.value || !String(el.value).trim()) add(el);
+            });
+            var tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
+            if (tbody) {
+                tbody.querySelectorAll("tr").forEach(function (tr) {
+                    var alt = tr.querySelector('input[name$=".AltUnitCode"]');
+                    var num = tr.querySelector('input[name$=".Numerator"]');
+                    var den = tr.querySelector('input[name$=".Denominator"]');
+                    if (!alt || !String(alt.value || "").trim()) add(alt);
+                    if (!num || String(num.value || "").trim() === "" || isNaN(parseFloat(num.value))) add(num);
+                    if (!den || String(den.value || "").trim() === "" || isNaN(parseFloat(den.value))) add(den);
+                });
+            }
+            return bad;
+        }
+
         function addUomRowV2WithValues(altUnit, numerator, denominator, baseUom) {
             const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
             if (!tbody) return;
@@ -410,10 +439,10 @@
                 '<tr id="' + rowId + '">' +
                 '<td><input name="Conversions[' + uomIndexV2 + '].AltUnitCode" class="form-control form-control-sm" maxlength="3" value="' + escapeAttr(altUnit) + '" /></td>' +
                 '<td><input name="Conversions[' + uomIndexV2 + '].Numerator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(numStr) + '" /></td>' +
-                '<td class="text-center align-middle">=</td>' +
+                '<td class="mat-uom-eq">=</td>' +
                 '<td><input name="Conversions[' + uomIndexV2 + '].Denominator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(denStr) + '" /></td>' +
                 '<td><input class="form-control form-control-sm sap-readonly" value="' + escapeAttr(baseUomValue) + '" readonly /></td>' +
-                '<td><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'' + rowId + '\').remove()">X</button></td>' +
+                '<td class="mat-uom-action"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'' + rowId + '\').remove()">X</button></td>' +
                 '</tr>';
             tbody.insertAdjacentHTML("beforeend", html);
             uomIndexV2++;
@@ -525,6 +554,14 @@
                 saveBtn.addEventListener("click", function () {
                     const form = document.getElementById(v2id("createMaterialV2Form"));
                     if (!form) return;
+                    if (typeof window.auClearInlineValidation === "function")
+                        window.auClearInlineValidation(form);
+                    var bad = v2CollectValidationInvalid();
+                    if (bad.length) {
+                        if (typeof window.auShowInlineValidation === "function")
+                            window.auShowInlineValidation(form, bad);
+                        return;
+                    }
                     const fd = new FormData(form);
                     const origH = document.getElementById(v2id("createV2OriginalMaterialNumber"));
                     const hasOriginal = !!(origH && origH.value);
@@ -567,10 +604,18 @@
                                 else
                                     afterListOrReload();
                             } else {
-                                alert(data.message || "Save failed");
+                                if (typeof window.auShowInlineValidation === "function")
+                                    window.auShowInlineValidation(form, [], data.message || "Save failed.");
+                                else
+                                    alert(data.message || "Save failed");
                             }
                         })
-                        .catch(function () { alert("Request failed"); });
+                        .catch(function () {
+                            if (typeof window.auShowInlineValidation === "function")
+                                window.auShowInlineValidation(form, [], "Request failed.");
+                            else
+                                alert("Request failed");
+                        });
                 });
             }
             const modalEl = document.getElementById("materialCreateV2Modal");

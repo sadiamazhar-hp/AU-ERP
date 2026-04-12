@@ -42,6 +42,16 @@ namespace AU_ERP.Main_Controller
                 new SelectListItem { Text = "Mechanical Engineering", Value = "M" },
                 new SelectListItem { Text = "Chemical Industry", Value = "C" }
             };
+
+            ViewBag.UomList = _context.UnitOfMeasurements.AsNoTracking()
+                .OrderBy(u => u.Code)
+                .Select(u => new SelectListItem
+                {
+                    Value = u.Code ?? "",
+                    Text = (u.Code ?? "") + " — " + (u.Description ?? "")
+                })
+                .Where(u => !string.IsNullOrEmpty(u.Value))
+                .ToList();
         }
 
         [HttpPost]
@@ -407,7 +417,7 @@ namespace AU_ERP.Main_Controller
                 }
 
                 await _context.SaveChangesAsync();
-                if (isAjax) return Json(new { success = true, message = "Number Ranges Saved Successfully !" });
+                if (isAjax) return Json(new { success = true, message = "Material ranges saved successfully !" });
                 TempData["Success"] = "Data Saved Successfully!";
             }
             catch (DbUpdateException ex)
@@ -437,7 +447,7 @@ namespace AU_ERP.Main_Controller
 
                 _context.MaterialNumberRanges.Remove(item);
                 await _context.SaveChangesAsync();
-                return Json(new { success = true, message = "Number Range Deleted Successfully !" });
+                return Json(new { success = true, message = "Material range deleted successfully !" });
             }
             catch (Exception ex)
             {
@@ -578,7 +588,7 @@ namespace AU_ERP.Main_Controller
 
         public IActionResult MaterialGroup() => View("materialgroup");
 
-        public IActionResult UnitOfMeasure() => View("unitofmeasure");
+        public IActionResult UnitOfMeasure() => RedirectToAction("Index", "UOM");
 
         public IActionResult SampleOfMaterialAndRangeMapping() => View("sampleofmaterialandrangemapping");
 

@@ -687,7 +687,7 @@ namespace AU_ERP.Main_Controller
                     }
                 }
                 await _db.SaveChangesAsync(ct);
-                if (isAjax) return Json(new { success = true, message = "BP Number Ranges Saved Successfully !" });
+                if (isAjax) return Json(new { success = true, message = "BP ranges saved successfully !" });
                 return RedirectToAction(nameof(BPTypeNumberRanges));
             }
             catch (Exception ex)
@@ -708,7 +708,7 @@ namespace AU_ERP.Main_Controller
                     return Json(new { success = false, message = "Record not found" });
                 _db.BPTypeNumberRanges.Remove(item);
                 await _db.SaveChangesAsync(ct);
-                return Json(new { success = true, message = "BP Number Range Deleted Successfully !" });
+                return Json(new { success = true, message = "BP range deleted successfully !" });
             }
             catch (Exception ex)
             {

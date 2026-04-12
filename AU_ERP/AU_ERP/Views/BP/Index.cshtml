@@ -66,6 +66,7 @@
         </div>
         <div class="tab-pane fade @(bpTabList ? "show active" : "")" id="bpPaneList" role="tabpanel" aria-labelledby="bpTabList">
             <div class="sap-window border-0 rounded-0">
+                <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
                 <div class="p-2 px-3">
                     <input type="search" class="form-control form-control-sm" id="bpListFilter" placeholder="Filter by ID, name, city…" style="max-width:22rem;" />
                 </div>
@@ -132,6 +133,7 @@
             <form id="bpEditForm">
                 @Html.AntiForgeryToken()
                 <input type="hidden" id="bpEditBPID" name="BPID" />
+                <div class="au-validation-summary px-3 pt-1" style="display:none;" role="alert"></div>
 
                 <div class="modal-header">
                     <h5 class="modal-title" id="bpEditModalLabel">Edit Business Partner</h5>
@@ -362,6 +364,48 @@
             });
         })();
 
+        function bpListPaneRoot() {
+            return document.getElementById("bpPaneList");
+        }
+
+        function bpShowListMessage(message, invalidEls) {
+            var root = bpListPaneRoot();
+            if (!root) return;
+            if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+            if (typeof window.auShowInlineValidation === "function")
+                window.auShowInlineValidation(root, invalidEls || [], message);
+            else alert(message || "Following Fields are Required");
+        }
+
+        function bpValidateEditForm() {
+            var bad = [];
+            function req(id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                if (!(String(el.value || "").trim())) bad.push(el);
+            }
+            req("bpEditRole");
+            req("bpEditGroup");
+            req("bpEditFullName");
+            req("bpEditStreet");
+            req("bpEditHouseNo");
+            req("bpEditCity");
+            req("bpEditPostalCode");
+            req("bpEditRegion");
+            req("bpEditReconAccount");
+            var roleSel = document.getElementById("bpEditRole");
+            var opt = roleSel && roleSel.options[roleSel.selectedIndex];
+            var code = opt ? (opt.getAttribute("data-code") || "") : "";
+            if (code === "FLCU01") {
+                req("bpEditDistChannel");
+                req("bpEditSalesSchema");
+            }
+            if (code === "FLVN01") {
+                req("bpEditPurchSchema");
+            }
+            return bad;
+        }
+
         function deleteBPFromList(bpId) {
             if (!bpId) return;
             function doDelete() {
@@ -375,9 +419,9 @@
                             else
                                 bpReloadToListTab();
                         } else
-                            alert(res.message || "Delete failed");
+                            bpShowListMessage(res.message || "Delete failed", []);
                     })
-                    .catch(function () { alert("Delete request failed"); });
+                    .catch(function () { bpShowListMessage("Delete request failed", []); });
             }
             if (typeof window.materialShowDeleteConfirmModalThen === "function")
                 window.materialShowDeleteConfirmModalThen("Do you want to Delete this Partner?", doDelete);
@@ -391,6 +435,13 @@
             if (!form) return;
             form.addEventListener("submit", function (e) {
                 e.preventDefault();
+                if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(form);
+                var bad = typeof bpValidateCreateForm === "function" ? bpValidateCreateForm(form) : [];
+                if (bad.length) {
+                    if (typeof window.auShowInlineValidation === "function")
+                        window.auShowInlineValidation(form, bad);
+                    return;
+                }
                 var fd = new FormData(form);
                 fetch(form.action, {
                     method: "POST",
@@ -406,10 +457,16 @@
                         else
                             location.reload();
                     } else {
-                        alert(data.message || "Save failed");
+                        if (typeof window.auShowInlineValidation === "function")
+                            window.auShowInlineValidation(form, [], data.message || "Save failed");
+                        else alert(data.message || "Save failed");
                     }
                 })
-                .catch(function () { alert("Request failed"); });
+                .catch(function () {
+                    if (typeof window.auShowInlineValidation === "function")
+                        window.auShowInlineValidation(form, [], "Request failed");
+                    else alert("Request failed");
+                });
             });
         })();
 
@@ -436,7 +493,9 @@
             fetch('@Url.Action("GetPartnerForEdit", "BP")?id=' + encodeURIComponent(bpId))
                 .then(function (r) { return r.json(); })
                 .then(function (res) {
-                    if (!res.success) { alert(res.message || "Load failed"); return; }
+                    if (!res.success) { bpShowListMessage(res.message || "Load failed", []); return; }
+                    var editForm = document.getElementById("bpEditForm");
+                    if (editForm && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(editForm);
                     var p = res.partner;
                     setEditField("bpEditBPID", p.bpid || p.BPID);
                     setEditField("bpEditBPIDDisplay", p.bpid || p.BPID);
@@ -474,13 +533,20 @@
                     if (el && typeof bootstrap !== "undefined" && bootstrap.Modal)
                         bootstrap.Modal.getOrCreateInstance(el).show();
                 })
-                .catch(function () { alert("Request failed"); });
+                .catch(function () { bpShowListMessage("Request failed", []); });
         }
 
         /* ---- Edit modal Save ---- */
         document.getElementById("bpEditSaveBtn").addEventListener("click", function () {
             var form = document.getElementById("bpEditForm");
             if (!form) return;
+            if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(form);
+            var badEdit = bpValidateEditForm();
+            if (badEdit.length) {
+                if (typeof window.auShowInlineValidation === "function")
+                    window.auShowInlineValidation(form, badEdit);
+                return;
+            }
             var fd = new FormData(form);
             fetch('@Url.Action("UpdatePartner", "BP")', {
                 method: "POST",
@@ -509,10 +575,16 @@
                             bpReloadToListTab();
                     }
                 } else {
-                    alert(data.message || "Update failed");
+                    if (typeof window.auShowInlineValidation === "function")
+                        window.auShowInlineValidation(form, [], data.message || "Update failed");
+                    else alert(data.message || "Update failed");
                 }
             })
-            .catch(function () { alert("Request failed"); });
+            .catch(function () {
+                if (typeof window.auShowInlineValidation === "function")
+                    window.auShowInlineValidation(form, [], "Request failed");
+                else alert("Request failed");
+            });
         });
     </script>
 }

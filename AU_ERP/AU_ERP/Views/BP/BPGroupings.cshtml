@@ -8,6 +8,7 @@
 <div class="sap-window" id="app">
     <form id="bpGroupingsForm" method="post" action="@Url.Action("BPGroupings", "BP")">
         @Html.AntiForgeryToken()
+        <div class="au-validation-summary" style="display:none;" role="alert"></div>
 
         <div class="sap-toolbar">
             <div class="d-flex">
@@ -82,6 +83,8 @@
         document.getElementById('btnEdit').disabled = edit;
         document.getElementById('btnNew').disabled = !edit;
         document.getElementById('btnSave').disabled = !edit;
+        var f = document.getElementById('bpGroupingsForm');
+        if (f && typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(f);
     }
 
     function addNewRow() {
@@ -105,53 +108,37 @@
         document.getElementById('btnDelete').disabled = false;
     }
 
-    function clearValidation() {
-        document.querySelectorAll('.row-validation-error').forEach(r => r.classList.remove('row-validation-error'));
-        document.querySelectorAll('.sap-invalid').forEach(i => i.classList.remove('sap-invalid'));
-    }
-
-    function validateRows() {
-        clearValidation();
-        let valid = true, firstBad = null;
+    function collectInvalidBpGroupingsRows() {
+        var bad = [];
         document.querySelectorAll('#gridBody tr').forEach(tr => {
             tr.querySelectorAll('.sap-input[data-required]').forEach(inp => {
-                if (!inp.value.trim()) {
-                    tr.classList.add('row-validation-error');
-                    inp.classList.add('sap-invalid');
-                    valid = false;
-                    if (!firstBad) firstBad = inp;
-                }
+                if (!inp.value.trim()) bad.push(inp);
             });
         });
-        if (firstBad) firstBad.focus();
-        return valid;
-    }
-
-    function showErrorAlert(msg) {
-        var body = document.getElementById('bpRangeErrorModalBody');
-        var el = document.getElementById('bpRangeErrorModal');
-        if (body && el) {
-            body.textContent = msg;
-            if (el.parentElement !== document.body) document.body.appendChild(el);
-            bootstrap.Modal.getOrCreateInstance(el).show();
-        } else { alert(msg); }
+        return bad;
     }
 
     function handleSave() {
-        if (!validateRows()) {
-            showErrorAlert('Please fill in all required fields (highlighted in red).');
+        var form = document.getElementById('bpGroupingsForm');
+        if (typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(form);
+        var bad = collectInvalidBpGroupingsRows();
+        if (bad.length) {
+            if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, bad);
             return;
         }
-        var form = document.getElementById('bpGroupingsForm');
         document.querySelectorAll('.sap-input').forEach(i => { i.readOnly = false; });
         var fd = new FormData(form);
         fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.json())
             .then(data => {
                 if (data.success) { location.reload(); }
-                else { showErrorAlert(data.message || 'Save failed'); }
+                else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], data.message || 'Save failed');
+                else alert(data.message || 'Save failed');
             })
-            .catch(() => showErrorAlert('Request failed'));
+            .catch(() => {
+                if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], 'Request failed');
+                else alert('Request failed');
+            });
     }
 
     function handleDelete() {
@@ -167,7 +154,8 @@
                         reIndexAllRows();
                         if (typeof window.materialShowSuccessModal === 'function')
                             window.materialShowSuccessModal(response.message || 'Deleted !');
-                    } else { showErrorAlert(response.message || 'Delete failed'); }
+                    } else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(document.getElementById('bpGroupingsForm'), [], response.message || 'Delete failed');
+                    else alert(response.message || 'Delete failed');
                 });
             } else {
                 selectedRow.remove(); selectedRow = null;

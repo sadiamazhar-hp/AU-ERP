@@ -2,7 +2,7 @@
 @using System.Text.Json
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "BP Number Ranges";
+    ViewData["Title"] = "BP Ranges";
     var typeList = ViewBag.TypeList as List<SelectListItem> ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.BPTypeNumberRanges>();
     var typeOptsJson = JsonSerializer.Serialize(typeList.Select(t => new { value = t.Value ?? "", text = t.Text ?? "" }));
@@ -12,6 +12,7 @@
 <div class="sap-window" id="app">
     <form id="bpTypeNrForm" method="post" action="@Url.Action("BPTypeNumberRanges", "BP")">
         @Html.AntiForgeryToken()
+        <div class="au-validation-summary" style="display:none;" role="alert"></div>
 
         <div class="sap-toolbar">
             <div class="d-flex">
@@ -125,6 +126,8 @@
         document.getElementById('btnEdit').disabled = edit;
         document.getElementById('btnNew').disabled = !edit;
         document.getElementById('btnSave').disabled = !edit;
+        var f = document.getElementById('bpTypeNrForm');
+        if (f && typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(f);
     }
 
     function enforceDigitLimit(input) {
@@ -175,37 +178,15 @@
         document.getElementById('btnDelete').disabled = false;
     }
 
-    function clearValidation() {
-        document.querySelectorAll('.row-validation-error').forEach(r => r.classList.remove('row-validation-error'));
-        document.querySelectorAll('.sap-invalid').forEach(i => i.classList.remove('sap-invalid'));
-    }
-
-    function validateRows() {
-        clearValidation();
-        let valid = true, firstBad = null;
+    function collectInvalidBpNrRows() {
+        var bad = [];
         document.querySelectorAll('#gridBody tr').forEach(tr => {
             tr.querySelectorAll('[data-required]').forEach(inp => {
                 var val = inp.value ? inp.value.trim() : '';
-                if (!val) {
-                    tr.classList.add('row-validation-error');
-                    inp.classList.add('sap-invalid');
-                    valid = false;
-                    if (!firstBad) firstBad = inp;
-                }
+                if (!val) bad.push(inp);
             });
         });
-        if (firstBad) firstBad.focus();
-        return valid;
-    }
-
-    function showErrorAlert(msg) {
-        var body = document.getElementById('bpRangeErrorModalBody');
-        var el = document.getElementById('bpRangeErrorModal');
-        if (body && el) {
-            body.textContent = msg;
-            if (el.parentElement !== document.body) document.body.appendChild(el);
-            bootstrap.Modal.getOrCreateInstance(el).show();
-        } else { alert(msg); }
+        return bad;
     }
 
     var existingBPTypeSet = new Set(@Html.Raw(existingBPTypeIdsJson));
@@ -234,14 +215,21 @@
             .then(r => r.json())
             .then(data => {
                 if (data.success) { location.reload(); }
-                else { showErrorAlert(data.message || 'Save failed'); }
+                else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], data.message || 'Save failed');
+                else alert(data.message || 'Save failed');
             })
-            .catch(() => showErrorAlert('Request failed'));
+            .catch(() => {
+                if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], 'Request failed');
+                else alert('Request failed');
+            });
     }
 
     function handleSave() {
-        if (!validateRows()) {
-            showErrorAlert('Please fill in all required fields (highlighted in red).');
+        var form = document.getElementById('bpTypeNrForm');
+        if (typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(form);
+        var bad = collectInvalidBpNrRows();
+        if (bad.length) {
+            if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, bad);
             return;
         }
         var dupes = checkDuplicateTypes();
@@ -266,7 +254,8 @@
                         selectedRow.remove(); selectedRow = null;
                         document.getElementById('btnDelete').disabled = true;
                         reIndexAllRows();
-                    } else { showErrorAlert(response.message || 'Delete failed'); }
+                    } else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(document.getElementById('bpTypeNrForm'), [], response.message || 'Delete failed');
+                    else alert(response.message || 'Delete failed');
                 });
             } else {
                 selectedRow.remove(); selectedRow = null;
@@ -275,7 +264,7 @@
             }
         }
         if (typeof window.materialShowDeleteConfirmModalThen === 'function')
-            window.materialShowDeleteConfirmModalThen('Do you want to delete this BP Number Range?', doDelete);
+            window.materialShowDeleteConfirmModalThen('Do you want to delete this BP range?', doDelete);
         else if (confirm('Delete this entry?')) doDelete();
     }
 
