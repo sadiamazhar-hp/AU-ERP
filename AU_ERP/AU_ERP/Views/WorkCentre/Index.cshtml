@@ -4,7 +4,6 @@
     var safeModel = Model ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
     var wcTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
-    var wcUoms = ViewBag.UomList as List<AU_ERP.Models.UnitOfMeasurement> ?? new List<AU_ERP.Models.UnitOfMeasurement>();
 }
 
 <style>
@@ -108,12 +107,11 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">UoM</label>
-                            <select id="wcCreateUomId" class="form-select form-select-sm">
+                            <select id="wcCreateTimeUom" class="form-select form-select-sm">
                                 <option value="">-- Select --</option>
-                                @foreach (var u in wcUoms)
-                                {
-                                    <option value="@u.Id">@(u.Code ?? ("#" + u.Id))</option>
-                                }
+                                <option value="Min">Min</option>
+                                <option value="Hr">Hr</option>
+                                <option value="Day">Day</option>
                             </select>
                         </div>
                     </div>
@@ -250,12 +248,11 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">UoM</label>
-                            <select id="wcEditUomId" class="form-select form-select-sm">
+                            <select id="wcEditTimeUom" class="form-select form-select-sm">
                                 <option value="">-- Select --</option>
-                                @foreach (var u in wcUoms)
-                                {
-                                    <option value="@u.Id">@(u.Code ?? ("#" + u.Id))</option>
-                                }
+                                <option value="Min">Min</option>
+                                <option value="Hr">Hr</option>
+                                <option value="Day">Day</option>
                             </select>
                         </div>
                     </div>
@@ -317,7 +314,7 @@
         if (!(n.value || "").trim()) bad.push(n);
         if (!(p.value || "").trim()) bad.push(p);
         if (wcAnyTimeFilled("wcCreate")) {
-            var u = document.getElementById("wcCreateUomId");
+            var u = document.getElementById("wcCreateTimeUom");
             if (!u || !(u.value || "").trim()) bad.push(u);
         }
         return bad;
@@ -328,7 +325,7 @@
         var n = document.getElementById("wcEditName");
         if (!(n.value || "").trim()) bad.push(n);
         if (wcAnyTimeFilled("wcEdit")) {
-            var u = document.getElementById("wcEditUomId");
+            var u = document.getElementById("wcEditTimeUom");
             if (!u || !(u.value || "").trim()) bad.push(u);
         }
         return bad;
@@ -345,7 +342,7 @@
         document.getElementById("wcCreateSetup").value = "";
         document.getElementById("wcCreateMachine").value = "";
         document.getElementById("wcCreateLabor").value = "";
-        document.getElementById("wcCreateUomId").value = "";
+        document.getElementById("wcCreateTimeUom").value = "";
     }
 
     function wcCollectCreate() {
@@ -358,9 +355,9 @@
             SetupTime: parseFloat(document.getElementById("wcCreateSetup").value) || null,
             MachineTime: parseFloat(document.getElementById("wcCreateMachine").value) || null,
             LaborTime: parseFloat(document.getElementById("wcCreateLabor").value) || null,
-            UomId: (function () {
-                var v = parseInt(document.getElementById("wcCreateUomId").value, 10);
-                return isNaN(v) ? null : v;
+            TimeUom: (function () {
+                var v = (document.getElementById("wcCreateTimeUom").value || "").trim();
+                return v || null;
             })()
         };
     }
@@ -411,8 +408,8 @@
                 document.getElementById("wcEditSetup").value = d.setupTime != null ? d.setupTime : "";
                 document.getElementById("wcEditMachine").value = d.machineTime != null ? d.machineTime : "";
                 document.getElementById("wcEditLabor").value = d.laborTime != null ? d.laborTime : "";
-                var uid = d.uomId != null ? d.uomId : (d.UomId != null ? d.UomId : "");
-                document.getElementById("wcEditUomId").value = uid !== "" && uid != null ? String(uid) : "";
+                var tu = d.timeUom != null ? d.timeUom : (d.TimeUom != null ? d.TimeUom : "");
+                document.getElementById("wcEditTimeUom").value = tu ? String(tu) : "";
 
                 var modalEl = document.getElementById("wcEditModal");
                 if (modalEl) {
@@ -449,9 +446,9 @@
             SetupTime: parseFloat(document.getElementById("wcEditSetup").value) || null,
             MachineTime: parseFloat(document.getElementById("wcEditMachine").value) || null,
             LaborTime: parseFloat(document.getElementById("wcEditLabor").value) || null,
-            UomId: (function () {
-                var v = parseInt(document.getElementById("wcEditUomId").value, 10);
-                return isNaN(v) ? null : v;
+            TimeUom: (function () {
+                var v = (document.getElementById("wcEditTimeUom").value || "").trim();
+                return v || null;
             })()
         };
 

@@ -7,7 +7,7 @@
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
     var materialList = ViewBag.MaterialList as List<AU_ERP.Models.CreateMaterialMaster> ?? new List<AU_ERP.Models.CreateMaterialMaster>();
     var workCentres = ViewBag.WorkCentres as List<AU_ERP.Models.WorkCenterMasterSample> ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
-    var rtWcJson = JsonSerializer.Serialize(workCentres.Select(w => new { id = w.ID, name = w.WorkCenterName ?? "", uomId = w.UomId, uomCode = w.Uom?.Code ?? "" }));
+    var rtWcJson = JsonSerializer.Serialize(workCentres.Select(w => new { id = w.ID, name = w.WorkCenterName ?? "", timeUom = w.TimeUom ?? "" }));
 }
 
 <style>
@@ -308,8 +308,8 @@
         var disp = tr.querySelector(".rt-op-uom-display");
         if (!disp) return;
         var meta = sel ? rtFindWcMeta(sel.value) : null;
-        if (meta && meta.uomId != null && meta.uomId !== "") {
-            disp.value = meta.uomCode || "";
+        if (meta && meta.timeUom != null && String(meta.timeUom).trim() !== "") {
+            disp.value = String(meta.timeUom).trim();
         } else {
             disp.value = "";
         }
@@ -396,7 +396,7 @@
             if (!rtNumFieldOk(mach)) bad.push(mach);
             if (!rtNumFieldOk(lab)) bad.push(lab);
             var meta = wc ? rtFindWcMeta(wc.value) : null;
-            if (!meta || meta.uomId == null || meta.uomId === "") bad.push(wc);
+            if (!meta || meta.timeUom == null || String(meta.timeUom).trim() === "") bad.push(wc);
         });
         return bad;
     }

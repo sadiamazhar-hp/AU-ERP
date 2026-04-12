@@ -16,10 +16,6 @@ namespace AU_ERP.Controllers
             ViewBag.Plants = new SelectList(
                 await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantID).ToListAsync(ct),
                 "PlantID", "PlantName");
-
-            ViewBag.UomList = await _db.UnitOfMeasurements.AsNoTracking()
-                .OrderBy(u => u.Code)
-                .ToListAsync(ct);
         }
 
         public async Task<IActionResult> Index(CancellationToken ct = default)
@@ -29,11 +25,18 @@ namespace AU_ERP.Controllers
             var list = await _db.WorkCenterMasterSamples
                 .AsNoTracking()
                 .Include(w => w.Plant)
-                .Include(w => w.Uom)
                 .OrderByDescending(w => w.ID)
                 .ToListAsync(ct);
 
             return View(list);
+        }
+
+        private static string? NormalizeTimeUom(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            var t = raw.Trim();
+            if (WorkCenterTimeUom.IsAllowed(t)) return t;
+            return WorkCenterTimeUom.FromMeasurementCode(t);
         }
 
         [HttpPost]
@@ -45,11 +48,13 @@ namespace AU_ERP.Controllers
                 if (string.IsNullOrEmpty(name))
                     return Json(new { success = false, message = "Work Centre Name is required." });
 
-                if (dto.UomId is { } uid && uid > 0)
+                var rawTu = dto.TimeUom?.Trim();
+                string? timeUom = null;
+                if (!string.IsNullOrEmpty(rawTu))
                 {
-                    var uomOk = await _db.UnitOfMeasurements.AsNoTracking().AnyAsync(u => u.Id == uid, ct);
-                    if (!uomOk)
-                        return Json(new { success = false, message = "Invalid UOM selected." });
+                    timeUom = NormalizeTimeUom(dto.TimeUom);
+                    if (timeUom == null || !WorkCenterTimeUom.IsAllowed(timeUom))
+                        return Json(new { success = false, message = "Invalid time UOM. Use Min, Hr, or Day." });
                 }
 
                 var wc = new WorkCenterMasterSample
@@ -62,7 +67,7 @@ namespace AU_ERP.Controllers
                     SetupTime = dto.SetupTime,
                     MachineTime = dto.MachineTime,
                     LaborTime = dto.LaborTime,
-                    UomId = dto.UomId is > 0 ? dto.UomId : null,
+                    TimeUom = timeUom,
                     CreatedAt = DateTime.Now
                 };
 
@@ -82,7 +87,6 @@ namespace AU_ERP.Controllers
         {
             var wc = await _db.WorkCenterMasterSamples
                 .AsNoTracking()
-                .Include(w => w.Uom)
                 .FirstOrDefaultAsync(w => w.ID == id, ct);
 
             if (wc == null)
@@ -102,8 +106,7 @@ namespace AU_ERP.Controllers
                     wc.SetupTime,
                     wc.MachineTime,
                     wc.LaborTime,
-                    wc.UomId,
-                    UomCode = wc.Uom != null ? wc.Uom.Code : null
+                    wc.TimeUom
                 }
             });
         }
@@ -123,11 +126,13 @@ namespace AU_ERP.Controllers
                 if (string.IsNullOrEmpty(name))
                     return Json(new { success = false, message = "Work Centre Name is required." });
 
-                if (dto.UomId is { } uid && uid > 0)
+                var rawTu = dto.TimeUom?.Trim();
+                string? timeUom = null;
+                if (!string.IsNullOrEmpty(rawTu))
                 {
-                    var uomOk = await _db.UnitOfMeasurements.AsNoTracking().AnyAsync(u => u.Id == uid, ct);
-                    if (!uomOk)
-                        return Json(new { success = false, message = "Invalid UOM selected." });
+                    timeUom = NormalizeTimeUom(dto.TimeUom);
+                    if (timeUom == null || !WorkCenterTimeUom.IsAllowed(timeUom))
+                        return Json(new { success = false, message = "Invalid time UOM. Use Min, Hr, or Day." });
                 }
 
                 wc.WorkCenterName = name;
@@ -138,7 +143,7 @@ namespace AU_ERP.Controllers
                 wc.SetupTime = dto.SetupTime;
                 wc.MachineTime = dto.MachineTime;
                 wc.LaborTime = dto.LaborTime;
-                wc.UomId = dto.UomId is > 0 ? dto.UomId : null;
+                wc.TimeUom = timeUom;
 
                 await _db.SaveChangesAsync(ct);
                 return Json(new { success = true, message = "Work Centre Updated Successfully !" });
@@ -183,6 +188,7 @@ namespace AU_ERP.Controllers
         public decimal? SetupTime { get; set; }
         public decimal? MachineTime { get; set; }
         public decimal? LaborTime { get; set; }
-        public int? UomId { get; set; }
+        /// <summary>Min, Hr, or Day when any time field is set.</summary>
+        public string? TimeUom { get; set; }
     }
 }

@@ -21,7 +21,6 @@ namespace AU_ERP.Controllers
                 .OrderBy(m => m.MaterialNumber).ToListAsync(ct);
 
             ViewBag.WorkCentres = await _db.WorkCenterMasterSamples.AsNoTracking()
-                .Include(w => w.Uom)
                 .OrderBy(w => w.WorkCenterName)
                 .ToListAsync(ct);
         }
@@ -41,13 +40,13 @@ namespace AU_ERP.Controllers
             return View(list);
         }
 
-        private async Task<int?> ResolveOpUomFromWorkCentreAsync(int? workCenterId, CancellationToken ct)
+        private async Task<string?> ResolveOpTimeUomFromWorkCentreAsync(int? workCenterId, CancellationToken ct)
         {
             if (workCenterId is null or <= 0)
                 return null;
             return await _db.WorkCenterMasterSamples.AsNoTracking()
                 .Where(w => w.ID == workCenterId.Value)
-                .Select(w => w.UomId)
+                .Select(w => w.TimeUom)
                 .FirstOrDefaultAsync(ct);
         }
 
@@ -82,8 +81,8 @@ namespace AU_ERP.Controllers
                     int seq = 10;
                     foreach (var op in dto.Operations)
                     {
-                        var uomId = await ResolveOpUomFromWorkCentreAsync(op.WorkCenterID, ct);
-                        if (!uomId.HasValue)
+                        var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
+                        if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
                         {
                             var wcName = op.WorkCenterID.HasValue
                                 ? await _db.WorkCenterMasterSamples.AsNoTracking()
@@ -94,7 +93,7 @@ namespace AU_ERP.Controllers
                             return Json(new
                             {
                                 success = false,
-                                message = $"Work centre '{wcName ?? "—"}' has no UOM assigned. Set UOM on the work centre before using it in routing."
+                                message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
                             });
                         }
 
@@ -105,7 +104,7 @@ namespace AU_ERP.Controllers
                             Description = op.Description?.Trim(),
                             MachineTime = op.MachineTime,
                             LaborTime = op.LaborTime,
-                            UomId = uomId
+                            TimeUom = timeUom
                         });
                         seq += 10;
                     }
@@ -128,7 +127,6 @@ namespace AU_ERP.Controllers
             var r = await _db.RoutingHeadersSamples
                 .AsNoTracking()
                 .Include(h => h.RoutingOperationsSamples)
-                    .ThenInclude(o => o.Uom)
                 .FirstOrDefaultAsync(h => h.RoutingID == id, ct);
 
             if (r == null)
@@ -155,8 +153,7 @@ namespace AU_ERP.Controllers
                             o.Description,
                             o.MachineTime,
                             o.LaborTime,
-                            o.UomId,
-                            UomCode = o.Uom != null ? o.Uom.Code : null
+                            o.TimeUom
                         })
                 }
             });
@@ -190,8 +187,8 @@ namespace AU_ERP.Controllers
                     int seq = 10;
                     foreach (var op in dto.Operations)
                     {
-                        var uomId = await ResolveOpUomFromWorkCentreAsync(op.WorkCenterID, ct);
-                        if (!uomId.HasValue)
+                        var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
+                        if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
                         {
                             var wcName = op.WorkCenterID.HasValue
                                 ? await _db.WorkCenterMasterSamples.AsNoTracking()
@@ -202,7 +199,7 @@ namespace AU_ERP.Controllers
                             return Json(new
                             {
                                 success = false,
-                                message = $"Work centre '{wcName ?? "—"}' has no UOM assigned. Set UOM on the work centre before using it in routing."
+                                message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
                             });
                         }
 
@@ -213,7 +210,7 @@ namespace AU_ERP.Controllers
                             Description = op.Description?.Trim(),
                             MachineTime = op.MachineTime,
                             LaborTime = op.LaborTime,
-                            UomId = uomId
+                            TimeUom = timeUom
                         });
                         seq += 10;
                     }

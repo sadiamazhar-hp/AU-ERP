@@ -607,8 +607,9 @@ namespace AU_ERP.Data.Migrations
                     b.Property<int?>("RoutingID")
                         .HasColumnType("int");
 
-                    b.Property<int?>("UomId")
-                        .HasColumnType("int");
+                    b.Property<string>("TimeUom")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<int?>("WorkCenterID")
                         .HasColumnType("int");
@@ -616,8 +617,6 @@ namespace AU_ERP.Data.Migrations
                     b.HasKey("OpID");
 
                     b.HasIndex("RoutingID");
-
-                    b.HasIndex("UomId");
 
                     b.HasIndex("WorkCenterID");
 
@@ -704,8 +703,9 @@ namespace AU_ERP.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
 
-                    b.Property<int?>("UomId")
-                        .HasColumnType("int");
+                    b.Property<string>("TimeUom")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<int?>("UtilizationPercentage")
                         .HasColumnType("int");
@@ -717,8 +717,6 @@ namespace AU_ERP.Data.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("PlantID");
-
-                    b.HasIndex("UomId");
 
                     b.ToTable("WorkCenterMasterSamples");
                 });
@@ -891,19 +889,12 @@ namespace AU_ERP.Data.Migrations
                         .HasForeignKey("RoutingID")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "Uom")
-                        .WithMany()
-                        .HasForeignKey("UomId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AU_ERP.Models.WorkCenterMasterSample", "WorkCenter")
                         .WithMany("RoutingOperations")
                         .HasForeignKey("WorkCenterID")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("RoutingHeader");
-
-                    b.Navigation("Uom");
 
                     b.Navigation("WorkCenter");
                 });
@@ -926,14 +917,7 @@ namespace AU_ERP.Data.Migrations
                         .HasForeignKey("PlantID")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "Uom")
-                        .WithMany()
-                        .HasForeignKey("UomId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Plant");
-
-                    b.Navigation("Uom");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BOMLevelsSample", b =>

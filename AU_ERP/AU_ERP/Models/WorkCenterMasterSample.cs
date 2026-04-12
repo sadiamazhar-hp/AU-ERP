@@ -15,13 +15,13 @@ namespace AU_ERP.Models
         public decimal? MachineTime { get; set; }
         public decimal? LaborTime { get; set; }
 
-        /// <summary>FK to <see cref="UnitOfMeasurement.Id"/> for setup, machine, and labor times.</summary>
-        public int? UomId { get; set; }
+        /// <summary>Time UOM for setup, machine, and labor: <see cref="WorkCenterTimeUom"/> (Min, Hr, Day).</summary>
+        [MaxLength(10)]
+        public string? TimeUom { get; set; }
 
         public DateTime? CreatedAt { get; set; }
 
         public virtual PlantsSample? Plant { get; set; }
-        public virtual UnitOfMeasurement? Uom { get; set; }
         public ICollection<RoutingOperationsSample> RoutingOperations { get; set; } = null!;
     }
 }
