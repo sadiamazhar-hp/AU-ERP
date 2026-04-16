@@ -1,5 +1,6 @@
 ﻿@model AU_ERP.Models.CreateMaterialMaster
 @using Microsoft.AspNetCore.Mvc.Rendering
+@using System.Collections.Generic
 @using System.Linq
 @using System.Text.Json
 
@@ -8,6 +9,20 @@
     var uomAltOptsClassicJson = JsonSerializer.Serialize(
         (ViewBag.UomIdList as IEnumerable<SelectListItem> ?? Enumerable.Empty<SelectListItem>())
         .Select(x => new { value = x.Value ?? "", text = x.Text ?? "" }));
+    var mrpTypeItemsClassic = new List<SelectListItem>
+    {
+        new() { Text = "Standard", Value = "STANDARD" },
+        new() { Text = "No Planning", Value = "NO_PLANNING" }
+    };
+    var strategyGroupItemsClassic = new List<SelectListItem>
+    {
+        new() { Text = "Make to Stop (MTS)", Value = "MTS" }
+    };
+    var plantItemsClassic = (ViewBag.PlantList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var procurementItemsClassic = (ViewBag.ProcurementTypeList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var itemCategoryItemsClassic = (ViewBag.ItemCategoryGroupList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var purchasingGroupItemsClassic = (ViewBag.PurchasingGroupSelectList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var grProcessingUomItemsClassic = (ViewBag.GrProcessingUomList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
 }
 
 @section Styles {
@@ -227,11 +242,11 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <label class="form-label">Delivering Plant</label>
-                                @Html.EditorFor(m => m.DeliveringPlantCode, new { htmlAttributes = new { @class = "form-control" } })
+                                @Html.DropDownListFor(m => m.DeliveringPlantCode, plantItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Item Category Group</label>
-                                @Html.EditorFor(m => m.ItemCategoryGroup, new { htmlAttributes = new { @class = "form-control" } })
+                                @Html.DropDownListFor(m => m.ItemCategoryGroup, itemCategoryItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
                             </div>
                         </div>
                     </div>
@@ -244,11 +259,14 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <label class="form-label">Purchasing Group</label>
-                                @Html.EditorFor(m => m.PurchasingGroupCode, new { htmlAttributes = new { @class = "form-control", maxlength = "20" } })
+                                @Html.DropDownListFor(m => m.PurchasingGroupCode, purchasingGroupItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">GR Processing Time</label>
-                                @Html.EditorFor(m => m.GrProcessingTime, new { htmlAttributes = new { @class = "form-control", type = "number" } })
+                                <div class="input-group input-group-sm">
+                                    @Html.EditorFor(m => m.GrProcessingTime, new { htmlAttributes = new { @class = "form-control", type = "number", min = "0", step = "1" } })
+                                    @Html.DropDownListFor(m => m.GrProcessingUom, grProcessingUomItemsClassic, "-- UOM --", new { @class = "form-select", style = "max-width:8rem;" })
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -261,15 +279,28 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <label class="form-label">MRP Type</label>
-                                @Html.EditorFor(m => m.MrpTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
-                                <label class="form-label">Procurement Type</label>
-                                @Html.EditorFor(m => m.ProcurementTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "1" } })
+                                @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
+                                <label class="form-label mt-2">Procurement Type</label>
+                                @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
+                                <label class="form-label mt-2">Strategy Group</label>
+                                @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Strategy Group</label>
-                                @Html.EditorFor(m => m.StrategyGroup, new { htmlAttributes = new { @class = "form-control" } })
-                                <label class="form-label">Availability Check</label>
-                                @Html.EditorFor(m => m.AvailabilityCheckCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
+                                <label class="form-label">Lead time</label>
+                                <div class="input-group input-group-sm">
+                                    @Html.TextBoxFor(m => m.LeadTimeDays, new { @class = "form-control", type = "number", min = "0", step = "1", id = "LeadTimeDaysClassic" })
+                                    <span class="input-group-text">days</span>
+                                </div>
+                                <label class="form-label mt-2">Safety stock</label>
+                                <div class="input-group input-group-sm">
+                                    @Html.TextBoxFor(m => m.SafetyStock, new { @class = "form-control", type = "number", step = "0.0001", id = "SafetyStockClassic" })
+                                    <span class="input-group-text" id="mrpSafetyUomClassic">—</span>
+                                </div>
+                                <label class="form-label mt-2">Reorder point</label>
+                                <div class="input-group input-group-sm">
+                                    @Html.TextBoxFor(m => m.ReorderPoint, new { @class = "form-control", type = "number", min = "0", step = "1", id = "ReorderPointClassic" })
+                                    <span class="input-group-text" id="mrpReorderUomClassic">—</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -422,8 +453,34 @@
         document.getElementById("statusBar").innerText = "✔ Validating entries...";
     }
 
+    function syncMrpQtyFieldsClassic() {
+        const baseEl = document.getElementById("BaseUnitCode");
+        const code = baseEl && String(baseEl.value || "").trim();
+        const has = !!code;
+        const lblS = document.getElementById("mrpSafetyUomClassic");
+        const lblR = document.getElementById("mrpReorderUomClassic");
+        if (lblS) lblS.textContent = has ? code : "—";
+        if (lblR) lblR.textContent = has ? code : "—";
+        const safety = document.getElementById("SafetyStockClassic");
+        const reorder = document.getElementById("ReorderPointClassic");
+        if (safety) {
+            safety.readOnly = !has;
+            if (!has) safety.value = "";
+        }
+        if (reorder) {
+            reorder.readOnly = !has;
+            if (!has) reorder.value = "";
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         handleTabVisibility();
+        const bu = document.getElementById("BaseUnitCode");
+        if (bu) {
+            bu.addEventListener("input", syncMrpQtyFieldsClassic);
+            bu.addEventListener("change", syncMrpQtyFieldsClassic);
+        }
+        syncMrpQtyFieldsClassic();
 
         // Success (Materials/Create POST redirect)
         var message = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"] as string ?? ""));

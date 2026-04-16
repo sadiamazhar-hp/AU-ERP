@@ -1,11 +1,14 @@
 @model AU_ERP.Models.BusinessPartnerMasterSample
+@using System
 @using Microsoft.AspNetCore.Mvc.Rendering
 @{
     var roleOptions = ViewBag.RoleOptions as List<AU_ERP.Models.BPRole> ?? new List<AU_ERP.Models.BPRole>();
     var typeOptions = ViewBag.TypeOptions as List<AU_ERP.Models.BPTypeSample> ?? new List<AU_ERP.Models.BPTypeSample>();
     var groupOptions = ViewBag.GroupOptions as List<AU_ERP.Models.BPGrouping> ?? new List<AU_ERP.Models.BPGrouping>();
+    var distChannels = ViewBag.DistributionChannels as List<AU_ERP.Models.DistributionChannel> ?? new List<AU_ERP.Models.DistributionChannel>();
+    var purchaseSchemes = ViewBag.PurchaseSchemeRows as List<AU_ERP.Models.PurchaseSchemeRow> ?? new List<AU_ERP.Models.PurchaseSchemeRow>();
 }
-<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")">
+<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")" data-initial-sales-schema="@(Model.SalesSchema ?? "")">
     @Html.AntiForgeryToken()
     <input type="hidden" name="returnTo" value="@(ViewBag.FormReturnTo ?? "Index")" />
     <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
@@ -166,12 +169,37 @@
                     <div class="bp-field-row">
                         <div class="bp-mandatory-bar"></div>
                         <label>Dist. channel</label>
-                        @Html.TextBoxFor(m => m.DistChannel, new { @class = "form-control form-control-sm f-dist" })
+                        <select name="DistChannel" id="bpCreateDistChannel" class="form-select form-select-sm f-dist" style="min-width:14rem;">
+                            <option value="">-- Select --</option>
+                            @foreach (var d in distChannels)
+                            {
+                                var sel = string.Equals(Model.DistChannel, d.DistributionChannelID.ToString(), StringComparison.Ordinal);
+                                if (sel)
+                                {
+                                    <option value="@d.DistributionChannelID" selected>@d.DistributionChannelName</option>
+                                }
+                                else
+                                {
+                                    <option value="@d.DistributionChannelID">@d.DistributionChannelName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Sales category</label>
+                        <select id="bpCreateSalesCategory" class="form-select form-select-sm f-sales-cat" style="min-width:14rem;">
+                            <option value="">-- Select sales category --</option>
+                            <option value="Walk-In">Walk-In Sales</option>
+                            <option value="Dealer">Dealer Sales</option>
+                        </select>
                     </div>
                     <div class="bp-field-row">
                         <div class="bp-mandatory-bar"></div>
                         <label>Sales schema</label>
-                        @Html.TextBoxFor(m => m.SalesSchema, new { @class = "form-control form-control-sm f-sales-schema" })
+                        <select name="SalesSchema" id="bpCreateSalesSchema" class="form-select form-select-sm f-sales-schema" style="min-width:18rem;">
+                            <option value="">-- Select category first --</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -181,8 +209,26 @@
                     <h3 class="bp-section-title">Purchasing</h3>
                     <div class="bp-field-row">
                         <div class="bp-mandatory-bar"></div>
-                        <label>Purch. schema</label>
-                        @Html.TextBoxFor(m => m.PurchSchema, new { @class = "form-control form-control-sm f-purch-schema" })
+                        <label>Purch. scheme</label>
+                        <select name="PurchSchema" id="bpCreatePurchSchema" class="form-select form-select-sm f-purch-schema" style="min-width:18rem;">
+                            <option value="">-- Select --</option>
+                            @foreach (var p in purchaseSchemes)
+                            {
+                                var psel = string.Equals(Model.PurchSchema, p.ConditionID.ToString(), StringComparison.Ordinal);
+                                if (psel)
+                                {
+                                    <option value="@p.ConditionID" selected>@p.ConditionType — @p.ConditionSchema</option>
+                                }
+                                else
+                                {
+                                    <option value="@p.ConditionID">@p.ConditionType — @p.ConditionSchema</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="bp-field-row">
+                        <label>Currency</label>
+                        <input type="text" class="form-control form-control-sm" value="PKR" readonly style="max-width:10rem;background:#f4f4f4;" tabindex="-1" aria-readonly="true" />
                     </div>
                 </div>
             </div>
@@ -195,6 +241,33 @@
 </form>
 
 <script type="text/javascript">
+    var bpSalesRows = @Html.Raw(ViewBag.SalesSchemaRowsJson ?? "[]");
+    function bpCreateFillSalesSchemaSelect(salesType) {
+        var sel = document.getElementById('bpCreateSalesSchema');
+        if (!sel) return;
+        var keep = (sel.value || '').trim();
+        sel.innerHTML = '<option value="">-- Select schema line --</option>';
+        if (!salesType) return;
+        (bpSalesRows || []).filter(function (r) { return r.salesType === salesType; }).forEach(function (r) {
+            var o = document.createElement('option');
+            o.value = String(r.id);
+            o.textContent = r.label;
+            sel.appendChild(o);
+        });
+        if (keep) sel.value = keep;
+    }
+    function bpCreateRestoreSalesFromInitial() {
+        var form = document.getElementById('bpCreateRoot');
+        var initial = form && (form.getAttribute('data-initial-sales-schema') || '').trim();
+        if (!initial) return;
+        var row = (bpSalesRows || []).find(function (r) { return String(r.id) === String(initial); });
+        if (!row) return;
+        var cat = document.getElementById('bpCreateSalesCategory');
+        if (cat) cat.value = row.salesType;
+        bpCreateFillSalesSchemaSelect(row.salesType);
+        var sel = document.getElementById('bpCreateSalesSchema');
+        if (sel) sel.value = initial;
+    }
     function bpHandleRoleUI(select) {
         const root = select.closest('#bpCreateRoot');
         if (!root) return;
@@ -202,8 +275,10 @@
         const roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
         const sales = root.querySelector('.tab-sales-btn');
         const purch = root.querySelector('.tab-purch-btn');
-        if (sales) sales.classList.toggle('d-none', roleCode !== 'FLCU01');
-        if (purch) purch.classList.toggle('d-none', roleCode !== 'FLVN01');
+        var showSales = roleCode === 'FLCU01' || roleCode === 'FLCU00';
+        var showPurch = roleCode === 'FLVN01' || roleCode === 'FLCU00';
+        if (sales) sales.classList.toggle('d-none', !showSales);
+        if (purch) purch.classList.toggle('d-none', !showPurch);
     }
     function bpSwitchTab(btn, tab) {
         const root = btn.closest('#bpCreateRoot');
@@ -217,6 +292,12 @@
     document.querySelectorAll('#bpCreateRoot .f-role').forEach(function (el) {
         bpHandleRoleUI(el);
     });
+    document.getElementById('bpCreateSalesCategory')?.addEventListener('change', function () {
+        var sel = document.getElementById('bpCreateSalesSchema');
+        if (sel) sel.value = '';
+        bpCreateFillSalesSchemaSelect(this.value);
+    });
+    bpCreateRestoreSalesFromInitial();
 
     function bpShowInlineError(root, invalidEls, message) {
         root = root || document.getElementById('bpCreateRoot');
@@ -252,11 +333,12 @@
         var roleSel = root.querySelector('.f-role');
         var opt = roleSel && roleSel.options[roleSel.selectedIndex];
         var roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
-        if (roleCode === 'FLCU01') {
+        if (roleCode === 'FLCU01' || roleCode === 'FLCU00') {
             req('.f-dist');
+            req('.f-sales-cat');
             req('.f-sales-schema');
         }
-        if (roleCode === 'FLVN01') {
+        if (roleCode === 'FLVN01' || roleCode === 'FLCU00') {
             req('.f-purch-schema');
         }
         return bad;

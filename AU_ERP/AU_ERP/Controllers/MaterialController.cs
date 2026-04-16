@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace AU_ERP.Main_Controller
@@ -72,6 +73,39 @@ namespace AU_ERP.Main_Controller
                     Text = g.MaterialGroupCode + " - " + (g.Description ?? "")
                 })
                 .ToList();
+
+            ViewBag.PlantList = _context.PlantsSamples.AsNoTracking()
+                .OrderBy(p => p.PlantID)
+                .Select(p => new SelectListItem
+                {
+                    Value = p.PlantID,
+                    Text = p.PlantID + " — " + p.PlantName
+                })
+                .ToList();
+
+            ViewBag.ProcurementTypeList = new List<SelectListItem>
+            {
+                new() { Text = "Internal", Value = "INTERNAL" },
+                new() { Text = "External", Value = "EXTERNAL" },
+                new() { Text = "Production", Value = "PRODUCTION" }
+            };
+
+            ViewBag.ItemCategoryGroupList = new List<SelectListItem>
+            {
+                new() { Text = "Standard", Value = "STANDARD" }
+            };
+
+            ViewBag.PurchasingGroupSelectList = new List<SelectListItem>
+            {
+                new() { Text = "Local", Value = "LOCAL" }
+            };
+
+            ViewBag.GrProcessingUomList = new List<SelectListItem>
+            {
+                new() { Text = "Hr", Value = "HR" },
+                new() { Text = "Day", Value = "DAY" },
+                new() { Text = "Min", Value = "MIN" }
+            };
         }
 
         /// <summary>Bind posted conversions to the material number from the info tab and drop binder noise for server-filled fields.</summary>
@@ -86,6 +120,15 @@ namespace AU_ERP.Main_Controller
                          k.StartsWith("Conversions[", StringComparison.OrdinalIgnoreCase) &&
                          k.Contains(".MaterialNumber", StringComparison.OrdinalIgnoreCase)).ToList())
                 ModelState.Remove(key);
+        }
+
+        /// <summary>Quantity-based MRP fields require a base unit; clear them when base unit is missing (including tampered posts).</summary>
+        private static void HarmonizeMaterialMrpFields(CreateMaterialMaster material)
+        {
+            if (!string.IsNullOrWhiteSpace(material.BaseUnitCode))
+                return;
+            material.SafetyStock = null;
+            material.ReorderPoint = null;
         }
 
         private static string NormalizeMaterialDescription(string? description) => (description ?? "").Trim();
@@ -150,6 +193,7 @@ namespace AU_ERP.Main_Controller
         public async Task<IActionResult> Create(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
             HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
+            HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
             {
                 ModelState.Clear();
@@ -182,6 +226,7 @@ namespace AU_ERP.Main_Controller
         public async Task<IActionResult> CreateV2(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
             HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
+            HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -221,10 +266,13 @@ namespace AU_ERP.Main_Controller
                 m.ItemCategoryGroup,
                 m.PurchasingGroupCode,
                 m.GrProcessingTime,
+                m.GrProcessingUom,
                 m.MrpTypeCode,
                 m.ProcurementTypeCode,
                 m.StrategyGroup,
-                m.AvailabilityCheckCode,
+                m.LeadTimeDays,
+                m.SafetyStock,
+                m.ReorderPoint,
                 m.ValuationClassCode
             };
 
@@ -242,6 +290,7 @@ namespace AU_ERP.Main_Controller
         public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, List<UnitConversion> conversions)
         {
             HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
+            HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -276,6 +325,7 @@ namespace AU_ERP.Main_Controller
                 var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
                 if (vPur != null)
                     return (false, vPur);
+                HarmonizeMaterialMrpFields(material);
 
                 var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, originalMaterialNumber);
                 if (vDesc != null)
@@ -339,6 +389,7 @@ namespace AU_ERP.Main_Controller
                 var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
                 if (vPur != null)
                     return (false, vPur);
+                HarmonizeMaterialMrpFields(material);
 
                 var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, material.MaterialNumber);
                 if (vDesc != null)
@@ -358,10 +409,13 @@ namespace AU_ERP.Main_Controller
                 existing.ItemCategoryGroup = material.ItemCategoryGroup;
                 existing.PurchasingGroupCode = material.PurchasingGroupCode;
                 existing.GrProcessingTime = material.GrProcessingTime;
+                existing.GrProcessingUom = material.GrProcessingUom;
                 existing.MrpTypeCode = material.MrpTypeCode;
                 existing.ProcurementTypeCode = material.ProcurementTypeCode;
                 existing.StrategyGroup = material.StrategyGroup;
-                existing.AvailabilityCheckCode = material.AvailabilityCheckCode;
+                existing.LeadTimeDays = material.LeadTimeDays;
+                existing.SafetyStock = material.SafetyStock;
+                existing.ReorderPoint = material.ReorderPoint;
                 existing.ValuationClassCode = material.ValuationClassCode;
 
                 var oldUom = await _context.UnitConversions
@@ -409,6 +463,7 @@ namespace AU_ERP.Main_Controller
                 var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
                 if (vPur != null)
                     return (false, vPur);
+                HarmonizeMaterialMrpFields(material);
 
                 var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, null);
                 if (vDesc != null)

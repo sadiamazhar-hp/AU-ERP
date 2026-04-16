@@ -16,6 +16,9 @@ namespace AU_ERP.Models
         public DbSet<BomItemsSample> BomItemsSamples { get; set; }
         public DbSet<BusinessPartnerMasterSample> BusinessPartnerMasterSamples { get; set; }
         public DbSet<BPRole> BPRoles { get; set; }
+        public DbSet<DistributionChannel> DistributionChannels { get; set; }
+        public DbSet<SalesSchemaRow> SalesSchemaRows { get; set; }
+        public DbSet<PurchaseSchemeRow> PurchaseSchemeRows { get; set; }
         public DbSet<BPTypeSample> BPTypeSamples { get; set; }
         public DbSet<BPGrouping> BPGroupings { get; set; }
         public DbSet<BPTypeNumberRanges> BPTypeNumberRanges { get; set; }
@@ -134,12 +137,30 @@ namespace AU_ERP.Models
                 .HasIndex(e => e.RoleCode)
                 .IsUnique();
 
+            // FLCU00 (Basic): both Sales & Purchasing tabs; FLCU01: Sales; FLVN01: Purchasing.
+            modelBuilder.Entity<BPRole>().HasData(
+                new BPRole { Id = 1, RoleCode = "FLCU00", RoleName = "Basic" },
+                new BPRole { Id = 2, RoleCode = "FLCU01", RoleName = "Customer (Sales)" },
+                new BPRole { Id = 3, RoleCode = "FLVN01", RoleName = "Vendor" });
+
             modelBuilder.Entity<BPTypeSample>()
                 .Property(e => e.Id)
                 .ValueGeneratedOnAdd();
 
             modelBuilder.Entity<BPGrouping>()
                 .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<DistributionChannel>()
+                .Property(e => e.DistributionChannelID)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesSchemaRow>()
+                .Property(e => e.ConditionTypeID)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<PurchaseSchemeRow>()
+                .Property(e => e.ConditionID)
                 .ValueGeneratedOnAdd();
 
             modelBuilder.Entity<BusinessPartnerMasterSample>()

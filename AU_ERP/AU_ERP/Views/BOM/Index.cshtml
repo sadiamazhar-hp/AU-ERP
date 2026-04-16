@@ -8,6 +8,7 @@
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
     var bomUoms = ViewBag.UomList as List<AU_ERP.Models.UnitOfMeasurement> ?? new List<AU_ERP.Models.UnitOfMeasurement>();
     var bomUomsJson = JsonSerializer.Serialize(bomUoms.Select(u => new { id = u.Id, code = u.Code ?? "" }));
+    var nextBomCode = ViewBag.NextBomCode as string ?? "";
 }
 
 <style>
@@ -153,6 +154,52 @@
     .bom-items-table .form-control-sm {
         border-radius: 2px;
     }
+
+    .bom-mat-picker {
+        position: relative;
+    }
+
+    .bom-mat-picker-dropdown {
+        display: none;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        margin-top: 2px;
+        max-height: 220px;
+        overflow-y: auto;
+        z-index: 1060;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 2px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+
+    .bom-mat-picker-dropdown.show {
+        display: block;
+    }
+
+    .bom-mat-picker-item {
+        padding: 6px 10px;
+        font-size: .82rem;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+    }
+
+    .bom-mat-picker-item:hover,
+    .bom-mat-picker-item.active {
+        background: var(--sap-selected, #b3d7ff);
+    }
+
+    .bom-mat-picker-item .bom-mat-code {
+        font-weight: 600;
+    }
+
+    .bom-mat-picker-empty {
+        padding: 8px 10px;
+        font-size: .78rem;
+        color: #666;
+    }
 </style>
 
 <div class="bom-module">
@@ -177,7 +224,7 @@
                     <div class="row g-3">
                         <div class="col-md-3">
                             <label class="form-label">BOM Code</label>
-                            <input type="text" id="bomCreateCode" class="form-control form-control-sm" maxlength="20" placeholder="Optional; next from 100000" />
+                            <input type="text" id="bomCreateCode" class="form-control form-control-sm" maxlength="20" value="@nextBomCode" readonly style="background:var(--sap-readonly);" title="Assigned automatically when you save" />
                         </div>
                         <div class="col-md-5">
                             <label class="form-label"><span class="mandatory-bar"></span> BOM Title</label>
@@ -216,6 +263,24 @@
                         <div class="col-md-3">
                             <label class="form-label">Valid From</label>
                             <input type="date" id="bomCreateValidFrom" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar"></span> Material Type</label>
+                            <select id="bomCreateHeaderMatType" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                <option value="HALB">HALB</option>
+                                <option value="FERT">FERT</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label"><span class="mandatory-bar"></span> Material</label>
+                            <div class="bom-mat-picker" data-purpose="header" data-mat-type-select-id="bomCreateHeaderMatType">
+                                <input type="text" class="form-control form-control-sm bom-mat-picker-search" id="bomCreateHeaderMatSearch" placeholder="Search material number or description…" autocomplete="off" />
+                                <input type="hidden" id="bomCreateHeaderMat" class="bom-mat-picker-value" value="" />
+                                <div class="bom-mat-picker-dropdown" id="bomCreateHeaderMatDd"></div>
+                            </div>
                         </div>
                     </div>
                 </fieldset>
@@ -364,6 +429,24 @@
                             <input type="date" id="bomEditValidFrom" class="form-control form-control-sm" />
                         </div>
                     </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-3">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Material Type</label>
+                            <select id="bomEditHeaderMatType" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                <option value="HALB">HALB</option>
+                                <option value="FERT">FERT</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Material</label>
+                            <div class="bom-mat-picker" data-purpose="header" data-mat-type-select-id="bomEditHeaderMatType">
+                                <input type="text" class="form-control form-control-sm bom-mat-picker-search" id="bomEditHeaderMatSearch" placeholder="Search material number or description…" autocomplete="off" />
+                                <input type="hidden" id="bomEditHeaderMat" class="bom-mat-picker-value" value="" />
+                                <div class="bom-mat-picker-dropdown" id="bomEditHeaderMatDd"></div>
+                            </div>
+                        </div>
+                    </div>
                 </fieldset>
 
                 <fieldset class="v2-frame">
@@ -396,52 +479,177 @@
 @section Scripts {
 <script>
     var bomItemCounter = 0;
-
-    var bomAllMaterials = [
-        @foreach (var mat in ViewBag.MaterialList as List<AU_ERP.Models.CreateMaterialMaster> ?? new List<AU_ERP.Models.CreateMaterialMaster>())
-        {
-            <text>{ n: "@Html.Raw(mat.MaterialNumber)", d: "@Html.Raw((mat.Description ?? "").Replace("\"", "\\\""))" },</text>
-        }
-    ];
-
     var bomAllUoms = @Html.Raw(bomUomsJson);
+    var bomNextCodeUrl = '@Url.Action("GetNextBomCode", "BOM")';
+    var bomSearchMaterialsUrl = '@Url.Action("SearchBomMaterials", "BOM")';
+    var bomPickerTimers = {};
 
     function escBomAttr(s) {
         if (s == null || s === undefined) return "";
         return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     }
 
-    function bomBuildCompSelectHtml(selectedVal) {
-        var html = '<option value="">-- Select --</option>';
-        bomAllMaterials.forEach(function (m) {
-            var isSelected = (m.n === selectedVal) ? ' selected' : '';
-            html += '<option value="' + escBomAttr(m.n) + '"' + isSelected + '>'
-                  + escBomAttr(m.n) + ' - ' + escBomAttr(m.d) + '</option>';
+    function bomCloseAllMatPickers() {
+        document.querySelectorAll(".bom-mat-picker-dropdown.show").forEach(function (d) {
+            d.classList.remove("show");
+            d.innerHTML = "";
         });
-        return html;
     }
 
-    function bomBuildUomSelectHtml(selectedId) {
-        var html = '<option value="">-- Select --</option>';
-        (bomAllUoms || []).forEach(function (u) {
-            var sel = (String(u.id) === String(selectedId) || u.id === selectedId) ? ' selected' : '';
-            var c = u.code != null ? String(u.code) : "";
-            html += '<option value="' + escBomAttr(String(u.id)) + '"' + sel + '>' + escBomAttr(c) + '</option>';
-        });
-        return html;
+    document.addEventListener("mousedown", function (e) {
+        if (e.target.closest(".bom-mat-picker-dropdown"))
+            e.preventDefault();
+        else if (!e.target.closest(".bom-mat-picker"))
+            bomCloseAllMatPickers();
+    });
+
+    function bomMatPickerBuildUrl(purpose, q, matType) {
+        var url = bomSearchMaterialsUrl + "?purpose=" + encodeURIComponent(purpose) + "&q=" + encodeURIComponent(q || "");
+        if (purpose === "header" && matType)
+            url += "&materialType=" + encodeURIComponent(matType);
+        return url;
+    }
+
+    function bomMatPickerGetHidden(wrap) {
+        return wrap.querySelector("input.bom-mat-picker-value") || wrap.querySelector("input[type=hidden]");
+    }
+
+    function bomMatPickerFetch(searchInput) {
+        var wrap = searchInput.closest(".bom-mat-picker");
+        if (!wrap) return;
+        var purpose = wrap.getAttribute("data-purpose") || "component";
+        var dd = wrap.querySelector(".bom-mat-picker-dropdown");
+        if (!dd) return;
+        var matType = "";
+        if (purpose === "header") {
+            var selId = wrap.getAttribute("data-mat-type-select-id");
+            var sel = selId ? document.getElementById(selId) : null;
+            matType = sel && sel.value ? sel.value : "";
+            if (!matType) {
+                dd.innerHTML = '<div class="bom-mat-picker-empty">Select Material Type first.</div>';
+                dd.classList.add("show");
+                return;
+            }
+        }
+        fetch(bomMatPickerBuildUrl(purpose, searchInput.value, matType))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    dd.innerHTML = '<div class="bom-mat-picker-empty">Could not load materials.</div>';
+                    dd.classList.add("show");
+                    return;
+                }
+                var items = data.items || [];
+                if (!items.length)
+                    dd.innerHTML = '<div class="bom-mat-picker-empty">No matches</div>';
+                else
+                    dd.innerHTML = items.map(function (it) {
+                        var uid = it.uomId != null && it.uomId !== undefined ? String(it.uomId) : "";
+                        var bu = it.baseUom != null ? String(it.baseUom) : "";
+                        return '<button type="button" class="bom-mat-picker-item list-group-item list-group-item-action py-1 px-2 text-start border-0 rounded-0" data-n="' + escBomAttr(it.n) + '" data-d="' + escBomAttr(it.d) + '" data-base-uom="' + escBomAttr(bu) + '" data-uom-id="' + escBomAttr(uid) + '">'
+                            + '<span class="bom-mat-code">' + escBomAttr(it.n) + '</span>'
+                            + ' <span class="text-muted small">— ' + escBomAttr(it.d) + "</span></button>";
+                    }).join("");
+                dd.classList.add("show");
+            })
+            .catch(function () {
+                dd.innerHTML = '<div class="bom-mat-picker-empty">Request failed.</div>';
+                dd.classList.add("show");
+            });
+    }
+
+    function bomMatPickerScheduleSearch(inputEl) {
+        var key = inputEl.id || ("picker-" + (inputEl.name || Math.random()));
+        clearTimeout(bomPickerTimers[key]);
+        bomPickerTimers[key] = setTimeout(function () { bomMatPickerFetch(inputEl); }, 250);
+    }
+
+    document.addEventListener("focusin", function (e) {
+        if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search")) return;
+        bomMatPickerFetch(e.target);
+    });
+
+    document.addEventListener("input", function (e) {
+        if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search")) return;
+        bomMatPickerScheduleSearch(e.target);
+    });
+
+    document.addEventListener("click", function (e) {
+        var btn = e.target.closest(".bom-mat-picker-item");
+        if (!btn) return;
+        e.preventDefault();
+        var wrap = btn.closest(".bom-mat-picker");
+        var dd = btn.closest(".bom-mat-picker-dropdown");
+        var hidden = bomMatPickerGetHidden(wrap);
+        var search = wrap.querySelector(".bom-mat-picker-search");
+        var n = btn.getAttribute("data-n") || "";
+        var d = btn.getAttribute("data-d") || "";
+        if (hidden) hidden.value = n;
+        if (search) search.value = n ? (n + (d ? " — " + d : "")) : "";
+        if (wrap.getAttribute("data-purpose") === "component") {
+            var tr = wrap.closest("tr");
+            if (tr) {
+                var uid = (btn.getAttribute("data-uom-id") || "").trim();
+                var bu = (btn.getAttribute("data-base-uom") || "").trim();
+                var disp = tr.querySelector(".bom-comp-uom-display");
+                var hidUom = tr.querySelector("input.bom-comp-uom-id");
+                if (disp) disp.value = bu || (uid ? "" : "—");
+                if (hidUom) hidUom.value = uid;
+            }
+        }
+        if (dd) {
+            dd.classList.remove("show");
+            dd.innerHTML = "";
+        }
+    });
+
+    function bomBuildCompMaterialCell(matNum, displayText) {
+        var disp = displayText || "";
+        var v = matNum || "";
+        return '<div class="bom-mat-picker" data-purpose="component">'
+            + '<input type="text" class="form-control form-control-sm bom-mat-picker-search" placeholder="Search # or description…" autocomplete="off" value="' + escBomAttr(disp) + '" />'
+            + '<input type="hidden" class="bom-mat-picker-value bom-comp-mat" value="' + escBomAttr(v) + '" />'
+            + '<div class="bom-mat-picker-dropdown"></div>'
+            + "</div>";
+    }
+
+    function bomBuildCompUomReadonlyCell(uomId, baseUomCode) {
+        var idStr = uomId != null && uomId !== "" ? String(uomId) : "";
+        var disp = (baseUomCode != null && String(baseUomCode).trim()) ? String(baseUomCode).trim() : "";
+        if (!disp && idStr && bomAllUoms && bomAllUoms.length) {
+            var u = bomAllUoms.find(function (x) { return String(x.id) === idStr; });
+            if (u && u.code) disp = String(u.code);
+        }
+        if (!disp) disp = "—";
+        return '<input type="text" class="form-control form-control-sm bom-comp-uom-display" readonly style="background:var(--sap-readonly,#f4f4f4);" value="' + escBomAttr(disp) + '" title="Base unit from component material" />'
+            + '<input type="hidden" class="bom-comp-uom-id" value="' + escBomAttr(idStr) + '" />';
     }
 
     function bomAddItemRow(tbodyId) {
         var tbody = document.getElementById(tbodyId);
         if (!tbody) return;
+        if (tbodyId === "bomCreateItemsBody") {
+            var htC = document.getElementById("bomCreateHeaderMatType");
+            if (!htC || !(htC.value || "").trim()) {
+                bomShowInline(bomCreateFormRoot(), [htC], "Select header Material Type before adding components.");
+                return;
+            }
+        }
+        if (tbodyId === "bomEditItemsBody") {
+            var htE = document.getElementById("bomEditHeaderMatType");
+            if (!htE || !(htE.value || "").trim()) {
+                bomShowInline(bomEditFormRoot(), [htE], "Select header Material Type before adding components.");
+                return;
+            }
+        }
         bomItemCounter++;
         var pos = tbody.rows.length + 1;
         var tr = document.createElement("tr");
         tr.innerHTML =
             '<td class="text-center">' + pos + '</td>' +
-            '<td><select class="form-select form-select-sm bom-comp-mat">' + bomBuildCompSelectHtml("") + '</select></td>' +
+            "<td>" + bomBuildCompMaterialCell("", "") + "</td>" +
             '<td><input type="number" class="form-control form-control-sm bom-comp-qty" step="any" value="1" /></td>' +
-            '<td><select class="form-select form-select-sm bom-comp-uom">' + bomBuildUomSelectHtml("") + '</select></td>' +
+            "<td>" + bomBuildCompUomReadonlyCell("", "") + "</td>" +
             '<td><input type="number" class="form-control form-control-sm bom-comp-scrap" step="any" value="0" /></td>' +
             '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
         tbody.appendChild(tr);
@@ -451,10 +659,11 @@
         var items = [];
         var rows = document.querySelectorAll("#" + tbodyId + " tr");
         rows.forEach(function (tr) {
-            var matVal = (tr.querySelector(".bom-comp-mat")?.value || "").trim();
+            var hid = tr.querySelector("input.bom-comp-mat");
+            var matVal = (hid && hid.value ? hid.value : "").trim();
             if (!matVal) return;
-            var uomSel = tr.querySelector(".bom-comp-uom");
-            var uomId = uomSel ? parseInt(uomSel.value, 10) : NaN;
+            var uomHid = tr.querySelector("input.bom-comp-uom-id");
+            var uomId = uomHid ? parseInt(uomHid.value, 10) : NaN;
             items.push({
                 MaterialNumber: matVal,
                 Quantity: parseFloat(tr.querySelector(".bom-comp-qty")?.value) || 0,
@@ -490,10 +699,15 @@
         var c = document.getElementById("bomCreateCode");
         var t = document.getElementById("bomCreateTitle");
         var lv = document.getElementById("bomCreateBLevel");
+        var ht = document.getElementById("bomCreateHeaderMatType");
+        var hm = document.getElementById("bomCreateHeaderMat");
+        var hms = document.getElementById("bomCreateHeaderMatSearch");
         var code = (c && c.value || "").trim();
         if (code && code.length > 20) bad.push(c);
         if (!(t && (t.value || "").trim())) bad.push(t);
         if (!(lv && (lv.value || "").trim())) bad.push(lv);
+        if (!(ht && (ht.value || "").trim())) bad.push(ht);
+        if (!(hm && (hm.value || "").trim())) bad.push(hms || hm);
         return bad;
     }
 
@@ -501,19 +715,24 @@
         var bad = [];
         var c = document.getElementById("bomEditCode");
         var t = document.getElementById("bomEditTitle");
+        var ht = document.getElementById("bomEditHeaderMatType");
+        var hm = document.getElementById("bomEditHeaderMat");
+        var hms = document.getElementById("bomEditHeaderMatSearch");
         var code = (c && c.value || "").trim();
         if (!code) bad.push(c);
         else if (code.length > 20) bad.push(c);
         if (!(t && (t.value || "").trim())) bad.push(t);
+        if (!(ht && (ht.value || "").trim())) bad.push(ht);
+        if (!(hm && (hm.value || "").trim())) bad.push(hms || hm);
         return bad;
     }
 
     function bomValidateComponentRows(tbodyId) {
         var bad = [];
         document.querySelectorAll("#" + tbodyId + " tr").forEach(function (tr) {
-            var mat = tr.querySelector(".bom-comp-mat");
+            var mat = tr.querySelector("input.bom-comp-mat");
             var qty = tr.querySelector(".bom-comp-qty");
-            var uom = tr.querySelector(".bom-comp-uom");
+            var uom = tr.querySelector("input.bom-comp-uom-id");
             var scr = tr.querySelector(".bom-comp-scrap");
             if (!mat || !qty || !uom || !scr) return;
             var mval = (mat.value || "").trim();
@@ -522,9 +741,12 @@
             var sraw = (scr.value || "").trim();
             var qnum = parseFloat(qraw);
             var snum = parseFloat(sraw);
-            if (!mval) bad.push(mat);
+            if (!mval) {
+                var searchEl = tr.querySelector(".bom-mat-picker-search");
+                bad.push(searchEl || mat);
+            }
             if (qraw === "" || isNaN(qnum)) bad.push(qty);
-            if (!uval) bad.push(uom);
+            if (!uval) bad.push(tr.querySelector(".bom-comp-uom-display") || uom);
             if (sraw === "" || isNaN(snum)) bad.push(scr);
         });
         return bad;
@@ -534,14 +756,28 @@
         var root = bomCreateFormRoot();
         if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
         document.getElementById("bomCreateBomID").value = "0";
-        document.getElementById("bomCreateCode").value = "";
         document.getElementById("bomCreateTitle").value = "";
         document.getElementById("bomCreateBLevel").value = "";
         document.getElementById("bomCreatePlant").value = "";
         document.getElementById("bomCreateBaseQty").value = "1";
         document.getElementById("bomCreateValidFrom").value = "";
+        var ht = document.getElementById("bomCreateHeaderMatType");
+        if (ht) ht.value = "";
+        var hm = document.getElementById("bomCreateHeaderMat");
+        if (hm) hm.value = "";
+        var hms = document.getElementById("bomCreateHeaderMatSearch");
+        if (hms) hms.value = "";
         document.getElementById("bomCreateItemsBody").innerHTML = "";
         document.getElementById("bomBtnSave").textContent = "Save";
+        var codeEl = document.getElementById("bomCreateCode");
+        if (codeEl) codeEl.value = "";
+        fetch(bomNextCodeUrl)
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (codeEl && res && res.success && res.nextBomCode)
+                    codeEl.value = res.nextBomCode;
+            })
+            .catch(function () { /* leave empty on failure */ });
     }
 
     function bomReloadToListTab() {
@@ -575,6 +811,8 @@
             Plant: document.getElementById("bomCreatePlant").value || null,
             BaseQty: parseFloat(document.getElementById("bomCreateBaseQty").value) || null,
             ValidFrom: document.getElementById("bomCreateValidFrom").value || null,
+            HeaderMaterialTypeCode: document.getElementById("bomCreateHeaderMatType")?.value || null,
+            BomMaterialNumber: (document.getElementById("bomCreateHeaderMat")?.value || "").trim() || null,
             Items: bomCollectItems("bomCreateItemsBody")
         };
 
@@ -613,21 +851,30 @@
                 document.getElementById("bomEditPlant").value = b.plant || b.Plant || "";
                 document.getElementById("bomEditBaseQty").value = b.baseQty != null ? b.baseQty : (b.BaseQty || "");
                 document.getElementById("bomEditValidFrom").value = b.validFrom || b.ValidFrom || "";
+                var eht = document.getElementById("bomEditHeaderMatType");
+                if (eht) eht.value = b.headerMaterialTypeCode || b.HeaderMaterialTypeCode || "";
+                var ehm = document.getElementById("bomEditHeaderMat");
+                if (ehm) ehm.value = b.bomMaterialNumber || b.BomMaterialNumber || "";
+                var ehms = document.getElementById("bomEditHeaderMatSearch");
+                if (ehms) ehms.value = b.headerMaterialDisplay || b.HeaderMaterialDisplay || "";
 
                 var tbody = document.getElementById("bomEditItemsBody");
                 tbody.innerHTML = "";
                 var items = b.items || b.Items || [];
                 items.forEach(function (item, idx) {
                     var matNum = item.materialNumber || item.MaterialNumber || "";
+                    var md = item.materialDescription || item.MaterialDescription || "";
+                    var disp = matNum && md ? (matNum + " — " + md) : matNum;
                     var qty = item.quantity != null ? item.quantity : (item.Quantity || "");
                     var uomId = item.uomId != null ? item.uomId : (item.UomId != null ? item.UomId : "");
+                    var baseU = item.baseUnitCode || item.BaseUnitCode || "";
                     var scrap = item.scrapPercentage != null ? item.scrapPercentage : (item.ScrapPercentage || 0);
                     var tr = document.createElement("tr");
                     tr.innerHTML =
                         '<td class="text-center">' + (idx + 1) + '</td>' +
-                        '<td><select class="form-select form-select-sm bom-comp-mat">' + bomBuildCompSelectHtml(matNum) + '</select></td>' +
+                        "<td>" + bomBuildCompMaterialCell(matNum, disp) + "</td>" +
                         '<td><input type="number" class="form-control form-control-sm bom-comp-qty" step="any" value="' + escBomAttr(qty) + '" /></td>' +
-                        '<td><select class="form-select form-select-sm bom-comp-uom">' + bomBuildUomSelectHtml(uomId) + '</select></td>' +
+                        "<td>" + bomBuildCompUomReadonlyCell(uomId, baseU) + "</td>" +
                         '<td><input type="number" class="form-control form-control-sm bom-comp-scrap" step="any" value="' + escBomAttr(scrap) + '" /></td>' +
                         '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
                     tbody.appendChild(tr);
@@ -667,6 +914,8 @@
             Plant: document.getElementById("bomEditPlant").value || null,
             BaseQty: parseFloat(document.getElementById("bomEditBaseQty").value) || null,
             ValidFrom: document.getElementById("bomEditValidFrom").value || null,
+            HeaderMaterialTypeCode: document.getElementById("bomEditHeaderMatType")?.value || null,
+            BomMaterialNumber: (document.getElementById("bomEditHeaderMat")?.value || "").trim() || null,
             Items: bomCollectItems("bomEditItemsBody")
         };
 
@@ -715,6 +964,25 @@
         else if (confirm("Delete this BOM?"))
             doDelete();
     }
+
+    (function () {
+        var ct = document.getElementById("bomCreateHeaderMatType");
+        if (ct) ct.addEventListener("change", function () {
+            var hm = document.getElementById("bomCreateHeaderMat");
+            var hms = document.getElementById("bomCreateHeaderMatSearch");
+            if (hm) hm.value = "";
+            if (hms) hms.value = "";
+            bomCloseAllMatPickers();
+        });
+        var et = document.getElementById("bomEditHeaderMatType");
+        if (et) et.addEventListener("change", function () {
+            var hm = document.getElementById("bomEditHeaderMat");
+            var hms = document.getElementById("bomEditHeaderMatSearch");
+            if (hm) hm.value = "";
+            if (hms) hms.value = "";
+            bomCloseAllMatPickers();
+        });
+    })();
 
     (function () {
         var inp = document.getElementById("bomListFilter");

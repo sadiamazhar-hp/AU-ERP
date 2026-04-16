@@ -51,6 +51,30 @@ namespace AU_ERP.Main_Controller
                 .OrderBy(t => t.TypeName)
                 .ToListAsync(ct);
             ViewBag.GroupOptions = await _db.BPGroupings.AsNoTracking().OrderBy(g => g.GroupName).ToListAsync(ct);
+
+            var dist = await _db.DistributionChannels.AsNoTracking().OrderBy(d => d.DistributionChannelID).ToListAsync(ct);
+            ViewBag.DistributionChannels = dist;
+            ViewBag.DistributionChannelsJson = JsonSerializer.Serialize(dist.Select(d => new { id = d.DistributionChannelID, name = d.DistributionChannelName }));
+
+            var salesRows = await _db.SalesSchemaRows.AsNoTracking()
+                .OrderBy(s => s.SalesType)
+                .ThenBy(s => s.ConditionTypeID)
+                .ToListAsync(ct);
+            ViewBag.SalesSchemaRows = salesRows;
+            ViewBag.SalesSchemaRowsJson = JsonSerializer.Serialize(salesRows.Select(s => new
+            {
+                id = s.ConditionTypeID,
+                salesType = s.SalesType,
+                label = $"{s.ConditionType} — {s.ConditionDescription}"
+            }));
+
+            var purchRows = await _db.PurchaseSchemeRows.AsNoTracking().OrderBy(p => p.ConditionID).ToListAsync(ct);
+            ViewBag.PurchaseSchemeRows = purchRows;
+            ViewBag.PurchaseSchemesJson = JsonSerializer.Serialize(purchRows.Select(p => new
+            {
+                id = p.ConditionID,
+                label = $"{p.ConditionType} — {p.ConditionSchema}"
+            }));
         }
 
         private static void NormalizePartnerFkIds(BusinessPartnerMasterSample m)
@@ -396,85 +420,6 @@ namespace AU_ERP.Main_Controller
         public IActionResult BPgroup()
         {
             return View();
-        }
-
-        public async Task<IActionResult> BPRoles(CancellationToken ct = default)
-        {
-            var list = await _db.BPRoles.AsNoTracking().OrderBy(r => r.Id).ToListAsync(ct);
-            return View("BPRoles", list);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> BPRoles(List<BPRole>? roles, CancellationToken ct = default)
-        {
-            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
-
-            if (roles == null || roles.Count == 0)
-            {
-                if (isAjax) return Json(new { success = false, message = "No data received." });
-                return RedirectToAction(nameof(BPRoles));
-            }
-
-            try
-            {
-                foreach (var item in roles)
-                {
-                    item.RoleCode = string.IsNullOrWhiteSpace(item.RoleCode) ? "" : item.RoleCode.Trim();
-                    item.RoleName = item.RoleName?.Trim() ?? "";
-
-                    if (item.Id > 0)
-                    {
-                        var existing = await _db.BPRoles.FindAsync(new object[] { item.Id }, ct);
-                        if (existing != null)
-                        {
-                            if (!string.IsNullOrWhiteSpace(item.RoleCode))
-                                existing.RoleCode = item.RoleCode;
-                            existing.RoleName = item.RoleName;
-                        }
-                    }
-                    else
-                    {
-                        if (string.IsNullOrWhiteSpace(item.RoleCode) && string.IsNullOrWhiteSpace(item.RoleName))
-                            continue;
-                        if (string.IsNullOrWhiteSpace(item.RoleCode))
-                            item.RoleCode = "R" + Guid.NewGuid().ToString("N")[..8];
-                        await _db.BPRoles.AddAsync(new BPRole
-                        {
-                            RoleCode = item.RoleCode,
-                            RoleName = item.RoleName,
-                            BusinessPartnerMasterSamples = new List<BusinessPartnerMasterSample>()
-                        }, ct);
-                    }
-                }
-                await _db.SaveChangesAsync(ct);
-                if (isAjax) return Json(new { success = true, message = "BP Roles Saved Successfully !" });
-                return RedirectToAction(nameof(BPRoles));
-            }
-            catch (Exception ex)
-            {
-                if (isAjax) return Json(new { success = false, message = "Save failed: " + ex.Message });
-                ModelState.AddModelError("", "Save failed: " + ex.Message);
-                return View("BPRoles", roles);
-            }
-        }
-
-        [HttpPost]
-        public async Task<JsonResult> DeleteBPRole(int id, CancellationToken ct = default)
-        {
-            try
-            {
-                var item = await _db.BPRoles.FindAsync(new object[] { id }, ct);
-                if (item == null)
-                    return Json(new { success = false, message = "Record not found" });
-                _db.BPRoles.Remove(item);
-                await _db.SaveChangesAsync(ct);
-                return Json(new { success = true, message = "BP Role Deleted Successfully !" });
-            }
-            catch (Exception ex)
-            {
-                return Json(new { success = false, message = ex.Message });
-            }
         }
 
         public async Task<IActionResult> BPTypeSamples(CancellationToken ct = default)

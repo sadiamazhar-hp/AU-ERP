@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -12,10 +13,10 @@ namespace AU_ERP.Controllers
 
         public BOMController(AppDbContext db) => _db = db;
 
-        /// <summary>Next numeric BOM code; first issued code is 100000.</summary>
+        /// <summary>Next numeric BOM code; first issued code is 10000, then +1 per new BOM.</summary>
         private async Task<string> AllocateNextBomCodeAsync(CancellationToken ct = default)
         {
-            const long floor = 100000;
+            const long floor = 10000;
             var codes = await _db.BomHeadersSamples.AsNoTracking()
                 .Where(h => h.BOMCode != null)
                 .Select(h => h.BOMCode!)
@@ -41,9 +42,6 @@ namespace AU_ERP.Controllers
                 await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantID).ToListAsync(ct),
                 "PlantID", "PlantName");
 
-            ViewBag.MaterialList = await _db.CreateMaterialMaster.AsNoTracking()
-                .OrderBy(m => m.MaterialNumber).ToListAsync(ct);
-
             ViewBag.UomList = await _db.UnitOfMeasurements.AsNoTracking()
                 .OrderBy(u => u.Code)
                 .ToListAsync(ct);
@@ -52,6 +50,7 @@ namespace AU_ERP.Controllers
         public async Task<IActionResult> Index(CancellationToken ct = default)
         {
             await PrepareViewBags(ct);
+            ViewBag.NextBomCode = await AllocateNextBomCodeAsync(ct);
 
             var list = await _db.BomHeadersSamples
                 .AsNoTracking()
@@ -64,14 +63,80 @@ namespace AU_ERP.Controllers
             return View(list);
         }
 
+        [HttpGet]
+        public async Task<JsonResult> GetNextBomCode(CancellationToken ct = default)
+        {
+            var next = await AllocateNextBomCodeAsync(ct);
+            return Json(new { success = true, nextBomCode = next });
+        }
+
+        /// <summary>Materials for BOM UI: header = HALB/FERT (optionally narrowed by materialType); component = ROH/HALB. Search q is partial match on number or description.</summary>
+        [HttpGet]
+        public async Task<JsonResult> SearchBomMaterials(string? purpose, string? q, string? materialType, CancellationToken ct = default)
+        {
+            var p = (purpose ?? "").Trim().ToLowerInvariant();
+            IQueryable<CreateMaterialMaster> query = _db.CreateMaterialMaster.AsNoTracking();
+
+            if (p == "component")
+                query = query.Where(m => m.MaterialTypeCode == "ROH" || m.MaterialTypeCode == "HALB");
+            else if (p == "header")
+            {
+                var mt = (materialType ?? "").Trim().ToUpperInvariant();
+                if (mt is "HALB" or "FERT")
+                    query = query.Where(m => m.MaterialTypeCode == mt);
+                else
+                    query = query.Where(m => m.MaterialTypeCode == "HALB" || m.MaterialTypeCode == "FERT");
+            }
+            else
+                return Json(new { success = false, message = "Invalid purpose. Use header or component." });
+
+            var qq = (q ?? "").Trim();
+            if (qq.Length > 0)
+                query = query.Where(m =>
+                    m.MaterialNumber.Contains(qq) ||
+                    (m.Description != null && m.Description.Contains(qq)));
+
+            var mats = await query
+                .OrderBy(m => m.MaterialNumber)
+                .Take(50)
+                .Select(m => new
+                {
+                    m.MaterialNumber,
+                    Description = m.Description ?? "",
+                    m.MaterialTypeCode,
+                    m.BaseUnitCode
+                })
+                .ToListAsync(ct);
+
+            var codes = mats
+                .Where(m => !string.IsNullOrEmpty(m.BaseUnitCode))
+                .Select(m => m.BaseUnitCode!)
+                .Distinct()
+                .ToList();
+
+            var uomMap = await _db.UnitOfMeasurements.AsNoTracking()
+                .Where(u => u.Code != null && codes.Contains(u.Code))
+                .ToDictionaryAsync(u => u.Code!, u => u.Id, ct);
+
+            var items = mats.Select(m => new
+            {
+                n = m.MaterialNumber,
+                d = m.Description,
+                t = m.MaterialTypeCode,
+                baseUom = m.BaseUnitCode ?? "",
+                uomId = m.BaseUnitCode != null && uomMap.TryGetValue(m.BaseUnitCode, out var uid) ? (int?)uid : null
+            }).ToList();
+
+            return Json(new { success = true, items });
+        }
+
         [HttpPost]
         public async Task<JsonResult> Create([FromBody] BomCreateDto dto, CancellationToken ct = default)
         {
             try
             {
-                var code = dto.BOMCode?.Trim();
-                if (string.IsNullOrEmpty(code))
-                    code = await AllocateNextBomCodeAsync(ct);
+                // BOM code is system-assigned (starts at 10000, increments); ignore client value on create.
+                var code = await AllocateNextBomCodeAsync(ct);
 
                 if (code.Length > 20)
                     return Json(new { success = false, message = "BOM Code must be 20 characters or less." });
@@ -79,10 +144,26 @@ namespace AU_ERP.Controllers
                 if (await _db.BomHeadersSamples.AnyAsync(h => h.BOMCode == code, ct))
                     return Json(new { success = false, message = "This BOM code is already in use." });
 
+                var headerType = dto.HeaderMaterialTypeCode?.Trim().ToUpperInvariant();
+                var headerMat = dto.BomMaterialNumber?.Trim();
+                if (string.IsNullOrEmpty(headerType) || string.IsNullOrEmpty(headerMat))
+                    return Json(new { success = false, message = "Material Type and Material are required for the BOM header." });
+                if (headerType is not ("HALB" or "FERT"))
+                    return Json(new { success = false, message = "Header Material Type must be HALB or FERT." });
+
+                var headerMaterial = await _db.CreateMaterialMaster.AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.MaterialNumber == headerMat, ct);
+                if (headerMaterial == null)
+                    return Json(new { success = false, message = $"Header material '{headerMat}' does not exist." });
+                if (headerMaterial.MaterialTypeCode != headerType)
+                    return Json(new { success = false, message = "Header material does not match the selected Material Type." });
+
                 var header = new BomHeadersSample
                 {
                     BOMCode = code,
                     BOMTitle = dto.BOMTitle?.Trim(),
+                    HeaderMaterialTypeCode = headerType,
+                    BomMaterialNumber = headerMat,
                     BLevel = dto.BLevel,
                     Plant = dto.Plant,
                     BaseQty = dto.BaseQty,
@@ -96,12 +177,14 @@ namespace AU_ERP.Controllers
                         var compNum = item.MaterialNumber?.Trim();
                         if (!string.IsNullOrEmpty(compNum))
                         {
-                            var compExists = await _db.CreateMaterialMaster
+                            var compMat = await _db.CreateMaterialMaster
                                 .AsNoTracking()
-                                .AnyAsync(m => m.MaterialNumber == compNum, ct);
+                                .FirstOrDefaultAsync(m => m.MaterialNumber == compNum, ct);
 
-                            if (!compExists)
+                            if (compMat == null)
                                 return Json(new { success = false, message = $"Component material '{compNum}' does not exist." });
+                            if (compMat.MaterialTypeCode is not ("ROH" or "HALB"))
+                                return Json(new { success = false, message = $"Component '{compNum}' must be Raw (ROH) or Semi-finished (HALB) material." });
 
                             if (item.UomId is null || item.UomId <= 0)
                                 return Json(new { success = false, message = "Each component line must have a UOM selected." });
@@ -140,10 +223,21 @@ namespace AU_ERP.Controllers
                 .AsNoTracking()
                 .Include(h => h.BomItemsSamples)
                     .ThenInclude(i => i.Uom)
+                .Include(h => h.BomItemsSamples)
+                    .ThenInclude(i => i.CreateMaterialMaster)
                 .FirstOrDefaultAsync(h => h.BomID == id, ct);
 
             if (bom == null)
                 return Json(new { success = false, message = "BOM not found." });
+
+            string? headerMatDisplay = null;
+            if (!string.IsNullOrEmpty(bom.BomMaterialNumber))
+            {
+                headerMatDisplay = await _db.CreateMaterialMaster.AsNoTracking()
+                    .Where(m => m.MaterialNumber == bom.BomMaterialNumber)
+                    .Select(m => m.MaterialNumber + " - " + (m.Description ?? ""))
+                    .FirstOrDefaultAsync(ct);
+            }
 
             return Json(new
             {
@@ -156,11 +250,16 @@ namespace AU_ERP.Controllers
                     bom.BLevel,
                     bom.Plant,
                     bom.BaseQty,
+                    bom.HeaderMaterialTypeCode,
+                    bom.BomMaterialNumber,
+                    HeaderMaterialDisplay = headerMatDisplay,
                     ValidFrom = bom.ValidFrom?.ToString("yyyy-MM-dd"),
                     Items = bom.BomItemsSamples.Select(i => new
                     {
                         i.ItemID,
                         i.MaterialNumber,
+                        MaterialDescription = i.CreateMaterialMaster != null ? i.CreateMaterialMaster.Description : null,
+                        BaseUnitCode = i.CreateMaterialMaster != null ? i.CreateMaterialMaster.BaseUnitCode : null,
                         i.Quantity,
                         i.UomId,
                         UomCode = i.Uom != null ? i.Uom.Code : null,
@@ -192,8 +291,24 @@ namespace AU_ERP.Controllers
                 if (await _db.BomHeadersSamples.AnyAsync(h => h.BomID != dto.BomID && h.BOMCode == code, ct))
                     return Json(new { success = false, message = "This BOM code is already in use." });
 
+                var headerType = dto.HeaderMaterialTypeCode?.Trim().ToUpperInvariant();
+                var headerMat = dto.BomMaterialNumber?.Trim();
+                if (string.IsNullOrEmpty(headerType) || string.IsNullOrEmpty(headerMat))
+                    return Json(new { success = false, message = "Material Type and Material are required for the BOM header." });
+                if (headerType is not ("HALB" or "FERT"))
+                    return Json(new { success = false, message = "Header Material Type must be HALB or FERT." });
+
+                var headerMaterial = await _db.CreateMaterialMaster.AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.MaterialNumber == headerMat, ct);
+                if (headerMaterial == null)
+                    return Json(new { success = false, message = $"Header material '{headerMat}' does not exist." });
+                if (headerMaterial.MaterialTypeCode != headerType)
+                    return Json(new { success = false, message = "Header material does not match the selected Material Type." });
+
                 header.BOMCode = code;
                 header.BOMTitle = dto.BOMTitle?.Trim();
+                header.HeaderMaterialTypeCode = headerType;
+                header.BomMaterialNumber = headerMat;
                 header.BLevel = dto.BLevel;
                 header.Plant = dto.Plant;
                 header.BaseQty = dto.BaseQty;
@@ -208,12 +323,14 @@ namespace AU_ERP.Controllers
                         var compNum = item.MaterialNumber?.Trim();
                         if (!string.IsNullOrEmpty(compNum))
                         {
-                            var compExists = await _db.CreateMaterialMaster
+                            var compMat = await _db.CreateMaterialMaster
                                 .AsNoTracking()
-                                .AnyAsync(m => m.MaterialNumber == compNum, ct);
+                                .FirstOrDefaultAsync(m => m.MaterialNumber == compNum, ct);
 
-                            if (!compExists)
+                            if (compMat == null)
                                 return Json(new { success = false, message = $"Component material '{compNum}' does not exist." });
+                            if (compMat.MaterialTypeCode is not ("ROH" or "HALB"))
+                                return Json(new { success = false, message = $"Component '{compNum}' must be Raw (ROH) or Semi-finished (HALB) material." });
 
                             if (item.UomId is null || item.UomId <= 0)
                                 return Json(new { success = false, message = "Each component line must have a UOM selected." });
@@ -273,6 +390,10 @@ namespace AU_ERP.Controllers
         public int BomID { get; set; }
         public string? BOMCode { get; set; }
         public string? BOMTitle { get; set; }
+        /// <summary>HALB or FERT.</summary>
+        public string? HeaderMaterialTypeCode { get; set; }
+        /// <summary>Header (assembly) material number.</summary>
+        public string? BomMaterialNumber { get; set; }
         public int? BLevel { get; set; }
         public string? Plant { get; set; }
         public decimal? BaseQty { get; set; }

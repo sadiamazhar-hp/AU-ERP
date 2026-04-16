@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace AU_ERP.Models
@@ -21,10 +22,18 @@ namespace AU_ERP.Models
         [MaxLength(20)]
         public string? PurchasingGroupCode { get; set; }
         public int? GrProcessingTime { get; set; }
+
+        /// <summary>Unit for GR processing time: HR, DAY, or MIN.</summary>
+        [MaxLength(10)]
+        [Column("Gr_Processing_UOM")]
+        public string? GrProcessingUom { get; set; }
         public string? MrpTypeCode { get; set; }
         public string? ProcurementTypeCode { get; set; }
         public string? StrategyGroup { get; set; }
-        public string? AvailabilityCheckCode { get; set; }
+        /// <summary>Planned lead time in calendar days.</summary>
+        public int? LeadTimeDays { get; set; }
+        public decimal? SafetyStock { get; set; }
+        public int? ReorderPoint { get; set; }
         public string? ValuationClassCode { get; set; }
 
         // Nav properties: not posted with forms; [ValidateNever] avoids false "required" validation.

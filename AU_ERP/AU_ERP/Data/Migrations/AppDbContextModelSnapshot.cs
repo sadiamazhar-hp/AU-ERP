@@ -91,6 +91,26 @@ namespace AU_ERP.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("BPRoles");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            RoleCode = "FLCU00",
+                            RoleName = "Basic"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            RoleCode = "FLCU01",
+                            RoleName = "Customer (Sales)"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            RoleCode = "FLVN01",
+                            RoleName = "Vendor"
+                        });
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BPTypeNumberRanges", b =>
@@ -167,9 +187,17 @@ namespace AU_ERP.Data.Migrations
                     b.Property<string>("BOMTitle")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("BomMaterialNumber")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<decimal?>("BaseQty")
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("HeaderMaterialTypeCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("Plant")
                         .HasColumnType("nvarchar(450)");
@@ -314,9 +342,6 @@ namespace AU_ERP.Data.Migrations
                     b.Property<string>("MaterialNumber")
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("AvailabilityCheckCode")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("BaseUnitCode")
                         .HasColumnType("nvarchar(max)");
 
@@ -336,8 +361,16 @@ namespace AU_ERP.Data.Migrations
                     b.Property<int?>("GrProcessingTime")
                         .HasColumnType("int");
 
+                    b.Property<string>("GrProcessingUom")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasColumnName("Gr_Processing_UOM");
+
                     b.Property<string>("IndustrySectorCode")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("LeadTimeDays")
+                        .HasColumnType("int");
 
                     b.Property<string>("ItemCategoryGroup")
                         .HasColumnType("nvarchar(max)");
@@ -354,9 +387,15 @@ namespace AU_ERP.Data.Migrations
                     b.Property<string>("ProcurementTypeCode")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("ReorderPoint")
+                        .HasColumnType("int");
+
                     b.Property<string>("PurchasingGroupCode")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal?>("SafetyStock")
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<string>("StrategyGroup")
                         .HasColumnType("nvarchar(max)");
@@ -371,6 +410,24 @@ namespace AU_ERP.Data.Migrations
                     b.HasIndex("MaterialTypeCode");
 
                     b.ToTable("CreateMaterialMaster");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.DistributionChannel", b =>
+                {
+                    b.Property<int>("DistributionChannelID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DistributionChannelID"));
+
+                    b.Property<string>("DistributionChannelName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("DistributionChannelID");
+
+                    b.ToTable("Distribution_Channel");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.DocumentRange", b =>
@@ -511,6 +568,55 @@ namespace AU_ERP.Data.Migrations
                             PlantID = "Man102",
                             PlantName = "Manufacturing Plant"
                         });
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.PurchaseSchemeRow", b =>
+                {
+                    b.Property<int>("ConditionID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ConditionID"));
+
+                    b.Property<string>("ConditionSchema")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ConditionType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("ConditionID");
+
+                    b.ToTable("Purchase_Scheme");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesSchemaRow", b =>
+                {
+                    b.Property<int>("ConditionTypeID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ConditionTypeID"));
+
+                    b.Property<string>("ConditionDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ConditionType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("SalesType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("ConditionTypeID");
+
+                    b.ToTable("Sales_Schema");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.ProductionVersion", b =>

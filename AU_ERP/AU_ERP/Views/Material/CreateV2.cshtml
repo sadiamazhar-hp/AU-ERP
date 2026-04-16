@@ -1,5 +1,6 @@
 @model AU_ERP.Models.CreateMaterialMaster
 @using Microsoft.AspNetCore.Mvc.Rendering
+@using System.Collections.Generic
 @using System.Linq
 @using System.Text.Json
 @{
@@ -11,6 +12,20 @@
     var uomAltOptsJson = JsonSerializer.Serialize(
         (ViewBag.UomIdList as IEnumerable<SelectListItem> ?? Enumerable.Empty<SelectListItem>())
         .Select(x => new { value = x.Value ?? "", text = x.Text ?? "" }));
+    var mrpTypeItemsV2 = new List<SelectListItem>
+    {
+        new() { Text = "Standard", Value = "STANDARD" },
+        new() { Text = "No Planning", Value = "NO_PLANNING" }
+    };
+    var strategyGroupItemsV2 = new List<SelectListItem>
+    {
+        new() { Text = "Make to Stop (MTS)", Value = "MTS" }
+    };
+    var plantItemsV2 = (ViewBag.PlantList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var procurementItemsV2 = (ViewBag.ProcurementTypeList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var itemCategoryItemsV2 = (ViewBag.ItemCategoryGroupList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var purchasingGroupItemsV2 = (ViewBag.PurchasingGroupSelectList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
+    var grProcessingUomItemsV2 = (ViewBag.GrProcessingUomList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
 }
 <style>
     .au-create-v2-modal .modal-header {
@@ -194,11 +209,11 @@
                     <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label">Delivering Plant</label>
-                            @Html.EditorFor(m => m.DeliveringPlantCode, new { htmlAttributes = new { @class = "form-control" } })
+                            @Html.DropDownListFor(m => m.DeliveringPlantCode, plantItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Item Category Group</label>
-                            @Html.EditorFor(m => m.ItemCategoryGroup, new { htmlAttributes = new { @class = "form-control" } })
+                            @Html.DropDownListFor(m => m.ItemCategoryGroup, itemCategoryItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                         </div>
                     </div>
                 </div>
@@ -210,11 +225,14 @@
                     <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label">Purchasing Group</label>
-                            @Html.EditorFor(m => m.PurchasingGroupCode, new { htmlAttributes = new { @class = "form-control", maxlength = "20" } })
+                            @Html.DropDownListFor(m => m.PurchasingGroupCode, purchasingGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">GR Processing Time</label>
-                            @Html.EditorFor(m => m.GrProcessingTime, new { htmlAttributes = new { @class = "form-control", type = "number" } })
+                            <div class="input-group input-group-sm">
+                                @Html.EditorFor(m => m.GrProcessingTime, new { htmlAttributes = new { @class = "form-control", type = "number", min = "0", step = "1" } })
+                                @Html.DropDownListFor(m => m.GrProcessingUom, grProcessingUomItemsV2, "-- UOM --", new { @class = "form-select", style = "max-width:8rem;" })
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -226,15 +244,28 @@
                     <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label">MRP Type</label>
-                            @Html.EditorFor(m => m.MrpTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
-                            <label class="form-label">Procurement Type</label>
-                            @Html.EditorFor(m => m.ProcurementTypeCode, new { htmlAttributes = new { @class = "form-control", maxlength = "1" } })
+                            @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            <label class="form-label mt-2">Procurement Type</label>
+                            @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            <label class="form-label mt-2">Strategy Group</label>
+                            @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Strategy Group</label>
-                            @Html.EditorFor(m => m.StrategyGroup, new { htmlAttributes = new { @class = "form-control" } })
-                            <label class="form-label">Availability Check</label>
-                            @Html.EditorFor(m => m.AvailabilityCheckCode, new { htmlAttributes = new { @class = "form-control", maxlength = "2" } })
+                            <label class="form-label">Lead time</label>
+                            <div class="input-group input-group-sm">
+                                @Html.TextBoxFor(m => m.LeadTimeDays, new { @class = "form-control", type = "number", min = "0", step = "1", id = "LeadTimeDaysV2" + V2IdAffix })
+                                <span class="input-group-text">days</span>
+                            </div>
+                            <label class="form-label mt-2">Safety stock</label>
+                            <div class="input-group input-group-sm">
+                                @Html.TextBoxFor(m => m.SafetyStock, new { @class = "form-control", type = "number", step = "0.0001", id = "SafetyStockV2" + V2IdAffix })
+                                <span class="input-group-text" id="@("mrpSafetyUomLbl" + V2IdAffix)">—</span>
+                            </div>
+                            <label class="form-label mt-2">Reorder point</label>
+                            <div class="input-group input-group-sm">
+                                @Html.TextBoxFor(m => m.ReorderPoint, new { @class = "form-control", type = "number", min = "0", step = "1", id = "ReorderPointV2" + V2IdAffix })
+                                <span class="input-group-text" id="@("mrpReorderUomLbl" + V2IdAffix)">—</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -471,6 +502,28 @@
             uomIndexV2++;
         }
 
+        function syncMrpQtyFieldsV2() {
+            const baseEl = document.getElementById(v2id("BaseUnitCodeV2"));
+            const code = baseEl && String(baseEl.value || "").trim();
+            const has = !!code;
+            const opt = baseEl && baseEl.options && baseEl.selectedIndex >= 0 ? baseEl.options[baseEl.selectedIndex] : null;
+            const uomText = has && opt ? String(opt.text || "").trim() : "—";
+            const lblS = document.getElementById(v2id("mrpSafetyUomLbl"));
+            const lblR = document.getElementById(v2id("mrpReorderUomLbl"));
+            if (lblS) lblS.textContent = has ? uomText : "—";
+            if (lblR) lblR.textContent = has ? uomText : "—";
+            const safety = document.getElementById(v2id("SafetyStockV2"));
+            const reorder = document.getElementById(v2id("ReorderPointV2"));
+            if (safety) {
+                safety.readOnly = !has;
+                if (!has) safety.value = "";
+            }
+            if (reorder) {
+                reorder.readOnly = !has;
+                if (!has) reorder.value = "";
+            }
+        }
+
         window['addUomRowV2@(v2HandlerKey)'] = function () {
             const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
             if (!tbody) return;
@@ -516,10 +569,16 @@
             setVal("PurchasingGroupCode", pick(m, "purchasingGroupCode", "PurchasingGroupCode"));
             var gr = pick(m, "grProcessingTime", "GrProcessingTime");
             setVal("GrProcessingTime", gr !== "" && gr != null ? gr : "");
+            setVal("GrProcessingUom", pick(m, "grProcessingUom", "GrProcessingUom"));
             setVal("MrpTypeCode", pick(m, "mrpTypeCode", "MrpTypeCode"));
             setVal("ProcurementTypeCode", pick(m, "procurementTypeCode", "ProcurementTypeCode"));
             setVal("StrategyGroup", pick(m, "strategyGroup", "StrategyGroup"));
-            setVal("AvailabilityCheckCode", pick(m, "availabilityCheckCode", "AvailabilityCheckCode"));
+            var lt = pick(m, "leadTimeDays", "LeadTimeDays");
+            setVal("LeadTimeDays", lt !== "" && lt != null ? lt : "");
+            var ss = pick(m, "safetyStock", "SafetyStock");
+            setVal("SafetyStock", ss !== "" && ss != null ? ss : "");
+            var rp = pick(m, "reorderPoint", "ReorderPoint");
+            setVal("ReorderPoint", rp !== "" && rp != null ? rp : "");
             setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
 
             const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
@@ -536,6 +595,7 @@
             });
             const sb = document.getElementById(v2id("statusBarV2"));
             if (sb) sb.innerText = "Loaded for edit.";
+            syncMrpQtyFieldsV2();
 
             var origNum = pick(m, "materialNumber", "MaterialNumber");
             var origH = document.getElementById(v2id("createV2OriginalMaterialNumber"));
@@ -570,6 +630,7 @@
             if (firstTabBtn && typeof bootstrap !== "undefined" && bootstrap.Tab)
                 bootstrap.Tab.getOrCreateInstance(firstTabBtn).show();
             handleTabVisibilityV2();
+            syncMrpQtyFieldsV2();
         }
 
         if (createV2Embedded)
@@ -582,6 +643,11 @@
             if (!createV2Embedded && typeof window.moveCreateV2ModalToBody === "function")
                 window.moveCreateV2ModalToBody();
             handleTabVisibilityV2();
+            const baseUomSel = document.getElementById(v2id("BaseUnitCodeV2"));
+            if (baseUomSel) {
+                baseUomSel.addEventListener("change", syncMrpQtyFieldsV2);
+            }
+            syncMrpQtyFieldsV2();
             const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
             if (saveBtn) {
                 saveBtn.addEventListener("click", function () {
@@ -664,5 +730,8 @@
                 });
             }
         });
+
+        window.auMaterialV2MrpSyncByAffix = window.auMaterialV2MrpSyncByAffix || {};
+        window.auMaterialV2MrpSyncByAffix[V2_ID_AFFIX || ""] = syncMrpQtyFieldsV2;
     })();
 </script>

@@ -373,10 +373,16 @@
                 setVal("PurchasingGroupCode", pick(m, "purchasingGroupCode", "PurchasingGroupCode"));
                 var gr = pick(m, "grProcessingTime", "GrProcessingTime");
                 setVal("GrProcessingTime", gr !== "" && gr != null ? gr : "");
+                setVal("GrProcessingUom", pick(m, "grProcessingUom", "GrProcessingUom"));
                 setVal("MrpTypeCode", pick(m, "mrpTypeCode", "MrpTypeCode"));
                 setVal("ProcurementTypeCode", pick(m, "procurementTypeCode", "ProcurementTypeCode"));
                 setVal("StrategyGroup", pick(m, "strategyGroup", "StrategyGroup"));
-                setVal("AvailabilityCheckCode", pick(m, "availabilityCheckCode", "AvailabilityCheckCode"));
+                var ltEd = pick(m, "leadTimeDays", "LeadTimeDays");
+                setVal("LeadTimeDays", ltEd !== "" && ltEd != null ? ltEd : "");
+                var ssEd = pick(m, "safetyStock", "SafetyStock");
+                setVal("SafetyStock", ssEd !== "" && ssEd != null ? ssEd : "");
+                var rpEd = pick(m, "reorderPoint", "ReorderPoint");
+                setVal("ReorderPoint", rpEd !== "" && rpEd != null ? rpEd : "");
                 setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
                 var tbody = document.querySelector("#uomTableV2-modal tbody");
                 if (tbody) tbody.innerHTML = "";
@@ -403,6 +409,8 @@
                     if (tbody) tbody.insertAdjacentHTML("beforeend", html);
                     uomIdx++;
                 });
+                var syncMrp = window.auMaterialV2MrpSyncByAffix && window.auMaterialV2MrpSyncByAffix["-modal"];
+                if (typeof syncMrp === "function") syncMrp();
                 var origNum = pick(m, "materialNumber", "MaterialNumber");
                 var origH = document.getElementById("createV2OriginalMaterialNumber-modal");
                 if (origH) origH.value = origNum || "";

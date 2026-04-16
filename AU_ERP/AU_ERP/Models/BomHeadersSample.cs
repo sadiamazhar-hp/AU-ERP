@@ -17,8 +17,13 @@ namespace AU_ERP.Models
         public string? BOMCode { get; set; }
         public string? BOMTitle { get; set; }
 
-        // public string? MaterialNumber { get; set; }
-        // public string? MaterialTypeCode { get; set; }
+        /// <summary>HALB or FERT — BOM header (assembly) material type.</summary>
+        [MaxLength(10)]
+        public string? HeaderMaterialTypeCode { get; set; }
+
+        /// <summary>Material this BOM is built for (must match <see cref="HeaderMaterialTypeCode"/>).</summary>
+        [MaxLength(450)]
+        public string? BomMaterialNumber { get; set; }
 
         public int? BLevel { get; set; }
         public int? AlternativeBOM { get; set; }
