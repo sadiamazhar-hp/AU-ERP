@@ -6,7 +6,8 @@ namespace AU_ERP.Models
     {
         [Key]
         public int OpID { get; set; }
-        public int? RoutingID { get; set; }
+
+        public int OperationHeaderId { get; set; }
         public int? WorkCenterID { get; set; }
         public int OperationSequence { get; set; }
         public string? Description { get; set; }
@@ -17,7 +18,7 @@ namespace AU_ERP.Models
         [MaxLength(10)]
         public string? TimeUom { get; set; }
 
-        public virtual RoutingHeadersSample? RoutingHeader { get; set; }
+        public virtual RoutingOperationHeaderSample? OperationHeader { get; set; }
         public virtual WorkCenterMasterSample? WorkCenter { get; set; }
     }
 }

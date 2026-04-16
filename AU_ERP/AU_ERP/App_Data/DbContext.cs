@@ -25,6 +25,7 @@ namespace AU_ERP.Models
         public DbSet<PlantsSample> PlantsSamples { get; set; }
         public DbSet<WorkCenterMasterSample> WorkCenterMasterSamples { get; set; }
         public DbSet<RoutingHeadersSample> RoutingHeadersSamples { get; set; }
+        public DbSet<RoutingOperationHeaderSample> RoutingOperationHeadersSamples { get; set; }
         public DbSet<RoutingOperationsSample> RoutingOperationsSamples { get; set; }
         public DbSet<DocumentType> DocumentTypes { get; set; }
         public DbSet<DocumentRange> DocumentRanges { get; set; }
@@ -229,6 +230,16 @@ namespace AU_ERP.Models
                 .HasForeignKey(h => h.MaterialNumber)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<RoutingOperationHeaderSample>()
+                .Property(e => e.OperationHeaderId)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<RoutingOperationHeaderSample>()
+                .HasOne(h => h.RoutingHeader)
+                .WithMany(r => r.OperationHeaders)
+                .HasForeignKey(h => h.RoutingID)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<RoutingOperationsSample>()
                 .Property(e => e.OpID)
                 .ValueGeneratedOnAdd();
@@ -242,9 +253,9 @@ namespace AU_ERP.Models
                 .HasPrecision(18, 6);
 
             modelBuilder.Entity<RoutingOperationsSample>()
-                .HasOne(o => o.RoutingHeader)
+                .HasOne(o => o.OperationHeader)
                 .WithMany(h => h.RoutingOperationsSamples)
-                .HasForeignKey(o => o.RoutingID)
+                .HasForeignKey(o => o.OperationHeaderId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<RoutingOperationsSample>()

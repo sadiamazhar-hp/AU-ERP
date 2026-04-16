@@ -18,6 +18,11 @@ namespace AUTiles.Models
         public string? UoM { get; set; }
     }
 
+    public class RoutingOperationHeaderSample
+    {
+        public ICollection<RoutingOperationsSample>? RoutingOperationsSamples { get; set; }
+    }
+
     public class RoutingHeadersSample
     {
         public string? RoutingID { get; set; }
@@ -26,6 +31,7 @@ namespace AUTiles.Models
         public string? StatusID { get; set; }
         public DateTime? ValidFrom { get; set; }
         public ICollection<RoutingOperationsSample>? RoutingOperationsSamples { get; set; }
+        public ICollection<RoutingOperationHeaderSample>? OperationHeaders { get; set; }
     }
 
     public class BusinessPartnerMasterSample

@@ -688,6 +688,31 @@ namespace AU_ERP.Data.Migrations
                     b.ToTable("RoutingHeadersSamples");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.RoutingOperationHeaderSample", b =>
+                {
+                    b.Property<int>("OperationHeaderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OperationHeaderId"));
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RoutingID")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("OperationHeaderId");
+
+                    b.HasIndex("RoutingID");
+
+                    b.ToTable("RoutingOperationHeadersSamples");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.RoutingOperationsSample", b =>
                 {
                     b.Property<int>("OpID")
@@ -707,10 +732,10 @@ namespace AU_ERP.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
 
-                    b.Property<int>("OperationSequence")
+                    b.Property<int>("OperationHeaderId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("RoutingID")
+                    b.Property<int>("OperationSequence")
                         .HasColumnType("int");
 
                     b.Property<string>("TimeUom")
@@ -722,7 +747,7 @@ namespace AU_ERP.Data.Migrations
 
                     b.HasKey("OpID");
 
-                    b.HasIndex("RoutingID");
+                    b.HasIndex("OperationHeaderId");
 
                     b.HasIndex("WorkCenterID");
 
@@ -988,11 +1013,21 @@ namespace AU_ERP.Data.Migrations
                     b.Navigation("Plant");
                 });
 
-            modelBuilder.Entity("AU_ERP.Models.RoutingOperationsSample", b =>
+            modelBuilder.Entity("AU_ERP.Models.RoutingOperationHeaderSample", b =>
                 {
                     b.HasOne("AU_ERP.Models.RoutingHeadersSample", "RoutingHeader")
-                        .WithMany("RoutingOperationsSamples")
+                        .WithMany("OperationHeaders")
                         .HasForeignKey("RoutingID")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("RoutingHeader");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.RoutingOperationsSample", b =>
+                {
+                    b.HasOne("AU_ERP.Models.RoutingOperationHeaderSample", "OperationHeader")
+                        .WithMany("RoutingOperationsSamples")
+                        .HasForeignKey("OperationHeaderId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("AU_ERP.Models.WorkCenterMasterSample", "WorkCenter")
@@ -1000,7 +1035,7 @@ namespace AU_ERP.Data.Migrations
                         .HasForeignKey("WorkCenterID")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("RoutingHeader");
+                    b.Navigation("OperationHeader");
 
                     b.Navigation("WorkCenter");
                 });
@@ -1087,6 +1122,11 @@ namespace AU_ERP.Data.Migrations
                 });
 
             modelBuilder.Entity("AU_ERP.Models.RoutingHeadersSample", b =>
+                {
+                    b.Navigation("OperationHeaders");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.RoutingOperationHeaderSample", b =>
                 {
                     b.Navigation("RoutingOperationsSamples");
                 });

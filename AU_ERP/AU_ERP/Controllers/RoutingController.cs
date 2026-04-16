@@ -33,7 +33,9 @@ namespace AU_ERP.Controllers
                 .AsNoTracking()
                 .Include(r => r.Material)
                 .Include(r => r.Plant)
-                .Include(r => r.RoutingOperationsSamples)
+                .Include(r => r.OperationHeaders)
+                    .ThenInclude(h => h.RoutingOperationsSamples)
+                    .ThenInclude(o => o.WorkCenter)
                 .OrderByDescending(r => r.RoutingID)
                 .ToListAsync(ct);
 
@@ -48,6 +50,70 @@ namespace AU_ERP.Controllers
                 .Where(w => w.ID == workCenterId.Value)
                 .Select(w => w.TimeUom)
                 .FirstOrDefaultAsync(ct);
+        }
+
+        /// <summary>Validates work-centre rows and appends headers + lines to <paramref name="header"/>.</summary>
+        private async Task<JsonResult?> TryAppendOperationHeadersAsync(
+            RoutingHeadersSample header,
+            IReadOnlyList<RoutingOperationHeaderDto>? headerDtos,
+            CancellationToken ct)
+        {
+            if (headerDtos == null || headerDtos.Count == 0)
+                return Json(new { success = false, message = "Add at least one operation (title + work centre rows)." });
+
+            var displayOrder = 10;
+            foreach (var hDto in headerDtos)
+            {
+                var title = (hDto.Title ?? "").Trim();
+                if (string.IsNullOrEmpty(title))
+                    return Json(new { success = false, message = "Each operation must have a title." });
+
+                var ops = hDto.Operations;
+                if (ops == null || ops.Count == 0)
+                    return Json(new { success = false, message = $"Operation \"{title}\" must have at least one work centre row." });
+
+                var oh = new RoutingOperationHeaderSample
+                {
+                    Title = title,
+                    DisplayOrder = displayOrder
+                };
+                displayOrder += 10;
+
+                var seq = 10;
+                foreach (var op in ops)
+                {
+                    var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
+                    if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
+                    {
+                        var wcName = op.WorkCenterID.HasValue
+                            ? await _db.WorkCenterMasterSamples.AsNoTracking()
+                                .Where(w => w.ID == op.WorkCenterID.Value)
+                                .Select(w => w.WorkCenterName)
+                                .FirstOrDefaultAsync(ct)
+                            : null;
+                        return Json(new
+                        {
+                            success = false,
+                            message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
+                        });
+                    }
+
+                    oh.RoutingOperationsSamples.Add(new RoutingOperationsSample
+                    {
+                        WorkCenterID = op.WorkCenterID,
+                        OperationSequence = seq,
+                        Description = op.Description?.Trim(),
+                        MachineTime = op.MachineTime,
+                        LaborTime = op.LaborTime,
+                        TimeUom = timeUom
+                    });
+                    seq += 10;
+                }
+
+                header.OperationHeaders.Add(oh);
+            }
+
+            return null;
         }
 
         [HttpPost]
@@ -76,39 +142,9 @@ namespace AU_ERP.Controllers
                     CreatedAt = DateTime.Now
                 };
 
-                if (dto.Operations != null)
-                {
-                    int seq = 10;
-                    foreach (var op in dto.Operations)
-                    {
-                        var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
-                        if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
-                        {
-                            var wcName = op.WorkCenterID.HasValue
-                                ? await _db.WorkCenterMasterSamples.AsNoTracking()
-                                    .Where(w => w.ID == op.WorkCenterID.Value)
-                                    .Select(w => w.WorkCenterName)
-                                    .FirstOrDefaultAsync(ct)
-                                : null;
-                            return Json(new
-                            {
-                                success = false,
-                                message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
-                            });
-                        }
-
-                        header.RoutingOperationsSamples.Add(new RoutingOperationsSample
-                        {
-                            WorkCenterID = op.WorkCenterID,
-                            OperationSequence = seq,
-                            Description = op.Description?.Trim(),
-                            MachineTime = op.MachineTime,
-                            LaborTime = op.LaborTime,
-                            TimeUom = timeUom
-                        });
-                        seq += 10;
-                    }
-                }
+                var err = await TryAppendOperationHeadersAsync(header, dto.OperationHeaders, ct);
+                if (err != null)
+                    return err;
 
                 await _db.RoutingHeadersSamples.AddAsync(header, ct);
                 await _db.SaveChangesAsync(ct);
@@ -126,7 +162,8 @@ namespace AU_ERP.Controllers
         {
             var r = await _db.RoutingHeadersSamples
                 .AsNoTracking()
-                .Include(h => h.RoutingOperationsSamples)
+                .Include(h => h.OperationHeaders)
+                    .ThenInclude(oh => oh.RoutingOperationsSamples)
                 .FirstOrDefaultAsync(h => h.RoutingID == id, ct);
 
             if (r == null)
@@ -143,17 +180,25 @@ namespace AU_ERP.Controllers
                     r.PlantID,
                     r.StatusID,
                     ValidFrom = r.ValidFrom.ToString("yyyy-MM-dd"),
-                    Operations = r.RoutingOperationsSamples
-                        .OrderBy(o => o.OperationSequence)
-                        .Select(o => new
+                    OperationHeaders = r.OperationHeaders
+                        .OrderBy(h => h.DisplayOrder)
+                        .Select(h => new
                         {
-                            o.OpID,
-                            o.WorkCenterID,
-                            o.OperationSequence,
-                            o.Description,
-                            o.MachineTime,
-                            o.LaborTime,
-                            o.TimeUom
+                            h.OperationHeaderId,
+                            h.Title,
+                            h.DisplayOrder,
+                            Operations = h.RoutingOperationsSamples
+                                .OrderBy(o => o.OperationSequence)
+                                .Select(o => new
+                                {
+                                    o.OpID,
+                                    o.WorkCenterID,
+                                    o.OperationSequence,
+                                    o.Description,
+                                    o.MachineTime,
+                                    o.LaborTime,
+                                    o.TimeUom
+                                })
                         })
                 }
             });
@@ -165,7 +210,8 @@ namespace AU_ERP.Controllers
             try
             {
                 var header = await _db.RoutingHeadersSamples
-                    .Include(h => h.RoutingOperationsSamples)
+                    .Include(h => h.OperationHeaders)
+                        .ThenInclude(oh => oh.RoutingOperationsSamples)
                     .FirstOrDefaultAsync(h => h.RoutingID == dto.RoutingID, ct);
 
                 if (header == null)
@@ -180,44 +226,45 @@ namespace AU_ERP.Controllers
                 header.StatusID = dto.StatusID;
                 header.ValidFrom = dto.ValidFrom ?? header.ValidFrom;
 
-                _db.RoutingOperationsSamples.RemoveRange(header.RoutingOperationsSamples);
+                _db.RoutingOperationHeadersSamples.RemoveRange(header.OperationHeaders);
+                header.OperationHeaders.Clear();
 
-                if (dto.Operations != null)
-                {
-                    int seq = 10;
-                    foreach (var op in dto.Operations)
-                    {
-                        var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
-                        if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
-                        {
-                            var wcName = op.WorkCenterID.HasValue
-                                ? await _db.WorkCenterMasterSamples.AsNoTracking()
-                                    .Where(w => w.ID == op.WorkCenterID.Value)
-                                    .Select(w => w.WorkCenterName)
-                                    .FirstOrDefaultAsync(ct)
-                                : null;
-                            return Json(new
-                            {
-                                success = false,
-                                message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
-                            });
-                        }
-
-                        header.RoutingOperationsSamples.Add(new RoutingOperationsSample
-                        {
-                            WorkCenterID = op.WorkCenterID,
-                            OperationSequence = seq,
-                            Description = op.Description?.Trim(),
-                            MachineTime = op.MachineTime,
-                            LaborTime = op.LaborTime,
-                            TimeUom = timeUom
-                        });
-                        seq += 10;
-                    }
-                }
+                var err = await TryAppendOperationHeadersAsync(header, dto.OperationHeaders, ct);
+                if (err != null)
+                    return err;
 
                 await _db.SaveChangesAsync(ct);
                 return Json(new { success = true, message = "Routing Updated Successfully !" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Update failed: " + (ex.InnerException?.Message ?? ex.Message) });
+            }
+        }
+
+        /// <summary>Replace only operation headers / work-centre lines; routing header fields unchanged.</summary>
+        [HttpPost]
+        public async Task<JsonResult> UpdateOperationHeaders([FromBody] RoutingOperationHeadersOnlyDto dto, CancellationToken ct = default)
+        {
+            try
+            {
+                var header = await _db.RoutingHeadersSamples
+                    .Include(h => h.OperationHeaders)
+                        .ThenInclude(oh => oh.RoutingOperationsSamples)
+                    .FirstOrDefaultAsync(h => h.RoutingID == dto.RoutingID, ct);
+
+                if (header == null)
+                    return Json(new { success = false, message = "Routing not found." });
+
+                _db.RoutingOperationHeadersSamples.RemoveRange(header.OperationHeaders);
+                header.OperationHeaders.Clear();
+
+                var err = await TryAppendOperationHeadersAsync(header, dto.OperationHeaders, ct);
+                if (err != null)
+                    return err;
+
+                await _db.SaveChangesAsync(ct);
+                return Json(new { success = true, message = "Operations updated successfully." });
             }
             catch (Exception ex)
             {
@@ -231,13 +278,11 @@ namespace AU_ERP.Controllers
             try
             {
                 var header = await _db.RoutingHeadersSamples
-                    .Include(h => h.RoutingOperationsSamples)
                     .FirstOrDefaultAsync(h => h.RoutingID == id, ct);
 
                 if (header == null)
                     return Json(new { success = false, message = "Routing not found." });
 
-                _db.RoutingOperationsSamples.RemoveRange(header.RoutingOperationsSamples);
                 _db.RoutingHeadersSamples.Remove(header);
                 await _db.SaveChangesAsync(ct);
 
@@ -258,6 +303,18 @@ namespace AU_ERP.Controllers
         public string? PlantID { get; set; }
         public int? StatusID { get; set; }
         public DateTime? ValidFrom { get; set; }
+        public List<RoutingOperationHeaderDto>? OperationHeaders { get; set; }
+    }
+
+    public class RoutingOperationHeadersOnlyDto
+    {
+        public int RoutingID { get; set; }
+        public List<RoutingOperationHeaderDto>? OperationHeaders { get; set; }
+    }
+
+    public class RoutingOperationHeaderDto
+    {
+        public string? Title { get; set; }
         public List<RoutingOpDto>? Operations { get; set; }
     }
 

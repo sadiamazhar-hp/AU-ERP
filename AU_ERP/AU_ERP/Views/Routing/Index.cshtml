@@ -41,6 +41,10 @@
     .rt-ops-table th { background: #dee6ef; border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; font-size: .82rem; }
     .rt-ops-table td { border: 1px solid #ccc; padding: 2px 4px; }
     .rt-ops-table .form-control-sm, .rt-ops-table .form-select-sm { border-radius: 2px; }
+
+    .rt-op-section { border: 1px solid #c4c4c4; border-radius: 4px; padding: .75rem 1rem; margin-bottom: .75rem; background: #fafbfc; }
+    .rt-ops-summary-cell { max-width: 28rem; vertical-align: top; }
+    .rt-ops-summary-cell .rt-op-sum-line { font-size: .78rem; line-height: 1.35; margin-bottom: .2rem; }
 </style>
 
 <div class="rt-module">
@@ -54,7 +58,6 @@
     </ul>
 
     <div class="tab-content rt-module-tab-content">
-        <!-- ───── CREATE TAB ───── -->
         <div class="tab-pane fade p-2 p-md-3 @(rtTabList ? "" : "show active")" id="rtPaneCreate" role="tabpanel">
             <div class="rt-create-form">
                 <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
@@ -105,22 +108,10 @@
                 <fieldset class="v2-frame">
                     <legend>
                         Operations
-                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="rtAddOpRow('rtCreateOpsBody')">+ Add</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="rtAddOpSection('rtCreateOpsRoot')">+ Add</button>
                     </legend>
-                    <table class="rt-ops-table">
-                        <thead>
-                            <tr>
-                                <th style="width:60px;">Op No.</th>
-                                <th style="width:200px;">Work Centre</th>
-                                <th>Description</th>
-                                <th style="width:110px;">Machine Time</th>
-                                <th style="width:110px;">Labor Time</th>
-                                <th style="width:90px;">UoM</th>
-                                <th style="width:50px;"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="rtCreateOpsBody"></tbody>
-                    </table>
+                    <p class="text-secondary small mb-2">Each operation has a title and a number of work-centre rows. Change the number to add or remove rows for that operation.</p>
+                    <div id="rtCreateOpsRoot" class="rt-ops-sections-root"></div>
                 </fieldset>
 
                 <div class="btn-save-bottom">
@@ -130,11 +121,10 @@
             </div>
         </div>
 
-        <!-- ───── LIST TAB ───── -->
         <div class="tab-pane fade @(rtTabList ? "show active" : "")" id="rtPaneList" role="tabpanel">
             <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
             <div class="p-2 px-3">
-                <input type="search" class="form-control form-control-sm" id="rtListFilter" placeholder="Filter by material, plant…" style="max-width:22rem;" />
+                <input type="search" class="form-control form-control-sm" id="rtListFilter" placeholder="Filter by material, plant, operation title…" style="max-width:22rem;" />
             </div>
             <div class="table-wrapper">
                 <table class="table-sap" id="rtListTable">
@@ -147,7 +137,7 @@
                             <th>Plant</th>
                             <th>Status</th>
                             <th>Valid From</th>
-                            <th>Ops</th>
+                            <th>Operations</th>
                             <th style="width:72px;">Action</th>
                         </tr>
                     </thead>
@@ -158,7 +148,17 @@
                             var matDesc = r.Material != null ? $"{r.MaterialNumber} - {r.Material.Description}" : (r.MaterialNumber ?? "");
                             var plantName = r.Plant?.PlantName ?? "";
                             var statusText = r.StatusID == 1 ? "Active" : "Inactive";
-                            <tr data-rt-filter="@($"{r.RoutingID} {r.Title} {matDesc} {plantName} {statusText}")" data-rt-id="@r.RoutingID">
+                            var ohEnum = r.OperationHeaders ?? Enumerable.Empty<RoutingOperationHeaderSample>();
+                            var filterParts = new List<string> { $"{r.RoutingID}", r.Title ?? "", matDesc, plantName, statusText };
+                            foreach (var oh in ohEnum.OrderBy(x => x.DisplayOrder))
+                            {
+                                filterParts.Add(oh.Title ?? "");
+                                var wn = (oh.RoutingOperationsSamples ?? Enumerable.Empty<RoutingOperationsSample>())
+                                    .OrderBy(o => o.OperationSequence).Select(o => o.WorkCenter?.WorkCenterName ?? "—");
+                                foreach (var w in wn) { filterParts.Add(w); }
+                            }
+                            var rtFilter = string.Join(" ", filterParts.Where(s => !string.IsNullOrWhiteSpace(s)));
+                            <tr data-rt-filter="@rtFilter" data-rt-id="@r.RoutingID">
                                 <td class="col-no">@(rtIdx + 1)</td>
                                 <td><input class="sap-input" value="@r.RoutingID" readonly /></td>
                                 <td><input class="sap-input" value="@r.Title" readonly /></td>
@@ -166,7 +166,23 @@
                                 <td><input class="sap-input" value="@plantName" readonly /></td>
                                 <td><input class="sap-input" value="@statusText" readonly /></td>
                                 <td><input class="sap-input" value="@(r.ValidFrom.ToString("yyyy-MM-dd"))" readonly /></td>
-                                <td><input class="sap-input" value="@(r.RoutingOperationsSamples?.Count ?? 0)" readonly /></td>
+                                <td class="rt-ops-summary-cell">
+                                    @if (!ohEnum.Any())
+                                    {
+                                        <span class="text-secondary small">—</span>
+                                    }
+                                    else
+                                    {
+                                        foreach (var oh in ohEnum.OrderBy(x => x.DisplayOrder))
+                                        {
+                                            var wcs = string.Join(", ",
+                                                (oh.RoutingOperationsSamples ?? Enumerable.Empty<RoutingOperationsSample>())
+                                                .OrderBy(o => o.OperationSequence)
+                                                .Select(o => o.WorkCenter?.WorkCenterName ?? "—"));
+                                            <div class="rt-op-sum-line"><strong>@(oh.Title ?? "—")</strong>: @wcs</div>
+                                        }
+                                    }
+                                </td>
                                 <td class="col-action">
                                     <div class="dropdown">
                                         <button class="btn btn-sm btn-link text-secondary p-0" type="button" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
@@ -174,6 +190,7 @@
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                                             <li><button type="button" class="dropdown-item" data-rt-id="@r.RoutingID" onclick="rtOpenEdit(this.getAttribute('data-rt-id'))">Edit</button></li>
+                                            <li><button type="button" class="dropdown-item" data-rt-id="@r.RoutingID" onclick="rtOpenManageOps(this.getAttribute('data-rt-id'))">Manage operations</button></li>
                                             <li><button type="button" class="dropdown-item text-danger" data-rt-id="@r.RoutingID" onclick="rtDeleteFromList(this.getAttribute('data-rt-id'))">Delete</button></li>
                                         </ul>
                                     </div>
@@ -192,7 +209,6 @@
     </div>
 </div>
 
-<!-- ───── EDIT MODAL ───── -->
 <div class="modal fade" id="rtEditModal" tabindex="-1" aria-labelledby="rtEditModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content au-create-v2-modal">
@@ -250,26 +266,40 @@
                 <fieldset class="v2-frame">
                     <legend>
                         Operations
-                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="rtAddOpRow('rtEditOpsBody')">+ Add</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="rtAddOpSection('rtEditOpsRoot')">+ Add</button>
                     </legend>
-                    <table class="rt-ops-table">
-                        <thead>
-                            <tr>
-                                <th style="width:60px;">Op No.</th>
-                                <th style="width:200px;">Work Centre</th>
-                                <th>Description</th>
-                                <th style="width:110px;">Machine Time</th>
-                                <th style="width:110px;">Labor Time</th>
-                                <th style="width:90px;">UoM</th>
-                                <th style="width:50px;"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="rtEditOpsBody"></tbody>
-                    </table>
+                    <p class="text-secondary small mb-2">Each operation has a title and a number of work-centre rows.</p>
+                    <div id="rtEditOpsRoot" class="rt-ops-sections-root"></div>
                 </fieldset>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm px-4" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="rtSaveEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rtManageOpsModal" tabindex="-1" aria-labelledby="rtManageOpsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content au-create-v2-modal">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rtManageOpsModalLabel">Manage operations</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="rtManageOpsRoutingId" />
+                <fieldset class="v2-frame">
+                    <legend>
+                        Operations
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" onclick="rtAddOpSection('rtManageOpsRoot')">+ Add</button>
+                    </legend>
+                    <p class="text-secondary small mb-2">Edit operation titles and work-centre rows. Header fields are unchanged until you use Edit routing.</p>
+                    <div id="rtManageOpsRoot" class="rt-ops-sections-root"></div>
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm px-4" style="background:#388087;color:#fff;border:1px solid #388087;" onclick="rtSaveManageOps()">Save operations</button>
             </div>
         </div>
     </div>
@@ -315,13 +345,10 @@
         }
     }
 
-    function rtAddOpRow(tbodyId, data) {
-        var tbody = document.getElementById(tbodyId);
-        if (!tbody) return;
+    function rtAppendWcRow(tbody, data) {
         var pos = tbody.rows.length + 1;
         var opSeq = pos * 10;
         var tr = document.createElement("tr");
-
         var wcId = data ? (data.workCenterID || data.WorkCenterID || "") : "";
         var desc = data ? (data.description || data.Description || "") : "";
         var mt = data ? (data.machineTime != null ? data.machineTime : (data.MachineTime || "")) : "";
@@ -329,7 +356,6 @@
         if (data && (data.operationSequence || data.OperationSequence)) {
             opSeq = data.operationSequence || data.OperationSequence;
         }
-
         tr.innerHTML =
             '<td class="text-center"><span class="rt-op-seq">' + opSeq + '</span></td>' +
             '<td><select class="form-select form-select-sm rt-op-wc">' + rtBuildWcSelectHtml(wcId) + '</select></td>' +
@@ -342,19 +368,140 @@
         rtSyncOpRowUomFromWc(tr);
     }
 
-    function rtCollectOps(tbodyId) {
-        var ops = [];
-        var rows = document.querySelectorAll("#" + tbodyId + " tr");
-        rows.forEach(function (tr) {
-            var wcVal = tr.querySelector(".rt-op-wc")?.value;
-            ops.push({
-                WorkCenterID: wcVal ? parseInt(wcVal) : null,
-                Description: (tr.querySelector(".rt-op-desc")?.value || "").trim() || null,
-                MachineTime: parseFloat(tr.querySelector(".rt-op-machine")?.value) || null,
-                LaborTime: parseFloat(tr.querySelector(".rt-op-labor")?.value) || null
-            });
+    function rtSetWcRowCount(section, desired) {
+        var tbody = section.querySelector(".rt-op-sec-wc-body");
+        if (!tbody) return;
+        var n = Math.max(1, Math.min(50, parseInt(desired, 10) || 1));
+        var cur = tbody.rows.length;
+        if (n < cur) {
+            while (tbody.rows.length > n) {
+                tbody.deleteRow(tbody.rows.length - 1);
+            }
+        } else {
+            while (tbody.rows.length < n) {
+                rtAppendWcRow(tbody, null);
+            }
+        }
+        for (var i = 0; i < tbody.rows.length; i++) {
+            var seqEl = tbody.rows[i].querySelector(".rt-op-seq");
+            if (seqEl) seqEl.textContent = String((i + 1) * 10);
+        }
+    }
+
+    function rtAddOpSection(rootId, headerData) {
+        var root = document.getElementById(rootId);
+        if (!root) return;
+        var wrap = document.createElement("div");
+        wrap.className = "rt-op-section";
+        wrap.innerHTML =
+            '<div class="row g-2 align-items-end mb-2">' +
+            '<div class="col-md-5">' +
+            '<label class="form-label">Operation title</label>' +
+            '<input type="text" class="form-control form-control-sm rt-op-sec-title" />' +
+            '</div>' +
+            '<div class="col-md-3">' +
+            '<label class="form-label">No. of work centres</label>' +
+            '<input type="number" class="form-control form-control-sm rt-op-sec-count" min="1" max="50" value="1" />' +
+            '</div>' +
+            '<div class="col-md-3 ms-md-auto text-md-end">' +
+            '<button type="button" class="btn btn-sm btn-outline-danger mt-3 mt-md-0">Remove operation</button>' +
+            '</div>' +
+            '</div>' +
+            '<table class="rt-ops-table"><thead><tr>' +
+            '<th style="width:60px;">Op No.</th><th style="width:200px;">Work Centre</th><th>Description</th>' +
+            '<th style="width:110px;">Machine Time</th><th style="width:110px;">Labor Time</th><th style="width:90px;">UoM</th><th style="width:50px;"></th>' +
+            '</tr></thead><tbody class="rt-op-sec-wc-body"></tbody></table>';
+        root.appendChild(wrap);
+        var rm = wrap.querySelector(".btn-outline-danger");
+        if (rm) rm.addEventListener("click", function () { wrap.remove(); });
+        var titleInp = wrap.querySelector(".rt-op-sec-title");
+        var countInp = wrap.querySelector(".rt-op-sec-count");
+        var ops = headerData && (headerData.operations || headerData.Operations) ? (headerData.operations || headerData.Operations) : [];
+        var cnt = ops.length > 0 ? ops.length : 1;
+        if (titleInp) titleInp.value = (headerData && (headerData.title || headerData.Title)) ? (headerData.title || headerData.Title) : "";
+        if (countInp) countInp.value = String(cnt);
+        var tbody = wrap.querySelector(".rt-op-sec-wc-body");
+        if (tbody && ops.length) {
+            ops.forEach(function (op) { rtAppendWcRow(tbody, op); });
+        } else {
+            rtSetWcRowCount(wrap, cnt);
+        }
+        if (countInp) {
+            countInp.addEventListener("change", function () { rtSetWcRowCount(wrap, countInp.value); });
+        }
+    }
+
+    function rtClearOpSections(rootId) {
+        var root = document.getElementById(rootId);
+        if (root) root.innerHTML = "";
+    }
+
+    function rtFillOpSectionsFromModel(rootId, headers) {
+        rtClearOpSections(rootId);
+        var list = headers || [];
+        if (!list.length) return;
+        list.forEach(function (h) { rtAddOpSection(rootId, h); });
+    }
+
+    function rtCollectOperationHeaders(rootId) {
+        var root = document.getElementById(rootId);
+        if (!root) return [];
+        var out = [];
+        root.querySelectorAll(".rt-op-section").forEach(function (sec) {
+            var titleInp = sec.querySelector(".rt-op-sec-title");
+            var tbody = sec.querySelector(".rt-op-sec-wc-body");
+            var title = (titleInp && titleInp.value || "").trim();
+            var ops = [];
+            if (tbody) {
+                tbody.querySelectorAll("tr").forEach(function (tr) {
+                    var wcVal = tr.querySelector(".rt-op-wc")?.value;
+                    ops.push({
+                        WorkCenterID: wcVal ? parseInt(wcVal, 10) : null,
+                        Description: (tr.querySelector(".rt-op-desc")?.value || "").trim() || null,
+                        MachineTime: parseFloat(tr.querySelector(".rt-op-machine")?.value) || null,
+                        LaborTime: parseFloat(tr.querySelector(".rt-op-labor")?.value) || null
+                    });
+                });
+            }
+            out.push({ Title: title || null, Operations: ops });
         });
-        return ops;
+        return out;
+    }
+
+    function rtNumFieldOk(inp) {
+        if (!inp) return false;
+        var raw = (inp.value || "").trim();
+        if (raw === "") return false;
+        return !isNaN(parseFloat(raw));
+    }
+
+    function rtValidateOpSections(rootId) {
+        var bad = [];
+        var root = document.getElementById(rootId);
+        if (!root) return bad;
+        root.querySelectorAll(".rt-op-section").forEach(function (sec) {
+            var titleInp = sec.querySelector(".rt-op-sec-title");
+            if (!titleInp || !(titleInp.value || "").trim()) bad.push(titleInp);
+            var tbody = sec.querySelector(".rt-op-sec-wc-body");
+            if (!tbody || !tbody.rows.length) {
+                var c = sec.querySelector(".rt-op-sec-count");
+                if (c) bad.push(c);
+            } else {
+            tbody.querySelectorAll("tr").forEach(function (tr) {
+                var wc = tr.querySelector(".rt-op-wc");
+                var desc = tr.querySelector(".rt-op-desc");
+                var mach = tr.querySelector(".rt-op-machine");
+                var lab = tr.querySelector(".rt-op-labor");
+                if (!wc || !(wc.value || "").trim()) bad.push(wc);
+                if (!desc || !(desc.value || "").trim()) bad.push(desc);
+                if (!rtNumFieldOk(mach)) bad.push(mach);
+                if (!rtNumFieldOk(lab)) bad.push(lab);
+                var meta = wc ? rtFindWcMeta(wc.value) : null;
+                if (!meta || meta.timeUom == null || String(meta.timeUom).trim() === "") bad.push(wc);
+            });
+            }
+        });
+        return bad;
     }
 
     function rtCreateFormRoot() {
@@ -363,6 +510,10 @@
 
     function rtEditFormRoot() {
         return document.querySelector("#rtEditModal .modal-body");
+    }
+
+    function rtManageOpsFormRoot() {
+        return document.querySelector("#rtManageOpsModal .modal-body");
     }
 
     function rtListPaneRoot() {
@@ -375,30 +526,6 @@
         if (typeof window.auShowInlineValidation === "function")
             window.auShowInlineValidation(root, invalidEls || [], message);
         else alert(message || "Following Fields are Required");
-    }
-
-    function rtNumFieldOk(inp) {
-        if (!inp) return false;
-        var raw = (inp.value || "").trim();
-        if (raw === "") return false;
-        return !isNaN(parseFloat(raw));
-    }
-
-    function rtValidateOps(tbodyId) {
-        var bad = [];
-        document.querySelectorAll("#" + tbodyId + " tr").forEach(function (tr) {
-            var wc = tr.querySelector(".rt-op-wc");
-            var desc = tr.querySelector(".rt-op-desc");
-            var mach = tr.querySelector(".rt-op-machine");
-            var lab = tr.querySelector(".rt-op-labor");
-            if (!wc || !(wc.value || "").trim()) bad.push(wc);
-            if (!desc || !(desc.value || "").trim()) bad.push(desc);
-            if (!rtNumFieldOk(mach)) bad.push(mach);
-            if (!rtNumFieldOk(lab)) bad.push(lab);
-            var meta = wc ? rtFindWcMeta(wc.value) : null;
-            if (!meta || meta.timeUom == null || String(meta.timeUom).trim() === "") bad.push(wc);
-        });
-        return bad;
     }
 
     function rtValidateCreateHeader() {
@@ -427,7 +554,7 @@
         document.getElementById("rtCreatePlant").value = "";
         document.getElementById("rtCreateStatus").value = "1";
         document.getElementById("rtCreateValidFrom").value = "";
-        document.getElementById("rtCreateOpsBody").innerHTML = "";
+        rtClearOpSections("rtCreateOpsRoot");
     }
 
     function rtReloadToListTab() {
@@ -439,22 +566,24 @@
     function rtSaveCreate() {
         var root = rtCreateFormRoot();
         if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
-        var bad = rtValidateCreateHeader().concat(rtValidateOps("rtCreateOpsBody"));
+        var bad = rtValidateCreateHeader().concat(rtValidateOpSections("rtCreateOpsRoot"));
         if (bad.length) {
             rtShowInline(root, bad);
             return;
         }
-
-        var mat = document.getElementById("rtCreateMaterial").value;
-        var plant = document.getElementById("rtCreatePlant").value;
+        var roots = document.getElementById("rtCreateOpsRoot");
+        if (!roots || !roots.querySelector(".rt-op-section")) {
+            rtShowInline(root, [], "Add at least one operation.");
+            return;
+        }
 
         var payload = {
             Title: (document.getElementById("rtCreateTitle").value || "").trim() || null,
-            MaterialNumber: mat,
-            PlantID: plant,
+            MaterialNumber: document.getElementById("rtCreateMaterial").value,
+            PlantID: document.getElementById("rtCreatePlant").value,
             StatusID: parseInt(document.getElementById("rtCreateStatus").value) || 1,
             ValidFrom: document.getElementById("rtCreateValidFrom").value || null,
-            Operations: rtCollectOps("rtCreateOpsBody")
+            OperationHeaders: rtCollectOperationHeaders("rtCreateOpsRoot")
         };
 
         fetch('@Url.Action("Create", "Routing")', {
@@ -490,13 +619,8 @@
                 document.getElementById("rtEditPlant").value = d.plantID || d.PlantID || "";
                 document.getElementById("rtEditStatus").value = d.statusID != null ? d.statusID : "1";
                 document.getElementById("rtEditValidFrom").value = d.validFrom || d.ValidFrom || "";
-
-                var tbody = document.getElementById("rtEditOpsBody");
-                tbody.innerHTML = "";
-                var ops = d.operations || d.Operations || [];
-                ops.forEach(function (op) {
-                    rtAddOpRow("rtEditOpsBody", op);
-                });
+                var oh = d.operationHeaders || d.OperationHeaders || [];
+                rtFillOpSectionsFromModel("rtEditOpsRoot", oh);
 
                 var modalEl = document.getElementById("rtEditModal");
                 if (modalEl) {
@@ -515,22 +639,25 @@
         var id = parseInt(document.getElementById("rtEditID").value) || 0;
         if (!id) { rtShowInline(root, [], "Invalid ID."); return; }
 
-        var bad = rtValidateEditHeader().concat(rtValidateOps("rtEditOpsBody"));
+        var bad = rtValidateEditHeader().concat(rtValidateOpSections("rtEditOpsRoot"));
         if (bad.length) {
             rtShowInline(root, bad);
             return;
         }
-
-        var mat = document.getElementById("rtEditMaterial").value;
+        var er = document.getElementById("rtEditOpsRoot");
+        if (!er || !er.querySelector(".rt-op-section")) {
+            rtShowInline(root, [], "Add at least one operation.");
+            return;
+        }
 
         var payload = {
             RoutingID: id,
             Title: (document.getElementById("rtEditTitle").value || "").trim() || null,
-            MaterialNumber: mat,
+            MaterialNumber: document.getElementById("rtEditMaterial").value,
             PlantID: document.getElementById("rtEditPlant").value || null,
             StatusID: parseInt(document.getElementById("rtEditStatus").value) || 1,
             ValidFrom: document.getElementById("rtEditValidFrom").value || null,
-            Operations: rtCollectOps("rtEditOpsBody")
+            OperationHeaders: rtCollectOperationHeaders("rtEditOpsRoot")
         };
 
         fetch('@Url.Action("Update", "Routing")', {
@@ -542,6 +669,74 @@
         .then(function (res) {
             if (res.success) {
                 var modalEl = document.getElementById("rtEditModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, function () { rtReloadToListTab(); });
+                else { alert(res.message); rtReloadToListTab(); }
+            } else {
+                rtShowInline(root, [], res.message || "Update failed.");
+            }
+        })
+        .catch(function () { rtShowInline(root, [], "Update request failed."); });
+    }
+
+    function rtOpenManageOps(id) {
+        if (!id) return;
+        fetch('@Url.Action("GetForEdit", "Routing")?id=' + encodeURIComponent(id))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) { rtShowInline(rtListPaneRoot(), [], res.message || "Could not load."); return; }
+                var mgrRoot = rtManageOpsFormRoot();
+                if (mgrRoot && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(mgrRoot);
+                var d = res.data;
+                document.getElementById("rtManageOpsRoutingId").value = d.routingID || d.RoutingID;
+                var oh = d.operationHeaders || d.OperationHeaders || [];
+                rtFillOpSectionsFromModel("rtManageOpsRoot", oh);
+
+                var modalEl = document.getElementById("rtManageOpsModal");
+                if (modalEl) {
+                    if (modalEl.parentElement !== document.body)
+                        document.body.appendChild(modalEl);
+                    if (typeof bootstrap !== "undefined")
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            })
+            .catch(function () { rtShowInline(rtListPaneRoot(), [], "Failed to load routing."); });
+    }
+
+    function rtSaveManageOps() {
+        var root = rtManageOpsFormRoot();
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        var id = parseInt(document.getElementById("rtManageOpsRoutingId").value) || 0;
+        if (!id) { rtShowInline(root, [], "Invalid routing."); return; }
+
+        var bad = rtValidateOpSections("rtManageOpsRoot");
+        if (bad.length) {
+            rtShowInline(root, bad);
+            return;
+        }
+        var mr = document.getElementById("rtManageOpsRoot");
+        if (!mr || !mr.querySelector(".rt-op-section")) {
+            rtShowInline(root, [], "Add at least one operation.");
+            return;
+        }
+
+        var payload = {
+            RoutingID: id,
+            OperationHeaders: rtCollectOperationHeaders("rtManageOpsRoot")
+        };
+
+        fetch('@Url.Action("UpdateOperationHeaders", "Routing")', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("rtManageOpsModal");
                 if (modalEl && typeof bootstrap !== "undefined")
                     bootstrap.Modal.getOrCreateInstance(modalEl).hide();
 

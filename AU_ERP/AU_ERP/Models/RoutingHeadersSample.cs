@@ -6,7 +6,7 @@ namespace AU_ERP.Models
     {
         public RoutingHeadersSample()
         {
-            RoutingOperationsSamples = new HashSet<RoutingOperationsSample>();
+            OperationHeaders = new HashSet<RoutingOperationHeaderSample>();
         }
 
         [Key]
@@ -20,6 +20,6 @@ namespace AU_ERP.Models
 
         public virtual CreateMaterialMaster? Material { get; set; }
         public virtual PlantsSample? Plant { get; set; }
-        public virtual ICollection<RoutingOperationsSample> RoutingOperationsSamples { get; set; }
+        public virtual ICollection<RoutingOperationHeaderSample> OperationHeaders { get; set; }
     }
 }
