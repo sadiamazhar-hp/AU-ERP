@@ -307,6 +307,31 @@
 
 @section Scripts {
 <script>
+    (function rtInitRoutingModals() {
+        function ensureOnBody(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.parentElement !== document.body) {
+                document.body.appendChild(el);
+            }
+        }
+        function init() {
+            ["rtEditModal", "rtManageOpsModal"].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener("show.bs.modal", function () {
+                    ensureOnBody(id);
+                });
+                ensureOnBody(id);
+            });
+        }
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", init);
+        } else {
+            init();
+        }
+    })();
+
     var rtAllWorkCentres = @Html.Raw(rtWcJson);
 
     function escRtAttr(s) {
@@ -412,6 +437,10 @@
             '<th style="width:110px;">Machine Time</th><th style="width:110px;">Labor Time</th><th style="width:90px;">UoM</th><th style="width:50px;"></th>' +
             '</tr></thead><tbody class="rt-op-sec-wc-body"></tbody></table>';
         root.appendChild(wrap);
+        var exId = headerData && (headerData.operationHeaderId != null ? headerData.operationHeaderId : headerData.OperationHeaderId);
+        if (exId != null && exId !== "" && !isNaN(parseInt(String(exId), 10)) && parseInt(String(exId), 10) > 0) {
+            wrap.setAttribute("data-operation-header-id", String(parseInt(String(exId), 10)));
+        }
         var rm = wrap.querySelector(".btn-outline-danger");
         if (rm) rm.addEventListener("click", function () { wrap.remove(); });
         var titleInp = wrap.querySelector(".rt-op-sec-title");
@@ -451,6 +480,8 @@
             var titleInp = sec.querySelector(".rt-op-sec-title");
             var tbody = sec.querySelector(".rt-op-sec-wc-body");
             var title = (titleInp && titleInp.value || "").trim();
+            var hid = sec.getAttribute("data-operation-header-id");
+            var opHeaderId = hid && !isNaN(parseInt(hid, 10)) && parseInt(hid, 10) > 0 ? parseInt(hid, 10) : null;
             var ops = [];
             if (tbody) {
                 tbody.querySelectorAll("tr").forEach(function (tr) {
@@ -463,7 +494,9 @@
                     });
                 });
             }
-            out.push({ Title: title || null, Operations: ops });
+            var block = { Title: title || null, Operations: ops };
+            if (opHeaderId != null) block.OperationHeaderId = opHeaderId;
+            out.push(block);
         });
         return out;
     }

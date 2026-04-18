@@ -1,0 +1,349 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using AU_ERP.Models;
+
+namespace AU_ERP.Controllers
+{
+    public class OperationTrackingController : Controller
+    {
+        private readonly AppDbContext _db;
+
+        public static readonly string[] WastageReasons = { "Breakage", "Trimming", "Other" };
+
+        public OperationTrackingController(AppDbContext db) => _db = db;
+
+        /// <summary>Dashboard: all production orders that have operation stages (released routing).</summary>
+        public async Task<IActionResult> Index(int? productionOrderId, CancellationToken ct = default)
+        {
+            if (productionOrderId is > 0)
+                return RedirectToAction(nameof(Details), new { productionOrderId = productionOrderId.Value });
+
+            ViewData["Title"] = "Operation Tracking";
+
+            var orders = await _db.ProductionOrders.AsNoTracking()
+                .Include(p => p.FinishedMaterial)
+                .Include(p => p.Uom)
+                .Include(p => p.StageProgresses)
+                .Where(p => p.ReleasedRoutingId != null
+                    && (p.Status == ProductionOrder.StatusReleased
+                        || p.Status == ProductionOrder.StatusInProgress
+                        || p.Status == ProductionOrder.StatusCompleted))
+                .OrderByDescending(p => p.ProductionNumber)
+                .ToListAsync(ct);
+
+            var list = new List<OperationTrackingListItemVm>();
+            foreach (var po in orders)
+            {
+                var stages = po.StageProgresses.OrderBy(s => s.SequenceOrder).ToList();
+                var mat = po.FinishedMaterial;
+                var itemLabel = mat != null
+                    ? $"{po.FinishedMaterialNumber} — {mat.Description}"
+                    : po.FinishedMaterialNumber;
+                var active = stages.FirstOrDefault(s => s.StageStatus == ProductionOrderStageProgress.StageInProgress);
+
+                list.Add(new OperationTrackingListItemVm
+                {
+                    ProductionOrderId = po.Id,
+                    ProductionNumber = po.ProductionNumber,
+                    FinishedItemLabel = itemLabel,
+                    TargetQuantity = po.TargetQuantity,
+                    UomCode = po.Uom?.Code,
+                    Status = po.Status,
+                    OverallStatusLabel = DeriveOverallLabel(po.Status, stages),
+                    StagesTotal = stages.Count,
+                    StagesCompleted = stages.Count(s => s.StageStatus == ProductionOrderStageProgress.StageCompleted),
+                    ActiveStageTitle = active?.StageTitle
+                });
+            }
+
+            return View("List", new OperationTrackingListVm { Orders = list });
+        }
+
+        /// <summary>Single production order: stages, stepper, and update actions.</summary>
+        public async Task<IActionResult> Details(int productionOrderId, CancellationToken ct = default)
+        {
+            ViewData["Title"] = "Production Stage Tracking";
+
+            if (productionOrderId <= 0)
+                return RedirectToAction(nameof(Index));
+
+            var po = await _db.ProductionOrders.AsNoTracking()
+                .Include(p => p.FinishedMaterial)
+                .Include(p => p.Uom)
+                .FirstOrDefaultAsync(p => p.Id == productionOrderId, ct);
+
+            if (po == null)
+                return RedirectToAction(nameof(Index));
+
+            var stages = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                .Where(s => s.ProductionOrderId == po.Id)
+                .OrderBy(s => s.SequenceOrder)
+                .ToListAsync(ct);
+
+            var mat = po.FinishedMaterial;
+            var itemLabel = mat != null
+                ? $"{mat.MaterialNumber} — {mat.Description}"
+                : po.FinishedMaterialNumber;
+
+            var active = stages.FirstOrDefault(s => s.StageStatus == ProductionOrderStageProgress.StageInProgress);
+
+            var vm = new OperationTrackingPageVm
+            {
+                ProductionOrderId = po.Id,
+                ProductionNumber = po.ProductionNumber,
+                FinishedItemLabel = itemLabel,
+                TargetQuantity = po.TargetQuantity,
+                UomCode = po.Uom?.Code,
+                OverallStatusLabel = DeriveOverallLabel(po.Status, stages),
+                OrderStatus = po.Status,
+                Priority = po.Priority,
+                PlannedStartDate = po.PlannedStartDate,
+                PlannedEndDate = po.PlannedEndDate,
+                ActiveStageTitle = active?.StageTitle,
+                StagesCompleted = stages.Count(s => s.StageStatus == ProductionOrderStageProgress.StageCompleted),
+                StagesTotal = stages.Count,
+                Stages = stages
+            };
+
+            return View(vm);
+        }
+
+        private static string DeriveOverallLabel(string status, List<ProductionOrderStageProgress> stages)
+        {
+            if (stages.Count == 0)
+                return status switch
+                {
+                    ProductionOrder.StatusCompleted => "Completed",
+                    ProductionOrder.StatusInProgress => "In progress",
+                    ProductionOrder.StatusReleased => "Released",
+                    ProductionOrder.StatusPlanned => "Planned",
+                    _ => status
+                };
+
+            if (stages.All(s => s.StageStatus == ProductionOrderStageProgress.StageCompleted))
+                return "Completed";
+            if (stages.Any(s => s.StageStatus == ProductionOrderStageProgress.StageInProgress))
+                return "In progress";
+            return "Pending";
+        }
+
+        /// <summary>Resolves the active (in-progress) stage for quick-update UIs (e.g. production order list modal).</summary>
+        [HttpGet]
+        public async Task<JsonResult> GetActiveStageForUpdate(int productionOrderId, CancellationToken ct = default)
+        {
+            var stage = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                .Include(s => s.ProductionOrder)
+                .Where(s => s.ProductionOrderId == productionOrderId
+                    && s.StageStatus == ProductionOrderStageProgress.StageInProgress)
+                .OrderBy(s => s.SequenceOrder)
+                .FirstOrDefaultAsync(ct);
+
+            if (stage?.ProductionOrder == null)
+                return Json(new { success = false, message = "No active stage to update. Open tracking to review completed orders." });
+
+            return await BuildGetStageForUpdateJsonAsync(stage, ct);
+        }
+
+        [HttpGet]
+        public Task<JsonResult> GetStageForUpdate(int productionOrderId, int stageProgressId, CancellationToken ct = default)
+            => GetStageForUpdateCoreAsync(productionOrderId, stageProgressId, ct);
+
+        private async Task<JsonResult> GetStageForUpdateCoreAsync(int productionOrderId, int stageProgressId, CancellationToken ct)
+        {
+            var stage = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                .Include(s => s.ProductionOrder)
+                .FirstOrDefaultAsync(s => s.Id == stageProgressId && s.ProductionOrderId == productionOrderId, ct);
+
+            if (stage?.ProductionOrder == null)
+                return Json(new { success = false, message = "Stage not found." });
+
+            if (stage.StageStatus != ProductionOrderStageProgress.StageInProgress)
+                return Json(new { success = false, message = "Only the active stage (in progress) can be updated here." });
+
+            return await BuildGetStageForUpdateJsonAsync(stage, ct);
+        }
+
+        private async Task<JsonResult> BuildGetStageForUpdateJsonAsync(ProductionOrderStageProgress stage, CancellationToken ct)
+        {
+            var productionOrderId = stage.ProductionOrderId;
+            var priorCount = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                .CountAsync(s => s.ProductionOrderId == productionOrderId && s.SequenceOrder < stage.SequenceOrder, ct);
+            var stageIndex = priorCount + 1;
+
+            decimal? defaultInput = null;
+            if (stageIndex <= 1)
+                defaultInput = stage.ProductionOrder!.TargetQuantity;
+            else
+            {
+                var prev = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                    .Where(s => s.ProductionOrderId == productionOrderId && s.SequenceOrder < stage.SequenceOrder)
+                    .OrderByDescending(s => s.SequenceOrder)
+                    .FirstOrDefaultAsync(ct);
+                defaultInput = prev?.OutputQuantity;
+            }
+
+            var poNum = stage.ProductionOrder!.ProductionNumber;
+            var title = string.IsNullOrWhiteSpace(stage.StageTitle) ? "Stage" : stage.StageTitle;
+
+            return Json(new
+            {
+                success = true,
+                data = new
+                {
+                    stage.Id,
+                    stage.ProductionOrderId,
+                    StageIndex = stageIndex,
+                    StageTitle = title,
+                    ProductionNumber = poNum,
+                    DefaultInputQuantity = defaultInput,
+                    stage.InputQuantity,
+                    stage.OutputQuantity,
+                    stage.WastageQuantity,
+                    stage.ActualHours,
+                    stage.WastageReason,
+                    stage.WorkerOperator,
+                    stage.Observations,
+                    stage.StageStatus,
+                    WastageReasons = WastageReasons,
+                    MarkOptions = new[] { ProductionOrderStageProgress.StageInProgress, ProductionOrderStageProgress.StageCompleted }
+                }
+            });
+        }
+
+        [HttpPost]
+        public async Task<JsonResult> UpdateStage([FromBody] UpdateStageDto dto, CancellationToken ct = default)
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                if (dto.ProductionOrderId <= 0 || dto.StageProgressId <= 0)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Invalid request." });
+                }
+
+                var stage = await _db.ProductionOrderStageProgresses
+                    .Include(s => s.ProductionOrder)
+                    .FirstOrDefaultAsync(s => s.Id == dto.StageProgressId && s.ProductionOrderId == dto.ProductionOrderId, ct);
+
+                if (stage?.ProductionOrder == null)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Stage not found." });
+                }
+
+                if (stage.StageStatus != ProductionOrderStageProgress.StageInProgress)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Only the active stage can be updated." });
+                }
+
+                if (dto.InputQuantity < 0 || dto.OutputQuantity < 0 || dto.ActualHours <= 0)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Input, output must be non-negative; actual hours must be greater than zero." });
+                }
+
+                if (dto.OutputQuantity > dto.InputQuantity)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Output cannot exceed input." });
+                }
+
+                var derivedWastage = dto.InputQuantity - dto.OutputQuantity;
+                if (dto.WastageQuantity.HasValue)
+                {
+                    var diff = Math.Abs(dto.WastageQuantity.Value - derivedWastage);
+                    if (diff > 0.0001m)
+                    {
+                        await tx.RollbackAsync(ct);
+                        return Json(new { success = false, message = "Wastage quantity must equal input minus output." });
+                    }
+                }
+
+                var wastage = derivedWastage;
+                var mark = (dto.MarkStageAs ?? "").Trim();
+                if (!string.Equals(mark, ProductionOrderStageProgress.StageInProgress, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(mark, ProductionOrderStageProgress.StageCompleted, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Mark stage as must be InProgress or Completed." });
+                }
+
+                var normalizedMark = string.Equals(mark, ProductionOrderStageProgress.StageCompleted, StringComparison.OrdinalIgnoreCase)
+                    ? ProductionOrderStageProgress.StageCompleted
+                    : ProductionOrderStageProgress.StageInProgress;
+
+                stage.InputQuantity = dto.InputQuantity;
+                stage.OutputQuantity = dto.OutputQuantity;
+                stage.WastageQuantity = wastage;
+                stage.ActualHours = dto.ActualHours;
+                stage.WastageReason = string.IsNullOrWhiteSpace(dto.WastageReason) ? null : dto.WastageReason.Trim();
+                stage.WorkerOperator = string.IsNullOrWhiteSpace(dto.WorkerOperator) ? null : dto.WorkerOperator.Trim();
+                stage.Observations = string.IsNullOrWhiteSpace(dto.Observations) ? null : dto.Observations.Trim();
+                stage.UpdatedAt = DateTime.UtcNow;
+
+                if (normalizedMark == ProductionOrderStageProgress.StageCompleted)
+                {
+                    stage.StageStatus = ProductionOrderStageProgress.StageCompleted;
+
+                    var next = await _db.ProductionOrderStageProgresses
+                        .Where(s => s.ProductionOrderId == dto.ProductionOrderId
+                            && s.SequenceOrder > stage.SequenceOrder
+                            && s.StageStatus == ProductionOrderStageProgress.StagePending)
+                        .OrderBy(s => s.SequenceOrder)
+                        .FirstOrDefaultAsync(ct);
+
+                    if (next != null)
+                    {
+                        next.StageStatus = ProductionOrderStageProgress.StageInProgress;
+                        next.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    var allDone = !await _db.ProductionOrderStageProgresses
+                        .AnyAsync(s => s.ProductionOrderId == dto.ProductionOrderId
+                            && s.StageStatus != ProductionOrderStageProgress.StageCompleted, ct);
+
+                    if (allDone)
+                        stage.ProductionOrder.Status = ProductionOrder.StatusCompleted;
+                }
+                else
+                {
+                    stage.StageStatus = ProductionOrderStageProgress.StageInProgress;
+                }
+
+                await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return Json(new { success = true, message = "Stage updated." });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync(ct);
+                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public Task<JsonResult> PostGoodsReceipt(int productionOrderId, CancellationToken ct = default)
+        {
+            _ = productionOrderId;
+            _ = ct;
+            return Task.FromResult(Json(new { success = false, message = "Post Goods Receipt is not implemented yet." }));
+        }
+    }
+
+    public class UpdateStageDto
+    {
+        public int ProductionOrderId { get; set; }
+        public int StageProgressId { get; set; }
+        public decimal InputQuantity { get; set; }
+        public decimal OutputQuantity { get; set; }
+        /// <summary>Optional; when set must match input − output.</summary>
+        public decimal? WastageQuantity { get; set; }
+        public decimal ActualHours { get; set; }
+        public string? WastageReason { get; set; }
+        public string? WorkerOperator { get; set; }
+        public string? MarkStageAs { get; set; }
+        public string? Observations { get; set; }
+    }
+}

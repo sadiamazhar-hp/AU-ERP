@@ -1,0 +1,1162 @@
+@model AU_ERP.Models.ProductionOrderPageVm
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Production Orders";
+    string FmtDate(DateTime d) => d.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+    string StatusLabel(string s) => s switch
+    {
+        ProductionOrder.StatusPlanned => "Planned",
+        ProductionOrder.StatusReleased => "Released",
+        ProductionOrder.StatusInProgress => "In progress",
+        ProductionOrder.StatusCompleted => "Completed",
+        _ => s
+    };
+    string StatusBadgeClass(string s) => s switch
+    {
+        ProductionOrder.StatusPlanned => "po-badge po-badge-planned",
+        ProductionOrder.StatusReleased => "po-badge po-badge-released",
+        ProductionOrder.StatusInProgress => "po-badge po-badge-progress",
+        ProductionOrder.StatusCompleted => "po-badge po-badge-done",
+        _ => "po-badge po-badge-muted"
+    };
+    string PriorityBadgeClass(string p) => p switch
+    {
+        ProductionOrder.PriorityHigh => "po-badge po-badge-pri-high",
+        ProductionOrder.PriorityMedium => "po-badge po-badge-pri-med",
+        ProductionOrder.PriorityLow => "po-badge po-badge-pri-low",
+        _ => "po-badge po-badge-muted"
+    };
+    var stSel = string.IsNullOrWhiteSpace(Model.Status) ? "All" : Model.Status!;
+    var prSel = string.IsNullOrWhiteSpace(Model.Priority) ? "All" : Model.Priority!;
+}
+
+@section Styles {
+    <style>
+        .po-page { color: var(--au-black, #171717); }
+        .po-page .po-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+        .po-page .po-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--au-primary-dark, #388087); margin: 0 0 .25rem 0; }
+        .po-page .po-hero p { margin: 0; color: #555; font-size: .9rem; }
+        .po-btn-new { background: var(--au-primary-dark, #388087); color: #fff; border: 1px solid var(--au-primary-dark, #388087); border-radius: .35rem; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
+        .po-btn-new:hover { filter: brightness(1.05); color: #fff; }
+        .po-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+        @@media (max-width: 900px) { .po-stats { grid-template-columns: repeat(2, 1fr); } }
+        .po-stat-card { background: #fff; border: 1px solid rgba(56, 128, 135, 0.25); border-radius: .5rem; padding: .85rem 1rem; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+        .po-stat-card .po-stat-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: #666; text-transform: uppercase; }
+        .po-stat-card .po-stat-val { font-size: 1.65rem; font-weight: 600; color: var(--au-primary-dark, #388087); line-height: 1.2; margin-top: .2rem; }
+        .po-table-card { background: #fff; border: 1px solid rgba(56, 128, 135, 0.25); border-radius: .5rem; padding: 1rem 1.1rem; }
+        .po-table-card .po-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+        .po-table-card .po-table-title { font-size: 1rem; font-weight: 600; color: var(--au-primary-dark, #388087); margin: 0; }
+        .po-table-card .po-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+        .po-table-card .po-toolbar .form-control-sm { min-width: 10rem; }
+        .po-table-wrap { overflow-x: auto; }
+        .po-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .po-table thead th { background: var(--au-primary-dark, #388087); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+        .po-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+        .po-table tbody tr:nth-child(even) { background: #fafafa; }
+        .po-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
+        .po-badge-planned { background: #cfe2ff; color: #084298; }
+        .po-badge-released { background: #cff4fc; color: #055160; }
+        .po-badge-progress { background: #fff3cd; color: #664d03; }
+        .po-badge-done { background: #d1e7dd; color: #0f5132; }
+        .po-badge-pri-high { background: #f8d7da; color: #842029; }
+        .po-badge-pri-med { background: #fff3cd; color: #664d03; }
+        .po-badge-pri-low { background: #e2e3e5; color: #41464b; }
+        .po-badge-muted { background: #eee; color: #555; }
+        .po-actions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+        .po-actions .btn { font-size: .75rem; padding: .2rem .5rem; }
+        #poOperationModal .modal-content { border: none; border-radius: .55rem; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.18); }
+        #poOperationModal .po-op-modal-header { background: #2c3e42; color: #fff; border-bottom: none; }
+        #poOperationModal .po-op-modal-header .btn-close { filter: invert(1); opacity: .85; }
+        #poOperationModal .form-label { font-weight: 500; color: #444; font-size: .85rem; }
+        /* BOM-style material picker (server search) for New PO */
+        .au-mat-picker { position: relative; }
+        .au-mat-picker-dropdown { display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; max-height: 220px; overflow-y: auto; z-index: 1060; background: #fff; border: 1px solid #ccc; border-radius: .25rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+        .au-mat-picker-dropdown.show { display: block; }
+        .au-mat-picker-item { padding: 6px 10px; font-size: .82rem; cursor: pointer; border: 0; border-bottom: 1px solid #eee; width: 100%; text-align: left; background: #fff; }
+        .au-mat-picker-item:hover, .au-mat-picker-item.active { background: #b3d7ff; }
+        .au-mat-picker-item .au-mat-code { font-weight: 600; }
+        .au-mat-picker-empty { padding: 8px 10px; font-size: .78rem; color: #666; }
+    </style>
+}
+
+<div class="po-page">
+    <div class="po-hero">
+        <div>
+            <h1>Production Orders</h1>
+            <p>Plan and track tile manufacturing lifecycle.</p>
+        </div>
+        <button type="button" class="po-btn-new" data-bs-toggle="modal" data-bs-target="#poCreateModal">
+            <i class="bi bi-plus-lg"></i> New Production Order
+        </button>
+    </div>
+
+    <div class="po-stats">
+        <div class="po-stat-card">
+            <div class="po-stat-label">Planned</div>
+            <div class="po-stat-val">@Model.CountPlanned</div>
+        </div>
+        <div class="po-stat-card">
+            <div class="po-stat-label">Released</div>
+            <div class="po-stat-val">@Model.CountReleased</div>
+        </div>
+        <div class="po-stat-card">
+            <div class="po-stat-label">In progress</div>
+            <div class="po-stat-val">@Model.CountInProgress</div>
+        </div>
+        <div class="po-stat-card">
+            <div class="po-stat-label">Completed</div>
+            <div class="po-stat-val">@Model.CountCompleted</div>
+        </div>
+    </div>
+
+    <div class="po-table-card">
+        <div class="po-table-head">
+            <h2 class="po-table-title">Production Orders (@Model.Items.Count)</h2>
+            <form id="poListFilterForm" method="get" asp-controller="ProductionOrder" asp-action="Index" class="po-toolbar">
+                <input type="search" name="q" class="form-control form-control-sm" placeholder="Search item, remarks…" value="@Model.Q" />
+                <input type="hidden" name="status" id="poListStatus" value="@stSel" />
+                <input type="hidden" name="priority" id="poListPriority" value="@prSel" />
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#poFilterModal">Filter</button>
+                <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear</a>
+            </form>
+        </div>
+
+        <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+
+        <div class="po-table-wrap">
+            <table class="po-table">
+                <thead>
+                    <tr>
+                        <th>Production No.</th>
+                        <th>Date</th>
+                        <th>Item</th>
+                        <th>Target Qty</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-secondary">No production orders match the current filters.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var p in Model.Items)
+                        {
+                            var itemTxt = p.FinishedMaterial != null
+                                ? $"{p.FinishedMaterialNumber} — {p.FinishedMaterial.Description}"
+                                : p.FinishedMaterialNumber;
+                            var uomCode = p.Uom?.Code ?? "—";
+                            <tr>
+                                <td><strong>PO-@p.ProductionNumber</strong></td>
+                                <td>@FmtDate(p.CreatedAt)</td>
+                                <td>@itemTxt</td>
+                                <td>@p.TargetQuantity @uomCode</td>
+                                <td>@FmtDate(p.PlannedStartDate)</td>
+                                <td>@FmtDate(p.PlannedEndDate)</td>
+                                <td><span class="@PriorityBadgeClass(p.Priority)">@p.Priority</span></td>
+                                <td><span class="@StatusBadgeClass(p.Status)">@StatusLabel(p.Status)</span></td>
+                                <td>
+                                    <div class="po-actions">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" title="BOM" onclick="poOpenBom(@p.Id)"><i class="bi bi-list-nested"></i> BOM</button>
+                                        @if (p.Status == ProductionOrder.StatusPlanned)
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="poOpenEdit(@p.Id)"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
+                                            <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Release" onclick="poRelease(@p.Id)"><i class="bi bi-play-fill"></i> Release</button>
+                                        }
+                                        else if (p.ReleasedRoutingId != null && (p.Status == ProductionOrder.StatusReleased || p.Status == ProductionOrder.StatusInProgress || p.Status == ProductionOrder.StatusCompleted))
+                                        {
+                                            <button type="button" class="btn btn-sm text-white" style="background:var(--au-secondary-dark,#35b85a);" title="Update operation" onclick="poOpenOperationModal(@p.Id)"><i class="bi bi-gear"></i> Operation</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create -->
+<div class="modal fade" id="poCreateModal" tabindex="-1" aria-labelledby="poCreateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="poCreateModalLabel">New Production Order</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <div class="mb-2">
+                    <label class="form-label small">Finished item (HALB / FERT)</label>
+                    <div class="au-mat-picker" id="poCreateMatPickerWrap">
+                        <input type="text" class="form-control form-control-sm au-mat-picker-search" id="poCreateMaterialSearch" placeholder="Search material number or description…" autocomplete="off" />
+                        <input type="hidden" id="poCreateMaterial" value="" />
+                        <div class="au-mat-picker-dropdown" id="poCreateMaterialDd"></div>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Target quantity</label>
+                    <input type="number" id="poCreateQty" class="form-control form-control-sm" min="1" step="1" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">UOM</label>
+                    <select id="poCreateUom" class="form-select form-select-sm"></select>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small">Planned start</label>
+                        <input type="date" id="poCreateStart" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Planned end</label>
+                        <input type="date" id="poCreateEnd" class="form-control form-control-sm" />
+                    </div>
+                </div>
+                <div class="mb-2 mt-2">
+                    <label class="form-label small">Priority</label>
+                    <select id="poCreatePriority" class="form-select form-select-sm">
+                        <option value="Low">Low</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Remarks</label>
+                    <textarea id="poCreateRemarks" class="form-control form-control-sm" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm po-btn-new" onclick="poSaveCreate()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit -->
+<div class="modal fade" id="poEditModal" tabindex="-1" aria-labelledby="poEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="poEditModalLabel">Edit Production Order</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="poEditId" />
+                <div class="mb-2">
+                    <label class="form-label small">Finished item (HALB / FERT)</label>
+                    <select id="poEditMaterial" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Target quantity</label>
+                    <input type="number" id="poEditQty" class="form-control form-control-sm" min="1" step="1" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">UOM</label>
+                    <select id="poEditUom" class="form-select form-select-sm"></select>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small">Planned start</label>
+                        <input type="date" id="poEditStart" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Planned end</label>
+                        <input type="date" id="poEditEnd" class="form-control form-control-sm" />
+                    </div>
+                </div>
+                <div class="mb-2 mt-2">
+                    <label class="form-label small">Priority</label>
+                    <select id="poEditPriority" class="form-select form-select-sm">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Remarks</label>
+                    <textarea id="poEditRemarks" class="form-control form-control-sm" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm po-btn-new" onclick="poSaveEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter -->
+<div class="modal fade" id="poFilterModal" tabindex="-1" aria-labelledby="poFilterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="poFilterModalLabel">Filter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small">Status</label>
+                    <select id="poModStatus" class="form-select form-select-sm">
+                        <option value="All">All</option>
+                        <option value="@ProductionOrder.StatusPlanned">Planned</option>
+                        <option value="@ProductionOrder.StatusReleased">Released</option>
+                        <option value="@ProductionOrder.StatusInProgress">In progress</option>
+                        <option value="@ProductionOrder.StatusCompleted">Completed</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Priority</label>
+                    <select id="poModPriority" class="form-select form-select-sm">
+                        <option value="All">All</option>
+                        <option value="@ProductionOrder.PriorityLow">Low</option>
+                        <option value="@ProductionOrder.PriorityMedium">Medium</option>
+                        <option value="@ProductionOrder.PriorityHigh">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm po-btn-new" onclick="poApplyFilterModal()">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Operation / update active stage (from production order list) -->
+<div class="modal fade" id="poOperationModal" tabindex="-1" aria-labelledby="poOperationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header po-op-modal-header py-3">
+                <h5 class="modal-title d-flex align-items-center gap-2 mb-0" id="poOperationModalLabel"><span aria-hidden="true">📈</span> <span id="poOperationTitleText">Update stage</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="poOperationPoId" />
+                <input type="hidden" id="poOperationStageId" />
+                <div class="au-validation-summary mb-2" id="poOperationValidation" style="display:none;" role="alert"></div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Input quantity (pieces) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" id="poOpInQty" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Output quantity (pieces) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" id="poOpOutQty" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Wastage quantity <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" id="poOpWastQty" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Actual hours <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" id="poOpActHrs" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Wastage reason</label>
+                        <select class="form-select form-select-sm" id="poOpWastReason"></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Worker / operator</label>
+                        <input type="text" class="form-control form-control-sm" id="poOpOperator" maxlength="200" placeholder="Operator name" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small">Mark stage as <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="poOpMarkAs">
+                            <option value="@ProductionOrderStageProgress.StageInProgress">In-Progress</option>
+                            <option value="@ProductionOrderStageProgress.StageCompleted">Completed</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small">Observations</label>
+                        <textarea class="form-control form-control-sm" id="poOpObs" rows="3" placeholder="Stage observations…"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer d-flex flex-wrap align-items-center gap-2">
+                <a class="btn btn-sm btn-outline-primary" href="#" id="poOpOpenTrackingBtn"><i class="bi bi-kanban"></i> Open full tracking</a>
+                <div class="d-flex gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="poSaveOperationStage()"><i class="bi bi-floppy me-1"></i>Update stage</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BOM lines (read-only) -->
+<div class="modal fade" id="poBomModal" tabindex="-1" aria-labelledby="poBomModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="poBomModalLabel">Bill of materials</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-secondary mb-2" id="poBomHeaderText"></p>
+                <div class="au-validation-summary mb-2" id="poBomError" style="display:none;" role="alert"></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Material number</th>
+                                <th>Material</th>
+                                <th>Material type</th>
+                                <th>Qty</th>
+                                <th>UOM</th>
+                            </tr>
+                        </thead>
+                        <tbody id="poBomBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function poInitProductionModals() {
+        function ensureOnBody(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.parentElement !== document.body) {
+                document.body.appendChild(el);
+            }
+        }
+        function init() {
+            ["poCreateModal", "poEditModal", "poFilterModal", "poOperationModal", "poBomModal"].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener("show.bs.modal", function () {
+                    ensureOnBody(id);
+                });
+                ensureOnBody(id);
+            });
+        }
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", init);
+        } else {
+            init();
+        }
+    })();
+
+    var poLookupLoaded = false;
+
+    window._poMaterialUomState = window._poMaterialUomState || {};
+
+    function poInitUomPlaceholder(sel) {
+        if (!sel) return;
+        sel.innerHTML = "";
+        var o = document.createElement("option");
+        o.value = "";
+        o.textContent = "Select a finished item first";
+        sel.appendChild(o);
+        sel.value = "";
+    }
+
+    function poPopulateUomFromContext(prefix, sel, data, preferredUomId) {
+        if (!sel) return;
+        sel.innerHTML = "";
+        var uoms = data.uoms || data.Uoms || [];
+        var allowed = data.allowedUomIds || data.AllowedUomIds || [];
+        window._poMaterialUomState[prefix] = { allowedIds: new Set(allowed.map(function (x) { return Number(x); })) };
+        var baseId = data.baseUomId != null ? data.baseUomId : data.BaseUomId;
+        if (!uoms.length) {
+            var ox = document.createElement("option");
+            ox.value = "";
+            ox.textContent = "—";
+            sel.appendChild(ox);
+            return;
+        }
+        uoms.forEach(function (u) {
+            var id = u.id != null ? u.id : u.Id;
+            var code = u.code || u.Code || "";
+            var isBase = !!(u.isBase || u.IsBase);
+            var outside = !!(u.outsideAllowedSet || u.OutsideAllowedSet);
+            var o = document.createElement("option");
+            o.value = id;
+            o.textContent = (code || String(id)) + (isBase ? " (base)" : "") + (outside ? " — add conversion or change UOM" : "");
+            sel.appendChild(o);
+        });
+        var pref = preferredUomId != null && preferredUomId !== "" ? Number(preferredUomId) : (baseId != null ? Number(baseId) : null);
+        if (pref != null && !isNaN(pref) && Array.from(sel.options).some(function (x) { return x.value === String(pref); }))
+            sel.value = String(pref);
+        else if (baseId != null && Array.from(sel.options).some(function (x) { return x.value === String(baseId); }))
+            sel.value = String(baseId);
+    }
+
+    function poLoadMaterialUomContext(prefix, modalId, materialNumber, includeUomIdForEdit) {
+        var sel = document.getElementById(prefix + "Uom");
+        var root = poFormRoot(modalId);
+        poClearInline(root);
+        var url = "@Url.Action("MaterialUomContext", "ProductionOrder")?materialNumber=" + encodeURIComponent(materialNumber);
+        if (includeUomIdForEdit != null && includeUomIdForEdit !== "")
+            url += "&includeUomIdForEdit=" + encodeURIComponent(String(includeUomIdForEdit));
+        return fetch(url).then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.success) {
+                poShowInline(root, res.message || "Could not load UOMs.");
+                poInitUomPlaceholder(sel);
+                return;
+            }
+            var d = res.data || res.Data || {};
+            var err = d.setupError || d.SetupError;
+            if (err) {
+                poShowInline(root, err);
+                poInitUomPlaceholder(sel);
+                window._poMaterialUomState[prefix] = { allowedIds: new Set() };
+                return;
+            }
+            poPopulateUomFromContext(prefix, sel, d, includeUomIdForEdit);
+            poClearInline(root);
+        }).catch(function () {
+            poShowInline(root, "Could not load UOMs.");
+            poInitUomPlaceholder(sel);
+        });
+    }
+
+    function poValidateUomClient(root, prefix) {
+        var sel = document.getElementById(prefix + "Uom");
+        var vid = parseInt(sel && sel.value, 10) || 0;
+        if (!vid) {
+            poShowInline(root, "Select a UOM.");
+            return false;
+        }
+        var st = window._poMaterialUomState[prefix];
+        if (!st || !st.allowedIds || st.allowedIds.size === 0) {
+            poShowInline(root, "Choose a finished item with a valid base unit and UOM setup.");
+            return false;
+        }
+        if (!st.allowedIds.has(vid)) {
+            poShowInline(root, "The selected unit of measure must be the material base unit or an alternate unit with a unit conversion on the material master.");
+            return false;
+        }
+        poClearInline(root);
+        return true;
+    }
+
+    function poFormRoot(modalId) {
+        return document.querySelector("#" + modalId + " .modal-content");
+    }
+
+    function poShowInline(root, message) {
+        if (!root) root = document.querySelector(".po-page");
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        if (typeof window.auShowInlineValidation === "function")
+            window.auShowInlineValidation(root, [], message);
+        else alert(message);
+    }
+
+    function poClearInline(root) {
+        if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+    }
+
+    function poReload() {
+        window.location.reload();
+    }
+
+    /** Hide PO create/edit modal so the global success dialog stacks above it. */
+    function poHideActiveFormModalThen(fn) {
+        var ids = ["poCreateModal", "poEditModal"];
+        ids.forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el || typeof bootstrap === "undefined") return;
+            var inst = bootstrap.Modal.getInstance(el);
+            if (inst && el.classList.contains("show")) inst.hide();
+        });
+        window.requestAnimationFrame(function () {
+            setTimeout(fn, 120);
+        });
+    }
+
+    var poBomMatSearchUrl = "@Url.Action("SearchBomMaterials", "BOM")";
+    var poCreatePickerTimers = {};
+
+    function poEscAttr(s) {
+        if (s == null || s === undefined) return "";
+        return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    }
+
+    function poCreateMatPickerCloseDd() {
+        var dd = document.getElementById("poCreateMaterialDd");
+        if (dd) {
+            dd.classList.remove("show");
+            dd.innerHTML = "";
+        }
+    }
+
+    function poCreateMatPickerFetch(searchInput) {
+        var dd = document.getElementById("poCreateMaterialDd");
+        if (!dd || !searchInput) return;
+        var q = searchInput.value || "";
+        var url = poBomMatSearchUrl + "?purpose=" + encodeURIComponent("header") + "&q=" + encodeURIComponent(q);
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    dd.innerHTML = '<div class="au-mat-picker-empty">Could not load materials.</div>';
+                    dd.classList.add("show");
+                    return;
+                }
+                var items = data.items || [];
+                if (!items.length)
+                    dd.innerHTML = '<div class="au-mat-picker-empty">No matches</div>';
+                else
+                    dd.innerHTML = items.map(function (it) {
+                        var t = (it.t || "").toUpperCase();
+                        var tag = t === "FERT" ? "FG" : (t === "HALB" ? "SFG" : t);
+                        var tagHtml = tag ? ' <span class="badge bg-light text-dark border">' + poEscAttr(tag) + "</span>" : "";
+                        return '<button type="button" class="au-mat-picker-item list-group-item list-group-item-action py-1 px-2 text-start border-0 rounded-0" data-n="' + poEscAttr(it.n) + '" data-d="' + poEscAttr(it.d) + '">'
+                            + '<span class="au-mat-code">' + poEscAttr(it.n) + "</span>"
+                            + ' <span class="text-muted small">— ' + poEscAttr(it.d) + "</span>" + tagHtml + "</button>";
+                    }).join("");
+                dd.classList.add("show");
+            })
+            .catch(function () {
+                dd.innerHTML = '<div class="au-mat-picker-empty">Request failed.</div>';
+                dd.classList.add("show");
+            });
+    }
+
+    function poCreateMatPickerSchedule(searchInput) {
+        var key = searchInput.id || "poCreateMat";
+        clearTimeout(poCreatePickerTimers[key]);
+        poCreatePickerTimers[key] = setTimeout(function () { poCreateMatPickerFetch(searchInput); }, 250);
+    }
+
+    function poRefreshCreateMaterialPickerLabel(matNum) {
+        if (!matNum) return Promise.resolve();
+        return fetch(poBomMatSearchUrl + "?purpose=header&q=" + encodeURIComponent(matNum))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var items = (data && data.items) || [];
+                var it = items.find(function (x) { return (x.n || "") === matNum; }) || items[0];
+                var sin = document.getElementById("poCreateMaterialSearch");
+                if (sin && it) sin.value = (it.n || "") + (it.d ? " — " + it.d : "");
+                else if (sin) sin.value = matNum;
+            })
+            .catch(function () {
+                var sin = document.getElementById("poCreateMaterialSearch");
+                if (sin) sin.value = matNum;
+            });
+    }
+
+    function poEnsureLookups() {
+        if (poLookupLoaded) return Promise.resolve();
+        return fetch("@Url.Action("FinishedItems", "ProductionOrder")").then(function (r) { return r.json(); }).then(function (res) {
+            var mats = res.data || [];
+            function fillMat(sel) {
+                sel.innerHTML = '<option value="">-- Select --</option>';
+                mats.forEach(function (m) {
+                    var t = (m.materialNumber || m.MaterialNumber || "");
+                    var d = (m.description || m.Description || "");
+                    var o = document.createElement("option");
+                    o.value = t;
+                    o.textContent = t + " — " + d;
+                    sel.appendChild(o);
+                });
+            }
+            fillMat(document.getElementById("poEditMaterial"));
+            poInitUomPlaceholder(document.getElementById("poCreateUom"));
+            poInitUomPlaceholder(document.getElementById("poEditUom"));
+            document.getElementById("poEditMaterial").addEventListener("change", function () {
+                var v = (this.value || "").trim();
+                var uSel = document.getElementById("poEditUom");
+                poClearInline(poFormRoot("poEditModal"));
+                if (!v) {
+                    poInitUomPlaceholder(uSel);
+                    return;
+                }
+                poLoadMaterialUomContext("poEdit", "poEditModal", v, null);
+            });
+            document.getElementById("poCreateUom").addEventListener("change", function () {
+                var root = poFormRoot("poCreateModal");
+                poClearInline(root);
+                var mat = (document.getElementById("poCreateMaterial").value || "").trim();
+                var st = window._poMaterialUomState && window._poMaterialUomState.poCreate;
+                if (mat && st && st.allowedIds && st.allowedIds.size)
+                    poValidateUomClient(root, "poCreate");
+            });
+            document.getElementById("poEditUom").addEventListener("change", function () {
+                var root = poFormRoot("poEditModal");
+                poClearInline(root);
+                var mat = (document.getElementById("poEditMaterial").value || "").trim();
+                var st = window._poMaterialUomState && window._poMaterialUomState.poEdit;
+                if (mat && st && st.allowedIds && st.allowedIds.size)
+                    poValidateUomClient(root, "poEdit");
+            });
+            poLookupLoaded = true;
+        });
+    }
+
+    (function poBindCreateMatPicker() {
+        if (window._poCreateMatPickerBound) return;
+        window._poCreateMatPickerBound = true;
+        document.addEventListener("mousedown", function (e) {
+            if (e.target.closest("#poCreateMaterialDd"))
+                e.preventDefault();
+            else if (!e.target.closest("#poCreateMatPickerWrap"))
+                poCreateMatPickerCloseDd();
+        });
+        document.addEventListener("click", function (e) {
+            var btn = e.target.closest("#poCreateMatPickerWrap .au-mat-picker-item");
+            if (!btn) return;
+            e.preventDefault();
+            var n = btn.getAttribute("data-n") || "";
+            var d = btn.getAttribute("data-d") || "";
+            var hid = document.getElementById("poCreateMaterial");
+            var search = document.getElementById("poCreateMaterialSearch");
+            if (hid) hid.value = n;
+            if (search) search.value = n ? (n + (d ? " — " + d : "")) : "";
+            poCreateMatPickerCloseDd();
+            var uSel = document.getElementById("poCreateUom");
+            poClearInline(poFormRoot("poCreateModal"));
+            if (!n) {
+                poInitUomPlaceholder(uSel);
+                return;
+            }
+            poLoadMaterialUomContext("poCreate", "poCreateModal", n, null);
+        });
+        var wrap = document.getElementById("poCreateMatPickerWrap");
+        if (wrap) {
+            wrap.addEventListener("focusin", function (e) {
+                if (e.target.classList && e.target.classList.contains("au-mat-picker-search"))
+                    poCreateMatPickerFetch(e.target);
+            });
+            wrap.addEventListener("input", function (e) {
+                if (e.target.classList && e.target.classList.contains("au-mat-picker-search"))
+                    poCreateMatPickerSchedule(e.target);
+            });
+        }
+    })();
+
+    document.getElementById("poCreateModal").addEventListener("show.bs.modal", function () {
+        var auto = window._poAutoFillCreate;
+        if (auto && typeof auto === "object" && (auto.material || "").trim()) {
+            var snap = auto;
+            window._poAutoFillCreate = null;
+            poEnsureLookups().then(function () {
+                poClearInline(poFormRoot("poCreateModal"));
+                var mat = (snap.material || "").trim();
+                var uomId = parseInt(String(snap.uomId), 10) || 0;
+                var qtyRaw = snap.qty != null ? String(snap.qty) : "1";
+                var qtyInt = Math.max(1, Math.ceil(parseFloat(qtyRaw) || 0));
+                return poLoadMaterialUomContext("poCreate", "poCreateModal", mat, uomId ? uomId : null).then(function () {
+                    var hid = document.getElementById("poCreateMaterial");
+                    if (hid) hid.value = mat;
+                    return poRefreshCreateMaterialPickerLabel(mat);
+                }).then(function () {
+                    document.getElementById("poCreateQty").value = String(qtyInt);
+                    var uEl = document.getElementById("poCreateUom");
+                    if (uomId && uEl && Array.from(uEl.options).some(function (o) { return o.value === String(uomId); }))
+                        uEl.value = String(uomId);
+                    var today = new Date().toISOString().slice(0, 10);
+                    var end = new Date();
+                    end.setDate(end.getDate() + 7);
+                    document.getElementById("poCreateStart").value = today;
+                    document.getElementById("poCreateEnd").value = end.toISOString().slice(0, 10);
+                    document.getElementById("poCreatePriority").value = "Medium";
+                    document.getElementById("poCreateRemarks").value = (snap.remarks || "").trim() || "";
+                });
+            });
+            return;
+        }
+        poEnsureLookups().then(function () {
+            poClearInline(poFormRoot("poCreateModal"));
+            var pS = document.getElementById("poCreateMaterialSearch");
+            if (pS) pS.value = "";
+            poCreateMatPickerCloseDd();
+            document.getElementById("poCreateMaterial").value = "";
+            document.getElementById("poCreateQty").value = "";
+            poInitUomPlaceholder(document.getElementById("poCreateUom"));
+            document.getElementById("poCreateStart").value = "";
+            document.getElementById("poCreateEnd").value = "";
+            document.getElementById("poCreatePriority").value = "Medium";
+            document.getElementById("poCreateRemarks").value = "";
+        });
+    });
+
+    document.getElementById("poFilterModal").addEventListener("show.bs.modal", function () {
+        document.getElementById("poModStatus").value = document.getElementById("poListStatus").value || "All";
+        document.getElementById("poModPriority").value = document.getElementById("poListPriority").value || "All";
+    });
+
+    function poApplyFilterModal() {
+        document.getElementById("poListStatus").value = document.getElementById("poModStatus").value;
+        document.getElementById("poListPriority").value = document.getElementById("poModPriority").value;
+        var modalEl = document.getElementById("poFilterModal");
+        if (modalEl && typeof bootstrap !== "undefined")
+            bootstrap.Modal.getInstance(modalEl).hide();
+        document.getElementById("poListFilterForm").submit();
+    }
+
+    function poOpenBom(id) {
+        var errEl = document.getElementById("poBomError");
+        var body = document.getElementById("poBomBody");
+        var head = document.getElementById("poBomHeaderText");
+        if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+        if (body) body.innerHTML = "";
+        if (head) head.textContent = "";
+        fetch("@Url.Action("BomLines", "ProductionOrder")?id=" + encodeURIComponent(id))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                var root = document.querySelector("#poBomModal .modal-content");
+                if (!res.success) {
+                    if (errEl) {
+                        errEl.textContent = res.message || "Could not load BOM.";
+                        errEl.style.display = "block";
+                    }
+                    if (typeof window.auShowInlineValidation === "function" && root)
+                        window.auShowInlineValidation(root, [], res.message || "Could not load BOM.");
+                    else if (errEl) errEl.style.display = "block";
+                    var modalEl = document.getElementById("poBomModal");
+                    if (modalEl && typeof bootstrap !== "undefined")
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                    return;
+                }
+                var fm = res.finishedMaterialNumber || res.FinishedMaterialNumber || "";
+                if (head) {
+                    head.textContent = fm
+                        ? ("Finished item: " + fm + ". Quantities are scaled from this order’s target quantity and the BOM base quantity.")
+                        : "";
+                }
+                var lines = res.data || res.Data || [];
+                if (body) {
+                    if (!lines.length) {
+                        body.innerHTML = '<tr><td colspan="5" class="text-secondary">No BOM lines found for this item.</td></tr>';
+                    } else {
+                        lines.forEach(function (row) {
+                            var tr = document.createElement("tr");
+                            var mn = row.materialNumber || row.MaterialNumber || "";
+                            var desc = row.description || row.Description || "";
+                            var mt = row.materialTypeCode || row.MaterialTypeCode || "";
+                            var q = row.quantity != null ? row.quantity : row.Quantity;
+                            var u = row.uomCode || row.UomCode || "—";
+                            tr.innerHTML =
+                                "<td><strong>" + poBomEsc(mn) + "</strong></td>" +
+                                "<td>" + poBomEsc(desc) + "</td>" +
+                                "<td>" + poBomEsc(mt) + "</td>" +
+                                "<td>" + poBomEsc(String(q)) + "</td>" +
+                                "<td>" + poBomEsc(u) + "</td>";
+                            body.appendChild(tr);
+                        });
+                    }
+                }
+                var modalEl = document.getElementById("poBomModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            })
+            .catch(function () {
+                if (errEl) {
+                    errEl.textContent = "Request failed.";
+                    errEl.style.display = "block";
+                }
+                var modalEl = document.getElementById("poBomModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            });
+    }
+
+    function poBomEsc(s) {
+        if (s == null) return "";
+        var d = document.createElement("div");
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
+
+    function poNavToMrpForShortage(mat, qty, uomId, note) {
+        var base = "@Url.Action("Index", "MRP")";
+        var u = new URL(base, window.location.origin);
+        u.searchParams.set("autoRun", "1");
+        u.searchParams.set("material", (mat || "").trim());
+        u.searchParams.set("qty", String(qty != null ? qty : "1"));
+        u.searchParams.set("uomId", String(uomId != null ? uomId : 0));
+        if (note) u.searchParams.set("note", String(note).substring(0, 500));
+        window.location.href = u.pathname + u.search;
+    }
+
+    function poSaveCreate() {
+        var root = poFormRoot("poCreateModal");
+        poClearInline(root);
+        var matNum = (document.getElementById("poCreateMaterial").value || "").trim();
+        if (matNum && !poValidateUomClient(root, "poCreate")) return;
+        var payload = {
+            FinishedMaterialNumber: (document.getElementById("poCreateMaterial").value || "").trim(),
+            TargetQuantity: parseInt(document.getElementById("poCreateQty").value, 10) || 0,
+            UomId: parseInt(document.getElementById("poCreateUom").value, 10) || 0,
+            PlannedStartDate: document.getElementById("poCreateStart").value || null,
+            PlannedEndDate: document.getElementById("poCreateEnd").value || null,
+            Priority: document.getElementById("poCreatePriority").value,
+            Remarks: (document.getElementById("poCreateRemarks").value || "").trim() || null
+        };
+        fetch("@Url.Action("Create", "ProductionOrder")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.success) {
+                poHideActiveFormModalThen(function () {
+                    if (typeof window.materialShowSuccessModalThen === "function")
+                        window.materialShowSuccessModalThen(res.message, poReload);
+                    else { alert(res.message); poReload(); }
+                });
+            } else if (res.mrpShortage || res.MrpShortage) {
+                poNavToMrpForShortage(
+                    res.mrpMaterialNumber || res.MrpMaterialNumber,
+                    res.mrpTargetQuantity != null ? res.mrpTargetQuantity : res.MrpTargetQuantity,
+                    res.mrpUomId != null ? res.mrpUomId : res.MrpUomId,
+                    res.message || "");
+            } else poShowInline(root, res.message || "Save failed.");
+        }).catch(function () { poShowInline(root, "Request failed."); });
+    }
+
+    function poOpenEdit(id) {
+        poEnsureLookups().then(function () {
+            return fetch("@Url.Action("GetForEdit", "ProductionOrder")?id=" + encodeURIComponent(id));
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            var root = poFormRoot("poEditModal");
+            poClearInline(root);
+            if (!res.success) { poShowInline(document.querySelector(".po-page"), res.message || "Load failed."); return; }
+            var d = res.data;
+            document.getElementById("poEditId").value = d.id || d.Id;
+            var matNum = (d.finishedMaterialNumber || d.FinishedMaterialNumber || "").trim();
+            var curUom = d.uomId != null ? d.uomId : d.UomId;
+            document.getElementById("poEditMaterial").value = matNum;
+            return poLoadMaterialUomContext("poEdit", "poEditModal", matNum, curUom).then(function () {
+                document.getElementById("poEditQty").value = d.targetQuantity != null ? d.targetQuantity : d.TargetQuantity;
+                document.getElementById("poEditStart").value = d.plannedStartDate || d.PlannedStartDate || "";
+                document.getElementById("poEditEnd").value = d.plannedEndDate || d.PlannedEndDate || "";
+                document.getElementById("poEditPriority").value = d.priority || d.Priority || "Medium";
+                document.getElementById("poEditRemarks").value = d.remarks || d.Remarks || "";
+                var modalEl = document.getElementById("poEditModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            });
+        }).catch(function () { poShowInline(document.querySelector(".po-page"), "Load failed."); });
+    }
+
+    function poSaveEdit() {
+        var root = poFormRoot("poEditModal");
+        poClearInline(root);
+        var matNum = (document.getElementById("poEditMaterial").value || "").trim();
+        if (matNum && !poValidateUomClient(root, "poEdit")) return;
+        var payload = {
+            Id: parseInt(document.getElementById("poEditId").value, 10) || 0,
+            FinishedMaterialNumber: (document.getElementById("poEditMaterial").value || "").trim(),
+            TargetQuantity: parseInt(document.getElementById("poEditQty").value, 10) || 0,
+            UomId: parseInt(document.getElementById("poEditUom").value, 10) || 0,
+            PlannedStartDate: document.getElementById("poEditStart").value || null,
+            PlannedEndDate: document.getElementById("poEditEnd").value || null,
+            Priority: document.getElementById("poEditPriority").value,
+            Remarks: (document.getElementById("poEditRemarks").value || "").trim() || null
+        };
+        fetch("@Url.Action("Update", "ProductionOrder")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.success) {
+                poHideActiveFormModalThen(function () {
+                    if (typeof window.materialShowSuccessModalThen === "function")
+                        window.materialShowSuccessModalThen(res.message, poReload);
+                    else { alert(res.message); poReload(); }
+                });
+            } else poShowInline(root, res.message || "Update failed.");
+        }).catch(function () { poShowInline(root, "Request failed."); });
+    }
+
+    function poDelete(id) {
+        function run() {
+            fetch("@Url.Action("Delete", "ProductionOrder")?id=" + encodeURIComponent(id), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(res.message, poReload);
+                        else { alert(res.message); poReload(); }
+                    } else poShowInline(document.querySelector(".po-page"), res.message || "Delete failed.");
+                }).catch(function () { poShowInline(document.querySelector(".po-page"), "Delete failed."); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Delete this production order?", run);
+        else if (confirm("Delete this production order?")) run();
+    }
+
+    function poRelease(id) {
+        function run() {
+            fetch("@Url.Action("Release", "ProductionOrder")?id=" + encodeURIComponent(id), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        poHideActiveFormModalThen(function () {
+                            if (typeof window.materialShowSuccessModalThen === "function")
+                                window.materialShowSuccessModalThen(res.message, poReload);
+                            else { alert(res.message); poReload(); }
+                        });
+                    } else if (res.mrpShortage || res.MrpShortage) {
+                        poNavToMrpForShortage(
+                            res.mrpMaterialNumber || res.MrpMaterialNumber,
+                            res.mrpTargetQuantity != null ? res.mrpTargetQuantity : res.MrpTargetQuantity,
+                            res.mrpUomId != null ? res.mrpUomId : res.MrpUomId,
+                            res.message || "");
+                    } else poShowInline(document.querySelector(".po-page"), res.message || "Release failed.");
+                }).catch(function () { poShowInline(document.querySelector(".po-page"), "Release failed."); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Release this production order?", run);
+        else if (confirm("Release this production order?")) run();
+    }
+
+    var poTrackingDetailsUrl = "@Url.Action("Details", "OperationTracking")";
+
+    function poOpSyncWastage() {
+        var a = parseFloat(document.getElementById("poOpInQty").value);
+        var b = parseFloat(document.getElementById("poOpOutQty").value);
+        var wEl = document.getElementById("poOpWastQty");
+        if (!wEl) return;
+        if (isNaN(a) || isNaN(b)) { wEl.value = ""; return; }
+        wEl.value = Math.max(0, a - b).toFixed(4);
+    }
+    (function poOpBindWastage() {
+        var a = document.getElementById("poOpInQty");
+        var b = document.getElementById("poOpOutQty");
+        if (a) a.addEventListener("input", poOpSyncWastage);
+        if (b) b.addEventListener("input", poOpSyncWastage);
+    })();
+
+    function poOpenOperationModal(productionOrderId) {
+        var vRoot = document.querySelector("#poOperationModal .modal-content");
+        if (vRoot && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(vRoot);
+        var valEl = document.getElementById("poOperationValidation");
+        if (valEl) { valEl.style.display = "none"; valEl.textContent = ""; }
+        document.getElementById("poOperationPoId").value = String(productionOrderId);
+        var trackBtn = document.getElementById("poOpOpenTrackingBtn");
+        trackBtn.href = poTrackingDetailsUrl + "?productionOrderId=" + encodeURIComponent(productionOrderId);
+        fetch("@Url.Action("GetActiveStageForUpdate", "OperationTracking")?productionOrderId=" + encodeURIComponent(productionOrderId))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) {
+                    if (valEl) { valEl.style.display = "block"; valEl.textContent = res.message || "Could not load active stage."; }
+                    document.getElementById("poOperationTitleText").textContent = "Operation";
+                    var modalWarn = document.getElementById("poOperationModal");
+                    if (modalWarn && typeof bootstrap !== "undefined")
+                        bootstrap.Modal.getOrCreateInstance(modalWarn).show();
+                    return;
+                }
+                var d = res.data;
+                document.getElementById("poOperationStageId").value = d.id != null ? d.id : d.Id;
+                var idx = d.stageIndex != null ? d.stageIndex : d.StageIndex;
+                var title = d.stageTitle || d.StageTitle || "";
+                var poNum = d.productionNumber != null ? d.productionNumber : d.ProductionNumber;
+                document.getElementById("poOperationTitleText").textContent = "Update Stage " + idx + ": " + title + " (PO-" + poNum + ")";
+                var defIn = d.defaultInputQuantity != null ? d.defaultInputQuantity : d.DefaultInputQuantity;
+                var curIn = d.inputQuantity != null ? d.inputQuantity : d.InputQuantity;
+                var curOut = d.outputQuantity != null ? d.outputQuantity : d.OutputQuantity;
+                var curAct = d.actualHours != null ? d.actualHours : d.ActualHours;
+                var curW = d.wastageQuantity != null ? d.wastageQuantity : d.WastageQuantity;
+                document.getElementById("poOpInQty").value = (curIn != null && curIn !== "") ? curIn : (defIn != null && defIn !== "" ? defIn : "");
+                document.getElementById("poOpOutQty").value = (curOut != null && curOut !== "") ? curOut : "";
+                document.getElementById("poOpActHrs").value = (curAct != null && curAct !== "") ? curAct : "";
+                if (curW != null && curW !== "") document.getElementById("poOpWastQty").value = curW;
+                else poOpSyncWastage();
+                document.getElementById("poOpOperator").value = d.workerOperator || d.WorkerOperator || "";
+                document.getElementById("poOpObs").value = d.observations || d.Observations || "";
+                var wr = d.wastageReason || d.WastageReason || "";
+                var selW = document.getElementById("poOpWastReason");
+                selW.innerHTML = '<option value="">— Optional —</option>';
+                (d.wastageReasons || d.WastageReasons || []).forEach(function (x) {
+                    var o = document.createElement("option");
+                    o.value = x; o.textContent = x;
+                    if (x === wr) o.selected = true;
+                    selW.appendChild(o);
+                });
+                var mark = (d.stageStatus || d.StageStatus || "").toString();
+                document.getElementById("poOpMarkAs").value = mark === "Completed" ? "Completed" : "InProgress";
+                var modalEl = document.getElementById("poOperationModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }).catch(function () {
+                if (valEl) { valEl.style.display = "block"; valEl.textContent = "Request failed."; }
+                var modalEl = document.getElementById("poOperationModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            });
+    }
+
+    function poSaveOperationStage() {
+        var vRoot = document.querySelector("#poOperationModal .modal-content");
+        var valEl = document.getElementById("poOperationValidation");
+        if (valEl) { valEl.style.display = "none"; valEl.textContent = ""; }
+        var poId = parseInt(document.getElementById("poOperationPoId").value, 10) || 0;
+        var sid = parseInt(document.getElementById("poOperationStageId").value, 10) || 0;
+        if (!poId || !sid) {
+            if (valEl) { valEl.style.display = "block"; valEl.textContent = "No active stage to update. Use Open full tracking."; }
+            return;
+        }
+        var wq = parseFloat(document.getElementById("poOpWastQty").value);
+        var payload = {
+            productionOrderId: poId,
+            stageProgressId: sid,
+            inputQuantity: parseFloat(document.getElementById("poOpInQty").value) || 0,
+            outputQuantity: parseFloat(document.getElementById("poOpOutQty").value) || 0,
+            wastageQuantity: isNaN(wq) ? null : wq,
+            actualHours: parseFloat(document.getElementById("poOpActHrs").value) || 0,
+            wastageReason: (document.getElementById("poOpWastReason").value || "").trim() || null,
+            workerOperator: (document.getElementById("poOpOperator").value || "").trim() || null,
+            markStageAs: document.getElementById("poOpMarkAs").value,
+            observations: (document.getElementById("poOpObs").value || "").trim() || null
+        };
+        fetch("@Url.Action("UpdateStage", "OperationTracking")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("poOperationModal");
+                if (modalEl && typeof bootstrap !== "undefined") {
+                    var inst = bootstrap.Modal.getInstance(modalEl);
+                    if (inst) inst.hide();
+                }
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message || "Stage updated.", poReload);
+                else { alert(res.message || "Stage updated."); poReload(); }
+            } else {
+                if (valEl) { valEl.style.display = "block"; valEl.textContent = res.message || "Update failed."; }
+                else poShowInline(vRoot, res.message || "Update failed.");
+            }
+        }).catch(function () {
+            if (valEl) { valEl.style.display = "block"; valEl.textContent = "Request failed."; }
+        });
+    }
+
+    (function poOpenCreateFromMrpUrl() {
+        try {
+            var sp = new URLSearchParams(window.location.search);
+            if (sp.get("autoPo") !== "1") return;
+            var material = (sp.get("material") || "").trim();
+            var qty = sp.get("qty") || "1";
+            var uomId = parseInt(sp.get("uomId") || "0", 10) || 0;
+            var remarks = sp.get("remarks") || "";
+            if (history.replaceState) history.replaceState(null, document.title, window.location.pathname);
+            window._poAutoFillCreate = { material: material, qty: qty, uomId: uomId, remarks: remarks };
+            var el = document.getElementById("poCreateModal");
+            if (el && typeof bootstrap !== "undefined")
+                bootstrap.Modal.getOrCreateInstance(el).show();
+        } catch (ex) { }
+    })();
+</script>
+}

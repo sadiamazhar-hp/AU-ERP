@@ -414,6 +414,18 @@ body.modal-open:has(#rtEditModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+#rtManageOpsModal.modal {
+  z-index: 100050 !important;
+}
+
+#rtManageOpsModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#rtManageOpsModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
 /* Material Create — UOM conversions table (align with Routing rt-ops-table look) */
 .mat-uom-table {
   width: 100%;
@@ -507,16 +519,76 @@ body.modal-open:has(#pvEditModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
-/* Material success modal — teal dialog; stack above backdrop when inside .au-card. */
-#materialSuccessModal.modal {
+/* Production Order modals — same stacking as other dialogs under .au-card (backdrop-filter). */
+#poCreateModal.modal,
+#poEditModal.modal,
+#poFilterModal.modal,
+#poOperationModal.modal,
+#poBomModal.modal {
   z-index: 100050 !important;
 }
 
-#materialSuccessModal.modal ~ .modal-backdrop {
+#poCreateModal.modal ~ .modal-backdrop,
+#poEditModal.modal ~ .modal-backdrop,
+#poFilterModal.modal ~ .modal-backdrop,
+#poOperationModal.modal ~ .modal-backdrop,
+#poBomModal.modal ~ .modal-backdrop {
   z-index: 100040 !important;
 }
 
+body.modal-open:has(#poCreateModal.show) .modal-backdrop,
+body.modal-open:has(#poEditModal.show) .modal-backdrop,
+body.modal-open:has(#poFilterModal.show) .modal-backdrop,
+body.modal-open:has(#poOperationModal.show) .modal-backdrop,
+body.modal-open:has(#poBomModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Stock Overview modals */
+#soCreateModal.modal,
+#soEditModal.modal,
+#soFilterModal.modal {
+  z-index: 100050 !important;
+}
+
+#soCreateModal.modal ~ .modal-backdrop,
+#soEditModal.modal ~ .modal-backdrop,
+#soFilterModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#soCreateModal.show) .modal-backdrop,
+body.modal-open:has(#soEditModal.show) .modal-backdrop,
+body.modal-open:has(#soFilterModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Material success modal — teal dialog; stack above PO/routing modals (100050). */
+#materialSuccessModal.modal {
+  z-index: 100060 !important;
+}
+
+#materialSuccessModal.modal ~ .modal-backdrop {
+  z-index: 100055 !important;
+}
+
 body.modal-open:has(#materialSuccessModal.show) .modal-backdrop {
+  z-index: 100055 !important;
+}
+
+/* Operation Tracking — update stage modal (reparented to body like PO). */
+#otUpdateStageModal.modal,
+#otGrStubModal.modal {
+  z-index: 100050 !important;
+}
+
+#otUpdateStageModal.modal ~ .modal-backdrop,
+#otGrStubModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#otUpdateStageModal.show) .modal-backdrop,
+body.modal-open:has(#otGrStubModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 

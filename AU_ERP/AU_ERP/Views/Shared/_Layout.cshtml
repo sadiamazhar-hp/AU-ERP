@@ -30,6 +30,15 @@
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var pvActive = string.Equals(ctrl, "ProductionVersion", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var mrpActive = string.Equals(ctrl, "MRP", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var productionOrderActive = string.Equals(ctrl, "ProductionOrder", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var operationTrackingActive = string.Equals(ctrl, "OperationTracking", StringComparison.OrdinalIgnoreCase)
+        && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(act, "Details", StringComparison.OrdinalIgnoreCase));
+    var stockOverviewActive = string.Equals(ctrl, "StockOverview", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -68,6 +77,14 @@
                 <a class="au-sidebar-link @(wcActive ? "active" : null)" asp-controller="WorkCentre" asp-action="Index">Work Centres</a>
                 <a class="au-sidebar-link @(rtActive ? "active" : null)" asp-controller="Routing" asp-action="Index">Routing</a>
                 <a class="au-sidebar-link @(pvActive ? "active" : null)" asp-controller="ProductionVersion" asp-action="Index">Product Version</a>
+
+                <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Production</div>
+                <a class="au-sidebar-link @(mrpActive ? "active" : null)" asp-controller="MRP" asp-action="Index">MRP</a>
+                <a class="au-sidebar-link @(productionOrderActive ? "active" : null)" asp-controller="ProductionOrder" asp-action="Index">Production Order</a>
+                <a class="au-sidebar-link @(operationTrackingActive ? "active" : null)" asp-controller="OperationTracking" asp-action="Index">Operation Tracking</a>
+
+                <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Inventory</div>
+                <a class="au-sidebar-link @(stockOverviewActive ? "active" : null)" asp-controller="StockOverview" asp-action="Index">Stock Overview</a>
 
                 <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Configuration</div>
                 <a class="au-sidebar-link @(materialTypeActive ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Types</a>

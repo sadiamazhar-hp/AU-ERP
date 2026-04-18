@@ -1,0 +1,598 @@
+@{
+    ViewData["Title"] = "MRP";
+}
+
+@section Styles {
+    <style>
+        .mrp-page { color: var(--au-black, #171717); }
+        .mrp-page .mrp-hero { margin-bottom: 1.25rem; }
+        .mrp-page .mrp-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--au-primary-dark, #388087); margin: 0 0 .25rem 0; }
+        .mrp-page .mrp-hero p { margin: 0; color: #555; font-size: .9rem; }
+        .mrp-btn-run { background: var(--au-primary-dark, #388087); color: #fff; border: 1px solid var(--au-primary-dark, #388087); border-radius: .35rem; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
+        .mrp-btn-run:hover { filter: brightness(1.05); color: #fff; }
+        .mrp-card { background: #fff; border: 1px solid rgba(56, 128, 135, 0.25); border-radius: .5rem; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+        .mrp-card h2 { font-size: 1rem; font-weight: 600; color: var(--au-primary-dark, #388087); margin: 0 0 .75rem 0; }
+        .mrp-table-wrap { overflow-x: auto; }
+        .mrp-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .mrp-table thead th { background: var(--au-primary-dark, #388087); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+        .mrp-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+        .mrp-table tbody tr:nth-child(even) { background: #fafafa; }
+        .mrp-table tbody tr.mrp-row-short { background: #f8d7da !important; color: #842029; }
+        .mrp-success-banner { display: none; border: 1px solid #badbcc; background: #d1e7dd; color: #0f5132; border-radius: .5rem; padding: .75rem 1rem; margin-bottom: 1rem; font-weight: 500; }
+        .mrp-sub-detail td { background: #f4fbfb; border-top: none !important; }
+        .mrp-sub-inner { font-size: .82rem; }
+        .mrp-sub-inner table { width: 100%; margin: 0; }
+        .mrp-sub-inner th { background: #e8f4f5; color: #2c5f63; font-weight: 600; }
+        /* Same pattern as BOM material picker — server search + dropdown */
+        .au-mat-picker { position: relative; }
+        .au-mat-picker-dropdown { display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; max-height: 220px; overflow-y: auto; z-index: 1060; background: #fff; border: 1px solid #ccc; border-radius: .25rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+        .au-mat-picker-dropdown.show { display: block; }
+        .au-mat-picker-item { padding: 6px 10px; font-size: .82rem; cursor: pointer; border: 0; border-bottom: 1px solid #eee; width: 100%; text-align: left; background: #fff; }
+        .au-mat-picker-item:hover, .au-mat-picker-item.active { background: #b3d7ff; }
+        .au-mat-picker-item .au-mat-code { font-weight: 600; }
+        .au-mat-picker-empty { padding: 8px 10px; font-size: .78rem; color: #666; }
+    </style>
+}
+
+<div class="mrp-page">
+    <div class="mrp-hero">
+        <h1>Material requirements planning</h1>
+        <p>Select a finished good or semi-finished assembly (FERT or HALB), quantity, and UOM, then run MRP to compare BOM requirements with active stock.</p>
+    </div>
+
+    <div id="mrpSuccessBanner" class="mrp-success-banner" role="status">
+        <div class="d-flex flex-wrap align-items-center gap-2 justify-content-between">
+            <span>MRP complete — Ready for Production</span>
+            <button type="button" class="btn btn-sm btn-success" id="mrpBtnCreatePoMain" style="display:none;">Create Production Order</button>
+        </div>
+    </div>
+
+    <div class="mrp-card">
+        <h2>Run parameters</h2>
+        <div class="au-validation-summary mb-2" id="mrpFormError" style="display:none;" role="alert"></div>
+        <div class="row g-2 align-items-end flex-wrap">
+            <div class="col-md-4">
+                <label class="form-label small">Material (FERT / HALB)</label>
+                <div class="au-mat-picker" id="mrpMatPickerWrap">
+                    <input type="text" class="form-control form-control-sm au-mat-picker-search" id="mrpMaterialSearch" placeholder="Search material number or description…" autocomplete="off" />
+                    <input type="hidden" id="mrpMaterial" value="" />
+                    <div class="au-mat-picker-dropdown" id="mrpMaterialDd"></div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Quantity</label>
+                <input type="number" id="mrpQty" class="form-control form-control-sm" min="0.0001" step="any" value="1" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">Quantity UOM</label>
+                <select id="mrpUom" class="form-select form-select-sm"></select>
+            </div>
+            <div class="col-md-3">
+                <button type="button" class="btn mrp-btn-run" id="mrpRunBtn">Run MRP</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mrp-card" id="mrpResultCard" style="display:none;">
+        <h2 id="mrpResultTitle">Results</h2>
+        <div id="mrpWarnings" class="small text-warning mb-2" style="display:none;"></div>
+        <div class="mrp-table-wrap">
+            <table class="mrp-table" id="mrpResultTable">
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Material type</th>
+                        <th>Total required</th>
+                        <th>Total stock</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="mrpResultBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    function mrpInitUomPlaceholder(sel) {
+        if (!sel) return;
+        sel.innerHTML = "";
+        var o = document.createElement("option");
+        o.value = "";
+        o.textContent = "Select a material first";
+        sel.appendChild(o);
+    }
+
+    function mrpPopulateUom(sel, data, preferredUomId) {
+        sel.innerHTML = "";
+        var uoms = data.uoms || data.Uoms || [];
+        if (!uoms.length) {
+            var ox = document.createElement("option");
+            ox.value = "";
+            ox.textContent = "—";
+            sel.appendChild(ox);
+            return;
+        }
+        var baseId = data.baseUomId != null ? data.baseUomId : data.BaseUomId;
+        uoms.forEach(function (u) {
+            var id = u.id != null ? u.id : u.Id;
+            var code = u.code || u.Code || "";
+            var isBase = !!(u.isBase || u.IsBase);
+            var o = document.createElement("option");
+            o.value = id;
+            o.textContent = (code || String(id)) + (isBase ? " (base)" : "");
+            sel.appendChild(o);
+        });
+        var pref = preferredUomId != null ? Number(preferredUomId) : (baseId != null ? Number(baseId) : null);
+        if (pref != null && !isNaN(pref) && Array.from(sel.options).some(function (x) { return x.value === String(pref); }))
+            sel.value = String(pref);
+        else if (baseId != null)
+            sel.value = String(baseId);
+    }
+
+    function mrpShowFormError(msg) {
+        var el = document.getElementById("mrpFormError");
+        if (!el) return;
+        el.textContent = msg || "";
+        el.style.display = msg ? "block" : "none";
+    }
+
+    function mrpClearFormError() { mrpShowFormError(""); }
+
+    function mrpFmtQty(v) {
+        var n = Number(v);
+        if (isNaN(n)) return "—";
+        return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    }
+
+    var mrpBomMatSearchUrl = "@Url.Action("SearchBomMaterials", "BOM")";
+    var mrpPickerTimers = {};
+
+    function mrpEscAttr(s) {
+        if (s == null || s === undefined) return "";
+        return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    }
+
+    function mrpMatPickerCloseDd() {
+        var dd = document.getElementById("mrpMaterialDd");
+        if (dd) {
+            dd.classList.remove("show");
+            dd.innerHTML = "";
+        }
+    }
+
+    function mrpMatPickerFetch(searchInput) {
+        var dd = document.getElementById("mrpMaterialDd");
+        if (!dd || !searchInput) return;
+        var q = searchInput.value || "";
+        var url = mrpBomMatSearchUrl + "?purpose=" + encodeURIComponent("header") + "&q=" + encodeURIComponent(q);
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    dd.innerHTML = '<div class="au-mat-picker-empty">Could not load materials.</div>';
+                    dd.classList.add("show");
+                    return;
+                }
+                var items = data.items || [];
+                if (!items.length)
+                    dd.innerHTML = '<div class="au-mat-picker-empty">No matches</div>';
+                else
+                    dd.innerHTML = items.map(function (it) {
+                        var t = (it.t || "").toUpperCase();
+                        var tag = t === "FERT" ? "FG" : (t === "HALB" ? "SFG" : t);
+                        var tagHtml = tag ? ' <span class="badge bg-light text-dark border">' + mrpEscAttr(tag) + "</span>" : "";
+                        return '<button type="button" class="au-mat-picker-item list-group-item list-group-item-action py-1 px-2 text-start border-0 rounded-0" data-n="' + mrpEscAttr(it.n) + '" data-d="' + mrpEscAttr(it.d) + '">'
+                            + '<span class="au-mat-code">' + mrpEscAttr(it.n) + "</span>"
+                            + ' <span class="text-muted small">— ' + mrpEscAttr(it.d) + "</span>" + tagHtml + "</button>";
+                    }).join("");
+                dd.classList.add("show");
+            })
+            .catch(function () {
+                dd.innerHTML = '<div class="au-mat-picker-empty">Request failed.</div>';
+                dd.classList.add("show");
+            });
+    }
+
+    function mrpMatPickerSchedule(searchInput) {
+        var key = searchInput.id || "mrpMat";
+        clearTimeout(mrpPickerTimers[key]);
+        mrpPickerTimers[key] = setTimeout(function () { mrpMatPickerFetch(searchInput); }, 250);
+    }
+
+    function mrpRefreshMaterialPickerLabel(matNum) {
+        if (!matNum) return Promise.resolve();
+        return fetch(mrpBomMatSearchUrl + "?purpose=header&q=" + encodeURIComponent(matNum))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var items = (data && data.items) || [];
+                var it = items.find(function (x) { return (x.n || "") === matNum; }) || items[0];
+                var sin = document.getElementById("mrpMaterialSearch");
+                if (sin && it) sin.value = (it.n || "") + (it.d ? " — " + it.d : "");
+                else if (sin) sin.value = matNum;
+            })
+            .catch(function () {
+                var sin = document.getElementById("mrpMaterialSearch");
+                if (sin) sin.value = matNum;
+            });
+    }
+
+    function mrpLoadUomForMaterial(materialNumber) {
+        var sel = document.getElementById("mrpUom");
+        mrpClearFormError();
+        if (!materialNumber) {
+            mrpInitUomPlaceholder(sel);
+            return Promise.resolve();
+        }
+        return fetch("@Url.Action("MaterialUomContext", "MRP")?materialNumber=" + encodeURIComponent(materialNumber))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) {
+                    mrpShowFormError(res.message || "Could not load UOMs.");
+                    mrpInitUomPlaceholder(sel);
+                    return;
+                }
+                var d = res.data || res.Data || {};
+                if (d.setupError || d.SetupError) {
+                    mrpShowFormError(d.setupError || d.SetupError);
+                    mrpInitUomPlaceholder(sel);
+                    return;
+                }
+                mrpPopulateUom(sel, d, null);
+            })
+            .catch(function () {
+                mrpShowFormError("Could not load UOMs.");
+                mrpInitUomPlaceholder(sel);
+            });
+    }
+
+    window._mrpLineMeta = window._mrpLineMeta || [];
+    window._mrpSubCache = window._mrpSubCache || {};
+    window._mrpSubLoading = window._mrpSubLoading || {};
+
+    function mrpFetchRun(mat, qty, uomId, subMrp) {
+        return fetch("@Url.Action("Run", "MRP")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                MaterialNumber: mat,
+                Quantity: qty,
+                UomId: uomId,
+                SubMrp: !!subMrp
+            })
+        }).then(function (r) { return r.json(); });
+    }
+
+    function mrpNavToCreatePo(mat, qty, uomId) {
+        var matTrim = (mat || "").trim();
+        if (!matTrim) return;
+        var base = "@Url.Action("Index", "ProductionOrder")";
+        var u = new URL(base, window.location.origin);
+        u.searchParams.set("autoPo", "1");
+        u.searchParams.set("material", matTrim);
+        u.searchParams.set("qty", String(qty != null ? qty : "1"));
+        u.searchParams.set("uomId", String(uomId != null ? uomId : 0));
+        window.location.href = u.pathname + u.search;
+    }
+
+    function mrpHalbActionsHtml(idx, includeCreatePo) {
+        var html = '<button type="button" class="btn btn-sm btn-outline-secondary mrp-check-mrp" data-mrp-idx="' + idx + '">Check MRP</button>';
+        if (includeCreatePo)
+            html += ' <button type="button" class="btn btn-sm btn-success mrp-create-po-line" data-mrp-idx="' + idx + '">Create Production Order</button>';
+        return html;
+    }
+
+    function mrpRefreshHalbActionCell(idx) {
+        var td = document.getElementById("mrp-actions-td-" + idx);
+        if (!td) return;
+        var meta = window._mrpLineMeta[idx];
+        if (!meta || !meta.showCheck) return;
+        var c = window._mrpSubCache[idx];
+        var allSat = c && !!(c.allSatisfied || c.AllSatisfied);
+        var stub = meta.poStub ? ' <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Purchase order creation is not implemented yet">Create purchase order</button>' : "";
+        td.innerHTML = mrpHalbActionsHtml(idx, allSat) + stub;
+    }
+
+    function mrpBuildSubTableHtml(payload) {
+        var rows = payload.rows || payload.Rows || [];
+        var allSat = !!(payload.allSatisfied || payload.AllSatisfied);
+        var head = '<div class="mb-1 fw-semibold text-success">' + (allSat ? "Sub MRP satisfied — components available for this quantity." : "Sub MRP — shortages remain.") + '</div>';
+        if (!rows.length) return head + "<p class=\"text-muted mb-0\">No BOM lines.</p>";
+        var sb = head + '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Material</th><th>Type</th><th>Required</th><th>Stock</th></tr></thead><tbody>';
+        rows.forEach(function (row) {
+            var mat = row.materialNumber || row.MaterialNumber || "";
+            var type = row.materialTypeCode || row.MaterialTypeCode || "";
+            var req = row.requiredQty != null ? row.requiredQty : row.RequiredQty;
+            var uom = row.requiredUomCode || row.RequiredUomCode || "";
+            var stock = row.onHandQty != null ? row.onHandQty : row.OnHandQty;
+            var shortage = !!(row.shortage || row.Shortage);
+            var cls = shortage ? " class=\"table-danger\"" : "";
+            sb += "<tr" + cls + "><td><strong>" + mrpEscapeHtml(mat) + "</strong></td><td>" + mrpEscapeHtml(type) + "</td><td>" + mrpEscapeHtml(mrpFmtQty(req) + " " + (uom || "")) + "</td><td>" + mrpEscapeHtml(mrpFmtQty(stock) + " " + (uom || "")) + "</td></tr>";
+        });
+        sb += "</tbody></table>";
+        return sb;
+    }
+
+    function mrpApplySubMrpResult(idx, payload) {
+        var inner = document.getElementById("mrp-sub-inner-" + idx);
+        if (inner) inner.innerHTML = mrpBuildSubTableHtml(payload);
+    }
+
+    function mrpToggleSubMrp(idx) {
+        var subTr = document.querySelector('tr[data-mrp-sub-idx="' + idx + '"]');
+        if (!subTr) return;
+        var inner = document.getElementById("mrp-sub-inner-" + idx);
+        if (!inner) return;
+        var hidden = subTr.classList.contains("d-none");
+        if (!hidden) {
+            subTr.classList.add("d-none");
+            return;
+        }
+        subTr.classList.remove("d-none");
+        if (window._mrpSubCache[idx]) {
+            mrpApplySubMrpResult(idx, window._mrpSubCache[idx]);
+            mrpRefreshHalbActionCell(idx);
+            return;
+        }
+        if (window._mrpSubLoading[idx]) return;
+        var meta = window._mrpLineMeta[idx];
+        if (!meta || !meta.mat || !meta.reqUomId) {
+            inner.innerHTML = '<div class="alert alert-warning py-1 mb-0">Missing line UOM for sub MRP.</div>';
+            return;
+        }
+        window._mrpSubLoading[idx] = true;
+        inner.innerHTML = '<span class="text-muted">Running sub MRP…</span>';
+        mrpFetchRun(meta.mat, meta.req, meta.reqUomId, true).then(function (payload) {
+            window._mrpSubLoading[idx] = false;
+            if (!payload || payload.success === false) {
+                inner.innerHTML = '<div class="alert alert-danger py-1 mb-0">' + mrpEscapeHtml((payload && (payload.message || payload.Message)) || "MRP run failed.") + "</div>";
+                return;
+            }
+            window._mrpSubCache[idx] = payload;
+            mrpApplySubMrpResult(idx, payload);
+            mrpRefreshHalbActionCell(idx);
+        }).catch(function () {
+            window._mrpSubLoading[idx] = false;
+            inner.innerHTML = '<div class="alert alert-danger py-1 mb-0">Request failed.</div>';
+        });
+    }
+
+    function mrpRenderResult(payload) {
+        var card = document.getElementById("mrpResultCard");
+        var body = document.getElementById("mrpResultBody");
+        var banner = document.getElementById("mrpSuccessBanner");
+        var warnEl = document.getElementById("mrpWarnings");
+        var btnMain = document.getElementById("mrpBtnCreatePoMain");
+        if (!card || !body) return;
+
+        window._mrpLineMeta = [];
+        window._mrpSubCache = {};
+        window._mrpSubLoading = {};
+
+        body.innerHTML = "";
+        var rows = payload.rows || payload.Rows || [];
+        var warnings = payload.warnings || payload.Warnings || [];
+
+        if (warnings.length) {
+            warnEl.textContent = warnings.join(" ");
+            warnEl.style.display = "block";
+        } else {
+            warnEl.style.display = "none";
+            warnEl.textContent = "";
+        }
+
+        var allOk = !!(payload.allSatisfied || payload.AllSatisfied);
+        if (allOk && rows.length > 0) {
+            banner.style.display = "block";
+        } else {
+            banner.style.display = "none";
+        }
+        if (btnMain) {
+            btnMain.style.display = (allOk && rows.length > 0) ? "inline-block" : "none";
+        }
+
+        var fertMat = (document.getElementById("mrpMaterial").value || "").trim();
+        var fertQty = document.getElementById("mrpQty").value;
+        var fertUom = parseInt(document.getElementById("mrpUom").value, 10) || 0;
+        window._mrpLastMain = { material: fertMat, qty: fertQty, uomId: fertUom };
+
+        rows.forEach(function (row, idx) {
+            var mat = row.materialNumber || row.MaterialNumber || "";
+            var type = row.materialTypeCode || row.MaterialTypeCode || "";
+            var req = row.requiredQty != null ? row.requiredQty : row.RequiredQty;
+            var reqUomId = row.requiredUomId != null ? row.requiredUomId : row.RequiredUomId;
+            var uom = row.requiredUomCode || row.RequiredUomCode || "";
+            var stock = row.onHandQty != null ? row.onHandQty : row.OnHandQty;
+            var shortage = !!(row.shortage || row.Shortage);
+            var sub = !!(row.canRunSubMrp || row.CanRunSubMrp);
+            var poStub = !!(row.showPurchaseStub || row.ShowPurchaseStub);
+            var typeUp = (type || "").toUpperCase();
+            var isHalb = typeUp === "HALB";
+            var showCheck = !!(sub && shortage && isHalb);
+
+            window._mrpLineMeta.push({
+                mat: mat,
+                req: Number(req),
+                reqUomId: Number(reqUomId) || 0,
+                showCheck: showCheck,
+                poStub: poStub
+            });
+
+            var tr = document.createElement("tr");
+            tr.setAttribute("data-mrp-main-idx", String(idx));
+            if (shortage) tr.className = "mrp-row-short";
+
+            var reqCell = mrpFmtQty(req) + " " + (uom || "");
+            var stockCell = mrpFmtQty(stock) + " " + (uom || "");
+
+            var actions = "—";
+            if (showCheck) {
+                var c = window._mrpSubCache[idx];
+                var allSat = c && !!(c.allSatisfied || c.AllSatisfied);
+                actions = mrpHalbActionsHtml(idx, allSat);
+                if (poStub) {
+                    actions += ' <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Purchase order creation is not implemented yet">Create purchase order</button>';
+                }
+            } else if (poStub) {
+                actions = '<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Purchase order creation is not implemented yet">Create purchase order</button>';
+            }
+
+            tr.innerHTML =
+                "<td><strong>" + mrpEscapeHtml(mat) + "</strong></td>" +
+                "<td>" + mrpEscapeHtml(type) + "</td>" +
+                "<td>" + mrpEscapeHtml(reqCell) + "</td>" +
+                "<td>" + mrpEscapeHtml(stockCell) + "</td>" +
+                '<td id="mrp-actions-td-' + idx + '">' + actions + "</td>";
+            body.appendChild(tr);
+
+            if (showCheck) {
+                var subTr = document.createElement("tr");
+                subTr.className = "mrp-sub-detail d-none";
+                subTr.setAttribute("data-mrp-sub-idx", String(idx));
+                subTr.innerHTML =
+                    '<td colspan="5" class="p-0"><div class="mrp-sub-inner p-2 border-top" id="mrp-sub-inner-' + idx + '"></div></td>';
+                body.appendChild(subTr);
+            }
+        });
+
+        card.style.display = rows.length ? "block" : "none";
+    }
+
+    function mrpEscapeHtml(s) {
+        if (!s) return "";
+        var d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function mrpEscapeAttr(s) {
+        if (!s) return "";
+        return String(s).replace(/"/g, "&quot;");
+    }
+
+    function mrpRunForMaterial(materialNumber, subMrp) {
+        mrpClearFormError();
+        if (subMrp) return Promise.resolve();
+        var qty = parseFloat(document.getElementById("mrpQty").value) || 0;
+        var uomId = parseInt(document.getElementById("mrpUom").value, 10) || 0;
+        var mat = (materialNumber || (document.getElementById("mrpMaterial").value || "")).trim();
+
+        if (!mat) {
+            mrpShowFormError("Select a material.");
+            return Promise.resolve();
+        }
+        if (qty <= 0) {
+            mrpShowFormError("Enter a quantity greater than zero.");
+            return Promise.resolve();
+        }
+        if (!uomId) {
+            mrpShowFormError("Select a UOM.");
+            return Promise.resolve();
+        }
+        return mrpFetchRun(mat, qty, uomId, false).then(function (payload) {
+            if (payload.success === false) {
+                mrpShowFormError(payload.message || payload.Message || "MRP run failed.");
+                document.getElementById("mrpResultCard").style.display = "none";
+                return;
+            }
+            mrpRenderResult(payload);
+        }).catch(function () { mrpShowFormError("Request failed."); });
+    }
+
+    document.addEventListener("mousedown", function (e) {
+        if (e.target.closest("#mrpMaterialDd"))
+            e.preventDefault();
+        else if (!e.target.closest("#mrpMatPickerWrap"))
+            mrpMatPickerCloseDd();
+    });
+
+    document.addEventListener("click", function (e) {
+        var btn = e.target.closest("#mrpMatPickerWrap .au-mat-picker-item");
+        if (!btn) return;
+        e.preventDefault();
+        var n = btn.getAttribute("data-n") || "";
+        var d = btn.getAttribute("data-d") || "";
+        var hid = document.getElementById("mrpMaterial");
+        var search = document.getElementById("mrpMaterialSearch");
+        if (hid) hid.value = n;
+        if (search) search.value = n ? (n + (d ? " — " + d : "")) : "";
+        mrpMatPickerCloseDd();
+        mrpLoadUomForMaterial(n);
+    });
+
+    (function mrpBindMatPicker() {
+        var wrap = document.getElementById("mrpMatPickerWrap");
+        if (!wrap) return;
+        wrap.addEventListener("focusin", function (e) {
+            if (e.target.classList && e.target.classList.contains("au-mat-picker-search"))
+                mrpMatPickerFetch(e.target);
+        });
+        wrap.addEventListener("input", function (e) {
+            if (e.target.classList && e.target.classList.contains("au-mat-picker-search"))
+                mrpMatPickerSchedule(e.target);
+        });
+    })();
+
+    document.getElementById("mrpRunBtn").addEventListener("click", function () {
+        mrpRunForMaterial(null, false);
+    });
+
+    var mrpResultBody = document.getElementById("mrpResultBody");
+    if (mrpResultBody) {
+        mrpResultBody.addEventListener("click", function (e) {
+            var check = e.target.closest(".mrp-check-mrp");
+            if (check) {
+                var ix = parseInt(check.getAttribute("data-mrp-idx"), 10);
+                if (!isNaN(ix)) mrpToggleSubMrp(ix);
+                return;
+            }
+            var poLine = e.target.closest(".mrp-create-po-line");
+            if (poLine) {
+                var ix2 = parseInt(poLine.getAttribute("data-mrp-idx"), 10);
+                var meta = window._mrpLineMeta[ix2];
+                if (meta && meta.mat) mrpNavToCreatePo(meta.mat, meta.req, meta.reqUomId);
+            }
+        });
+    }
+
+    var mrpBtnCreatePoMain = document.getElementById("mrpBtnCreatePoMain");
+    if (mrpBtnCreatePoMain) {
+        mrpBtnCreatePoMain.addEventListener("click", function () {
+            var m = window._mrpLastMain;
+            if (m && m.material) mrpNavToCreatePo(m.material, m.qty, m.uomId);
+        });
+    }
+
+    function mrpUrlAutoRunIfPresent() {
+        try {
+            var sp = new URLSearchParams(window.location.search);
+            if (sp.get("autoRun") !== "1") return Promise.resolve();
+            var mat = (sp.get("material") || "").trim();
+            var qty = sp.get("qty") || "1";
+            var uomId = parseInt(sp.get("uomId") || "0", 10) || 0;
+            var note = sp.get("note") || "";
+            if (history.replaceState) history.replaceState(null, document.title, window.location.pathname);
+            var hid = document.getElementById("mrpMaterial");
+            if (hid) hid.value = mat;
+            var qEl = document.getElementById("mrpQty");
+            if (qEl) qEl.value = qty;
+            if (note) mrpShowFormError(note);
+            if (!mat) return Promise.resolve();
+            return mrpRefreshMaterialPickerLabel(mat).then(function () {
+                return mrpLoadUomForMaterial(mat);
+            }).then(function () {
+                var uSel = document.getElementById("mrpUom");
+                if (uomId && uSel && Array.from(uSel.options).some(function (o) { return o.value === String(uomId); }))
+                    uSel.value = String(uomId);
+                return mrpRunForMaterial(null, false);
+            });
+        } catch (e) { return Promise.resolve(); }
+    }
+
+    mrpInitUomPlaceholder(document.getElementById("mrpUom"));
+    mrpUrlAutoRunIfPresent();
+})();
+</script>
+}

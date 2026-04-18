@@ -2,6 +2,10 @@
 @using System.Text.Json
 @{
     ViewData["Title"] = "Bill Of Materials";
+    string BomAssemblyLabel(string? code) =>
+        string.Equals(code, "FERT", StringComparison.OrdinalIgnoreCase) ? "FG"
+        : string.Equals(code, "HALB", StringComparison.OrdinalIgnoreCase) ? "SFG"
+        : (code ?? "—");
     var safeModel = Model ?? new List<AU_ERP.Models.BomHeadersSample>();
     var bomTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
     var bomLevels = ViewBag.BomLevels as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
@@ -267,11 +271,11 @@
                     </div>
                     <div class="row g-3 mt-1">
                         <div class="col-md-3">
-                            <label class="form-label"><span class="mandatory-bar"></span> Material Type</label>
-                            <select id="bomCreateHeaderMatType" class="form-select form-select-sm">
+                            <label class="form-label"><span class="mandatory-bar"></span> Assembly type</label>
+                            <select id="bomCreateHeaderMatType" class="form-select form-select-sm" title="Stored as material type HALB or FERT">
                                 <option value="">-- Select --</option>
-                                <option value="HALB">HALB</option>
-                                <option value="FERT">FERT</option>
+                                <option value="HALB">SFG (semi-finished)</option>
+                                <option value="FERT">FG (finished good)</option>
                             </select>
                         </div>
                         <div class="col-md-9">
@@ -316,7 +320,7 @@
         <div class="tab-pane fade @(bomTabList ? "show active" : "")" id="bomPaneList" role="tabpanel" aria-labelledby="bomTabListBtn">
             <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
             <div class="p-2 px-3">
-                <input type="search" class="form-control form-control-sm" id="bomListFilter" placeholder="Filter by BOM ID, code, title, level…" style="max-width:22rem;" />
+                <input type="search" class="form-control form-control-sm" id="bomListFilter" placeholder="Filter by BOM ID, code, title, material, level…" style="max-width:22rem;" />
             </div>
             <div class="table-wrapper">
                 <table class="table-sap" id="bomListTable">
@@ -326,6 +330,8 @@
                             <th>BOM ID</th>
                             <th>BOM Code</th>
                             <th>BOM Title</th>
+                            <th>Material</th>
+                            <th>Assembly</th>
                             <th>Level</th>
                             <th>Plant</th>
                             <th>Base Qty</th>
@@ -338,11 +344,15 @@
                         {
                             var levelName = h.BOMLevel?.LevelName ?? "";
                             var plantName = h.PlantSample?.PlantName ?? "";
-                            <tr data-bom-filter="@($"{h.BomID} {h.BOMCode} {h.BOMTitle} {levelName} {plantName}")" data-bom-id="@h.BomID">
+                            var headerMat = h.BomMaterialNumber ?? "";
+                            var asmLabel = BomAssemblyLabel(h.HeaderMaterialTypeCode);
+                            <tr data-bom-filter="@($"{h.BomID} {h.BOMCode} {h.BOMTitle} {headerMat} {asmLabel} {levelName} {plantName}")" data-bom-id="@h.BomID">
                                 <td class="col-no">@(bomIdx + 1)</td>
                                 <td><input class="sap-input" value="@h.BomID" readonly /></td>
                                 <td><input class="sap-input" value="@h.BOMCode" readonly /></td>
                                 <td><input class="sap-input" value="@h.BOMTitle" readonly /></td>
+                                <td><input class="sap-input" value="@headerMat" readonly /></td>
+                                <td><input class="sap-input" value="@asmLabel" readonly /></td>
                                 <td><input class="sap-input" value="@levelName" readonly /></td>
                                 <td><input class="sap-input" value="@plantName" readonly /></td>
                                 <td><input class="sap-input" value="@(h.BaseQty.HasValue ? (h.BaseQty.Value == Math.Truncate(h.BaseQty.Value) ? h.BaseQty.Value.ToString("0") : h.BaseQty.Value.ToString("0.00")) : "")" readonly /></td>
@@ -431,20 +441,14 @@
                     </div>
                     <div class="row g-3 mt-1">
                         <div class="col-md-3">
-                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Material Type</label>
-                            <select id="bomEditHeaderMatType" class="form-select form-select-sm">
-                                <option value="">-- Select --</option>
-                                <option value="HALB">HALB</option>
-                                <option value="FERT">FERT</option>
-                            </select>
+                            <label class="form-label">Assembly type</label>
+                            <input type="hidden" id="bomEditHeaderMatType" value="" />
+                            <input type="text" id="bomEditHeaderMatTypeReadonly" class="form-control form-control-sm" readonly style="background:var(--sap-readonly,#f4f4f4);" title="Cannot be changed after BOM is created" />
                         </div>
                         <div class="col-md-9">
-                            <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Material</label>
-                            <div class="bom-mat-picker" data-purpose="header" data-mat-type-select-id="bomEditHeaderMatType">
-                                <input type="text" class="form-control form-control-sm bom-mat-picker-search" id="bomEditHeaderMatSearch" placeholder="Search material number or description…" autocomplete="off" />
-                                <input type="hidden" id="bomEditHeaderMat" class="bom-mat-picker-value" value="" />
-                                <div class="bom-mat-picker-dropdown" id="bomEditHeaderMatDd"></div>
-                            </div>
+                            <label class="form-label">Header material</label>
+                            <input type="hidden" id="bomEditHeaderMat" value="" />
+                            <input type="text" id="bomEditHeaderMatSearch" class="form-control form-control-sm" readonly style="background:var(--sap-readonly,#f4f4f4);" title="Cannot be changed after BOM is created" />
                         </div>
                     </div>
                 </fieldset>
@@ -631,14 +635,14 @@
         if (tbodyId === "bomCreateItemsBody") {
             var htC = document.getElementById("bomCreateHeaderMatType");
             if (!htC || !(htC.value || "").trim()) {
-                bomShowInline(bomCreateFormRoot(), [htC], "Select header Material Type before adding components.");
+                bomShowInline(bomCreateFormRoot(), [htC], "Select assembly type (FG / SFG) before adding components.");
                 return;
             }
         }
         if (tbodyId === "bomEditItemsBody") {
             var htE = document.getElementById("bomEditHeaderMatType");
             if (!htE || !(htE.value || "").trim()) {
-                bomShowInline(bomEditFormRoot(), [htE], "Select header Material Type before adding components.");
+                bomShowInline(bomEditFormRoot(), [htE], "Header assembly is missing; reopen the BOM from the list.");
                 return;
             }
         }
@@ -722,7 +726,7 @@
         if (!code) bad.push(c);
         else if (code.length > 20) bad.push(c);
         if (!(t && (t.value || "").trim())) bad.push(t);
-        if (!(ht && (ht.value || "").trim())) bad.push(ht);
+        if (!(ht && (ht.value || "").trim())) bad.push(document.getElementById("bomEditHeaderMatTypeReadonly") || ht);
         if (!(hm && (hm.value || "").trim())) bad.push(hms || hm);
         return bad;
     }
@@ -750,6 +754,13 @@
             if (sraw === "" || isNaN(snum)) bad.push(scr);
         });
         return bad;
+    }
+
+    function bomAssemblyReadonlyLabel(code) {
+        var c = (code || "").trim().toUpperCase();
+        if (c === "FERT") return "FG";
+        if (c === "HALB") return "SFG";
+        return c || "—";
     }
 
     function bomResetCreateForm() {
@@ -852,7 +863,10 @@
                 document.getElementById("bomEditBaseQty").value = b.baseQty != null ? b.baseQty : (b.BaseQty || "");
                 document.getElementById("bomEditValidFrom").value = b.validFrom || b.ValidFrom || "";
                 var eht = document.getElementById("bomEditHeaderMatType");
-                if (eht) eht.value = b.headerMaterialTypeCode || b.HeaderMaterialTypeCode || "";
+                var htCode = (b.headerMaterialTypeCode || b.HeaderMaterialTypeCode || "").trim();
+                if (eht) eht.value = htCode;
+                var ehtr = document.getElementById("bomEditHeaderMatTypeReadonly");
+                if (ehtr) ehtr.value = bomAssemblyReadonlyLabel(htCode);
                 var ehm = document.getElementById("bomEditHeaderMat");
                 if (ehm) ehm.value = b.bomMaterialNumber || b.BomMaterialNumber || "";
                 var ehms = document.getElementById("bomEditHeaderMatSearch");
@@ -970,14 +984,6 @@
         if (ct) ct.addEventListener("change", function () {
             var hm = document.getElementById("bomCreateHeaderMat");
             var hms = document.getElementById("bomCreateHeaderMatSearch");
-            if (hm) hm.value = "";
-            if (hms) hms.value = "";
-            bomCloseAllMatPickers();
-        });
-        var et = document.getElementById("bomEditHeaderMatType");
-        if (et) et.addEventListener("change", function () {
-            var hm = document.getElementById("bomEditHeaderMat");
-            var hms = document.getElementById("bomEditHeaderMatSearch");
             if (hm) hm.value = "";
             if (hms) hms.value = "";
             bomCloseAllMatPickers();

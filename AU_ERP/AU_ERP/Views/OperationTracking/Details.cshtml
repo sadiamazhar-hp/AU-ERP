@@ -1,0 +1,411 @@
+@model AU_ERP.Models.OperationTrackingPageVm
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Production Stage Tracking";
+    var uom = string.IsNullOrWhiteSpace(Model.UomCode) ? "" : Model.UomCode;
+    var activeStage = Model.Stages.FirstOrDefault(s => s.StageStatus == ProductionOrderStageProgress.StageInProgress);
+    var activeStageId = activeStage?.Id;
+    string FmtDate(DateTime d) => d.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+    string PriClass(string p) => p switch
+    {
+        ProductionOrder.PriorityHigh => "otd-pri otd-pri-hi",
+        ProductionOrder.PriorityMedium => "otd-pri otd-pri-med",
+        ProductionOrder.PriorityLow => "otd-pri otd-pri-lo",
+        _ => "otd-pri otd-pri-med"
+    };
+    string OrdStatusLabel(string s) => s switch
+    {
+        ProductionOrder.StatusPlanned => "Planned",
+        ProductionOrder.StatusReleased => "Released",
+        ProductionOrder.StatusInProgress => "In progress",
+        ProductionOrder.StatusCompleted => "Completed",
+        _ => s
+    };
+}
+
+@section Styles {
+    <style>
+        .otd-page { color: #171717; max-width: 1180px; margin: 0 auto; }
+        .otd-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+        .otd-topbar h1 { font-size: 1.15rem; font-weight: 600; color: #5a6f70; margin: 0; }
+        .otd-topbar .otd-crumb { font-size: .8rem; color: #888; }
+        .otd-po-card { background: linear-gradient(135deg, #fff 0%, #f4fafb 55%, #eef8f6 100%); border: 1px solid rgba(56, 128, 135, 0.28); border-radius: .75rem; padding: 1.15rem 1.25rem 1.2rem; margin-bottom: 1.15rem; box-shadow: 0 4px 18px rgba(56, 128, 135, 0.08); }
+        .otd-po-card h2 { font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #388087; margin: 0 0 .85rem 0; }
+        .otd-po-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: .85rem 1.1rem; }
+        .otd-po-grid .k { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #8a9394; margin-bottom: .12rem; }
+        .otd-po-grid .v { font-size: .95rem; font-weight: 600; color: #1e3335; }
+        .otd-po-grid .v.sm { font-weight: 500; font-size: .88rem; color: #444; }
+        .otd-pri { display: inline-block; padding: .15rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+        .otd-pri-hi { background: #f8d7da; color: #842029; }
+        .otd-pri-med { background: #fff3cd; color: #664d03; }
+        .otd-pri-lo { background: #e2e3e5; color: #41464b; }
+        .otd-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+        .otd-badge-done { background: #d1e7dd; color: #0f5132; }
+        .otd-badge-run { background: #fff3cd; color: #664d03; }
+        .otd-badge-wait { background: #e2e3e5; color: #41464b; }
+        .otd-stepper-wrap { background: #fff; border: 1px solid rgba(56, 128, 135, 0.15); border-radius: .65rem; padding: .85rem 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+        .otd-stepper-wrap .lbl { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #7a8f91; margin-bottom: .55rem; }
+        .otd-stepper { display: flex; flex-wrap: wrap; gap: .5rem; align-items: stretch; }
+        .otd-step { flex: 1 1 6rem; min-width: 5rem; border: 1px solid #e0e6e6; border-radius: .5rem; padding: .55rem .6rem; text-align: center; font-size: .76rem; background: #fafcfc; color: #666; transition: border-color .15s, box-shadow .15s; }
+        .otd-step.otd-step-done { border-color: #28a745; background: linear-gradient(180deg, #f4fff7, #e8f8ec); color: #0f5132; }
+        .otd-step.otd-step-active { border-color: #388087; background: linear-gradient(180deg, #f0fafb, #e4f5f3); color: #1a5c63; font-weight: 600; box-shadow: 0 0 0 2px rgba(56,128,135,.18); }
+        .otd-step .otd-step-ico { font-size: 1.15rem; line-height: 1.2; }
+        .otd-table-card { background: #fff; border: 1px solid rgba(56, 128, 135, 0.18); border-radius: .65rem; padding: 1rem 1.15rem; box-shadow: 0 2px 12px rgba(0,0,0,.035); }
+        .otd-table-card .otd-tbar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .9rem; align-items: center; }
+        .otd-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .83rem; border-radius: .45rem; overflow: hidden; border: 1px solid #e8ecec; }
+        .otd-table thead th { background: linear-gradient(180deg, #3d8f96, #347a80); color: #fff; font-weight: 600; padding: .55rem .6rem; text-align: left; white-space: nowrap; font-size: .78rem; }
+        .otd-table tbody td { border-top: 1px solid #edf1f1; padding: .48rem .6rem; vertical-align: middle; }
+        .otd-table tbody tr:nth-child(even) { background: #fafcfb; }
+        .otd-table tbody tr:hover { background: #f3faf9; }
+        #otUpdateStageModal .modal-header.ot-modal-header-dark { background: #2c3e42; color: #fff; border-bottom: none; border-radius: .5rem .5rem 0 0; }
+        #otUpdateStageModal .modal-header.ot-modal-header-dark .btn-close { filter: invert(1); opacity: .85; }
+        #otUpdateStageModal .modal-content { border: none; border-radius: .55rem; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.18); }
+        #otUpdateStageModal .modal-body { padding: 1.15rem 1.25rem; }
+        #otUpdateStageModal .modal-footer { border-top: 1px solid #eee; padding: .75rem 1.15rem; }
+        #otUpdateStageModal .form-label { font-weight: 500; color: #444; }
+    </style>
+}
+
+<div class="otd-page">
+    <div class="otd-topbar">
+        <div>
+            <div class="otd-crumb mb-1"><a asp-action="Index" class="text-decoration-none text-muted">Operation tracking</a> <span class="text-muted">/</span> <span class="text-dark">PO-@Model.ProductionNumber</span></div>
+            <h1>Production stage tracking</h1>
+        </div>
+        <a class="btn btn-sm btn-outline-secondary" asp-controller="OperationTracking" asp-action="Index">← Operation tracking</a>
+    </div>
+
+    <section class="otd-po-card" aria-labelledby="otd-po-card-title">
+        <h2 id="otd-po-card-title">Production order</h2>
+        <div class="otd-po-grid">
+            <div><div class="k">Document</div><div class="v">PO-@Model.ProductionNumber</div></div>
+            <div><div class="k">Finished item</div><div class="v sm">@(string.IsNullOrWhiteSpace(Model.FinishedItemLabel) ? "—" : Model.FinishedItemLabel)</div></div>
+            <div><div class="k">Target quantity</div><div class="v">@Model.TargetQuantity @uom</div></div>
+            <div><div class="k">Planned start</div><div class="v sm">@FmtDate(Model.PlannedStartDate)</div></div>
+            <div><div class="k">Planned end</div><div class="v sm">@FmtDate(Model.PlannedEndDate)</div></div>
+            <div><div class="k">Priority</div><div class="v"><span class="@PriClass(Model.Priority)">@Model.Priority</span></div></div>
+            <div><div class="k">Order status</div><div class="v sm">@OrdStatusLabel(Model.OrderStatus)</div></div>
+            <div><div class="k">Stage progress</div><div class="v">@Model.StagesCompleted / @Model.StagesTotal</div></div>
+            <div><div class="k">Tracking status</div><div class="v">
+                @{
+                    var badgeCls = Model.OverallStatusLabel.Contains("Completed", StringComparison.OrdinalIgnoreCase) ? "otd-badge otd-badge-done"
+                        : Model.OverallStatusLabel.Contains("progress", StringComparison.OrdinalIgnoreCase) ? "otd-badge otd-badge-run"
+                        : "otd-badge otd-badge-wait";
+                }
+                <span class="@badgeCls">@Model.OverallStatusLabel</span>
+            </div></div>
+            <div><div class="k">Active stage</div><div class="v sm">@(string.IsNullOrWhiteSpace(Model.ActiveStageTitle) ? "—" : Model.ActiveStageTitle)</div></div>
+        </div>
+    </section>
+
+    <input type="hidden" id="otProductionOrderId" value="@Model.ProductionOrderId" />
+    <input type="hidden" id="otActiveStageId" value="@(activeStageId?.ToString() ?? "")" />
+
+    @if (Model.Stages.Count == 0)
+    {
+        <div class="alert alert-info rounded-3 border-0 shadow-sm">No operation stages are recorded for this order. Release the order from routing first.</div>
+    }
+    else
+    {
+        <div class="otd-stepper-wrap">
+            <div class="lbl">Stages</div>
+            <div class="otd-stepper" aria-label="Stages">
+                @{
+                    var si = 0;
+                    foreach (var s in Model.Stages)
+                    {
+                        si++;
+                        var shortTitle = string.IsNullOrWhiteSpace(s.StageTitle) ? ("Stage " + si) : (s.StageTitle!.Length > 24 ? s.StageTitle[..24] + "…" : s.StageTitle);
+                        var cls = "otd-step";
+                        if (s.StageStatus == ProductionOrderStageProgress.StageCompleted) cls += " otd-step-done";
+                        else if (s.StageStatus == ProductionOrderStageProgress.StageInProgress) cls += " otd-step-active";
+                        <div class="@cls" title="@s.StageTitle">
+                            @if (s.StageStatus == ProductionOrderStageProgress.StageCompleted)
+                            {
+                                <div class="otd-step-ico text-success"><i class="bi bi-check-circle-fill"></i></div>
+                            }
+                            else if (s.StageStatus == ProductionOrderStageProgress.StageInProgress)
+                            {
+                                <div class="otd-step-ico"><i class="bi bi-play-circle-fill text-primary"></i></div>
+                            }
+                            else
+                            {
+                                <div class="otd-step-ico text-secondary"><i class="bi bi-circle"></i></div>
+                            }
+                            <div>@shortTitle</div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="otd-table-card">
+            <div class="otd-tbar">
+                <button type="button" class="btn text-white shadow-sm" style="background:var(--au-primary-dark,#388087);" id="otBtnUpdate" @(activeStageId == null ? "disabled" : "") onclick="otOpenUpdateModal()">
+                    <i class="bi bi-pencil-square"></i> Update active stage
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="otPostGrStub()"><i class="bi bi-box-seam"></i> Post goods receipt</button>
+            </div>
+
+            <div class="au-validation-summary mb-2" id="otPageValidation" style="display:none;" role="alert"></div>
+
+            <div class="table-responsive rounded-3 border border-light">
+                <table class="otd-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Stage</th>
+                            <th>Planned (h)</th>
+                            <th>Actual (h)</th>
+                            <th>Efficiency</th>
+                            <th>Input</th>
+                            <th>Output</th>
+                            <th>Wastage</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            var ri = 0;
+                            foreach (var s in Model.Stages)
+                            {
+                                ri++;
+                                decimal? act = s.ActualHours;
+                                string eff;
+                                if (act.HasValue && act.Value > 0)
+                                    eff = ((s.PlannedHours / act.Value) * 100m).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+                                else
+                                    eff = "—";
+                                string wast = "—";
+                                if (s.InputQuantity.HasValue && s.OutputQuantity.HasValue)
+                                    wast = (s.InputQuantity.Value - s.OutputQuantity.Value).ToString("0.####", CultureInfo.InvariantCulture);
+                                var stLabel = s.StageStatus switch
+                                {
+                                    ProductionOrderStageProgress.StageCompleted => "Completed",
+                                    ProductionOrderStageProgress.StageInProgress => "In progress",
+                                    ProductionOrderStageProgress.StagePending => "Pending",
+                                    _ => s.StageStatus
+                                };
+                                <tr>
+                                    <td>@ri</td>
+                                    <td>@(string.IsNullOrWhiteSpace(s.StageTitle) ? "—" : s.StageTitle)</td>
+                                    <td>@s.PlannedHours.ToString("0.####", CultureInfo.InvariantCulture)</td>
+                                    <td>@(s.ActualHours.HasValue ? s.ActualHours.Value.ToString("0.####", CultureInfo.InvariantCulture) : "—")</td>
+                                    <td>@eff</td>
+                                    <td>@(s.InputQuantity.HasValue ? s.InputQuantity.Value.ToString("0.####", CultureInfo.InvariantCulture) : "—")</td>
+                                    <td>@(s.OutputQuantity.HasValue ? s.OutputQuantity.Value.ToString("0.####", CultureInfo.InvariantCulture) : "—")</td>
+                                    <td>@wast</td>
+                                    <td>@stLabel</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="modal fade" id="otUpdateStageModal" tabindex="-1" aria-labelledby="otUpdateStageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header ot-modal-header-dark py-3">
+                <h5 class="modal-title d-flex align-items-center gap-2 mb-0" id="otUpdateStageModalLabel"><span aria-hidden="true">📈</span> <span id="otUpdateStageModalTitleText">Update stage</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" id="otModalValidation" style="display:none;" role="alert"></div>
+                <input type="hidden" id="otModalStageId" />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Input quantity (pieces) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control" id="otInQty" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Output quantity (pieces) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control" id="otOutQty" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Wastage quantity <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control" id="otWastQty" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Actual hours <span class="text-danger">*</span></label>
+                        <input type="number" step="0.0001" min="0" class="form-control" id="otActHrs" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Wastage reason</label>
+                        <select class="form-select" id="otWastReason"></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Worker / operator</label>
+                        <input type="text" class="form-control" id="otOperator" maxlength="200" placeholder="Operator name" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small">Mark stage as <span class="text-danger">*</span></label>
+                        <select class="form-select" id="otMarkAs">
+                            <option value="@ProductionOrderStageProgress.StageInProgress">In-Progress</option>
+                            <option value="@ProductionOrderStageProgress.StageCompleted">Completed</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small">Observations</label>
+                        <textarea class="form-control" id="otObs" rows="3" placeholder="Stage observations…"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="otSaveStage()"><i class="bi bi-floppy me-1"></i>Update stage</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="otGrStubModal" tabindex="-1" aria-labelledby="otGrStubModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="otGrStubModalLabel">Post goods receipt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Goods receipt posting is not implemented in this version.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function otReparentModals() {
+        function ensureOnBody(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.parentElement !== document.body) document.body.appendChild(el);
+        }
+        function init() {
+            ["otUpdateStageModal", "otGrStubModal"].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener("show.bs.modal", function () { ensureOnBody(id); });
+                ensureOnBody(id);
+            });
+        }
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+        else init();
+    })();
+
+    function otSyncWastageFromIo() {
+        var a = parseFloat(document.getElementById("otInQty").value);
+        var b = parseFloat(document.getElementById("otOutQty").value);
+        var wEl = document.getElementById("otWastQty");
+        if (!wEl) return;
+        if (isNaN(a) || isNaN(b)) { wEl.value = ""; return; }
+        var w = Math.max(0, a - b);
+        wEl.value = w.toFixed(4);
+    }
+    document.getElementById("otInQty").addEventListener("input", otSyncWastageFromIo);
+    document.getElementById("otOutQty").addEventListener("input", otSyncWastageFromIo);
+
+    function otShowInline(id, msg) {
+        var el = document.getElementById(id);
+        if (!el) { alert(msg); return; }
+        el.style.display = "block";
+        el.textContent = msg;
+    }
+    function otClearInline(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = "none";
+        el.textContent = "";
+    }
+
+    function otOpenUpdateModal() {
+        otClearInline("otModalValidation");
+        var poId = parseInt(document.getElementById("otProductionOrderId").value, 10) || 0;
+        var sid = parseInt(document.getElementById("otActiveStageId").value, 10) || 0;
+        if (!poId || !sid) return;
+        fetch("@Url.Action("GetStageForUpdate", "OperationTracking")?productionOrderId=" + encodeURIComponent(poId) + "&stageProgressId=" + encodeURIComponent(sid))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res.success) { otShowInline("otPageValidation", res.message || "Load failed."); return; }
+                var d = res.data;
+                document.getElementById("otModalStageId").value = d.id != null ? d.id : d.Id;
+                var idx = d.stageIndex != null ? d.stageIndex : d.StageIndex;
+                var title = d.stageTitle || d.StageTitle || "";
+                var poNum = d.productionNumber != null ? d.productionNumber : d.ProductionNumber;
+                document.getElementById("otUpdateStageModalTitleText").textContent = "Update Stage " + idx + ": " + title + " (PO-" + poNum + ")";
+                var defIn = d.defaultInputQuantity != null ? d.defaultInputQuantity : d.DefaultInputQuantity;
+                var curIn = d.inputQuantity != null ? d.inputQuantity : d.InputQuantity;
+                var curOut = d.outputQuantity != null ? d.outputQuantity : d.OutputQuantity;
+                var curAct = d.actualHours != null ? d.actualHours : d.ActualHours;
+                var curW = d.wastageQuantity != null ? d.wastageQuantity : d.WastageQuantity;
+                document.getElementById("otInQty").value = (curIn != null && curIn !== "") ? curIn : (defIn != null && defIn !== "" ? defIn : "");
+                document.getElementById("otOutQty").value = (curOut != null && curOut !== "") ? curOut : "";
+                document.getElementById("otActHrs").value = (curAct != null && curAct !== "") ? curAct : "";
+                if (curW != null && curW !== "") document.getElementById("otWastQty").value = curW;
+                else otSyncWastageFromIo();
+                document.getElementById("otOperator").value = d.workerOperator || d.WorkerOperator || "";
+                document.getElementById("otObs").value = d.observations || d.Observations || "";
+                var wr = d.wastageReason || d.WastageReason || "";
+                var selW = document.getElementById("otWastReason");
+                selW.innerHTML = '<option value="">— Optional —</option>';
+                (d.wastageReasons || d.WastageReasons || []).forEach(function (x) {
+                    var o = document.createElement("option");
+                    o.value = x; o.textContent = x;
+                    if (x === wr) o.selected = true;
+                    selW.appendChild(o);
+                });
+                var mark = (d.stageStatus || d.StageStatus || "").toString();
+                document.getElementById("otMarkAs").value = mark === "Completed" ? "Completed" : "InProgress";
+                var modalEl = document.getElementById("otUpdateStageModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }).catch(function () { otShowInline("otPageValidation", "Request failed."); });
+    }
+
+    function otSaveStage() {
+        otClearInline("otModalValidation");
+        var poId = parseInt(document.getElementById("otProductionOrderId").value, 10) || 0;
+        var sid = parseInt(document.getElementById("otModalStageId").value, 10) || 0;
+        var wq = parseFloat(document.getElementById("otWastQty").value);
+        var payload = {
+            productionOrderId: poId,
+            stageProgressId: sid,
+            inputQuantity: parseFloat(document.getElementById("otInQty").value) || 0,
+            outputQuantity: parseFloat(document.getElementById("otOutQty").value) || 0,
+            wastageQuantity: isNaN(wq) ? null : wq,
+            actualHours: parseFloat(document.getElementById("otActHrs").value) || 0,
+            wastageReason: (document.getElementById("otWastReason").value || "").trim() || null,
+            workerOperator: (document.getElementById("otOperator").value || "").trim() || null,
+            markStageAs: document.getElementById("otMarkAs").value,
+            observations: (document.getElementById("otObs").value || "").trim() || null
+        };
+        fetch("@Url.Action("UpdateStage", "OperationTracking")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("otUpdateStageModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getInstance(modalEl).hide();
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message || "Saved.", function () { window.location.reload(); });
+                else { alert(res.message || "Saved."); window.location.reload(); }
+            } else otShowInline("otModalValidation", res.message || "Save failed.");
+        }).catch(function () { otShowInline("otModalValidation", "Request failed."); });
+    }
+
+    function otPostGrStub() {
+        var el = document.getElementById("otGrStubModal");
+        if (el && typeof bootstrap !== "undefined")
+            bootstrap.Modal.getOrCreateInstance(el).show();
+    }
+</script>
+}

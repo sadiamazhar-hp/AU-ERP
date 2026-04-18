@@ -52,7 +52,7 @@ namespace AU_ERP.Controllers
                 .FirstOrDefaultAsync(ct);
         }
 
-        /// <summary>Validates work-centre rows and appends headers + lines to <paramref name="header"/>.</summary>
+        /// <summary>Validates work-centre rows and appends new headers + lines (create routing).</summary>
         private async Task<JsonResult?> TryAppendOperationHeadersAsync(
             RoutingHeadersSample header,
             IReadOnlyList<RoutingOperationHeaderDto>? headerDtos,
@@ -79,38 +79,155 @@ namespace AU_ERP.Controllers
                 };
                 displayOrder += 10;
 
-                var seq = 10;
-                foreach (var op in ops)
-                {
-                    var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
-                    if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
-                    {
-                        var wcName = op.WorkCenterID.HasValue
-                            ? await _db.WorkCenterMasterSamples.AsNoTracking()
-                                .Where(w => w.ID == op.WorkCenterID.Value)
-                                .Select(w => w.WorkCenterName)
-                                .FirstOrDefaultAsync(ct)
-                            : null;
-                        return Json(new
-                        {
-                            success = false,
-                            message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
-                        });
-                    }
-
-                    oh.RoutingOperationsSamples.Add(new RoutingOperationsSample
-                    {
-                        WorkCenterID = op.WorkCenterID,
-                        OperationSequence = seq,
-                        Description = op.Description?.Trim(),
-                        MachineTime = op.MachineTime,
-                        LaborTime = op.LaborTime,
-                        TimeUom = timeUom
-                    });
-                    seq += 10;
-                }
+                var err = await AppendWorkCentreLinesAsync(oh, ops, ct);
+                if (err != null)
+                    return err;
 
                 header.OperationHeaders.Add(oh);
+            }
+
+            return null;
+        }
+
+        /// <summary>Adds work-centre lines to one operation header (new or existing).</summary>
+        private async Task<JsonResult?> AppendWorkCentreLinesAsync(
+            RoutingOperationHeaderSample oh,
+            IReadOnlyList<RoutingOpDto> ops,
+            CancellationToken ct)
+        {
+            var seq = 10;
+            foreach (var op in ops)
+            {
+                var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
+                if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
+                {
+                    var wcName = op.WorkCenterID.HasValue
+                        ? await _db.WorkCenterMasterSamples.AsNoTracking()
+                            .Where(w => w.ID == op.WorkCenterID.Value)
+                            .Select(w => w.WorkCenterName)
+                            .FirstOrDefaultAsync(ct)
+                        : null;
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
+                    });
+                }
+
+                oh.RoutingOperationsSamples.Add(new RoutingOperationsSample
+                {
+                    WorkCenterID = op.WorkCenterID,
+                    OperationSequence = seq,
+                    Description = op.Description?.Trim(),
+                    MachineTime = op.MachineTime,
+                    LaborTime = op.LaborTime,
+                    TimeUom = timeUom
+                });
+                seq += 10;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Updates routing operations without deleting headers still referenced by released production orders.
+        /// New stages get new IDs; existing IDs are updated in place so PO stage snapshots stay valid.
+        /// </summary>
+        private async Task<JsonResult?> TryMergeOperationHeadersAsync(
+            RoutingHeadersSample header,
+            IReadOnlyList<RoutingOperationHeaderDto>? headerDtos,
+            CancellationToken ct)
+        {
+            if (headerDtos == null || headerDtos.Count == 0)
+                return Json(new { success = false, message = "Add at least one operation (title + work centre rows)." });
+
+            var routingId = header.RoutingID;
+
+            var opHeaderIdsOnRouting = await _db.RoutingOperationHeadersSamples.AsNoTracking()
+                .Where(oh => oh.RoutingID == routingId)
+                .Select(oh => oh.OperationHeaderId)
+                .ToListAsync(ct);
+
+            var inUseHeaderIds = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                .Where(s => opHeaderIdsOnRouting.Contains(s.RoutingOperationHeaderId))
+                .Select(s => s.RoutingOperationHeaderId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var dtoIdsWithValues = headerDtos
+                .Where(d => d.OperationHeaderId.HasValue && d.OperationHeaderId.Value > 0)
+                .Select(d => d.OperationHeaderId!.Value)
+                .ToList();
+            var dup = dtoIdsWithValues.GroupBy(x => x).FirstOrDefault(g => g.Count() > 1);
+            if (dup != null)
+                return Json(new { success = false, message = "Duplicate operation ids in the request. Refresh the page and try again." });
+
+            var dtoReferencedIds = dtoIdsWithValues.ToHashSet();
+
+            foreach (var existing in header.OperationHeaders.ToList())
+            {
+                if (dtoReferencedIds.Contains(existing.OperationHeaderId))
+                    continue;
+
+                if (inUseHeaderIds.Contains(existing.OperationHeaderId))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Cannot remove an operation that is still used by a released production order. " +
+                                  "Either keep that operation in this routing, or create a new routing (new version / valid-from) for new releases while existing orders finish on the current snapshot."
+                    });
+                }
+
+                _db.RoutingOperationHeadersSamples.Remove(existing);
+            }
+
+            for (var i = 0; i < headerDtos.Count; i++)
+            {
+                var hDto = headerDtos[i];
+                var title = (hDto.Title ?? "").Trim();
+                if (string.IsNullOrEmpty(title))
+                    return Json(new { success = false, message = "Each operation must have a title." });
+
+                var ops = hDto.Operations;
+                if (ops == null || ops.Count == 0)
+                    return Json(new { success = false, message = $"Operation \"{title}\" must have at least one work centre row." });
+
+                var displayOrder = (i + 1) * 10;
+
+                if (hDto.OperationHeaderId.HasValue && hDto.OperationHeaderId.Value > 0)
+                {
+                    var existingId = hDto.OperationHeaderId.Value;
+                    var oh = header.OperationHeaders.FirstOrDefault(h => h.OperationHeaderId == existingId);
+                    if (oh == null || oh.RoutingID != routingId)
+                        return Json(new { success = false, message = "Operation not found or no longer belongs to this routing. Refresh the page and try again." });
+
+                    oh.Title = title;
+                    oh.DisplayOrder = displayOrder;
+
+                    var oldLines = oh.RoutingOperationsSamples.ToList();
+                    if (oldLines.Count > 0)
+                        _db.RoutingOperationsSamples.RemoveRange(oldLines);
+                    oh.RoutingOperationsSamples.Clear();
+
+                    var err = await AppendWorkCentreLinesAsync(oh, ops, ct);
+                    if (err != null)
+                        return err;
+                }
+                else
+                {
+                    var oh = new RoutingOperationHeaderSample
+                    {
+                        RoutingID = routingId,
+                        Title = title,
+                        DisplayOrder = displayOrder
+                    };
+                    var err = await AppendWorkCentreLinesAsync(oh, ops, ct);
+                    if (err != null)
+                        return err;
+
+                    header.OperationHeaders.Add(oh);
+                }
             }
 
             return null;
@@ -226,10 +343,7 @@ namespace AU_ERP.Controllers
                 header.StatusID = dto.StatusID;
                 header.ValidFrom = dto.ValidFrom ?? header.ValidFrom;
 
-                _db.RoutingOperationHeadersSamples.RemoveRange(header.OperationHeaders);
-                header.OperationHeaders.Clear();
-
-                var err = await TryAppendOperationHeadersAsync(header, dto.OperationHeaders, ct);
+                var err = await TryMergeOperationHeadersAsync(header, dto.OperationHeaders, ct);
                 if (err != null)
                     return err;
 
@@ -256,10 +370,7 @@ namespace AU_ERP.Controllers
                 if (header == null)
                     return Json(new { success = false, message = "Routing not found." });
 
-                _db.RoutingOperationHeadersSamples.RemoveRange(header.OperationHeaders);
-                header.OperationHeaders.Clear();
-
-                var err = await TryAppendOperationHeadersAsync(header, dto.OperationHeaders, ct);
+                var err = await TryMergeOperationHeadersAsync(header, dto.OperationHeaders, ct);
                 if (err != null)
                     return err;
 
@@ -282,6 +393,24 @@ namespace AU_ERP.Controllers
 
                 if (header == null)
                     return Json(new { success = false, message = "Routing not found." });
+
+                var opIdsUnderRouting = await _db.RoutingOperationHeadersSamples.AsNoTracking()
+                    .Where(oh => oh.RoutingID == id)
+                    .Select(oh => oh.OperationHeaderId)
+                    .ToListAsync(ct);
+
+                var stageRefs = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                    .AnyAsync(s => opIdsUnderRouting.Contains(s.RoutingOperationHeaderId), ct);
+
+                if (stageRefs || await _db.ProductionOrders.AsNoTracking().AnyAsync(p => p.ReleasedRoutingId == id, ct))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Cannot delete this routing because production orders still reference its operations. " +
+                                  "Create a newer routing for new releases; existing orders keep this snapshot until completed."
+                    });
+                }
 
                 _db.RoutingHeadersSamples.Remove(header);
                 await _db.SaveChangesAsync(ct);
@@ -314,6 +443,9 @@ namespace AU_ERP.Controllers
 
     public class RoutingOperationHeaderDto
     {
+        /// <summary>Existing DB id when editing; omit or 0 for a new operation block.</summary>
+        public int? OperationHeaderId { get; set; }
+
         public string? Title { get; set; }
         public List<RoutingOpDto>? Operations { get; set; }
     }

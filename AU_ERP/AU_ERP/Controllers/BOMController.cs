@@ -291,24 +291,10 @@ namespace AU_ERP.Controllers
                 if (await _db.BomHeadersSamples.AnyAsync(h => h.BomID != dto.BomID && h.BOMCode == code, ct))
                     return Json(new { success = false, message = "This BOM code is already in use." });
 
-                var headerType = dto.HeaderMaterialTypeCode?.Trim().ToUpperInvariant();
-                var headerMat = dto.BomMaterialNumber?.Trim();
-                if (string.IsNullOrEmpty(headerType) || string.IsNullOrEmpty(headerMat))
-                    return Json(new { success = false, message = "Material Type and Material are required for the BOM header." });
-                if (headerType is not ("HALB" or "FERT"))
-                    return Json(new { success = false, message = "Header Material Type must be HALB or FERT." });
-
-                var headerMaterial = await _db.CreateMaterialMaster.AsNoTracking()
-                    .FirstOrDefaultAsync(m => m.MaterialNumber == headerMat, ct);
-                if (headerMaterial == null)
-                    return Json(new { success = false, message = $"Header material '{headerMat}' does not exist." });
-                if (headerMaterial.MaterialTypeCode != headerType)
-                    return Json(new { success = false, message = "Header material does not match the selected Material Type." });
+                // Header assembly (HALB/FERT + material number) is fixed after create so production orders can stay aligned with a stable assembly identity.
 
                 header.BOMCode = code;
                 header.BOMTitle = dto.BOMTitle?.Trim();
-                header.HeaderMaterialTypeCode = headerType;
-                header.BomMaterialNumber = headerMat;
                 header.BLevel = dto.BLevel;
                 header.Plant = dto.Plant;
                 header.BaseQty = dto.BaseQty;

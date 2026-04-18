@@ -31,6 +31,9 @@ namespace AU_ERP.Models
         public DbSet<DocumentRange> DocumentRanges { get; set; }
         public DbSet<ProductionVersion> ProductionVersions { get; set; }
         public DbSet<UnitOfMeasurement> UnitOfMeasurements { get; set; }
+        public DbSet<ProductionOrder> ProductionOrders { get; set; }
+        public DbSet<ProductionOrderStageProgress> ProductionOrderStageProgresses { get; set; }
+        public DbSet<StockInventoryLine> StockInventoryLines { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -302,6 +305,105 @@ namespace AU_ERP.Models
                 .HasOne(p => p.RoutingHeader)
                 .WithMany()
                 .HasForeignKey(p => p.RoutingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionOrder>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<ProductionOrder>()
+                .HasIndex(p => p.ProductionNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<ProductionOrder>()
+                .HasOne(p => p.FinishedMaterial)
+                .WithMany()
+                .HasForeignKey(p => p.FinishedMaterialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionOrder>()
+                .HasOne(p => p.Uom)
+                .WithMany()
+                .HasForeignKey(p => p.UomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionOrder>()
+                .HasOne(p => p.ReleasedRouting)
+                .WithMany()
+                .HasForeignKey(p => p.ReleasedRoutingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .Property(s => s.PlannedHours)
+                .HasPrecision(18, 6);
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .Property(s => s.ActualHours)
+                .HasPrecision(18, 6);
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .Property(s => s.InputQuantity)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .Property(s => s.OutputQuantity)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .Property(s => s.WastageQuantity)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .HasOne(s => s.ProductionOrder)
+                .WithMany(p => p.StageProgresses)
+                .HasForeignKey(s => s.ProductionOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .HasOne(s => s.RoutingOperationHeader)
+                .WithMany()
+                .HasForeignKey(s => s.RoutingOperationHeaderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .Property(s => s.Quantity)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .Property(s => s.StandardCostPerUom)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .Property(s => s.StockValue)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .HasIndex(s => s.MaterialNumber);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .HasIndex(s => s.QuantityUomId);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .HasIndex(s => s.Status);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .HasOne(s => s.Material)
+                .WithMany()
+                .HasForeignKey(s => s.MaterialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .HasOne(s => s.QuantityUom)
+                .WithMany()
+                .HasForeignKey(s => s.QuantityUomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BOMLevelsSample>().HasData(

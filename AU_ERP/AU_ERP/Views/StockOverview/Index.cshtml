@@ -1,0 +1,645 @@
+@model AU_ERP.Models.StockOverviewPageVm
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Stock Overview";
+    string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.InvariantCulture);
+    string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+    string StatusUi(string s) => s == StockInventoryLine.StatusNotActive ? "Not Active" : "Active";
+    string StatusBadge(string s) => s == StockInventoryLine.StatusNotActive ? "so-badge so-badge-off" : "so-badge so-badge-on";
+    var mtSel = string.IsNullOrWhiteSpace(Model.MaterialTypeCode) ? "All" : Model.MaterialTypeCode!;
+    var uomHidden = Model.UomId.HasValue ? Model.UomId.Value.ToString(CultureInfo.InvariantCulture) : "";
+}
+
+@section Styles {
+    <style>
+        .so-page { color: var(--au-black, #171717); }
+        .so-page .so-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+        .so-page .so-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--au-primary-dark, #388087); margin: 0 0 .25rem 0; }
+        .so-page .so-hero p { margin: 0; color: #555; font-size: .9rem; }
+        .so-btn-new { background: var(--au-primary-dark, #388087); color: #fff; border: 1px solid var(--au-primary-dark, #388087); border-radius: .35rem; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
+        .so-btn-new:hover { filter: brightness(1.05); color: #fff; }
+        .so-table-card { background: #fff; border: 1px solid rgba(56, 128, 135, 0.25); border-radius: .5rem; padding: 1rem 1.1rem; }
+        .so-table-card .so-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+        .so-table-card .so-table-title { font-size: 1rem; font-weight: 600; color: var(--au-primary-dark, #388087); margin: 0; }
+        .so-table-card .so-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+        .so-table-wrap { overflow-x: auto; }
+        .so-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .so-table thead th { background: var(--au-primary-dark, #388087); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+        .so-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+        .so-table tbody tr:nth-child(even) { background: #fafafa; }
+        .so-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
+        .so-badge-on { background: #d1e7dd; color: #0f5132; }
+        .so-badge-off { background: #e2e3e5; color: #41464b; }
+        .so-actions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+        .so-actions .btn { font-size: .75rem; padding: .2rem .5rem; }
+    </style>
+}
+
+<div class="so-page">
+    <div class="so-hero">
+        <div>
+            <h1>Stock overview</h1>
+            <p>Inventory lines with quantity, UOM, standard cost (PKR), and stock value.</p>
+        </div>
+        <button type="button" class="so-btn-new" data-bs-toggle="modal" data-bs-target="#soCreateModal">
+            <i class="bi bi-plus-lg"></i> New stock entry
+        </button>
+    </div>
+
+    <div class="so-table-card">
+        <div class="so-table-head">
+            <h2 class="so-table-title">Stock lines (@Model.Items.Count)</h2>
+            <form id="soListFilterForm" method="get" asp-controller="StockOverview" asp-action="Index" class="so-toolbar">
+                <input type="search" name="q" class="form-control form-control-sm" placeholder="Search material number or name…" value="@Model.Q" />
+                <input type="hidden" name="materialTypeCode" id="soListMaterialType" value="@mtSel" />
+                <input type="hidden" name="uomId" id="soListUomId" value="@uomHidden" />
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#soFilterModal">Filter</button>
+                <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear</a>
+            </form>
+        </div>
+
+        <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+
+        <div class="so-table-wrap">
+            <table class="so-table">
+                <thead>
+                    <tr>
+                        <th>Material number</th>
+                        <th>Material name</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Status</th>
+                        <th>Std cost (PKR)</th>
+                        <th>Stock value</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr><td colspan="8" class="text-secondary">No stock lines match the current filters.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var row in Model.Items)
+                        {
+                            var mat = row.Material;
+                            var typeLabel = mat?.MaterialType != null
+                                ? (!string.IsNullOrWhiteSpace(mat.MaterialType.Description) ? mat.MaterialType.Description : mat.MaterialType.MaterialTypeCode)
+                                : (mat?.MaterialTypeCode ?? "—");
+                            var name = mat?.Description ?? "—";
+                            var uom = row.QuantityUom?.Code ?? "—";
+                            <tr>
+                                <td><strong>@row.MaterialNumber</strong></td>
+                                <td>@name</td>
+                                <td>@typeLabel</td>
+                                <td>@FmtQty(row.Quantity) @uom</td>
+                                <td><span class="@StatusBadge(row.Status)">@StatusUi(row.Status)</span></td>
+                                <td>@FmtMoney(row.StandardCostPerUom)</td>
+                                <td>@FmtMoney(row.StockValue)</td>
+                                <td>
+                                    <div class="so-actions">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="soOpenEdit(@row.Id)"><i class="bi bi-pencil"></i></button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="soDelete(@row.Id)"><i class="bi bi-trash"></i></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create -->
+<div class="modal fade" id="soCreateModal" tabindex="-1" aria-labelledby="soCreateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="soCreateModalLabel">New stock entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <div class="mb-2">
+                    <label class="form-label small">Material type</label>
+                    <select id="soCreateMatType" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Material</label>
+                    <select id="soCreateMaterial" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Quantity</label>
+                    <input type="number" id="soCreateQty" class="form-control form-control-sm" min="0.0001" step="0.0001" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Quantity UOM</label>
+                    <select id="soCreateUom" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Status</label>
+                    <select id="soCreateStatus" class="form-select form-select-sm">
+                        <option value="@StockInventoryLine.StatusActive">Active</option>
+                        <option value="@StockInventoryLine.StatusNotActive">Not Active</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Standard cost per UOM (PKR)</label>
+                    <input type="number" id="soCreateCost" class="form-control form-control-sm" min="0" step="0.0001" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Stock value (PKR)</label>
+                    <input type="text" id="soCreateStockVal" class="form-control form-control-sm" readonly style="background:#f8f9fa;" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm so-btn-new" onclick="soSaveCreate()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit -->
+<div class="modal fade" id="soEditModal" tabindex="-1" aria-labelledby="soEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="soEditModalLabel">Edit stock entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <input type="hidden" id="soEditId" />
+                <div class="mb-2">
+                    <label class="form-label small">Material type</label>
+                    <select id="soEditMatType" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Material</label>
+                    <select id="soEditMaterial" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Quantity</label>
+                    <input type="number" id="soEditQty" class="form-control form-control-sm" min="0.0001" step="0.0001" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Quantity UOM</label>
+                    <select id="soEditUom" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Status</label>
+                    <select id="soEditStatus" class="form-select form-select-sm">
+                        <option value="@StockInventoryLine.StatusActive">Active</option>
+                        <option value="@StockInventoryLine.StatusNotActive">Not Active</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Standard cost per UOM (PKR)</label>
+                    <input type="number" id="soEditCost" class="form-control form-control-sm" min="0" step="0.0001" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Stock value (PKR)</label>
+                    <input type="text" id="soEditStockVal" class="form-control form-control-sm" readonly style="background:#f8f9fa;" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm so-btn-new" onclick="soSaveEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter -->
+<div class="modal fade" id="soFilterModal" tabindex="-1" aria-labelledby="soFilterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="soFilterModalLabel">Filter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small">Material type</label>
+                    <select id="soModMatType" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Quantity UOM</label>
+                    <select id="soModUom" class="form-select form-select-sm"></select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm so-btn-new" onclick="soApplyFilterModal()">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function soInitModals() {
+        function ensureOnBody(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.parentElement !== document.body) document.body.appendChild(el);
+        }
+        function init() {
+            ["soCreateModal", "soEditModal", "soFilterModal"].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener("show.bs.modal", function () { ensureOnBody(id); });
+                ensureOnBody(id);
+            });
+        }
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+        else init();
+    })();
+
+    var soLookupsLoaded = false;
+
+    function soFormRoot(modalId) {
+        return document.querySelector("#" + modalId + " .modal-content");
+    }
+
+    function soShowInline(root, message) {
+        if (!root) root = document.querySelector(".so-page");
+        if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+        if (typeof window.auShowInlineValidation === "function")
+            window.auShowInlineValidation(root, [], message);
+        else alert(message);
+    }
+
+    function soClearInline(root) {
+        if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
+    }
+
+    function soReload() { window.location.reload(); }
+
+    function soRecalc(prefix) {
+        var q = parseFloat(document.getElementById(prefix + "Qty").value) || 0;
+        var c = parseFloat(document.getElementById(prefix + "Cost").value) || 0;
+        var v = (q * c).toFixed(2);
+        document.getElementById(prefix + "StockVal").value = isNaN(q * c) ? "" : v;
+    }
+
+    function soBindCalc(prefix) {
+        ["Qty", "Cost"].forEach(function (s) {
+            var el = document.getElementById(prefix + s);
+            if (el) el.addEventListener("input", function () { soRecalc(prefix); });
+        });
+    }
+    soBindCalc("soCreate");
+    soBindCalc("soEdit");
+
+    function soFillMatTypeSelect(sel, includeAll) {
+        return fetch("@Url.Action("MaterialTypes", "StockOverview")").then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.success) return;
+            var types = res.data || [];
+            sel.innerHTML = "";
+            if (includeAll) {
+                var o0 = document.createElement("option");
+                o0.value = "All"; o0.textContent = "All"; sel.appendChild(o0);
+            }
+            types.forEach(function (t) {
+                var code = t.materialTypeCode || t.MaterialTypeCode || "";
+                var d = t.description || t.Description || "";
+                var o = document.createElement("option");
+                o.value = code;
+                o.textContent = code + (d ? " — " + d : "");
+                sel.appendChild(o);
+            });
+        });
+    }
+
+    function soFillUomSelect(sel, includeAll) {
+        return fetch("@Url.Action("Uoms", "StockOverview")").then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.success) return;
+            var uoms = res.data || [];
+            sel.innerHTML = "";
+            if (includeAll) {
+                var o0 = document.createElement("option");
+                o0.value = ""; o0.textContent = "All"; sel.appendChild(o0);
+            }
+            uoms.forEach(function (u) {
+                var id = u.id != null ? u.id : u.Id;
+                var c = u.code || u.Code || "";
+                var o = document.createElement("option");
+                o.value = id;
+                o.textContent = c || String(id);
+                sel.appendChild(o);
+            });
+        });
+    }
+
+    window._soStockUomState = window._soStockUomState || {};
+
+    function soInitStockUomPlaceholder(sel) {
+        if (!sel) return;
+        sel.innerHTML = "";
+        var o = document.createElement("option");
+        o.value = "";
+        o.textContent = "Select a material first";
+        sel.appendChild(o);
+        sel.value = "";
+    }
+
+    function soPopulateStockUomFromContext(prefix, sel, data, preferredUomId) {
+        if (!sel) return;
+        sel.innerHTML = "";
+        var uoms = data.uoms || data.Uoms || [];
+        var allowed = data.allowedUomIds || data.AllowedUomIds || [];
+        window._soStockUomState[prefix] = { allowedIds: new Set(allowed.map(function (x) { return Number(x); })) };
+        var baseId = data.baseUomId != null ? data.baseUomId : data.BaseUomId;
+        if (!uoms.length) {
+            var ox = document.createElement("option");
+            ox.value = "";
+            ox.textContent = "—";
+            sel.appendChild(ox);
+            return;
+        }
+        uoms.forEach(function (u) {
+            var id = u.id != null ? u.id : u.Id;
+            var code = u.code || u.Code || "";
+            var isBase = !!(u.isBase || u.IsBase);
+            var outside = !!(u.outsideAllowedSet || u.OutsideAllowedSet);
+            var o = document.createElement("option");
+            o.value = id;
+            o.textContent = (code || String(id)) + (isBase ? " (base)" : "") + (outside ? " — add conversion or change UOM" : "");
+            sel.appendChild(o);
+        });
+        var pref = preferredUomId != null && preferredUomId !== "" ? Number(preferredUomId) : (baseId != null ? Number(baseId) : null);
+        if (pref != null && !isNaN(pref) && Array.from(sel.options).some(function (x) { return x.value === String(pref); }))
+            sel.value = String(pref);
+        else if (baseId != null && Array.from(sel.options).some(function (x) { return x.value === String(baseId); }))
+            sel.value = String(baseId);
+    }
+
+    function soLoadStockUomContext(prefix, modalId, materialNumber, includeUomIdForEdit) {
+        var sel = document.getElementById(prefix + "Uom");
+        var root = soFormRoot(modalId);
+        soClearInline(root);
+        var url = "@Url.Action("MaterialUomContext", "StockOverview")?materialNumber=" + encodeURIComponent(materialNumber);
+        if (includeUomIdForEdit != null && includeUomIdForEdit !== "")
+            url += "&includeUomIdForEdit=" + encodeURIComponent(String(includeUomIdForEdit));
+        return fetch(url).then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.success) {
+                soShowInline(root, res.message || "Could not load UOMs.");
+                soInitStockUomPlaceholder(sel);
+                return;
+            }
+            var d = res.data || res.Data || {};
+            var err = d.setupError || d.SetupError;
+            if (err) {
+                soShowInline(root, err);
+                soInitStockUomPlaceholder(sel);
+                window._soStockUomState[prefix] = { allowedIds: new Set() };
+                return;
+            }
+            soPopulateStockUomFromContext(prefix, sel, d, includeUomIdForEdit);
+            soClearInline(root);
+        }).catch(function () {
+            soShowInline(root, "Could not load UOMs.");
+            soInitStockUomPlaceholder(sel);
+        });
+    }
+
+    function soValidateStockUomClient(root, prefix) {
+        var sel = document.getElementById(prefix + "Uom");
+        var vid = parseInt(sel && sel.value, 10) || 0;
+        if (!vid) {
+            soShowInline(root, "Select a quantity UOM.");
+            return false;
+        }
+        var st = window._soStockUomState[prefix];
+        if (!st || !st.allowedIds || st.allowedIds.size === 0) {
+            soShowInline(root, "Choose a material with a valid base unit and UOM setup.");
+            return false;
+        }
+        if (!st.allowedIds.has(vid)) {
+            soShowInline(root, "The selected unit of measure must be the material base unit or an alternate unit with a unit conversion on the material master.");
+            return false;
+        }
+        soClearInline(root);
+        return true;
+    }
+
+    function soFillMaterialsForType(matSel, typeCode, selectedMat) {
+        var url = "@Url.Action("Materials", "StockOverview")";
+        if (typeCode && typeCode !== "All") url += "?materialTypeCode=" + encodeURIComponent(typeCode);
+        return fetch(url).then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.success) return;
+            var mats = res.data || [];
+            matSel.innerHTML = '<option value="">-- Select material --</option>';
+            mats.forEach(function (m) {
+                var num = m.materialNumber || m.MaterialNumber || "";
+                var d = m.description || m.Description || "";
+                var o = document.createElement("option");
+                o.value = num;
+                o.textContent = num + " — " + d;
+                if (selectedMat && selectedMat === num) o.selected = true;
+                matSel.appendChild(o);
+            });
+        });
+    }
+
+    function soEnsureLookups() {
+        if (soLookupsLoaded) return Promise.resolve();
+        return Promise.all([
+            soFillMatTypeSelect(document.getElementById("soCreateMatType"), false),
+            soFillMatTypeSelect(document.getElementById("soEditMatType"), false),
+            soFillMatTypeSelect(document.getElementById("soModMatType"), true),
+            soFillUomSelect(document.getElementById("soModUom"), true)
+        ]).then(function () {
+            soLookupsLoaded = true;
+            soInitStockUomPlaceholder(document.getElementById("soCreateUom"));
+            soInitStockUomPlaceholder(document.getElementById("soEditUom"));
+            document.getElementById("soCreateMatType").addEventListener("change", function () {
+                soFillMaterialsForType(document.getElementById("soCreateMaterial"), this.value, null).then(function () {
+                    document.getElementById("soCreateMaterial").value = "";
+                    soInitStockUomPlaceholder(document.getElementById("soCreateUom"));
+                });
+            });
+            document.getElementById("soEditMatType").addEventListener("change", function () {
+                soFillMaterialsForType(document.getElementById("soEditMaterial"), this.value, null).then(function () {
+                    document.getElementById("soEditMaterial").value = "";
+                    soInitStockUomPlaceholder(document.getElementById("soEditUom"));
+                });
+            });
+            document.getElementById("soCreateMaterial").addEventListener("change", function () {
+                var v = (this.value || "").trim();
+                var uSel = document.getElementById("soCreateUom");
+                soClearInline(soFormRoot("soCreateModal"));
+                if (!v) {
+                    soInitStockUomPlaceholder(uSel);
+                    return;
+                }
+                soLoadStockUomContext("soCreate", "soCreateModal", v, null);
+            });
+            document.getElementById("soEditMaterial").addEventListener("change", function () {
+                var v = (this.value || "").trim();
+                var uSel = document.getElementById("soEditUom");
+                soClearInline(soFormRoot("soEditModal"));
+                if (!v) {
+                    soInitStockUomPlaceholder(uSel);
+                    return;
+                }
+                soLoadStockUomContext("soEdit", "soEditModal", v, null);
+            });
+            document.getElementById("soCreateUom").addEventListener("change", function () {
+                var root = soFormRoot("soCreateModal");
+                soClearInline(root);
+                var mat = (document.getElementById("soCreateMaterial").value || "").trim();
+                var st = window._soStockUomState && window._soStockUomState.soCreate;
+                if (mat && st && st.allowedIds && st.allowedIds.size)
+                    soValidateStockUomClient(root, "soCreate");
+            });
+            document.getElementById("soEditUom").addEventListener("change", function () {
+                var root = soFormRoot("soEditModal");
+                soClearInline(root);
+                var mat = (document.getElementById("soEditMaterial").value || "").trim();
+                var st = window._soStockUomState && window._soStockUomState.soEdit;
+                if (mat && st && st.allowedIds && st.allowedIds.size)
+                    soValidateStockUomClient(root, "soEdit");
+            });
+        });
+    }
+
+    document.getElementById("soCreateModal").addEventListener("show.bs.modal", function () {
+        soEnsureLookups().then(function () {
+            soClearInline(soFormRoot("soCreateModal"));
+            document.getElementById("soCreateMatType").value = document.getElementById("soCreateMatType").options[0] ? document.getElementById("soCreateMatType").options[0].value : "";
+            return soFillMaterialsForType(document.getElementById("soCreateMaterial"), document.getElementById("soCreateMatType").value, null);
+        }).then(function () {
+            document.getElementById("soCreateMaterial").value = "";
+            document.getElementById("soCreateQty").value = "";
+            soInitStockUomPlaceholder(document.getElementById("soCreateUom"));
+            document.getElementById("soCreateStatus").value = "@StockInventoryLine.StatusActive";
+            document.getElementById("soCreateCost").value = "";
+            document.getElementById("soCreateStockVal").value = "";
+        });
+    });
+
+    document.getElementById("soFilterModal").addEventListener("show.bs.modal", function () {
+        soEnsureLookups().then(function () {
+            document.getElementById("soModMatType").value = document.getElementById("soListMaterialType").value || "All";
+            var uhid = document.getElementById("soListUomId").value || "";
+            document.getElementById("soModUom").value = uhid;
+        });
+    });
+
+    function soApplyFilterModal() {
+        document.getElementById("soListMaterialType").value = document.getElementById("soModMatType").value;
+        document.getElementById("soListUomId").value = document.getElementById("soModUom").value;
+        var modalEl = document.getElementById("soFilterModal");
+        if (modalEl && typeof bootstrap !== "undefined")
+            bootstrap.Modal.getInstance(modalEl).hide();
+        document.getElementById("soListFilterForm").submit();
+    }
+
+    function soSaveCreate() {
+        var root = soFormRoot("soCreateModal");
+        soClearInline(root);
+        var matNum = (document.getElementById("soCreateMaterial").value || "").trim();
+        if (matNum && !soValidateStockUomClient(root, "soCreate")) return;
+        var payload = {
+            MaterialNumber: (document.getElementById("soCreateMaterial").value || "").trim(),
+            Quantity: parseFloat(document.getElementById("soCreateQty").value) || 0,
+            QuantityUomId: parseInt(document.getElementById("soCreateUom").value, 10) || 0,
+            Status: document.getElementById("soCreateStatus").value,
+            StandardCostPerUom: parseFloat(document.getElementById("soCreateCost").value) || 0
+        };
+        fetch("@Url.Action("Create", "StockOverview")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.success) {
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, soReload);
+                else { alert(res.message); soReload(); }
+            } else soShowInline(root, res.message || "Save failed.");
+        }).catch(function () { soShowInline(root, "Request failed."); });
+    }
+
+    function soOpenEdit(id) {
+        soEnsureLookups().then(function () {
+            return fetch("@Url.Action("GetForEdit", "StockOverview")?id=" + encodeURIComponent(id));
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            var root = soFormRoot("soEditModal");
+            soClearInline(root);
+            if (!res.success) { soShowInline(document.querySelector(".so-page"), res.message || "Load failed."); return; }
+            var d = res.data;
+            document.getElementById("soEditId").value = d.id || d.Id;
+            var mt = d.materialTypeCode || d.MaterialTypeCode || "";
+            var matTypeEl = document.getElementById("soEditMatType");
+            if (mt && Array.from(matTypeEl.options).some(function (o) { return o.value === mt; }))
+                matTypeEl.value = mt;
+            else if (matTypeEl.options.length) matTypeEl.selectedIndex = 0;
+            var matNum = d.materialNumber || d.MaterialNumber || "";
+            var curUom = d.quantityUomId != null ? d.quantityUomId : d.QuantityUomId;
+            return soFillMaterialsForType(document.getElementById("soEditMaterial"), matTypeEl.value, matNum).then(function () {
+                document.getElementById("soEditMaterial").value = matNum;
+                return soLoadStockUomContext("soEdit", "soEditModal", matNum, curUom);
+            }).then(function () {
+                document.getElementById("soEditQty").value = d.quantity != null ? d.quantity : d.Quantity;
+                var st = (d.status || d.Status || "").toString();
+                document.getElementById("soEditStatus").value = (st === "NotActive") ? "NotActive" : "Active";
+                document.getElementById("soEditCost").value = d.standardCostPerUom != null ? d.standardCostPerUom : d.StandardCostPerUom;
+                soRecalc("soEdit");
+                var modalEl = document.getElementById("soEditModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            });
+        }).catch(function () { soShowInline(document.querySelector(".so-page"), "Load failed."); });
+    }
+
+    function soSaveEdit() {
+        var root = soFormRoot("soEditModal");
+        soClearInline(root);
+        var matNum = (document.getElementById("soEditMaterial").value || "").trim();
+        if (matNum && !soValidateStockUomClient(root, "soEdit")) return;
+        var payload = {
+            Id: parseInt(document.getElementById("soEditId").value, 10) || 0,
+            MaterialNumber: (document.getElementById("soEditMaterial").value || "").trim(),
+            Quantity: parseFloat(document.getElementById("soEditQty").value) || 0,
+            QuantityUomId: parseInt(document.getElementById("soEditUom").value, 10) || 0,
+            Status: document.getElementById("soEditStatus").value,
+            StandardCostPerUom: parseFloat(document.getElementById("soEditCost").value) || 0
+        };
+        fetch("@Url.Action("Update", "StockOverview")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.success) {
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message, soReload);
+                else { alert(res.message); soReload(); }
+            } else soShowInline(root, res.message || "Update failed.");
+        }).catch(function () { soShowInline(root, "Request failed."); });
+    }
+
+    function soDelete(id) {
+        function run() {
+            fetch("@Url.Action("Delete", "StockOverview")?id=" + encodeURIComponent(id), { method: "POST" })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        if (typeof window.materialShowSuccessModalThen === "function")
+                            window.materialShowSuccessModalThen(res.message, soReload);
+                        else { alert(res.message); soReload(); }
+                    } else soShowInline(document.querySelector(".so-page"), res.message || "Delete failed.");
+                }).catch(function () { soShowInline(document.querySelector(".so-page"), "Delete failed."); });
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Delete this stock entry?", run);
+        else if (confirm("Delete this stock entry?")) run();
+    }
+</script>
+}
