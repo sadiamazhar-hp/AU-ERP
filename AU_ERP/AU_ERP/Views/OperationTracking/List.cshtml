@@ -21,15 +21,15 @@
 
 @section Styles {
     <style>
-        .otl-page { color: #171717; max-width: 1200px; }
+        .otl-page { color: var(--text, #32363a); max-width: 1200px; }
         .otl-hero { margin-bottom: 1.35rem; }
-        .otl-hero h1 { font-size: 1.45rem; font-weight: 700; color: var(--au-primary-dark, #388087); margin: 0 0 .35rem 0; letter-spacing: -0.02em; }
-        .otl-hero p { margin: 0; color: #5a5a5a; font-size: .92rem; max-width: 40rem; line-height: 1.45; }
+        .otl-hero h1 { font-size: 1.45rem; font-weight: 700; color: var(--dark, #354a5e); margin: 0 0 .35rem 0; letter-spacing: -0.02em; }
+        .otl-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .92rem; max-width: 40rem; line-height: 1.45; }
         .otl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr)); gap: 1rem; }
-        .otl-card { background: linear-gradient(180deg, #fff 0%, #fafcfb 100%); border: 1px solid rgba(56, 128, 135, 0.22); border-radius: .65rem; padding: 1.05rem 1.15rem; box-shadow: 0 2px 8px rgba(0,0,0,.04); transition: box-shadow .15s, border-color .15s; }
-        .otl-card:hover { box-shadow: 0 6px 20px rgba(56, 128, 135, 0.12); border-color: rgba(56, 128, 135, 0.35); }
+        .otl-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1.05rem 1.15rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); border-top: 3px solid var(--blue, #0070f2); transition: box-shadow .15s, border-color .15s; }
+        .otl-card:hover { box-shadow: var(--shl, 0 4px 20px rgba(0,0,0,.18)); border-color: #aaa; }
         .otl-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; margin-bottom: .65rem; }
-        .otl-po { font-size: 1.05rem; font-weight: 700; color: #1a4d52; }
+        .otl-po { font-size: 1.05rem; font-weight: 700; color: var(--dark, #354a5e); }
         .otl-badge { display: inline-block; padding: .18rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; white-space: nowrap; }
         .otl-rel { background: #cff4fc; color: #055160; }
         .otl-run { background: #fff3cd; color: #664d03; }
@@ -39,10 +39,10 @@
         .otl-meta { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem .75rem; font-size: .78rem; color: #666; margin-bottom: .85rem; }
         .otl-meta span { color: #999; display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
         .otl-progress { height: .35rem; background: #e8ecec; border-radius: 999px; overflow: hidden; margin-bottom: .75rem; }
-        .otl-progress-fill { height: 100%; background: linear-gradient(90deg, #388087, #4db896); border-radius: 999px; min-width: 2px; transition: width .25s ease; }
+        .otl-progress-fill { height: 100%; background: linear-gradient(90deg, var(--blue, #0070f2), var(--accent, #0053b3)); border-radius: 999px; min-width: 2px; transition: width .25s ease; }
         .otl-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
         .otl-actions .btn { font-size: .78rem; padding: .32rem .65rem; border-radius: .35rem; }
-        .otl-empty { text-align: center; padding: 2.5rem 1rem; color: #666; background: #f8faf9; border-radius: .65rem; border: 1px dashed rgba(56,128,135,.3); }
+        .otl-empty { text-align: center; padding: 2.5rem 1rem; color: var(--subtle, #6a7c8e); background: var(--bg, #f5f6f7); border-radius: 4px; border: 1px dashed var(--border, #d9d9d9); }
     </style>
 }
 
@@ -82,7 +82,7 @@
                     }
                     <div class="otl-progress" title="@o.StagesCompleted of @o.StagesTotal stages complete"><div class="otl-progress-fill" style="width:@(pct)%"></div></div>
                     <div class="otl-actions">
-                        <a class="btn text-white" style="background:var(--au-primary-dark,#388087);" asp-action="Details" asp-route-productionOrderId="@o.ProductionOrderId">View tracking</a>
+                        <a class="btn btn-primary btn-sm" asp-action="Details" asp-route-productionOrderId="@o.ProductionOrderId">View tracking</a>
                     </div>
                 </article>
             }

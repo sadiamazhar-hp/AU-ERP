@@ -2,53 +2,39 @@
 @model AUTiles.Models.BomHeadersSample
 
 @{
-    Layout = "~/Views/Shared/_Layout_Master.cshtml";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "BOM — Create";
 }
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAP BOM Master - Professional Suite</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <style>
-        :root {
+@section Styles {
+<style>
+        .bom-create-page {
             --sap-navy: #354a5f;
             --sap-blue: #0854a0;
             --sap-border: #bfbfbf;
             --sap-grid-header: #f2f2f2;
             --sap-mandatory: #b00;
-        }
-
-        body {
-            background-color: #edeff0;
-            font-family: "72", Arial, sans-serif;
             font-size: 13px;
-            margin: 0;
-            padding: 10px;
+            font-family: var(--font-aut, "IBM Plex Sans", system-ui, sans-serif);
+            color: var(--text, #32363a);
         }
 
-        .sap-window {
+        .bom-create-page .sap-window {
             background: #fff;
             border: 1px solid var(--sap-border);
             border-radius: 2px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            min-height: 90vh;
+            box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,0.12));
+            min-height: min(90vh, 920px);
         }
 
-        .sap-header {
+        .bom-create-page .sap-header {
             background: var(--sap-navy);
             color: #fff;
             padding: 8px 15px;
             font-weight: bold;
         }
 
-        .top-nav-bar {
+        .bom-create-page .top-nav-bar {
             background: #fff;
             border-bottom: 1px solid var(--sap-border);
             padding: 5px 15px;
@@ -56,7 +42,7 @@
             gap: 10px;
         }
 
-        .nav-link {
+        .bom-create-page .top-nav-bar > a {
             color: var(--sap-blue);
             padding: 5px 15px;
             cursor: pointer;
@@ -64,13 +50,13 @@
             border-radius: 4px;
         }
 
-            .nav-link.active {
+        .bom-create-page .top-nav-bar > a.active {
                 background: var(--sap-blue);
                 color: white;
                 font-weight: bold;
             }
 
-        .toolbar {
+        .bom-create-page .toolbar {
             background: #f7f7f7;
             border-bottom: 1px solid var(--sap-border);
             padding: 8px 15px;
@@ -252,9 +238,9 @@
             border: none !important;
         }
     </style>
-</head>
-<body>
+}
 
+<div class="bom-create-page">
     <datalist id="materialOptions">
         @if (ViewBag.MaterialList != null)
         {
@@ -269,9 +255,9 @@
         <div class="sap-header">🛠️ Bill of Material Management - Professional</div>
 
         <div class="top-nav-bar">
-            <a class="nav-link active" id="tab-create" onclick="toggleView('create')">Create</a>
-            <a class="nav-link" id="tab-list" onclick="toggleView('list')">BOM Lists</a>
-            <a class="nav-link" id="tab-explode" onclick="toggleView('explode')">BOM Explosion</a>
+            <a class="active" href="#" id="tab-create" onclick="toggleView('create'); return false;">Create</a>
+            <a href="#" id="tab-list" onclick="toggleView('list'); return false;">BOM Lists</a>
+            <a href="#" id="tab-explode" onclick="toggleView('explode'); return false;">BOM Explosion</a>
         </div>
 
         <div id="create-view">
@@ -373,6 +359,7 @@
             </div>
         </div>
     </div>
+</div>
 
     <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl">
@@ -446,16 +433,14 @@
             </div>
         </div>
     </div>
-   
-        </div>
-    </div>
-</div>
 
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(document).ready(() => { clearForm(); });
 
         function toggleView(view) {
-            $('.nav-link').removeClass('active');
+            $('.bom-create-page .top-nav-bar > a').removeClass('active');
             $(`#tab-${view}`).addClass('active');
             $('#create-view, #list-view, #explode-view').addClass('hidden');
             $(`#${view}-view`).removeClass('hidden');
@@ -859,5 +844,4 @@
                 });
         }
     </script>
-</body>
-</html>
+}

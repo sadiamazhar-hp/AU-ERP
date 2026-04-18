@@ -26,12 +26,12 @@
 
 @section Styles {
     <style>
-        .otd-page { color: #171717; max-width: 1180px; margin: 0 auto; }
+        .otd-page { color: var(--text, #32363a); max-width: 1180px; margin: 0 auto; }
         .otd-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
-        .otd-topbar h1 { font-size: 1.15rem; font-weight: 600; color: #5a6f70; margin: 0; }
-        .otd-topbar .otd-crumb { font-size: .8rem; color: #888; }
-        .otd-po-card { background: linear-gradient(135deg, #fff 0%, #f4fafb 55%, #eef8f6 100%); border: 1px solid rgba(56, 128, 135, 0.28); border-radius: .75rem; padding: 1.15rem 1.25rem 1.2rem; margin-bottom: 1.15rem; box-shadow: 0 4px 18px rgba(56, 128, 135, 0.08); }
-        .otd-po-card h2 { font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #388087; margin: 0 0 .85rem 0; }
+        .otd-topbar h1 { font-size: 1.15rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0; }
+        .otd-topbar .otd-crumb { font-size: .8rem; color: var(--subtle, #6a7c8e); }
+        .otd-po-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1.15rem 1.25rem 1.2rem; margin-bottom: 1.15rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); border-top: 3px solid var(--blue, #0070f2); }
+        .otd-po-card h2 { font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--blue, #0070f2); margin: 0 0 .85rem 0; }
         .otd-po-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: .85rem 1.1rem; }
         .otd-po-grid .k { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #8a9394; margin-bottom: .12rem; }
         .otd-po-grid .v { font-size: .95rem; font-weight: 600; color: #1e3335; }
@@ -44,20 +44,20 @@
         .otd-badge-done { background: #d1e7dd; color: #0f5132; }
         .otd-badge-run { background: #fff3cd; color: #664d03; }
         .otd-badge-wait { background: #e2e3e5; color: #41464b; }
-        .otd-stepper-wrap { background: #fff; border: 1px solid rgba(56, 128, 135, 0.15); border-radius: .65rem; padding: .85rem 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+        .otd-stepper-wrap { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; margin-bottom: 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); }
         .otd-stepper-wrap .lbl { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #7a8f91; margin-bottom: .55rem; }
         .otd-stepper { display: flex; flex-wrap: wrap; gap: .5rem; align-items: stretch; }
         .otd-step { flex: 1 1 6rem; min-width: 5rem; border: 1px solid #e0e6e6; border-radius: .5rem; padding: .55rem .6rem; text-align: center; font-size: .76rem; background: #fafcfc; color: #666; transition: border-color .15s, box-shadow .15s; }
         .otd-step.otd-step-done { border-color: #28a745; background: linear-gradient(180deg, #f4fff7, #e8f8ec); color: #0f5132; }
-        .otd-step.otd-step-active { border-color: #388087; background: linear-gradient(180deg, #f0fafb, #e4f5f3); color: #1a5c63; font-weight: 600; box-shadow: 0 0 0 2px rgba(56,128,135,.18); }
+        .otd-step.otd-step-active { border-color: var(--blue, #0070f2); background: #ebf4ff; color: var(--accent, #0053b3); font-weight: 600; box-shadow: 0 0 0 2px rgba(0, 112, 242, 0.2); }
         .otd-step .otd-step-ico { font-size: 1.15rem; line-height: 1.2; }
-        .otd-table-card { background: #fff; border: 1px solid rgba(56, 128, 135, 0.18); border-radius: .65rem; padding: 1rem 1.15rem; box-shadow: 0 2px 12px rgba(0,0,0,.035); }
+        .otd-table-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.15rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); }
         .otd-table-card .otd-tbar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .9rem; align-items: center; }
         .otd-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .83rem; border-radius: .45rem; overflow: hidden; border: 1px solid #e8ecec; }
-        .otd-table thead th { background: linear-gradient(180deg, #3d8f96, #347a80); color: #fff; font-weight: 600; padding: .55rem .6rem; text-align: left; white-space: nowrap; font-size: .78rem; }
-        .otd-table tbody td { border-top: 1px solid #edf1f1; padding: .48rem .6rem; vertical-align: middle; }
-        .otd-table tbody tr:nth-child(even) { background: #fafcfb; }
-        .otd-table tbody tr:hover { background: #f3faf9; }
+        .otd-table thead th { background: var(--dark, #354a5e); color: #fff; font-weight: 600; padding: .55rem .6rem; text-align: left; white-space: nowrap; font-size: .78rem; }
+        .otd-table tbody td { border-top: 1px solid #ebebeb; padding: .48rem .6rem; vertical-align: middle; }
+        .otd-table tbody tr:nth-child(even) { background: #fafafa; }
+        .otd-table tbody tr:hover { background: #f0f7ff; }
         #otUpdateStageModal .modal-header.ot-modal-header-dark { background: #2c3e42; color: #fff; border-bottom: none; border-radius: .5rem .5rem 0 0; }
         #otUpdateStageModal .modal-header.ot-modal-header-dark .btn-close { filter: invert(1); opacity: .85; }
         #otUpdateStageModal .modal-content { border: none; border-radius: .55rem; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.18); }
