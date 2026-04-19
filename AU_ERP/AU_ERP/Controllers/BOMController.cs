@@ -13,6 +13,19 @@ namespace AU_ERP.Controllers
 
         public BOMController(AppDbContext db) => _db = db;
 
+        /// <summary>FG BOM level → FERT header; SFG → HALB.</summary>
+        private static string? ExpectedHeaderMaterialTypeFromBomLevel(BOMLevelsSample? level)
+        {
+            if (level == null || string.IsNullOrWhiteSpace(level.LevelName))
+                return null;
+            var n = level.LevelName.Trim();
+            if (string.Equals(n, "FG", StringComparison.OrdinalIgnoreCase))
+                return "FERT";
+            if (string.Equals(n, "SFG", StringComparison.OrdinalIgnoreCase))
+                return "HALB";
+            return null;
+        }
+
         /// <summary>Next numeric BOM code; first issued code is 10000, then +1 per new BOM.</summary>
         private async Task<string> AllocateNextBomCodeAsync(CancellationToken ct = default)
         {
@@ -158,6 +171,22 @@ namespace AU_ERP.Controllers
                 if (headerMaterial.MaterialTypeCode != headerType)
                     return Json(new { success = false, message = "Header material does not match the selected Material Type." });
 
+                if (dto.BLevel is int bLevelId)
+                {
+                    var level = await _db.BOMLevelsSamples.AsNoTracking()
+                        .FirstOrDefaultAsync(l => l.LevelID == bLevelId, ct);
+                    var expected = ExpectedHeaderMaterialTypeFromBomLevel(level);
+                    if (expected != null
+                        && !string.Equals(headerType, expected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = "Header assembly must match BOM level: FG requires a FERT material; SFG requires a HALB material."
+                        });
+                    }
+                }
+
                 var header = new BomHeadersSample
                 {
                     BOMCode = code,
@@ -299,6 +328,22 @@ namespace AU_ERP.Controllers
                 header.Plant = dto.Plant;
                 header.BaseQty = dto.BaseQty;
                 header.ValidFrom = dto.ValidFrom;
+
+                if (dto.BLevel is int bLevelUp)
+                {
+                    var level = await _db.BOMLevelsSamples.AsNoTracking()
+                        .FirstOrDefaultAsync(l => l.LevelID == bLevelUp, ct);
+                    var expected = ExpectedHeaderMaterialTypeFromBomLevel(level);
+                    if (expected != null
+                        && !string.Equals(header.HeaderMaterialTypeCode, expected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message = "BOM level does not match this assembly (FG → FERT, SFG → HALB)."
+                        });
+                    }
+                }
 
                 _db.BomItemsSamples.RemoveRange(header.BomItemsSamples);
 

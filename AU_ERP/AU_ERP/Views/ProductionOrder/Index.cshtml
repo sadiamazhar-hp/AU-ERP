@@ -374,7 +374,8 @@
                     <div class="col-12">
                         <label class="form-label small">Mark stage as <span class="text-danger">*</span></label>
                         <select class="form-select form-select-sm" id="poOpMarkAs">
-                            <option value="@ProductionOrderStageProgress.StageInProgress">In-Progress</option>
+                            <option value="@ProductionOrderStageProgress.StageInProgress">In progress</option>
+                            <option value="@ProductionOrderStageProgress.StageOnHold">On hold</option>
                             <option value="@ProductionOrderStageProgress.StageCompleted">Completed</option>
                         </select>
                     </div>
@@ -1085,7 +1086,10 @@
                     selW.appendChild(o);
                 });
                 var mark = (d.stageStatus || d.StageStatus || "").toString();
-                document.getElementById("poOpMarkAs").value = mark === "Completed" ? "Completed" : "InProgress";
+                var poMark = document.getElementById("poOpMarkAs");
+                if (mark === "Completed") poMark.value = "Completed";
+                else if (mark === "OnHold") poMark.value = "OnHold";
+                else poMark.value = "InProgress";
                 var modalEl = document.getElementById("poOperationModal");
                 if (modalEl && typeof bootstrap !== "undefined")
                     bootstrap.Modal.getOrCreateInstance(modalEl).show();

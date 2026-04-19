@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.Linq;
+using System.Text.Json;
 using AU_ERP.Models;
 using AU_ERP.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -56,18 +58,6 @@ namespace AU_ERP.Main_Controller
             ViewBag.DistributionChannels = dist;
             ViewBag.DistributionChannelsJson = JsonSerializer.Serialize(dist.Select(d => new { id = d.DistributionChannelID, name = d.DistributionChannelName }));
 
-            var salesRows = await _db.SalesSchemaRows.AsNoTracking()
-                .OrderBy(s => s.SalesType)
-                .ThenBy(s => s.ConditionTypeID)
-                .ToListAsync(ct);
-            ViewBag.SalesSchemaRows = salesRows;
-            ViewBag.SalesSchemaRowsJson = JsonSerializer.Serialize(salesRows.Select(s => new
-            {
-                id = s.ConditionTypeID,
-                salesType = s.SalesType,
-                label = $"{s.ConditionType} — {s.ConditionDescription}"
-            }));
-
             var purchRows = await _db.PurchaseSchemeRows.AsNoTracking().OrderBy(p => p.ConditionID).ToListAsync(ct);
             ViewBag.PurchaseSchemeRows = purchRows;
             ViewBag.PurchaseSchemesJson = JsonSerializer.Serialize(purchRows.Select(p => new
@@ -85,6 +75,37 @@ namespace AU_ERP.Main_Controller
                 m.BPTypeId = null;
             if (m.BPGroupingId == 0)
                 m.BPGroupingId = null;
+        }
+
+        private static readonly string[] BpPaymentTermsAllowed = { "10-days", "15-days", "30-days" };
+        private static readonly string[] BpPaymentMethodsAllowed = { "Cash", "Cheque", "Online" };
+
+        private void ValidateBpPaymentAndSalesFields(BusinessPartnerMasterSample m)
+        {
+            var pt = m.PaymentTerms?.Trim();
+            if (!string.IsNullOrEmpty(pt) && Array.IndexOf(BpPaymentTermsAllowed, pt) < 0)
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.PaymentTerms), "Payment terms must be 10-days, 15-days, or 30-days.");
+
+            var pm = m.PaymentMethods?.Trim();
+            if (!string.IsNullOrEmpty(pm) && Array.IndexOf(BpPaymentMethodsAllowed, pm) < 0)
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.PaymentMethods), "Payment method must be Cash, Cheque, or Online.");
+
+            var ss = m.SalesSchema?.Trim();
+            if (string.IsNullOrEmpty(ss))
+                return;
+            if (string.Equals(ss, "Walk-in", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(ss, "Walk-In", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(ss, "WALKIN", StringComparison.OrdinalIgnoreCase))
+            {
+                m.SalesSchema = "Walk-in";
+                return;
+            }
+            if (string.Equals(ss, "Dealer", StringComparison.OrdinalIgnoreCase))
+            {
+                m.SalesSchema = "Dealer";
+                return;
+            }
+            ModelState.AddModelError(nameof(BusinessPartnerMasterSample.SalesSchema), "Sales schema must be Walk-in or Dealer.");
         }
 
         private async Task<string> AllocateNewBpIdAsync(CancellationToken ct = default)
@@ -246,6 +267,7 @@ namespace AU_ERP.Main_Controller
         {
             await PrepareBpLookupListsAsync(ct);
             NormalizePartnerFkIds(model);
+            ValidateBpPaymentAndSalesFields(model);
 
             if (string.IsNullOrWhiteSpace(model.FullName))
             {
@@ -367,6 +389,13 @@ namespace AU_ERP.Main_Controller
         public async Task<JsonResult> UpdatePartner(BusinessPartnerMasterSample model, CancellationToken ct = default)
         {
             NormalizePartnerFkIds(model);
+            ValidateBpPaymentAndSalesFields(model);
+            if (!ModelState.IsValid)
+            {
+                var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+                return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
+            }
 
             if (string.IsNullOrWhiteSpace(model.BPID))
                 return Json(new { success = false, message = "Missing partner ID." });

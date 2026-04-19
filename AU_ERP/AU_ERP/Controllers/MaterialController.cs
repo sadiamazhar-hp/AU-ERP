@@ -43,7 +43,8 @@ namespace AU_ERP.Main_Controller
             ViewBag.IndustrySectors = new List<SelectListItem>
             {
                 new SelectListItem { Text = "Mechanical Engineering", Value = "M" },
-                new SelectListItem { Text = "Chemical Industry", Value = "C" }
+                new SelectListItem { Text = "Chemical Industry", Value = "C" },
+                new SelectListItem { Text = "Manufacturing Industry", Value = "MI" }
             };
 
             ViewBag.UomList = _context.UnitOfMeasurements.AsNoTracking()

@@ -1,11 +1,11 @@
 @model AU_ERP.Models.OperationTrackingPageVm
 @using System.Globalization
+@using System.Linq
 @using AU_ERP.Models
 @{
     ViewData["Title"] = "Production Stage Tracking";
     var uom = string.IsNullOrWhiteSpace(Model.UomCode) ? "" : Model.UomCode;
-    var activeStage = Model.Stages.FirstOrDefault(s => s.StageStatus == ProductionOrderStageProgress.StageInProgress);
-    var activeStageId = activeStage?.Id;
+    var activeStageId = Model.ActiveStageProgressId;
     string FmtDate(DateTime d) => d.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
     string PriClass(string p) => p switch
     {
@@ -43,14 +43,29 @@
         .otd-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
         .otd-badge-done { background: #d1e7dd; color: #0f5132; }
         .otd-badge-run { background: #fff3cd; color: #664d03; }
+        .otd-badge-hold { background: #fde8d4; color: #7a4a12; }
         .otd-badge-wait { background: #e2e3e5; color: #41464b; }
-        .otd-stepper-wrap { background: #fff; border: 1px solid rgba(56, 128, 135, 0.15); border-radius: .65rem; padding: .85rem 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-        .otd-stepper-wrap .lbl { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #7a8f91; margin-bottom: .55rem; }
-        .otd-stepper { display: flex; flex-wrap: wrap; gap: .5rem; align-items: stretch; }
-        .otd-step { flex: 1 1 6rem; min-width: 5rem; border: 1px solid #e0e6e6; border-radius: .5rem; padding: .55rem .6rem; text-align: center; font-size: .76rem; background: #fafcfc; color: #666; transition: border-color .15s, box-shadow .15s; }
-        .otd-step.otd-step-done { border-color: #28a745; background: linear-gradient(180deg, #f4fff7, #e8f8ec); color: #0f5132; }
-        .otd-step.otd-step-active { border-color: #388087; background: linear-gradient(180deg, #f0fafb, #e4f5f3); color: #1a5c63; font-weight: 600; box-shadow: 0 0 0 2px rgba(56,128,135,.18); }
-        .otd-step .otd-step-ico { font-size: 1.15rem; line-height: 1.2; }
+        .otd-stepper-wrap { background: #fff; border: 1px solid rgba(56, 128, 135, 0.15); border-radius: .65rem; padding: .85rem 1rem 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+        .otd-stepper-wrap .lbl { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #7a8f91; margin-bottom: .65rem; }
+        .otd-h-main { display: flex; width: 100%; align-items: flex-start; gap: 0; }
+        .otd-h-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: stretch; padding: 0 .2rem; }
+        .otd-h-label { text-align: center; font-size: .76rem; color: #5d6f71; margin-bottom: .35rem; font-weight: 500; line-height: 1.25; min-height: 2.15rem; display: flex; align-items: flex-end; justify-content: center; }
+        .otd-h-join { display: flex; align-items: center; width: 100%; margin: .1rem 0 .5rem; }
+        .otd-h-line { flex: 1 1 auto; height: 2px; background: #cfd8d8; border-radius: 1px; min-width: 4px; border: 0; }
+        .otd-h-line.otd-h-line-hide { visibility: hidden; }
+        .otd-h-disc { width: 2rem; height: 2rem; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: .82rem; font-weight: 700; color: #fff; background: #9aa5a6; box-sizing: border-box; }
+        .otd-h-disc-done { background: #1f8a5b; }
+        .otd-h-disc-active { background: #388087; }
+        .otd-h-disc-hold { background: #b35c0a; }
+        .otd-h-machines-wrap { margin-top: .35rem; padding-top: .5rem; border-top: 1px dashed #e3e9e9; width: 100%; }
+        .otd-h-sub { display: flex; width: 100%; align-items: flex-start; }
+        .otd-h-subcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: stretch; padding: 0 .06rem; }
+        .otd-h-sublabel { text-align: center; font-size: .64rem; color: #5c6a6c; margin-bottom: .2rem; line-height: 1.2; max-height: 2.35rem; overflow: hidden; }
+        .otd-h-submeta { text-align: center; font-size: .58rem; color: #7d8b8d; line-height: 1.25; margin-bottom: .18rem; }
+        .otd-h-subdisc { width: 1.42rem; height: 1.42rem; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: .6rem; font-weight: 700; color: #fff; background: #aeb6b7; margin: 0 auto; }
+        .otd-h-subjoin { display: flex; align-items: center; width: 100%; margin: .08rem 0 .15rem; }
+        .otd-h-subline { flex: 1 1 auto; height: 1px; background: #dce2e2; min-width: 2px; border: 0; }
+        .otd-h-subline.otd-h-line-hide { visibility: hidden; }
         .otd-table-card { background: #fff; border: 1px solid rgba(56, 128, 135, 0.18); border-radius: .65rem; padding: 1rem 1.15rem; box-shadow: 0 2px 12px rgba(0,0,0,.035); }
         .otd-table-card .otd-tbar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .9rem; align-items: center; }
         .otd-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .83rem; border-radius: .45rem; overflow: hidden; border: 1px solid #e8ecec; }
@@ -90,6 +105,7 @@
             <div><div class="k">Tracking status</div><div class="v">
                 @{
                     var badgeCls = Model.OverallStatusLabel.Contains("Completed", StringComparison.OrdinalIgnoreCase) ? "otd-badge otd-badge-done"
+                        : Model.OverallStatusLabel.Contains("hold", StringComparison.OrdinalIgnoreCase) ? "otd-badge otd-badge-hold"
                         : Model.OverallStatusLabel.Contains("progress", StringComparison.OrdinalIgnoreCase) ? "otd-badge otd-badge-run"
                         : "otd-badge otd-badge-wait";
                 }
@@ -110,30 +126,62 @@
     {
         <div class="otd-stepper-wrap">
             <div class="lbl">Stages</div>
-            <div class="otd-stepper" aria-label="Stages">
+            <div class="otd-h-main" aria-label="Stages">
                 @{
+                    var nSt = Model.Stages.Count;
                     var si = 0;
                     foreach (var s in Model.Stages)
                     {
                         si++;
-                        var shortTitle = string.IsNullOrWhiteSpace(s.StageTitle) ? ("Stage " + si) : (s.StageTitle!.Length > 24 ? s.StageTitle[..24] + "…" : s.StageTitle);
-                        var cls = "otd-step";
-                        if (s.StageStatus == ProductionOrderStageProgress.StageCompleted) cls += " otd-step-done";
-                        else if (s.StageStatus == ProductionOrderStageProgress.StageInProgress) cls += " otd-step-active";
-                        <div class="@cls" title="@s.StageTitle">
-                            @if (s.StageStatus == ProductionOrderStageProgress.StageCompleted)
-                            {
-                                <div class="otd-step-ico text-success"><i class="bi bi-check-circle-fill"></i></div>
-                            }
-                            else if (s.StageStatus == ProductionOrderStageProgress.StageInProgress)
-                            {
-                                <div class="otd-step-ico"><i class="bi bi-play-circle-fill text-primary"></i></div>
-                            }
-                            else
-                            {
-                                <div class="otd-step-ico text-secondary"><i class="bi bi-circle"></i></div>
-                            }
-                            <div>@shortTitle</div>
+                        var title = string.IsNullOrWhiteSpace(s.StageTitle) ? ("Stage " + si) : s.StageTitle!;
+                        var label = title.Length > 28 ? title[..28] + "…" : title;
+                        var discCls = "otd-h-disc";
+                        if (string.Equals(s.StageStatus, ProductionOrderStageProgress.StageCompleted, StringComparison.OrdinalIgnoreCase))
+                            discCls += " otd-h-disc-done";
+                        else if (string.Equals(s.StageStatus, ProductionOrderStageProgress.StageOnHold, StringComparison.OrdinalIgnoreCase))
+                            discCls += " otd-h-disc-hold";
+                        else if (string.Equals(s.StageStatus, ProductionOrderStageProgress.StageInProgress, StringComparison.OrdinalIgnoreCase))
+                            discCls += " otd-h-disc-active";
+                        Model.MachinesByStageProgressId.TryGetValue(s.Id, out var machines);
+                        machines ??= new List<OperationStageMachineLineVm>();
+                        var mList = machines.OrderBy(m => m.Sequence).ToList();
+                        <div class="otd-h-col">
+                            <div class="otd-h-label" title="@title">@label</div>
+                            <div class="otd-h-join">
+                                <hr class="otd-h-line @(si <= 1 ? "otd-h-line-hide" : "")" />
+                                <span class="@discCls" title="@s.StageStatus">@si</span>
+                                <hr class="otd-h-line @(si >= nSt ? "otd-h-line-hide" : "")" />
+                            </div>
+                            <div class="otd-h-machines-wrap">
+                                @if (mList.Count == 0)
+                                {
+                                    <div class="text-center small text-muted py-1">No work centres in routing</div>
+                                }
+                                else
+                                {
+                                    var nm = mList.Count;
+                                    var mi = 0;
+                                    <div class="otd-h-sub" aria-label="Work centres for this operation">
+                                        @foreach (var m in mList)
+                                        {
+                                            mi++;
+                                            var u = string.IsNullOrWhiteSpace(m.TimeUom) ? "" : m.TimeUom;
+                                            var lab = m.DisplayName.Length > 22 ? m.DisplayName[..22] + "…" : m.DisplayName;
+                                            var lt = m.LaborTime.HasValue ? m.LaborTime.Value.ToString("0.###", CultureInfo.InvariantCulture) : "—";
+                                            var mt = m.MachineTime.HasValue ? m.MachineTime.Value.ToString("0.###", CultureInfo.InvariantCulture) : "—";
+                                            <div class="otd-h-subcol">
+                                                <div class="otd-h-sublabel" title="@m.DisplayName">@lab</div>
+                                                <div class="otd-h-submeta">Labor @lt @u · Mach @mt @u</div>
+                                                <div class="otd-h-subjoin">
+                                                    <hr class="otd-h-subline @(mi <= 1 ? "otd-h-line-hide" : "")" />
+                                                    <span class="otd-h-subdisc">@mi</span>
+                                                    <hr class="otd-h-subline @(mi >= nm ? "otd-h-line-hide" : "")" />
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
                         </div>
                     }
                 }
@@ -145,7 +193,6 @@
                 <button type="button" class="btn text-white shadow-sm" style="background:var(--au-primary-dark,#388087);" id="otBtnUpdate" @(activeStageId == null ? "disabled" : "") onclick="otOpenUpdateModal()">
                     <i class="bi bi-pencil-square"></i> Update active stage
                 </button>
-                <button type="button" class="btn btn-outline-secondary" onclick="otPostGrStub()"><i class="bi bi-box-seam"></i> Post goods receipt</button>
             </div>
 
             <div class="au-validation-summary mb-2" id="otPageValidation" style="display:none;" role="alert"></div>
@@ -184,6 +231,7 @@
                                 {
                                     ProductionOrderStageProgress.StageCompleted => "Completed",
                                     ProductionOrderStageProgress.StageInProgress => "In progress",
+                                    ProductionOrderStageProgress.StageOnHold => "On hold",
                                     ProductionOrderStageProgress.StagePending => "Pending",
                                     _ => s.StageStatus
                                 };
@@ -245,7 +293,8 @@
                     <div class="col-12">
                         <label class="form-label small">Mark stage as <span class="text-danger">*</span></label>
                         <select class="form-select" id="otMarkAs">
-                            <option value="@ProductionOrderStageProgress.StageInProgress">In-Progress</option>
+                            <option value="@ProductionOrderStageProgress.StageInProgress">In progress</option>
+                            <option value="@ProductionOrderStageProgress.StageOnHold">On hold</option>
                             <option value="@ProductionOrderStageProgress.StageCompleted">Completed</option>
                         </select>
                     </div>
@@ -263,23 +312,6 @@
     </div>
 </div>
 
-<div class="modal fade" id="otGrStubModal" tabindex="-1" aria-labelledby="otGrStubModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="otGrStubModalLabel">Post goods receipt</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p class="mb-0">Goods receipt posting is not implemented in this version.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 @section Scripts {
 <script>
     (function otReparentModals() {
@@ -289,7 +321,7 @@
             if (el.parentElement !== document.body) document.body.appendChild(el);
         }
         function init() {
-            ["otUpdateStageModal", "otGrStubModal"].forEach(function (id) {
+            ["otUpdateStageModal"].forEach(function (id) {
                 var el = document.getElementById(id);
                 if (!el) return;
                 el.addEventListener("show.bs.modal", function () { ensureOnBody(id); });
@@ -362,7 +394,10 @@
                     selW.appendChild(o);
                 });
                 var mark = (d.stageStatus || d.StageStatus || "").toString();
-                document.getElementById("otMarkAs").value = mark === "Completed" ? "Completed" : "InProgress";
+                var markEl = document.getElementById("otMarkAs");
+                if (mark === "Completed") markEl.value = "Completed";
+                else if (mark === "OnHold") markEl.value = "OnHold";
+                else markEl.value = "InProgress";
                 var modalEl = document.getElementById("otUpdateStageModal");
                 if (modalEl && typeof bootstrap !== "undefined")
                     bootstrap.Modal.getOrCreateInstance(modalEl).show();
@@ -402,10 +437,5 @@
         }).catch(function () { otShowInline("otModalValidation", "Request failed."); });
     }
 
-    function otPostGrStub() {
-        var el = document.getElementById("otGrStubModal");
-        if (el && typeof bootstrap !== "undefined")
-            bootstrap.Modal.getOrCreateInstance(el).show();
-    }
 </script>
 }

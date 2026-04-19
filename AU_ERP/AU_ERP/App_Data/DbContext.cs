@@ -34,6 +34,7 @@ namespace AU_ERP.Models
         public DbSet<ProductionOrder> ProductionOrders { get; set; }
         public DbSet<ProductionOrderStageProgress> ProductionOrderStageProgresses { get; set; }
         public DbSet<StockInventoryLine> StockInventoryLines { get; set; }
+        public DbSet<GoodsProduceBatch> GoodsProduceBatches { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -367,6 +368,40 @@ namespace AU_ERP.Models
                 .HasOne(s => s.RoutingOperationHeader)
                 .WithMany()
                 .HasForeignKey(s => s.RoutingOperationHeaderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .Property(g => g.ProducedQty)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .Property(g => g.QtyFirstQuality)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .Property(g => g.QtySecondQuality)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .Property(g => g.QtyThirdQuality)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .Property(g => g.RejectedScrapQty)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .HasIndex(g => g.ProductionOrderId)
+                .IsUnique();
+
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .HasOne(g => g.ProductionOrder)
+                .WithMany(p => p.GoodsProduceBatches)
+                .HasForeignKey(g => g.ProductionOrderId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<StockInventoryLine>()

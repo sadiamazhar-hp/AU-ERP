@@ -161,10 +161,10 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label">Industry Sector</label>
-                        @Html.DropDownListFor(m => m.IndustrySectorCode, new List<SelectListItem> {
-                            new SelectListItem { Text = "Mechanical Engineering", Value = "M" },
-                            new SelectListItem { Text = "Chemical Industry", Value = "C" }
-                        }, "Select Sector", new { @class = "form-control req" })
+                        @Html.DropDownListFor(m => m.IndustrySectorCode,
+                            ViewBag.IndustrySectors as IEnumerable<SelectListItem>,
+                            "Select Sector",
+                            new { @class = "form-control req" })
                     </div>
                     <div class="col-12">
                         <label class="form-label">Material Type</label>
@@ -226,29 +226,11 @@
                         <div class="col-md-6">
                             <label class="form-label">Purchasing Group</label>
                             @Html.DropDownListFor(m => m.PurchasingGroupCode, purchasingGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">GR Processing Time</label>
+                            <label class="form-label mt-2">GR Processing Time</label>
                             <div class="input-group input-group-sm">
                                 @Html.EditorFor(m => m.GrProcessingTime, new { htmlAttributes = new { @class = "form-control", type = "number", min = "0", step = "1" } })
                                 @Html.DropDownListFor(m => m.GrProcessingUom, grProcessingUomItemsV2, "-- UOM --", new { @class = "form-select", style = "max-width:8rem;" })
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tab-pane fade" id="@("v2mrp" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2mrp-tab" + V2IdAffix)">
-                <div class="v2-frame">
-                    <div class="v2-frame-title">MRP Data</div>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label">MRP Type</label>
-                            @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
-                            <label class="form-label mt-2">Procurement Type</label>
-                            @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
-                            <label class="form-label mt-2">Strategy Group</label>
-                            @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Lead time</label>
@@ -266,6 +248,22 @@
                                 @Html.TextBoxFor(m => m.ReorderPoint, new { @class = "form-control", type = "number", min = "0", step = "1", id = "ReorderPointV2" + V2IdAffix })
                                 <span class="input-group-text" id="@("mrpReorderUomLbl" + V2IdAffix)">—</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="@("v2mrp" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2mrp-tab" + V2IdAffix)">
+                <div class="v2-frame">
+                    <div class="v2-frame-title">MRP Data</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">MRP Type</label>
+                            @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            <label class="form-label mt-2">Procurement Type</label>
+                            @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            <label class="form-label mt-2">Strategy Group</label>
+                            @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                         </div>
                     </div>
                 </div>

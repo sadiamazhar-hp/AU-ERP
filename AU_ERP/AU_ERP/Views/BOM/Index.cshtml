@@ -242,7 +242,11 @@
                                 {
                                     foreach (var item in bomLevels)
                                     {
-                                        <option value="@item.Value">@item.Text</option>
+                                        var lvlName = (item.Text ?? "").Trim();
+                                        var headerMatType = string.Equals(lvlName, "FG", StringComparison.OrdinalIgnoreCase) ? "FERT"
+                                            : string.Equals(lvlName, "SFG", StringComparison.OrdinalIgnoreCase) ? "HALB"
+                                            : (item.Value == "1" ? "FERT" : item.Value == "2" ? "HALB" : "");
+                                        <option value="@item.Value" data-header-material-type="@headerMatType">@item.Text</option>
                                     }
                                 }
                             </select>
@@ -270,17 +274,9 @@
                         </div>
                     </div>
                     <div class="row g-3 mt-1">
-                        <div class="col-md-3">
-                            <label class="form-label"><span class="mandatory-bar"></span> Assembly type</label>
-                            <select id="bomCreateHeaderMatType" class="form-select form-select-sm" title="Stored as material type HALB or FERT">
-                                <option value="">-- Select --</option>
-                                <option value="HALB">SFG (semi-finished)</option>
-                                <option value="FERT">FG (finished good)</option>
-                            </select>
-                        </div>
-                        <div class="col-md-9">
-                            <label class="form-label"><span class="mandatory-bar"></span> Material</label>
-                            <div class="bom-mat-picker" data-purpose="header" data-mat-type-select-id="bomCreateHeaderMatType">
+                        <div class="col-12">
+                            <label class="form-label"><span class="mandatory-bar"></span> Material <span class="text-muted small fw-normal">(FG → FERT, SFG → HALB per BOM level)</span></label>
+                            <div class="bom-mat-picker" data-purpose="header" data-bom-level-select-id="bomCreateBLevel">
                                 <input type="text" class="form-control form-control-sm bom-mat-picker-search" id="bomCreateHeaderMatSearch" placeholder="Search material number or description…" autocomplete="off" />
                                 <input type="hidden" id="bomCreateHeaderMat" class="bom-mat-picker-value" value="" />
                                 <div class="bom-mat-picker-dropdown" id="bomCreateHeaderMatDd"></div>
@@ -412,7 +408,11 @@
                                 {
                                     foreach (var item in bomLevels)
                                     {
-                                        <option value="@item.Value">@item.Text</option>
+                                        var lvlNameE = (item.Text ?? "").Trim();
+                                        var headerMatTypeE = string.Equals(lvlNameE, "FG", StringComparison.OrdinalIgnoreCase) ? "FERT"
+                                            : string.Equals(lvlNameE, "SFG", StringComparison.OrdinalIgnoreCase) ? "HALB"
+                                            : (item.Value == "1" ? "FERT" : item.Value == "2" ? "HALB" : "");
+                                        <option value="@item.Value" data-header-material-type="@headerMatTypeE">@item.Text</option>
                                     }
                                 }
                             </select>
@@ -507,6 +507,12 @@
             bomCloseAllMatPickers();
     });
 
+    function bomGetHeaderMaterialTypeFromLevelSel(sel) {
+        if (!sel || !sel.value) return "";
+        var opt = sel.options[sel.selectedIndex];
+        return (opt && opt.getAttribute("data-header-material-type") || "").trim().toUpperCase();
+    }
+
     function bomMatPickerBuildUrl(purpose, q, matType) {
         var url = bomSearchMaterialsUrl + "?purpose=" + encodeURIComponent(purpose) + "&q=" + encodeURIComponent(q || "");
         if (purpose === "header" && matType)
@@ -526,11 +532,11 @@
         if (!dd) return;
         var matType = "";
         if (purpose === "header") {
-            var selId = wrap.getAttribute("data-mat-type-select-id");
-            var sel = selId ? document.getElementById(selId) : null;
-            matType = sel && sel.value ? sel.value : "";
+            var lvlId = wrap.getAttribute("data-bom-level-select-id");
+            var lvlSel = lvlId ? document.getElementById(lvlId) : null;
+            matType = bomGetHeaderMaterialTypeFromLevelSel(lvlSel);
             if (!matType) {
-                dd.innerHTML = '<div class="bom-mat-picker-empty">Select Material Type first.</div>';
+                dd.innerHTML = '<div class="bom-mat-picker-empty">Select BOM level (FG / SFG) first.</div>';
                 dd.classList.add("show");
                 return;
             }
@@ -633,9 +639,10 @@
         var tbody = document.getElementById(tbodyId);
         if (!tbody) return;
         if (tbodyId === "bomCreateItemsBody") {
-            var htC = document.getElementById("bomCreateHeaderMatType");
-            if (!htC || !(htC.value || "").trim()) {
-                bomShowInline(bomCreateFormRoot(), [htC], "Select assembly type (FG / SFG) before adding components.");
+            var blC = document.getElementById("bomCreateBLevel");
+            var hmC = document.getElementById("bomCreateHeaderMat");
+            if (!blC || !(blC.value || "").trim() || !hmC || !(hmC.value || "").trim()) {
+                bomShowInline(bomCreateFormRoot(), [blC, hmC].filter(Boolean), "Select BOM level and header material before adding components.");
                 return;
             }
         }
@@ -703,14 +710,13 @@
         var c = document.getElementById("bomCreateCode");
         var t = document.getElementById("bomCreateTitle");
         var lv = document.getElementById("bomCreateBLevel");
-        var ht = document.getElementById("bomCreateHeaderMatType");
         var hm = document.getElementById("bomCreateHeaderMat");
         var hms = document.getElementById("bomCreateHeaderMatSearch");
         var code = (c && c.value || "").trim();
         if (code && code.length > 20) bad.push(c);
         if (!(t && (t.value || "").trim())) bad.push(t);
         if (!(lv && (lv.value || "").trim())) bad.push(lv);
-        if (!(ht && (ht.value || "").trim())) bad.push(ht);
+        if (!bomGetHeaderMaterialTypeFromLevelSel(lv)) bad.push(lv);
         if (!(hm && (hm.value || "").trim())) bad.push(hms || hm);
         return bad;
     }
@@ -772,8 +778,6 @@
         document.getElementById("bomCreatePlant").value = "";
         document.getElementById("bomCreateBaseQty").value = "1";
         document.getElementById("bomCreateValidFrom").value = "";
-        var ht = document.getElementById("bomCreateHeaderMatType");
-        if (ht) ht.value = "";
         var hm = document.getElementById("bomCreateHeaderMat");
         if (hm) hm.value = "";
         var hms = document.getElementById("bomCreateHeaderMatSearch");
@@ -822,7 +826,7 @@
             Plant: document.getElementById("bomCreatePlant").value || null,
             BaseQty: parseFloat(document.getElementById("bomCreateBaseQty").value) || null,
             ValidFrom: document.getElementById("bomCreateValidFrom").value || null,
-            HeaderMaterialTypeCode: document.getElementById("bomCreateHeaderMatType")?.value || null,
+            HeaderMaterialTypeCode: bomGetHeaderMaterialTypeFromLevelSel(document.getElementById("bomCreateBLevel")) || null,
             BomMaterialNumber: (document.getElementById("bomCreateHeaderMat")?.value || "").trim() || null,
             Items: bomCollectItems("bomCreateItemsBody")
         };
@@ -980,8 +984,8 @@
     }
 
     (function () {
-        var ct = document.getElementById("bomCreateHeaderMatType");
-        if (ct) ct.addEventListener("change", function () {
+        var bl = document.getElementById("bomCreateBLevel");
+        if (bl) bl.addEventListener("change", function () {
             var hm = document.getElementById("bomCreateHeaderMat");
             var hms = document.getElementById("bomCreateHeaderMatSearch");
             if (hm) hm.value = "";

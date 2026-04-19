@@ -8,6 +8,7 @@ namespace AU_ERP.Models
     {
         public const string StagePending = "Pending";
         public const string StageInProgress = "InProgress";
+        public const string StageOnHold = "OnHold";
         public const string StageCompleted = "Completed";
 
         [Key]

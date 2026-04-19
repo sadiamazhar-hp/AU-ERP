@@ -2,19 +2,14 @@
 @using AU_ERP.Models
 @{
     ViewData["Title"] = "Operation Tracking";
-    string StatusLabel(string s) => s switch
+    string OverallBadgeClass(string? label) => (label ?? "") switch
     {
-        ProductionOrder.StatusPlanned => "Planned",
-        ProductionOrder.StatusReleased => "Released",
-        ProductionOrder.StatusInProgress => "In progress",
-        ProductionOrder.StatusCompleted => "Completed",
-        _ => s
-    };
-    string StatusBadgeClass(string s) => s switch
-    {
-        ProductionOrder.StatusReleased => "otl-badge otl-rel",
-        ProductionOrder.StatusInProgress => "otl-badge otl-run",
-        ProductionOrder.StatusCompleted => "otl-badge otl-done",
+        "Completed" => "otl-badge otl-done",
+        "In progress" => "otl-badge otl-run",
+        "On hold" => "otl-badge otl-hold",
+        "Released" => "otl-badge otl-rel",
+        "Planned" => "otl-badge otl-muted",
+        "Pending" => "otl-badge otl-muted",
         _ => "otl-badge otl-muted"
     };
 }
@@ -33,6 +28,7 @@
         .otl-badge { display: inline-block; padding: .18rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; white-space: nowrap; }
         .otl-rel { background: #cff4fc; color: #055160; }
         .otl-run { background: #fff3cd; color: #664d03; }
+        .otl-hold { background: #fde8d4; color: #7a4a12; }
         .otl-done { background: #d1e7dd; color: #0f5132; }
         .otl-muted { background: #eee; color: #555; }
         .otl-item { font-size: .82rem; color: #444; line-height: 1.35; margin-bottom: .65rem; min-height: 2.4rem; }
@@ -40,9 +36,12 @@
         .otl-meta span { color: #999; display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
         .otl-progress { height: .35rem; background: #e8ecec; border-radius: 999px; overflow: hidden; margin-bottom: .75rem; }
         .otl-progress-fill { height: 100%; background: linear-gradient(90deg, #388087, #4db896); border-radius: 999px; min-width: 2px; transition: width .25s ease; }
-        .otl-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
-        .otl-actions .btn { font-size: .78rem; padding: .32rem .65rem; border-radius: .35rem; }
+        .otl-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; align-items: stretch; }
+        .otl-actions .btn { width: 100%; font-size: .78rem; padding: .32rem .65rem; border-radius: .35rem; }
         .otl-empty { text-align: center; padding: 2.5rem 1rem; color: #666; background: #f8faf9; border-radius: .65rem; border: 1px dashed rgba(56,128,135,.3); }
+        .otl-gr-breakdown { border: 1px solid var(--border, #dee2e6); border-radius: .5rem; padding: 1rem; background: var(--bg, #f8f9fa); }
+        .otl-gr-sum-ok { color: #0f5132; }
+        .otl-gr-sum-bad { color: #842029; }
     </style>
 }
 
@@ -66,10 +65,16 @@
             {
                 var pct = o.StagesTotal > 0 ? (int)Math.Round(100.0 * o.StagesCompleted / o.StagesTotal) : 0;
                 var uom = string.IsNullOrWhiteSpace(o.UomCode) ? "" : o.UomCode;
+                var canPostGr = o.StagesTotal > 0 && o.StagesCompleted == o.StagesTotal && !o.GoodsReceiptPosted;
+                var grDisabledTitle = o.GoodsReceiptPosted
+                    ? "Goods receipt has already been posted for this order."
+                    : (o.StagesTotal == 0 || o.StagesCompleted < o.StagesTotal
+                        ? "Complete all operation stages on this order before posting goods receipt."
+                        : "");
                 <article class="otl-card">
                     <div class="otl-card-top">
                         <div class="otl-po">PO-@o.ProductionNumber</div>
-                        <span class="@StatusBadgeClass(o.Status)">@StatusLabel(o.Status)</span>
+                        <span class="@OverallBadgeClass(o.OverallStatusLabel)">@o.OverallStatusLabel</span>
                     </div>
                     <div class="otl-item">@(string.IsNullOrWhiteSpace(o.FinishedItemLabel) ? "—" : o.FinishedItemLabel)</div>
                     <div class="otl-meta">
@@ -82,10 +87,189 @@
                     }
                     <div class="otl-progress" title="@o.StagesCompleted of @o.StagesTotal stages complete"><div class="otl-progress-fill" style="width:@(pct)%"></div></div>
                     <div class="otl-actions">
-                        <a class="btn text-white" style="background:var(--au-primary-dark,#388087);" asp-action="Details" asp-route-productionOrderId="@o.ProductionOrderId">View tracking</a>
+                        <a class="btn btn-primary btn-sm" asp-action="Details" asp-route-productionOrderId="@o.ProductionOrderId">View tracking</a>
+                        @if (canPostGr)
+                        {
+                            <button type="button"
+                                    class="btn btn-success btn-sm"
+                                    data-po-id="@o.ProductionOrderId"
+                                    data-po-num="@o.ProductionNumber"
+                                    onclick="otlOpenGoodsReceipt(this)">
+                                <i class="bi bi-box-seam me-1"></i>Post goods receipt
+                            </button>
+                        }
+                        else if (o.GoodsReceiptPosted)
+                        {
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    disabled
+                                    title="Goods receipt has already been posted for this order.">
+                                <i class="bi bi-check2-circle me-1"></i>Goods receipt posted
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="btn btn-success btn-sm"
+                                    disabled
+                                    title="@grDisabledTitle">
+                                <i class="bi bi-box-seam me-1"></i>Post goods receipt
+                            </button>
+                        }
                     </div>
                 </article>
             }
         </div>
     }
 </div>
+
+@await Html.PartialAsync("_OperationTrackingGoodsReceiptModal")
+
+@section Scripts {
+<script>
+(function () {
+    function ensureModalOnBody() {
+        var el = document.getElementById("otGoodsReceiptModal");
+        if (el && el.parentElement !== document.body) document.body.appendChild(el);
+    }
+    function initReparent() {
+        var el = document.getElementById("otGoodsReceiptModal");
+        if (!el) return;
+        el.addEventListener("show.bs.modal", ensureModalOnBody);
+        ensureModalOnBody();
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initReparent);
+    else initReparent();
+
+    function parseQty(id) {
+        var v = parseFloat(document.getElementById(id).value);
+        return isNaN(v) ? 0 : v;
+    }
+
+    function otlRefreshGrSum() {
+        var produced = parseQty("otGrProduced");
+        var sum = parseQty("otGrFirst") + parseQty("otGrSecond") + parseQty("otGrThird") + parseQty("otGrScrap");
+        var line = document.getElementById("otGrSumLine");
+        var sumVal = document.getElementById("otGrSumVal");
+        var echo = document.getElementById("otGrProducedEcho");
+        if (sumVal) sumVal.textContent = String(sum);
+        if (echo) echo.textContent = String(produced);
+        if (line) {
+            var ok = Math.abs(sum - produced) < 0.0001 && produced >= 0;
+            line.className = ok ? "otl-gr-sum-ok" : "otl-gr-sum-bad";
+        }
+    }
+
+    ["otGrProduced", "otGrFirst", "otGrSecond", "otGrThird", "otGrScrap"].forEach(function (id) {
+        var n = document.getElementById(id);
+        if (n) n.addEventListener("input", otlRefreshGrSum);
+    });
+
+    window.otlOpenGoodsReceipt = function (btn) {
+        var poId = parseInt(btn.getAttribute("data-po-id"), 10) || 0;
+        var poNum = btn.getAttribute("data-po-num") || "";
+        document.getElementById("otGrPoId").value = poId;
+        document.getElementById("otGrPoNumLabel").textContent = "PO-" + poNum;
+        var vEl = document.getElementById("otGrValidation");
+        if (vEl) { vEl.style.display = "none"; vEl.textContent = ""; }
+        document.getElementById("otGrBatch").value = "";
+        document.getElementById("otGrFirst").value = "0";
+        document.getElementById("otGrSecond").value = "0";
+        document.getElementById("otGrThird").value = "0";
+        document.getElementById("otGrScrap").value = "0";
+        var d = new Date();
+        var iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        document.getElementById("otGrDate").value = iso;
+
+        fetch("@Url.Action("GetGoodsReceiptPrefill", "OperationTracking")?productionOrderId=" + encodeURIComponent(poId))
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                var def = 0;
+                if (res.success && res.data) {
+                    var dq = res.data.defaultProducedQty != null ? res.data.defaultProducedQty : res.data.DefaultProducedQty;
+                    def = parseFloat(dq) || 0;
+                }
+                document.getElementById("otGrProduced").value = def > 0 ? String(def) : "";
+                otlRefreshGrSum();
+                var modalEl = document.getElementById("otGoodsReceiptModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            })
+            .catch(function () {
+                document.getElementById("otGrProduced").value = "";
+                otlRefreshGrSum();
+                var modalEl = document.getElementById("otGoodsReceiptModal");
+                if (modalEl && typeof bootstrap !== "undefined")
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            });
+    };
+
+    document.getElementById("otGrSubmitBtn").addEventListener("click", function () {
+        var vEl = document.getElementById("otGrValidation");
+        if (vEl) { vEl.style.display = "none"; vEl.textContent = ""; }
+        var poId = parseInt(document.getElementById("otGrPoId").value, 10) || 0;
+        if (!poId) {
+            if (vEl) { vEl.style.display = "block"; vEl.textContent = "Missing production order."; }
+            return;
+        }
+        var grDateStr = document.getElementById("otGrDate").value;
+        if (!grDateStr) {
+            if (vEl) { vEl.style.display = "block"; vEl.textContent = "GR date is required."; }
+            return;
+        }
+        var batch = (document.getElementById("otGrBatch").value || "").trim();
+        if (!batch) {
+            if (vEl) { vEl.style.display = "block"; vEl.textContent = "Batch number is required."; }
+            return;
+        }
+        var produced = parseQty("otGrProduced");
+        var q1 = parseQty("otGrFirst"), q2 = parseQty("otGrSecond"), q3 = parseQty("otGrThird"), qs = parseQty("otGrScrap");
+        if (produced < 0 || q1 < 0 || q2 < 0 || q3 < 0 || qs < 0) {
+            if (vEl) { vEl.style.display = "block"; vEl.textContent = "Quantities cannot be negative."; }
+            return;
+        }
+        if (Math.abs(produced - (q1 + q2 + q3 + qs)) > 0.0001) {
+            if (vEl) {
+                vEl.style.display = "block";
+                vEl.textContent = "Total produced must equal first quality + second quality + third quality + rejected/scrap.";
+            }
+            return;
+        }
+        var payload = {
+            productionOrderId: poId,
+            grDate: grDateStr,
+            producedQty: produced,
+            qtyFirstQuality: q1,
+            qtySecondQuality: q2,
+            qtyThirdQuality: q3,
+            rejectedScrapQty: qs,
+            batchNo: batch
+        };
+        fetch("@Url.Action("PostGoodsReceipt", "OperationTracking")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.success) {
+                var modalEl = document.getElementById("otGoodsReceiptModal");
+                if (modalEl && typeof bootstrap !== "undefined") {
+                    var inst = bootstrap.Modal.getInstance(modalEl);
+                    if (inst) inst.hide();
+                }
+                if (typeof window.materialShowSuccessModalThen === "function")
+                    window.materialShowSuccessModalThen(res.message || "Goods receipt posted.", function () { window.location.reload(); });
+                else {
+                    alert(res.message || "Goods receipt posted.");
+                    window.location.reload();
+                }
+            } else {
+                if (vEl) { vEl.style.display = "block"; vEl.textContent = res.message || "Post failed."; }
+            }
+        }).catch(function () {
+            if (vEl) { vEl.style.display = "block"; vEl.textContent = "Request failed."; }
+        });
+    });
+})();
+</script>
+}
+

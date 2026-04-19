@@ -704,6 +704,56 @@ namespace AU_ERP.Data.Migrations
                     b.ToTable("ProductionOrderStageProgresses");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.GoodsProduceBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchNo")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GrDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ProductionOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ProducedQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QtyFirstQuality")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QtySecondQuality")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QtyThirdQuality")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("RejectedScrapQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductionOrderId")
+                        .IsUnique();
+
+                    b.ToTable("GoodsProduceBatches");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.ProductionVersion", b =>
                 {
                     b.Property<int>("Id")
@@ -1203,6 +1253,17 @@ namespace AU_ERP.Data.Migrations
                     b.Navigation("RoutingOperationHeader");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.GoodsProduceBatch", b =>
+                {
+                    b.HasOne("AU_ERP.Models.ProductionOrder", "ProductionOrder")
+                        .WithMany("GoodsProduceBatches")
+                        .HasForeignKey("ProductionOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProductionOrder");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.ProductionVersion", b =>
                 {
                     b.HasOne("AU_ERP.Models.BomHeadersSample", "BomHeader")
@@ -1375,6 +1436,8 @@ namespace AU_ERP.Data.Migrations
 
             modelBuilder.Entity("AU_ERP.Models.ProductionOrder", b =>
                 {
+                    b.Navigation("GoodsProduceBatches");
+
                     b.Navigation("StageProgresses");
                 });
 
