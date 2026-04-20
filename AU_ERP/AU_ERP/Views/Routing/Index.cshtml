@@ -5,7 +5,6 @@
     var safeModel = Model ?? new List<AU_ERP.Models.RoutingHeadersSample>();
     var rtTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
-    var materialList = ViewBag.MaterialList as List<AU_ERP.Models.CreateMaterialMaster> ?? new List<AU_ERP.Models.CreateMaterialMaster>();
     var workCentres = ViewBag.WorkCentres as List<AU_ERP.Models.WorkCenterMasterSample> ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
     var rtWcJson = JsonSerializer.Serialize(workCentres.Select(w => new { id = w.ID, name = w.WorkCenterName ?? "", timeUom = w.TimeUom ?? "" }));
 }
@@ -45,6 +44,17 @@
     .rt-op-section { border: 1px solid #c4c4c4; border-radius: 4px; padding: .75rem 1rem; margin-bottom: .75rem; background: #fafbfc; }
     .rt-ops-summary-cell { max-width: 28rem; vertical-align: top; }
     .rt-ops-summary-cell .rt-op-sum-line { font-size: .78rem; line-height: 1.35; margin-bottom: .2rem; }
+
+    .rt-mat-picker { position: relative; }
+    .rt-mat-picker-dropdown {
+        display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 1055;
+        max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid var(--sap-border, #9fb2c5);
+        border-radius: 0 0 4px 4px; box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-top: 1px;
+    }
+    .rt-mat-picker-dropdown.show { display: block; }
+    .rt-mat-picker-item { cursor: pointer; font-size: .8125rem; }
+    .rt-mat-picker-empty { padding: 8px 10px; color: #666; font-size: .8rem; }
+    .rt-mat-picker-item .rt-mat-code { font-weight: 600; }
 </style>
 
 <div class="rt-module">
@@ -70,13 +80,11 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label"><span class="mandatory-bar"></span> Material</label>
-                            <select id="rtCreateMaterial" class="form-select form-select-sm">
-                                <option value="">-- Select --</option>
-                                @foreach (var m in materialList)
-                                {
-                                    <option value="@m.MaterialNumber">@m.MaterialNumber - @m.Description</option>
-                                }
-                            </select>
+                            <div class="rt-mat-picker" data-purpose="header">
+                                <input type="text" class="form-control form-control-sm rt-mat-picker-search" id="rtCreateMaterialSearch" placeholder="Search material number or description…" autocomplete="off" />
+                                <input type="hidden" id="rtCreateMaterial" value="" />
+                                <div class="rt-mat-picker-dropdown" id="rtCreateMaterialDd"></div>
+                            </div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label"><span class="mandatory-bar"></span> Plant</label>
@@ -228,13 +236,11 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Material</label>
-                            <select id="rtEditMaterial" class="form-select form-select-sm">
-                                <option value="">-- Select --</option>
-                                @foreach (var m in materialList)
-                                {
-                                    <option value="@m.MaterialNumber">@m.MaterialNumber - @m.Description</option>
-                                }
-                            </select>
+                            <div class="rt-mat-picker" data-purpose="header">
+                                <input type="text" class="form-control form-control-sm rt-mat-picker-search" id="rtEditMaterialSearch" placeholder="Search material number or description…" autocomplete="off" />
+                                <input type="hidden" id="rtEditMaterial" value="" />
+                                <div class="rt-mat-picker-dropdown" id="rtEditMaterialDd"></div>
+                            </div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label"><span class="mandatory-bar" style="display:inline-block;width:3px;height:14px;background:#b00;margin-right:4px;vertical-align:middle;"></span> Plant</label>
@@ -338,6 +344,93 @@
         if (s == null || s === undefined) return "";
         return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     }
+
+    var rtSearchMaterialsUrl = '@Url.Action("SearchBomMaterials", "BOM")';
+    var rtMatPickerTimers = {};
+
+    function rtCloseAllMatPickers() {
+        document.querySelectorAll(".rt-mat-picker-dropdown.show").forEach(function (d) {
+            d.classList.remove("show");
+            d.innerHTML = "";
+        });
+    }
+
+    document.addEventListener("mousedown", function (e) {
+        if (e.target.closest(".rt-mat-picker-dropdown"))
+            e.preventDefault();
+        else if (!e.target.closest(".rt-mat-picker"))
+            rtCloseAllMatPickers();
+    });
+
+    function rtMatPickerBuildUrl(q) {
+        return rtSearchMaterialsUrl + "?purpose=" + encodeURIComponent("header") + "&q=" + encodeURIComponent(q || "");
+    }
+
+    function rtMatPickerFetch(searchInput) {
+        var wrap = searchInput.closest(".rt-mat-picker");
+        if (!wrap) return;
+        var dd = wrap.querySelector(".rt-mat-picker-dropdown");
+        if (!dd) return;
+        fetch(rtMatPickerBuildUrl(searchInput.value))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    dd.innerHTML = '<div class="rt-mat-picker-empty">Could not load materials.</div>';
+                    dd.classList.add("show");
+                    return;
+                }
+                var items = data.items || [];
+                if (!items.length)
+                    dd.innerHTML = '<div class="rt-mat-picker-empty">No matches</div>';
+                else
+                    dd.innerHTML = items.map(function (it) {
+                        var uid = it.uomId != null && it.uomId !== undefined ? String(it.uomId) : "";
+                        var bu = it.baseUom != null ? String(it.baseUom) : "";
+                        return '<button type="button" class="rt-mat-picker-item list-group-item list-group-item-action py-1 px-2 text-start border-0 rounded-0" data-n="' + escRtAttr(it.n) + '" data-d="' + escRtAttr(it.d) + '" data-base-uom="' + escRtAttr(bu) + '" data-uom-id="' + escRtAttr(uid) + '">'
+                            + '<span class="rt-mat-code">' + escRtAttr(it.n) + '</span>'
+                            + ' <span class="text-muted small">— ' + escRtAttr(it.d) + "</span></button>";
+                    }).join("");
+                dd.classList.add("show");
+            })
+            .catch(function () {
+                dd.innerHTML = '<div class="rt-mat-picker-empty">Request failed.</div>';
+                dd.classList.add("show");
+            });
+    }
+
+    function rtMatPickerScheduleSearch(inputEl) {
+        var key = inputEl.id || "rtMat";
+        clearTimeout(rtMatPickerTimers[key]);
+        rtMatPickerTimers[key] = setTimeout(function () { rtMatPickerFetch(inputEl); }, 250);
+    }
+
+    document.addEventListener("focusin", function (e) {
+        if (!e.target.classList || !e.target.classList.contains("rt-mat-picker-search")) return;
+        rtMatPickerFetch(e.target);
+    });
+
+    document.addEventListener("input", function (e) {
+        if (!e.target.classList || !e.target.classList.contains("rt-mat-picker-search")) return;
+        rtMatPickerScheduleSearch(e.target);
+    });
+
+    document.addEventListener("click", function (e) {
+        var btn = e.target.closest(".rt-mat-picker-item");
+        if (!btn) return;
+        e.preventDefault();
+        var wrap = btn.closest(".rt-mat-picker");
+        var dd = btn.closest(".rt-mat-picker-dropdown");
+        var hidden = wrap.querySelector("input[type=hidden]");
+        var search = wrap.querySelector(".rt-mat-picker-search");
+        var n = btn.getAttribute("data-n") || "";
+        var d = btn.getAttribute("data-d") || "";
+        if (hidden) hidden.value = n;
+        if (search) search.value = n ? (n + (d ? " — " + d : "")) : "";
+        if (dd) {
+            dd.classList.remove("show");
+            dd.innerHTML = "";
+        }
+    });
 
     function rtBuildWcSelectHtml(selectedId) {
         var html = '<option value="">-- Select --</option>';
@@ -565,7 +658,7 @@
         var bad = [];
         var mat = document.getElementById("rtCreateMaterial");
         var pl = document.getElementById("rtCreatePlant");
-        if (!(mat.value || "").trim()) bad.push(mat);
+        if (!(mat.value || "").trim()) bad.push(document.getElementById("rtCreateMaterialSearch") || mat);
         if (!(pl.value || "").trim()) bad.push(pl);
         return bad;
     }
@@ -574,7 +667,7 @@
         var bad = [];
         var mat = document.getElementById("rtEditMaterial");
         var pl = document.getElementById("rtEditPlant");
-        if (!(mat.value || "").trim()) bad.push(mat);
+        if (!(mat.value || "").trim()) bad.push(document.getElementById("rtEditMaterialSearch") || mat);
         if (!(pl.value || "").trim()) bad.push(pl);
         return bad;
     }
@@ -584,6 +677,9 @@
         if (root && typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
         document.getElementById("rtCreateTitle").value = "";
         document.getElementById("rtCreateMaterial").value = "";
+        var crS = document.getElementById("rtCreateMaterialSearch");
+        if (crS) crS.value = "";
+        rtCloseAllMatPickers();
         document.getElementById("rtCreatePlant").value = "";
         document.getElementById("rtCreateStatus").value = "1";
         document.getElementById("rtCreateValidFrom").value = "";
@@ -648,7 +744,11 @@
                 var d = res.data;
                 document.getElementById("rtEditID").value = d.routingID || d.RoutingID;
                 document.getElementById("rtEditTitle").value = d.title || d.Title || "";
-                document.getElementById("rtEditMaterial").value = d.materialNumber || d.MaterialNumber || "";
+                var matNum = d.materialNumber || d.MaterialNumber || "";
+                var matDesc = d.materialDescription || d.MaterialDescription || "";
+                document.getElementById("rtEditMaterial").value = matNum;
+                var edS = document.getElementById("rtEditMaterialSearch");
+                if (edS) edS.value = matNum && matDesc ? (matNum + " — " + matDesc) : matNum;
                 document.getElementById("rtEditPlant").value = d.plantID || d.PlantID || "";
                 document.getElementById("rtEditStatus").value = d.statusID != null ? d.statusID : "1";
                 document.getElementById("rtEditValidFrom").value = d.validFrom || d.ValidFrom || "";

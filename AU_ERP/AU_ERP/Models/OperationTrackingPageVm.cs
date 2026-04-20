@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace AU_ERP.Models
 {
     public class OperationTrackingPageVm
@@ -19,9 +21,15 @@ namespace AU_ERP.Models
         /// <summary>Current in-progress stage title, if any.</summary>
         public string? ActiveStageTitle { get; set; }
 
+        /// <summary>Stage progress row that can be updated (in progress or on hold).</summary>
+        public int? ActiveStageProgressId { get; set; }
+
         public int StagesCompleted { get; set; }
         public int StagesTotal { get; set; }
 
         public List<ProductionOrderStageProgress> Stages { get; set; } = new();
+
+        /// <summary>Routing work-centre lines per stage progress id (nested machine stepper).</summary>
+        public Dictionary<int, List<OperationStageMachineLineVm>> MachinesByStageProgressId { get; set; } = new();
     }
 }

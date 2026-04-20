@@ -149,11 +149,11 @@
                     <h3 class="bp-section-title">Payment</h3>
                     <div class="bp-field-row">
                         <label>Payment terms</label>
-                        @Html.DropDownListFor(m => m.PaymentTerms, new SelectList(new[] { "0001", "0002" }), new { @class = "form-select form-select-sm f-payterms" })
+                        @Html.DropDownListFor(m => m.PaymentTerms, new SelectList(new[] { "10-days", "15-days", "30-days" }), "-- Select --", new { @class = "form-select form-select-sm f-payterms" })
                     </div>
                     <div class="bp-field-row">
-                        <label>Payment methods</label>
-                        @Html.TextBoxFor(m => m.PaymentMethods, new { @class = "form-control form-control-sm f-paymeth", placeholder = "C = Cash, T = Transfer" })
+                        <label>Payment method</label>
+                        @Html.DropDownListFor(m => m.PaymentMethods, new SelectList(new[] { "Cash", "Cheque", "Online" }), "-- Select --", new { @class = "form-select form-select-sm f-paymeth" })
                     </div>
                 </div>
                 <div class="bp-section-box">
@@ -187,18 +187,11 @@
                     </div>
                     <div class="bp-field-row">
                         <div class="bp-mandatory-bar"></div>
-                        <label>Sales category</label>
-                        <select id="bpCreateSalesCategory" class="form-select form-select-sm f-sales-cat" style="min-width:14rem;">
-                            <option value="">-- Select sales category --</option>
-                            <option value="Walk-In">Walk-In Sales</option>
-                            <option value="Dealer">Dealer Sales</option>
-                        </select>
-                    </div>
-                    <div class="bp-field-row">
-                        <div class="bp-mandatory-bar"></div>
                         <label>Sales schema</label>
-                        <select name="SalesSchema" id="bpCreateSalesSchema" class="form-select form-select-sm f-sales-schema" style="min-width:18rem;">
-                            <option value="">-- Select category first --</option>
+                        <select name="SalesSchema" id="bpCreateSalesSchema" class="form-select form-select-sm f-sales-schema" style="min-width:14rem;">
+                            <option value="">-- Select --</option>
+                            <option value="Walk-in">Walk-in</option>
+                            <option value="Dealer">Dealer</option>
                         </select>
                     </div>
                 </div>
@@ -241,32 +234,20 @@
 </form>
 
 <script type="text/javascript">
-    var bpSalesRows = @Html.Raw(ViewBag.SalesSchemaRowsJson ?? "[]");
-    function bpCreateFillSalesSchemaSelect(salesType) {
-        var sel = document.getElementById('bpCreateSalesSchema');
-        if (!sel) return;
-        var keep = (sel.value || '').trim();
-        sel.innerHTML = '<option value="">-- Select schema line --</option>';
-        if (!salesType) return;
-        (bpSalesRows || []).filter(function (r) { return r.salesType === salesType; }).forEach(function (r) {
-            var o = document.createElement('option');
-            o.value = String(r.id);
-            o.textContent = r.label;
-            sel.appendChild(o);
-        });
-        if (keep) sel.value = keep;
+    function bpCreateNormalizeSalesSchemaVal(v) {
+        v = String(v || '').trim();
+        if (v === 'Walk-In' || v === 'WALK-IN' || v === 'WALKIN') return 'Walk-in';
+        return v;
     }
     function bpCreateRestoreSalesFromInitial() {
         var form = document.getElementById('bpCreateRoot');
         var initial = form && (form.getAttribute('data-initial-sales-schema') || '').trim();
         if (!initial) return;
-        var row = (bpSalesRows || []).find(function (r) { return String(r.id) === String(initial); });
-        if (!row) return;
-        var cat = document.getElementById('bpCreateSalesCategory');
-        if (cat) cat.value = row.salesType;
-        bpCreateFillSalesSchemaSelect(row.salesType);
         var sel = document.getElementById('bpCreateSalesSchema');
-        if (sel) sel.value = initial;
+        if (!sel) return;
+        var norm = bpCreateNormalizeSalesSchemaVal(initial);
+        if (norm === 'Walk-in' || norm === 'Dealer')
+            sel.value = norm;
     }
     function bpHandleRoleUI(select) {
         const root = select.closest('#bpCreateRoot');
@@ -291,11 +272,6 @@
     }
     document.querySelectorAll('#bpCreateRoot .f-role').forEach(function (el) {
         bpHandleRoleUI(el);
-    });
-    document.getElementById('bpCreateSalesCategory')?.addEventListener('change', function () {
-        var sel = document.getElementById('bpCreateSalesSchema');
-        if (sel) sel.value = '';
-        bpCreateFillSalesSchemaSelect(this.value);
     });
     bpCreateRestoreSalesFromInitial();
 
@@ -335,7 +311,6 @@
         var roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
         if (roleCode === 'FLCU01' || roleCode === 'FLCU00') {
             req('.f-dist');
-            req('.f-sales-cat');
             req('.f-sales-schema');
         }
         if (roleCode === 'FLVN01' || roleCode === 'FLCU00') {

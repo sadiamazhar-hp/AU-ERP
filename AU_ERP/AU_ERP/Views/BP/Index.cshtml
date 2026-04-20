@@ -279,12 +279,22 @@
                                 <div class="v2-frame-title">Payment</div>
                                 <div class="row g-2">
                                     <div class="col-md-6">
-                                        <label class="form-label">Payment Terms</label>
-                                        <select name="PaymentTerms" id="bpEditPaymentTerms" class="form-control"><option>0001</option><option>0002</option></select>
+                                        <label class="form-label">Payment terms</label>
+                                        <select name="PaymentTerms" id="bpEditPaymentTerms" class="form-select">
+                                            <option value="">-- Select --</option>
+                                            <option value="10-days">10-days</option>
+                                            <option value="15-days">15-days</option>
+                                            <option value="30-days">30-days</option>
+                                        </select>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label">Payment Methods</label>
-                                        <input name="PaymentMethods" id="bpEditPaymentMethods" class="form-control" placeholder="C = Cash, T = Transfer" />
+                                        <label class="form-label">Payment method</label>
+                                        <select name="PaymentMethods" id="bpEditPaymentMethods" class="form-select">
+                                            <option value="">-- Select --</option>
+                                            <option value="Cash">Cash</option>
+                                            <option value="Cheque">Cheque</option>
+                                            <option value="Online">Online</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -318,17 +328,11 @@
                                         </select>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label">Sales category</label>
-                                        <select id="bpEditSalesCategory" class="form-select req">
-                                            <option value="">-- Select sales category --</option>
-                                            <option value="Walk-In">Walk-In Sales</option>
-                                            <option value="Dealer">Dealer Sales</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-12">
-                                        <label class="form-label">Sales Schema</label>
+                                        <label class="form-label">Sales schema</label>
                                         <select name="SalesSchema" id="bpEditSalesSchema" class="form-select req">
-                                            <option value="">-- Select category first --</option>
+                                            <option value="">-- Select --</option>
+                                            <option value="Walk-in">Walk-in</option>
+                                            <option value="Dealer">Dealer</option>
                                         </select>
                                     </div>
                                 </div>
@@ -370,35 +374,16 @@
 
 @section Scripts {
     <script>
-        var bpSalesRows = @Html.Raw(ViewBag.SalesSchemaRowsJson ?? "[]");
-        function bpEditFillSalesSchemaSelect(salesType) {
+        function bpEditNormalizeSalesSchemaVal(v) {
+            v = String(v || '').trim();
+            if (v === 'Walk-In' || v === 'WALK-IN' || v === 'WALKIN') return 'Walk-in';
+            return v;
+        }
+        function bpEditApplySalesSchema(salesSchemaVal) {
             var sel = document.getElementById('bpEditSalesSchema');
             if (!sel) return;
-            var keep = (sel.value || '').trim();
-            sel.innerHTML = '<option value="">-- Select schema line --</option>';
-            if (!salesType) return;
-            (bpSalesRows || []).filter(function (r) { return r.salesType === salesType; }).forEach(function (r) {
-                var o = document.createElement('option');
-                o.value = String(r.id);
-                o.textContent = r.label;
-                sel.appendChild(o);
-            });
-            if (keep) sel.value = keep;
-        }
-        function bpEditApplySalesFromSavedId(salesSchemaVal) {
-            var cat = document.getElementById('bpEditSalesCategory');
-            if (!salesSchemaVal) {
-                if (cat) cat.value = '';
-                bpEditFillSalesSchemaSelect('');
-                var sel = document.getElementById('bpEditSalesSchema');
-                if (sel) sel.value = '';
-                return;
-            }
-            var row = (bpSalesRows || []).find(function (r) { return String(r.id) === String(salesSchemaVal); });
-            if (cat) cat.value = row ? row.salesType : '';
-            bpEditFillSalesSchemaSelect(row ? row.salesType : '');
-            var sel = document.getElementById('bpEditSalesSchema');
-            if (sel && salesSchemaVal) sel.value = salesSchemaVal;
+            var v = bpEditNormalizeSalesSchemaVal(salesSchemaVal);
+            sel.value = (v === 'Walk-in' || v === 'Dealer') ? v : '';
         }
         function bpReloadToListTab() {
             try {
@@ -457,7 +442,6 @@
             var code = opt ? (opt.getAttribute("data-code") || "") : "";
             if (code === "FLCU01" || code === "FLCU00") {
                 req("bpEditDistChannel");
-                req("bpEditSalesCategory");
                 req("bpEditSalesSchema");
             }
             if (code === "FLVN01" || code === "FLCU00") {
@@ -579,7 +563,7 @@
                     setEditField("bpEditBankName", p.bankName || p.BankName);
                     setEditField("bpEditAccountNumber", p.accountNumber || p.AccountNumber);
                     setEditField("bpEditDistChannel", p.distChannel || p.DistChannel);
-                    bpEditApplySalesFromSavedId(String(p.salesSchema || p.SalesSchema || "").trim());
+                    bpEditApplySalesSchema(String(p.salesSchema || p.SalesSchema || "").trim());
                     setEditField("bpEditPurchSchema", p.purchSchema || p.PurchSchema);
                     bpEditHandleRoleUI();
 
@@ -595,12 +579,6 @@
                 })
                 .catch(function () { bpShowListMessage("Request failed", []); });
         }
-
-        document.getElementById("bpEditSalesCategory")?.addEventListener("change", function () {
-            var sel = document.getElementById("bpEditSalesSchema");
-            if (sel) sel.value = "";
-            bpEditFillSalesSchemaSelect(this.value);
-        });
 
         /* ---- Edit modal Save ---- */
         document.getElementById("bpEditSaveBtn").addEventListener("click", function () {

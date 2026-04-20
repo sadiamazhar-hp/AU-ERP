@@ -12,6 +12,9 @@ namespace AU_ERP.Models
         public int StagesTotal { get; set; }
         public int StagesCompleted { get; set; }
         public string? ActiveStageTitle { get; set; }
+
+        /// <summary>True when a goods receipt / produce batch already exists for this order.</summary>
+        public bool GoodsReceiptPosted { get; set; }
     }
 
     public class OperationTrackingListVm

@@ -678,17 +678,17 @@ body.modal-open:has(#materialSuccessModal.show) .modal-backdrop {
 
 /* Operation Tracking — update stage modal (reparented to body like PO). */
 #otUpdateStageModal.modal,
-#otGrStubModal.modal {
+#otGoodsReceiptModal.modal {
   z-index: 100050 !important;
 }
 
 #otUpdateStageModal.modal ~ .modal-backdrop,
-#otGrStubModal.modal ~ .modal-backdrop {
+#otGoodsReceiptModal.modal ~ .modal-backdrop {
   z-index: 100040 !important;
 }
 
 body.modal-open:has(#otUpdateStageModal.show) .modal-backdrop,
-body.modal-open:has(#otGrStubModal.show) .modal-backdrop {
+body.modal-open:has(#otGoodsReceiptModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 

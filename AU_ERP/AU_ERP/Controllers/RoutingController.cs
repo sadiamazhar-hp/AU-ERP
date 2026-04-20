@@ -17,9 +17,6 @@ namespace AU_ERP.Controllers
                 await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantID).ToListAsync(ct),
                 "PlantID", "PlantName");
 
-            ViewBag.MaterialList = await _db.CreateMaterialMaster.AsNoTracking()
-                .OrderBy(m => m.MaterialNumber).ToListAsync(ct);
-
             ViewBag.WorkCentres = await _db.WorkCenterMasterSamples.AsNoTracking()
                 .OrderBy(w => w.WorkCenterName)
                 .ToListAsync(ct);
@@ -279,6 +276,7 @@ namespace AU_ERP.Controllers
         {
             var r = await _db.RoutingHeadersSamples
                 .AsNoTracking()
+                .Include(h => h.Material)
                 .Include(h => h.OperationHeaders)
                     .ThenInclude(oh => oh.RoutingOperationsSamples)
                 .FirstOrDefaultAsync(h => h.RoutingID == id, ct);
@@ -294,6 +292,7 @@ namespace AU_ERP.Controllers
                     r.RoutingID,
                     r.Title,
                     r.MaterialNumber,
+                    MaterialDescription = r.Material != null ? r.Material.Description : null,
                     r.PlantID,
                     r.StatusID,
                     ValidFrom = r.ValidFrom.ToString("yyyy-MM-dd"),

@@ -138,3 +138,35 @@
         return false;
     };
 })();
+
+/**
+ * Enforces non-negative values on number inputs app-wide.
+ * Opt out per field with attribute data-allow-negative="true" (e.g. temperature deltas).
+ */
+(function () {
+    function skip(el) {
+        if (!el || el.tagName !== "INPUT" || el.type !== "number") return true;
+        if (el.hasAttribute("data-allow-negative")) return true;
+        return false;
+    }
+    function clampNonNegative(el) {
+        if (skip(el)) return;
+        var raw = el.value;
+        if (raw === "" || raw == null) return;
+        var n = parseFloat(raw);
+        if (isNaN(n)) return;
+        if (n < 0) {
+            el.value = "0";
+            try {
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+            } catch (e) { /* ignore */ }
+        }
+    }
+    document.addEventListener("blur", function (e) {
+        clampNonNegative(e.target);
+    }, true);
+    document.addEventListener("change", function (e) {
+        clampNonNegative(e.target);
+    }, true);
+})();

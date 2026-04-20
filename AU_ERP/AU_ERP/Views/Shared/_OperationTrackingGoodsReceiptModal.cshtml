@@ -1,0 +1,71 @@
+@* Single shared modal for posting goods receipt from Operation Tracking list. *@
+<div class="modal fade" id="otGoodsReceiptModal" tabindex="-1" aria-labelledby="otGoodsReceiptModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white border-secondary py-2">
+                <h5 class="modal-title fs-6" id="otGoodsReceiptModalLabel">
+                    Goods Receipt from Production — <span id="otGrPoNumLabel"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="otGrPoId" value="" />
+                <div class="alert alert-danger py-2 small mb-3" id="otGrValidation" style="display:none;" role="alert"></div>
+
+                <p class="small text-muted mb-3 mb-md-2">
+                    Enter the <strong>total produced quantity</strong>, then split every piece across the four buckets below. The four buckets must add up exactly to the total.
+                </p>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" for="otGrDate">GR date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="otGrDate" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" for="otGrBatch">Batch No. <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="otGrBatch" maxlength="64" placeholder="e.g. BTH-2604-005" autocomplete="off" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold mb-1" for="otGrProduced">Total produced quantity (pieces) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control form-control-lg" id="otGrProduced" min="0" step="0.0001" inputmode="decimal" />
+                    </div>
+                </div>
+
+                <div class="otl-gr-breakdown mb-3">
+                    <div class="fw-semibold small mb-2 text-secondary text-uppercase" style="letter-spacing:.04em;">Split of total produced (pieces)</div>
+                    <div class="row g-2 g-md-3">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1" for="otGrFirst">First quality (premium)</label>
+                            <input type="number" class="form-control otl-gr-qty" id="otGrFirst" min="0" step="0.0001" inputmode="decimal" value="0" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1" for="otGrSecond">Second quality</label>
+                            <input type="number" class="form-control otl-gr-qty" id="otGrSecond" min="0" step="0.0001" inputmode="decimal" value="0" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1" for="otGrThird">Third quality / downgrade</label>
+                            <input type="number" class="form-control otl-gr-qty" id="otGrThird" min="0" step="0.0001" inputmode="decimal" value="0" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1" for="otGrScrap">Rejected / scrap</label>
+                            <input type="number" class="form-control otl-gr-qty" id="otGrScrap" min="0" step="0.0001" inputmode="decimal" value="0" />
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-2 border-top small">
+                        <span id="otGrSumLine" class="otl-gr-sum-bad">Pieces accounted for: <strong id="otGrSumVal">0</strong> / <strong id="otGrProducedEcho">0</strong></span>
+                    </div>
+                </div>
+
+                <div class="alert alert-success small mb-0 py-2" role="note">
+                    <strong>Accounting:</strong> DR: Finished Goods Inventory (1320) | CR: WIP Inventory (1310)
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="otGrSubmitBtn">
+                    <i class="bi bi-check-lg me-1"></i>Post Goods Receipt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
