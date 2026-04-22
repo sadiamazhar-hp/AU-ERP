@@ -1,10 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Models
 {
-    public class AppDbContext : DbContext
+    public class AppDbContext : IdentityDbContext<ApplicationUser>
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+        public DbSet<Department> Departments { get; set; }
+        public DbSet<ApplicationUserDepartment> ApplicationUserDepartments { get; set; }
 
         public DbSet<CreateMaterialMaster> CreateMaterialMaster { get; set; }
         public DbSet<MaterialNumberRange> MaterialNumberRanges { get; set; }
@@ -38,6 +42,34 @@ namespace AU_ERP.Models
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Department>()
+                .HasIndex(d => d.Code)
+                .IsUnique();
+
+            modelBuilder.Entity<ApplicationUserDepartment>()
+                .HasKey(ud => new { ud.UserId, ud.DepartmentId });
+
+            modelBuilder.Entity<ApplicationUserDepartment>()
+                .HasOne(ud => ud.User)
+                .WithMany(u => u.UserDepartments)
+                .HasForeignKey(ud => ud.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ApplicationUserDepartment>()
+                .HasOne(ud => ud.Department)
+                .WithMany(d => d.UserDepartments)
+                .HasForeignKey(ud => ud.DepartmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Department>().HasData(
+                new Department { Id = 1, Code = "Store", Name = "Store" },
+                new Department { Id = 2, Code = "Sales", Name = "Sales" },
+                new Department { Id = 3, Code = "Production", Name = "Production" },
+                new Department { Id = 4, Code = "Admin", Name = "Admin" },
+                new Department { Id = 5, Code = "Finance", Name = "Finance" });
+
             modelBuilder.Entity<CreateMaterialMaster>()
                 .HasOne(m => m.MaterialType)
                 .WithMany(t => t.CreateMaterialMasters)

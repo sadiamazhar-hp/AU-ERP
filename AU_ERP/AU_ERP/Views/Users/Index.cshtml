@@ -1,0 +1,122 @@
+@model UsersIndexPageModel
+@{
+    ViewData["Title"] = "Users";
+    var deptList = ViewBag.Departments as IEnumerable<Department>;
+}
+
+@if (TempData["UserMessage"] is string um)
+{
+    <div class="alert alert-success mb-3" role="status">@um</div>
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div>
+        <h1 class="h4 mb-0">Users</h1>
+        <p class="text-muted small mb-0">Invite users by email and assign departments.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+        Add user
+    </button>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Departments</th>
+                <th>Password</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in Model.Users)
+            {
+                <tr>
+                    <td>@u.FirstName @u.LastName</td>
+                    <td>@u.Email</td>
+                    <td>@string.Join(", ", u.Departments)</td>
+                    <td>
+                        @if (u.PasswordSetupCompleted)
+                        {
+                            <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Set</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Pending</span>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (!Model.Users.Any())
+            {
+                <tr>
+                    <td colspan="4" class="text-muted">No users yet.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-labelledby="createUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="Create" method="post" novalidate>
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createUserModalLabel">Add user</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small mb-3"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="CreateForm.FirstName" class="form-label"></label>
+                        <input asp-for="CreateForm.FirstName" class="form-control" autocomplete="given-name" />
+                        <span asp-validation-for="CreateForm.FirstName" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="CreateForm.LastName" class="form-label"></label>
+                        <input asp-for="CreateForm.LastName" class="form-control" autocomplete="family-name" />
+                        <span asp-validation-for="CreateForm.LastName" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="CreateForm.Email" class="form-label"></label>
+                        <input asp-for="CreateForm.Email" class="form-control" autocomplete="email" />
+                        <span asp-validation-for="CreateForm.Email" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-1">
+                        <label asp-for="CreateForm.DepartmentIds" class="form-label">Department</label>
+                        <select asp-for="CreateForm.DepartmentIds"
+                                asp-items="@(new MultiSelectList(deptList ?? Array.Empty<Department>(), nameof(Department.Id), nameof(Department.Name)))"
+                                class="form-select"
+                                multiple
+                                size="6">
+                        </select>
+                        <div class="form-text">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</div>
+                        <span asp-validation-for="CreateForm.DepartmentIds" class="text-danger small"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    @if (Model.OpenCreateModal)
+    {
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var el = document.getElementById('createUserModal');
+                if (el && window.bootstrap) {
+                    new bootstrap.Modal(el).show();
+                }
+            });
+        </script>
+    }
+}

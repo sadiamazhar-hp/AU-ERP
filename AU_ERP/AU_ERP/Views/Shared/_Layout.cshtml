@@ -39,6 +39,9 @@
             || string.Equals(act, "Details", StringComparison.OrdinalIgnoreCase));
     var stockOverviewActive = string.Equals(ctrl, "StockOverview", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var usersActive = string.Equals(ctrl, "Users", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var isAdminDept = User.HasClaim(AuClaimTypes.Department, "Admin");
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -65,9 +68,14 @@
             </div>
             <div class="au-header-spacer" aria-hidden="true"></div>
             <div class="au-header-actions">
-                <button type="button" class="au-icon-btn" title="Profile" aria-label="Profile">
-                    <i class="bi bi-person"></i>
-                </button>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                        <button type="submit" class="au-icon-btn" title="Sign out" aria-label="Sign out">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </button>
+                    </form>
+                }
             </div>
         </header>
 
@@ -87,6 +95,12 @@
 
                 <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Inventory</div>
                 <a class="au-sidebar-link @(stockOverviewActive ? "active" : null)" asp-controller="StockOverview" asp-action="Index">Stock Overview</a>
+
+                @if (isAdminDept)
+                {
+                    <div class="au-sidebar-section-title au-sidebar-section-title-spaced">User</div>
+                    <a class="au-sidebar-link @(usersActive ? "active" : null)" asp-controller="Users" asp-action="Index">Users</a>
+                }
 
                 <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Configuration</div>
                 <a class="au-sidebar-link @(materialTypeActive ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Types</a>

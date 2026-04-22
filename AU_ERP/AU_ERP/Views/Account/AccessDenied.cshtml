@@ -1,0 +1,23 @@
+@{
+    ViewData["Title"] = "Access denied";
+}
+
+<div class="login-shell">
+    <aside class="login-hero">
+        <div class="login-hero-inner">
+            <div class="login-brand">AU MANUFACTURERS</div>
+            <h1>You do not have access to this area.</h1>
+            <p class="lead">Contact an administrator if you believe this is a mistake.</p>
+        </div>
+        <footer class="login-hero-footer">Copyright © @DateTime.UtcNow.Year AU Manufacturers. All rights reserved.</footer>
+    </aside>
+    <section class="login-panel">
+        <div class="login-panel-inner">
+            <h2>Access denied</h2>
+            <p class="subtitle">Your account is not authorized for this page.</p>
+            <div class="login-meta" style="margin-top: 2rem;">
+                <a asp-controller="Material" asp-action="GetMaterialList">Go to Materials</a>
+            </div>
+        </div>
+    </section>
+</div>
