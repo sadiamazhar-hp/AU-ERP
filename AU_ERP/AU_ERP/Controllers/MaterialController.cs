@@ -1,5 +1,6 @@
 ﻿using AU_ERP.Models;
 using AU_ERP.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ using System.Linq;
 
 namespace AU_ERP.Main_Controller
 {
+    [Authorize(Policy = "AdminDepartment")]
     public class MaterialController : Controller
     {
         private readonly AppDbContext _context;

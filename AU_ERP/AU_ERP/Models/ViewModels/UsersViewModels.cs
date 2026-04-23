@@ -29,9 +29,32 @@ public class CreateUserViewModel
     public int[] DepartmentIds { get; set; } = Array.Empty<int>();
 }
 
+public class EditUserViewModel
+{
+    [Required]
+    public string UserId { get; set; } = string.Empty;
+
+    [Required]
+    [Display(Name = "First name")]
+    public string FirstName { get; set; } = string.Empty;
+
+    [Required]
+    [Display(Name = "Last name")]
+    public string LastName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    [Display(Name = "Email")]
+    public string Email { get; set; } = string.Empty;
+
+    public int[] DepartmentIds { get; set; } = Array.Empty<int>();
+}
+
 public class UsersIndexPageModel
 {
     public IReadOnlyList<UserListItemViewModel> Users { get; set; } = Array.Empty<UserListItemViewModel>();
     public CreateUserViewModel CreateForm { get; set; } = new();
     public bool OpenCreateModal { get; set; }
+    public EditUserViewModel EditForm { get; set; } = new();
+    public bool OpenEditModal { get; set; }
 }

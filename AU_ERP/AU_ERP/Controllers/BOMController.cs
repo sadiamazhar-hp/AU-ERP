@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +8,7 @@ using AU_ERP.Models;
 
 namespace AU_ERP.Controllers
 {
+    [Authorize(Policy = "AdminDepartment")]
     public class BOMController : Controller
     {
         private readonly AppDbContext _db;

@@ -663,6 +663,31 @@ body.modal-open:has(#soFilterModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+/* Users — Add user modal (reparented to body; same stacking as BP/Stock). */
+#createUserModal.modal {
+  z-index: 100050 !important;
+}
+
+#createUserModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#createUserModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+#editUserModal.modal {
+  z-index: 100050 !important;
+}
+
+#editUserModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#editUserModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
 /* Material success modal — teal dialog; stack above PO/routing modals (100050). */
 #materialSuccessModal.modal {
   z-index: 100060 !important;

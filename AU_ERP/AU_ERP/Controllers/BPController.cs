@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using AU_ERP.Models;
 using AU_ERP.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -10,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Main_Controller
 {
+    [Authorize(Policy = "AdminDepartment")]
     public class BPController : Controller
     {
         private readonly AppDbContext _db;

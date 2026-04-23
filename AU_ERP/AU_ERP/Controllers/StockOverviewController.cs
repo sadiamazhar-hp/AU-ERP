@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
@@ -5,6 +6,7 @@ using AU_ERP.Services;
 
 namespace AU_ERP.Controllers
 {
+    [Authorize(Policy = "AdminDepartment")]
     public class StockOverviewController : Controller
     {
         private readonly AppDbContext _db;

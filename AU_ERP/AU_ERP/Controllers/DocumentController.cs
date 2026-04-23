@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using AU_ERP.Services;
 
 namespace AU_ERP.Controllers
 {
+    [Authorize(Policy = "AdminDepartment")]
     public class DocumentController : Controller
     {
         private readonly AppDbContext _context;

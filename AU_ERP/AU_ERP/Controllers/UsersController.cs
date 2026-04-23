@@ -13,29 +13,58 @@ public class UsersController : Controller
 {
     private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
 
     public UsersController(
         AppDbContext db,
         UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
         IEmailService emailService,
         IConfiguration configuration)
     {
         _db = db;
         _userManager = userManager;
+        _signInManager = signInManager;
         _emailService = emailService;
         _configuration = configuration;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? editId = null)
     {
+        var users = await BuildUserListAsync().ConfigureAwait(false);
+        var editForm = new EditUserViewModel();
+        var openEdit = false;
+        if (!string.IsNullOrEmpty(editId))
+        {
+            var toEdit = await _db.Users
+                .AsNoTracking()
+                .Include(u => u.UserDepartments)
+                .FirstOrDefaultAsync(u => u.Id == editId)
+                .ConfigureAwait(false);
+            if (toEdit != null)
+            {
+                editForm = new EditUserViewModel
+                {
+                    UserId = toEdit.Id,
+                    FirstName = toEdit.FirstName?.Trim() ?? "",
+                    LastName = toEdit.LastName?.Trim() ?? "",
+                    Email = toEdit.Email ?? "",
+                    DepartmentIds = toEdit.UserDepartments.Select(ud => ud.DepartmentId).ToArray()
+                };
+                openEdit = true;
+            }
+        }
+
         var page = new UsersIndexPageModel
         {
-            Users = await BuildUserListAsync().ConfigureAwait(false),
+            Users = users,
             CreateForm = new CreateUserViewModel(),
-            OpenCreateModal = false
+            OpenCreateModal = false,
+            EditForm = editForm,
+            OpenEditModal = openEdit
         };
 
         ViewBag.Departments = await _db.Departments.AsNoTracking()
@@ -48,19 +77,98 @@ public class UsersController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(CreateUserViewModel model)
+    public async Task<IActionResult> Edit([Bind(Prefix = "EditForm")] EditUserViewModel model)
     {
+        const string pfx = "EditForm.";
         ViewBag.Departments = await _db.Departments.AsNoTracking()
             .OrderBy(d => d.Code)
             .ToListAsync()
             .ConfigureAwait(false);
 
         if (model.DepartmentIds == null || model.DepartmentIds.Length == 0)
-            ModelState.AddModelError(nameof(model.DepartmentIds), "Select at least one department.");
+            ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "Select at least one department.");
 
         var validDeptIds = await _db.Departments.Select(d => d.Id).ToListAsync().ConfigureAwait(false);
         if (model.DepartmentIds != null && model.DepartmentIds.Any(id => !validDeptIds.Contains(id)))
-            ModelState.AddModelError(nameof(model.DepartmentIds), "One or more departments are invalid.");
+            ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "One or more departments are invalid.");
+
+        var user = await _userManager.FindByIdAsync(model.UserId).ConfigureAwait(false);
+        if (user == null)
+            ModelState.AddModelError(string.Empty, "User not found.");
+
+        if (!ModelState.IsValid)
+        {
+            return View("Index", new UsersIndexPageModel
+            {
+                Users = await BuildUserListAsync().ConfigureAwait(false),
+                CreateForm = new CreateUserViewModel(),
+                OpenCreateModal = false,
+                EditForm = model,
+                OpenEditModal = true
+            });
+        }
+
+        user!.FirstName = model.FirstName.Trim();
+        user.LastName = model.LastName.Trim();
+
+        var updateResult = await _userManager.UpdateAsync(user).ConfigureAwait(false);
+        if (!updateResult.Succeeded)
+        {
+            foreach (var err in updateResult.Errors)
+                ModelState.AddModelError(string.Empty, err.Description);
+            return View("Index", new UsersIndexPageModel
+            {
+                Users = await BuildUserListAsync().ConfigureAwait(false),
+                CreateForm = new CreateUserViewModel(),
+                OpenCreateModal = false,
+                EditForm = model,
+                OpenEditModal = true
+            });
+        }
+
+        var existing = await _db.ApplicationUserDepartments
+            .Where(ud => ud.UserId == user.Id)
+            .ToListAsync()
+            .ConfigureAwait(false);
+        _db.ApplicationUserDepartments.RemoveRange(existing);
+        foreach (var deptId in model.DepartmentIds!.Distinct())
+        {
+            _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
+            {
+                UserId = user.Id,
+                DepartmentId = deptId
+            });
+        }
+
+        await _db.SaveChangesAsync().ConfigureAwait(false);
+
+        if (string.Equals(_userManager.GetUserId(User), user.Id, StringComparison.Ordinal))
+        {
+            var refreshed = await _userManager.GetUserAsync(User).ConfigureAwait(false);
+            if (refreshed != null)
+                await _signInManager.RefreshSignInAsync(refreshed).ConfigureAwait(false);
+        }
+
+        TempData["UserMessage"] = "User updated.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create([Bind(Prefix = "CreateForm")] CreateUserViewModel model)
+    {
+        const string pfx = "CreateForm.";
+        ViewBag.Departments = await _db.Departments.AsNoTracking()
+            .OrderBy(d => d.Code)
+            .ToListAsync()
+            .ConfigureAwait(false);
+
+        if (model.DepartmentIds == null || model.DepartmentIds.Length == 0)
+            ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "Select at least one department.");
+
+        var validDeptIds = await _db.Departments.Select(d => d.Id).ToListAsync().ConfigureAwait(false);
+        if (model.DepartmentIds != null && model.DepartmentIds.Any(id => !validDeptIds.Contains(id)))
+            ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "One or more departments are invalid.");
 
         if (!ModelState.IsValid)
         {
@@ -68,19 +176,23 @@ public class UsersController : Controller
             {
                 Users = await BuildUserListAsync().ConfigureAwait(false),
                 CreateForm = model,
-                OpenCreateModal = true
+                OpenCreateModal = true,
+                EditForm = new EditUserViewModel(),
+                OpenEditModal = false
             });
         }
 
         var existing = await _userManager.FindByEmailAsync(model.Email).ConfigureAwait(false);
         if (existing != null)
         {
-            ModelState.AddModelError(nameof(model.Email), "A user with this email already exists.");
+            ModelState.AddModelError("CreateForm.Email", "A user with this email already exists.");
             return View("Index", new UsersIndexPageModel
             {
                 Users = await BuildUserListAsync().ConfigureAwait(false),
                 CreateForm = model,
-                OpenCreateModal = true
+                OpenCreateModal = true,
+                EditForm = new EditUserViewModel(),
+                OpenEditModal = false
             });
         }
 
@@ -103,7 +215,9 @@ public class UsersController : Controller
             {
                 Users = await BuildUserListAsync().ConfigureAwait(false),
                 CreateForm = model,
-                OpenCreateModal = true
+                OpenCreateModal = true,
+                EditForm = new EditUserViewModel(),
+                OpenEditModal = false
             });
         }
 

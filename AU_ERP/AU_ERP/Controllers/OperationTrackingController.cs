@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
 
 namespace AU_ERP.Controllers
 {
+    [Authorize(Policy = "ProductionDepartment")]
     public class OperationTrackingController : Controller
     {
         private readonly AppDbContext _db;

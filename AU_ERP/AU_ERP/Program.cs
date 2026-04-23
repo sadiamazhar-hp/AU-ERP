@@ -37,6 +37,8 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminDepartment", policy =>
         policy.RequireClaim(AuClaimTypes.Department, "Admin"));
+    options.AddPolicy("ProductionDepartment", policy =>
+        policy.RequireClaim(AuClaimTypes.Department, "Production"));
 });
 
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -67,7 +69,7 @@ app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Material}/{action=GetMaterialList}/{id?}");
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 await IdentityDataSeeder.SeedAsync(app.Services, app.Configuration).ConfigureAwait(false);
 

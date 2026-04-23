@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
 
 namespace AU_ERP.Controllers
 {
+    [Authorize(Policy = "AdminDepartment")]
     public class UOMController : Controller
     {
         private readonly AppDbContext _context;

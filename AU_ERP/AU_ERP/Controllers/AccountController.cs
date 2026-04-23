@@ -31,7 +31,7 @@ public class AccountController : Controller
     public IActionResult Login(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
-            return RedirectToAction("GetMaterialList", "Material");
+            return Redirect(DepartmentLanding.GetPath(User));
 
         ViewData["ReturnUrl"] = returnUrl;
         return View(new LoginViewModel());
@@ -67,7 +67,7 @@ public class AccountController : Controller
         {
             if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                 return Redirect(returnUrl);
-            return RedirectToAction("GetMaterialList", "Material");
+            return Redirect(DepartmentLanding.GetPath(User));
         }
 
         ModelState.AddModelError(string.Empty, "Invalid email or password.");
