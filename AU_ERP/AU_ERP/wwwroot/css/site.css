@@ -220,6 +220,43 @@ a.au-icon-btn {
   margin-top: 4px;
 }
 
+/* Configuration: nested category → sub-link */
+.au-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 0 0.25rem 0;
+}
+
+.au-sidebar-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--subtle);
+  padding: 8px 16px 2px 16px;
+  margin: 0;
+  user-select: none;
+}
+
+.au-sidebar-group-title--active {
+  color: var(--dark, #354a5e);
+}
+
+.au-sidebar-link.au-sidebar-link--sub {
+  padding: 6px 16px 6px 28px;
+  font-size: 12.5px;
+  font-weight: 400;
+  border-left-width: 2px;
+}
+
+.au-sidebar-link.au-sidebar-link--sub:hover {
+  background: #f4f7fc;
+}
+
+.au-sidebar-link.au-sidebar-link--sub.active {
+  font-weight: 500;
+}
+
 .au-sidebar-placeholder-spaced {
   margin-top: 0.85rem;
 }
@@ -399,6 +436,54 @@ body.modal-open:has(#materialCreateV2Modal.show) .modal-backdrop {
 
 body.modal-open:has(#bpRangeErrorModal.show) .modal-backdrop {
   z-index: 100040 !important;
+}
+
+/* Delivery challan “view” detail modal — same stacking as materialCreateV2 (markup can live under .au-main; move to body in view script). */
+#dcViewModal.modal {
+  z-index: 100050 !important;
+}
+
+#dcViewModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#dcViewModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Sales order & quotation “view” read-only modals (markup can sit under .au-card; also reparent to body in view scripts). */
+#soViewModal.modal,
+#sqViewModal.modal {
+  z-index: 100050 !important;
+}
+
+#soViewModal.modal ~ .modal-backdrop,
+#sqViewModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#soViewModal.show) .modal-backdrop,
+body.modal-open:has(#sqViewModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Status-style pills (Sales Quotation, Users, etc.) */
+.sq-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.sq-badge-draft {
+  background: #e2e3e5;
+  color: #41464b;
+}
+
+.sq-badge-sent {
+  background: #d1e7dd;
+  color: #0f5132;
 }
 
 /* BP range error modal — compact maroon dialog (square corners, centered copy). */
@@ -660,6 +745,51 @@ body.modal-open:has(#poBomModal.show) .modal-backdrop {
 body.modal-open:has(#soCreateModal.show) .modal-backdrop,
 body.modal-open:has(#soEditModal.show) .modal-backdrop,
 body.modal-open:has(#soFilterModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Sales Quotation — Add quotation + filter (stack above main content backdrops). */
+#addQuotationModal.modal,
+#sqFilterModal.modal {
+  z-index: 100050 !important;
+}
+
+#addQuotationModal.modal ~ .modal-backdrop,
+#sqFilterModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#addQuotationModal.show) .modal-backdrop,
+body.modal-open:has(#sqFilterModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Sales Order — add / filter (same main-content stacking as quotation). */
+#addSalesOrderModal.modal,
+#salesOrderFilterModal.modal {
+  z-index: 100050 !important;
+}
+
+#addSalesOrderModal.modal ~ .modal-backdrop,
+#salesOrderFilterModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#addSalesOrderModal.show) .modal-backdrop,
+body.modal-open:has(#salesOrderFilterModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+#addDeliveryChallanModal.dc-challan-modal.modal,
+#dcFilterModal.modal {
+  z-index: 100050 !important;
+}
+#addDeliveryChallanModal.dc-challan-modal.modal ~ .modal-backdrop,
+#dcFilterModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+body.modal-open:has(#addDeliveryChallanModal.show) .modal-backdrop,
+body.modal-open:has(#dcFilterModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 

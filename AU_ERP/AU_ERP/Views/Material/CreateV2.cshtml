@@ -9,9 +9,6 @@
     var v2IdSuffixRaw = (ViewBag.CreateV2IdSuffix as string ?? "").Trim();
     var V2IdAffix = string.IsNullOrEmpty(v2IdSuffixRaw) ? "" : ("-" + v2IdSuffixRaw);
     var v2HandlerKey = string.IsNullOrEmpty(V2IdAffix) ? "Main" : "Modal";
-    var uomAltOptsJson = JsonSerializer.Serialize(
-        (ViewBag.UomIdList as IEnumerable<SelectListItem> ?? Enumerable.Empty<SelectListItem>())
-        .Select(x => new { value = x.Value ?? "", text = x.Text ?? "" }));
     var mrpTypeItemsV2 = new List<SelectListItem>
     {
         new() { Text = "Standard", Value = "STANDARD" },
@@ -144,9 +141,10 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="@("v2mrp-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2mrp" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2mrp" + V2IdAffix)" aria-selected="false">MRP</button>
             </li>
-            <li class="nav-item" role="presentation">
+            @* Units of Measure tab — use Configuration → Unit Conversion + Basic Data alternative units. *@
+            @*<li class="nav-item" role="presentation">
                 <button class="nav-link" id="@("v2uom-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2uom" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2uom" + V2IdAffix)" aria-selected="false">Units of Measure</button>
-            </li>
+            </li>*@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="@("v2acc-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2acc" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2acc" + V2IdAffix)" aria-selected="false">Accounting</button>
             </li>
@@ -184,11 +182,20 @@
                         <div class="col-md-6">
                             <label class="form-label">Description</label>
                             @Html.EditorFor(m => m.Description, new { htmlAttributes = new { @class = "form-control req" } })
-                            <label class="form-label">Base Unit</label>
+                            <label class="form-label mt-2">Base Unit</label>
                             @{
                                 var uomItems = (ViewBag.UomList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
                             }
                             @Html.DropDownListFor(m => m.BaseUnitCode, uomItems, "-- Select --", new { @class = "form-select form-select-sm req", id = "BaseUnitCodeV2" + V2IdAffix })
+                            <label class="form-label mt-2">Alternative units</label>
+                            <div class="dropdown" id="@("v2altUomDd" + V2IdAffix)">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" id="@("v2altUomBtn" + V2IdAffix)">
+                                    <span id="@("v2altUomSummary" + V2IdAffix)">—</span> <span class="text-muted small" id="@("v2altUomCount" + V2IdAffix)">(0)</span>
+                                </button>
+                                <ul class="dropdown-menu p-2 shadow" style="min-width: 16rem; max-height: 220px; overflow-y: auto; z-index: 1055;" id="@("v2altUomMenu" + V2IdAffix)">
+                                    <li class="small text-muted px-2 py-1">Select base unit first.</li>
+                                </ul>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Material Group</label>
@@ -196,7 +203,7 @@
                                 var materialGroupItemsV2 = (ViewBag.MaterialGroupList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
                             }
                             @Html.DropDownListFor(m => m.MaterialGroupCode, materialGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm", id = "MaterialGroupCodeV2" + V2IdAffix })
-                            <label class="form-label">EAN/UPC</label>
+                            <label class="form-label mt-2">EAN/UPC</label>
                             @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control" } })
                         </div>
                     </div>
@@ -210,6 +217,30 @@
                         <div class="col-md-6">
                             <label class="form-label">Delivering Plant</label>
                             @Html.DropDownListFor(m => m.DeliveringPlantCode, plantItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            <label class="form-label mt-2">Grade A cost (per base UOM)</label>
+                            <div class="input-group input-group-sm mb-1">
+                                @Html.EditorFor(m => m.SalesPriceGradeAPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm v2-mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                <span class="input-group-text text-muted" id="@("v2MatSalesBaseLbl" + V2IdAffix)">—</span>
+                                <span class="input-group-text">PKR</span>
+                            </div>
+                            <label class="form-label mt-1 small mb-0">Grade B cost (per base UOM)</label>
+                            <div class="input-group input-group-sm mb-1">
+                                @Html.EditorFor(m => m.SalesPriceGradeBPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm v2-mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                <span class="input-group-text text-muted v2-mat-sales-basesuf">—</span>
+                                <span class="input-group-text">PKR</span>
+                            </div>
+                            <label class="form-label mt-1 small mb-0">Grade C cost (per base UOM)</label>
+                            <div class="input-group input-group-sm mb-1">
+                                @Html.EditorFor(m => m.SalesPriceGradeCPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm v2-mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                <span class="input-group-text text-muted v2-mat-sales-basesuf">—</span>
+                                <span class="input-group-text">PKR</span>
+                            </div>
+                            <label class="form-label mt-1 small mb-0">Scrap cost (per base UOM)</label>
+                            <div class="input-group input-group-sm mb-1">
+                                @Html.EditorFor(m => m.ScrapCostPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm v2-mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                <span class="input-group-text text-muted v2-mat-sales-basesuf">—</span>
+                                <span class="input-group-text">PKR</span>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Item Category Group</label>
@@ -233,21 +264,11 @@
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Lead time</label>
-                            <div class="input-group input-group-sm">
-                                @Html.TextBoxFor(m => m.LeadTimeDays, new { @class = "form-control", type = "number", min = "0", step = "1", id = "LeadTimeDaysV2" + V2IdAffix })
-                                <span class="input-group-text">days</span>
-                            </div>
-                            <label class="form-label mt-2">Safety stock</label>
-                            <div class="input-group input-group-sm">
-                                @Html.TextBoxFor(m => m.SafetyStock, new { @class = "form-control", type = "number", step = "0.0001", id = "SafetyStockV2" + V2IdAffix })
-                                <span class="input-group-text" id="@("mrpSafetyUomLbl" + V2IdAffix)">—</span>
-                            </div>
-                            <label class="form-label mt-2">Reorder point</label>
-                            <div class="input-group input-group-sm">
-                                @Html.TextBoxFor(m => m.ReorderPoint, new { @class = "form-control", type = "number", min = "0", step = "1", id = "ReorderPointV2" + V2IdAffix })
-                                <span class="input-group-text" id="@("mrpReorderUomLbl" + V2IdAffix)">—</span>
-                            </div>
+                                <label class="form-label">Lead time</label>
+                                <div class="input-group input-group-sm">
+                                    @Html.TextBoxFor(m => m.LeadTimeDays, new { @class = "form-control", type = "number", min = "0", step = "1", id = "LeadTimeDaysV2" + V2IdAffix })
+                                    <span class="input-group-text">days</span>
+                                </div>
                         </div>
                     </div>
                 </div>
@@ -262,32 +283,17 @@
                             @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                             <label class="form-label mt-2">Procurement Type</label>
                             @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
-                            <label class="form-label mt-2">Strategy Group</label>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Strategy Group</label>
                             @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="tab-pane fade" id="@("v2uom" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2uom-tab" + V2IdAffix)">
-                <div class="v2-frame">
-                    <div class="v2-frame-title">Unit Conversions</div>
-                    <table class="mat-uom-table" id="@("uomTableV2" + V2IdAffix)">
-                        <thead>
-                            <tr>
-                                <th>Alt. Unit</th>
-                                <th>Numerator</th>
-                                <th style="width:3rem;">=</th>
-                                <th>Denominator</th>
-                                <th>Base Unit</th>
-                                <th style="width:4.5rem;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                    <button type="button" class="btn btn-sm btn-outline-secondary mat-uom-add-row-btn" onclick="window['addUomRowV2@(v2HandlerKey)']()">+ Add Row</button>
-                </div>
-            </div>
+            @* UOM tab removed — define conversions under Configuration → Unit Conversion; link alternates in Basic Data. *@
+            @*<div class="tab-pane fade" id="@("v2uom" + V2IdAffix)" ...>*@
 
             <div class="tab-pane fade" id="@("v2acc" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2acc-tab" + V2IdAffix)">
                 <div class="v2-frame">
@@ -316,11 +322,10 @@
         var createV2Embedded = @(createV2Embedded ? "true" : "false");
         var V2_ID_AFFIX = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(V2IdAffix));
         var v2IsModalCopy = V2_ID_AFFIX !== "";
-        let uomIndexV2 = 0;
         let createV2IsEdit = false;
         let createV2CommittedTypeCode = "";
         let createV2CommittedMaterialNumber = "";
-        const uomAltOptionList = @Html.Raw(uomAltOptsJson);
+        const urlGetAlternateUomsV2 = '@Url.Action("GetAlternateUomsForBaseCode", "Material")';
 
         if (v2IsModalCopy) {
             window.setCreateV2ModalEditState = function (v) {
@@ -344,7 +349,7 @@
             const purchLi = document.getElementById(v2id("nav-purch-v2"));
             if (salesLi) salesLi.style.display = "";
             if (purchLi) purchLi.style.display = "";
-            if (type === "ROH" && salesLi) salesLi.style.display = "none";
+            if ((type === "ROH" || type === "HALB" || type === "VERP") && salesLi) salesLi.style.display = "none";
             if (type === "FERT" && purchLi) purchLi.style.display = "none";
         }
 
@@ -440,15 +445,97 @@
             return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
         }
 
-        function buildUomAltSelectHtmlV2(index, selectedVal) {
-            var sel = selectedVal != null && selectedVal !== undefined ? String(selectedVal) : "";
-            var opts = '<option value="0">-- Select UOM --</option>';
-            (uomAltOptionList || []).forEach(function (o) {
-                var v = String(o.value ?? "");
-                var isSel = v !== "" && v === sel ? " selected" : "";
-                opts += '<option value="' + escapeAttr(v) + '"' + isSel + '>' + escapeAttr(String(o.text ?? "")) + '</option>';
+        function updateAltUomSummaryV2() {
+            const menu = document.getElementById(v2id("v2altUomMenu"));
+            const countEl = document.getElementById(v2id("v2altUomCount"));
+            const sumEl = document.getElementById(v2id("v2altUomSummary"));
+            if (!menu || !countEl || !sumEl) return;
+            const checks = menu.querySelectorAll('input[name="SelectedAlternateUomIds"]:checked');
+            const bits = [];
+            checks.forEach(function (c) {
+                const lab = c.closest("div.form-check");
+                if (lab) {
+                    const L = lab.querySelector("label");
+                    if (L) bits.push(String(L.textContent || "").trim().replace(/\s+/g, " "));
+                }
             });
-            return '<select name="Conversions[' + index + '].AltUnitId" class="form-select form-select-sm">' + opts + '</select>';
+            countEl.textContent = "(" + checks.length + ")";
+            sumEl.textContent = bits.length ? (bits.join(", ").length > 80 ? bits.join(", ").slice(0, 77) + "…" : bits.join(", ")) : "—";
+        }
+
+        function refreshAlternateUomMenuV2(presetSelectedIds) {
+            const menu = document.getElementById(v2id("v2altUomMenu"));
+            const baseEl = document.getElementById(v2id("BaseUnitCodeV2"));
+            if (!menu) return Promise.resolve();
+            const baseCode = baseEl && String(baseEl.value || "").trim();
+            if (!baseCode) {
+                menu.innerHTML = '<li class="small text-muted px-2 py-1">Select base unit first.</li>';
+                updateAltUomSummaryV2();
+                return Promise.resolve();
+            }
+            const url = urlGetAlternateUomsV2 + "?baseCode=" + encodeURIComponent(baseCode);
+            return fetch(url)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data || !data.success) {
+                        menu.innerHTML = '<li class="small text-danger px-2 py-1">Could not load alternates.</li>';
+                        return;
+                    }
+                    const alts = data.alts || [];
+                    if (!alts.length) {
+                        menu.innerHTML = '<li class="small text-muted px-2 py-1">No conversions for this base. Add them under Configuration → Unit Conversion.</li>';
+                        updateAltUomSummaryV2();
+                        return;
+                    }
+                    const preset = new Set();
+                    (presetSelectedIds || []).forEach(function (x) {
+                        var n = parseInt(x, 10);
+                        if (!isNaN(n)) preset.add(n);
+                    });
+                    var html = "";
+                    alts.forEach(function (a, i) {
+                        var id = a.id != null ? a.id : a.Id;
+                        var code = a.code != null ? a.code : a.Code;
+                        var desc = a.desc != null ? a.desc : a.Desc;
+                        var qty = a.quantity != null ? a.quantity : a.Quantity;
+                        var idNum = parseInt(id, 10);
+                        var checked = !isNaN(idNum) && preset.has(idNum) ? " checked" : "";
+                        var idAttr = "v2alt" + (V2_ID_AFFIX || "root").replace(/[^a-zA-Z0-9]/g, "_") + "_" + i + "_" + id;
+                        var line = String(code || "");
+                        if (desc) line += " — " + String(desc);
+                        if (qty !== null && qty !== undefined && String(qty) !== "")
+                            line += " (1 = " + String(qty) + ")";
+                        html += '<li class="px-0"><div class="form-check mb-0"><input class="form-check-input" type="checkbox" name="SelectedAlternateUomIds" value="' + escapeAttr(String(id)) + '" id="' + idAttr + '"' + checked + ' />' +
+                            '<label class="form-check-label small" for="' + idAttr + '">' + escapeAttr(line) + "</label></div></li>";
+                    });
+                    menu.innerHTML = html;
+                    menu.querySelectorAll('input[name="SelectedAlternateUomIds"]').forEach(function (cb) {
+                        cb.addEventListener("change", updateAltUomSummaryV2);
+                    });
+                    updateAltUomSummaryV2();
+                })
+                .catch(function () {
+                    menu.innerHTML = '<li class="small text-danger px-2 py-1">Request failed.</li>';
+                });
+        }
+
+        function updateV2MatSalesState() {
+            const form = document.getElementById(v2id("createMaterialV2Form"));
+            const baseEl = document.getElementById(v2id("BaseUnitCodeV2"));
+            if (!form || !baseEl) return;
+            const v = String(baseEl.value || "").trim();
+            const has = v.length > 0;
+            const opt = baseEl.options[baseEl.selectedIndex];
+            const code = has && opt ? (String(opt.text || opt.value || v).split("—")[0] || v).trim() : "—";
+            const dis = has ? code : "—";
+            const lbl0 = document.getElementById(v2id("v2MatSalesBaseLbl"));
+            if (lbl0) lbl0.textContent = dis;
+            form.querySelectorAll(".v2-mat-sales-basesuf").forEach(function (s) { s.textContent = dis; });
+            form.querySelectorAll(".v2-mat-sale-pkr").forEach(function (el) {
+                el.readOnly = !has;
+                el.classList.toggle("bg-light", !has);
+                if (!has) el.value = "";
+            });
         }
 
         function v2CollectValidationInvalid() {
@@ -461,88 +548,10 @@
             form.querySelectorAll(".req").forEach(function (el) {
                 if (!el.value || !String(el.value).trim()) add(el);
             });
-            var tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
-            if (tbody) {
-                tbody.querySelectorAll("tr").forEach(function (tr) {
-                    var alt = tr.querySelector('select[name$=".AltUnitId"]');
-                    var num = tr.querySelector('input[name$=".Numerator"]');
-                    var den = tr.querySelector('input[name$=".Denominator"]');
-                    if (!alt || !String(alt.value || "").trim() || alt.value === "0") add(alt);
-                    if (!num || String(num.value || "").trim() === "" || isNaN(parseFloat(num.value))) add(num);
-                    if (!den || String(den.value || "").trim() === "" || isNaN(parseFloat(den.value))) add(den);
-                });
-            }
             return bad;
         }
 
-        function addUomRowV2WithValues(altUnit, numerator, denominator, baseUom) {
-            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
-            if (!tbody) return;
-            const existingRowCount = tbody.querySelectorAll("tr").length;
-            if (uomIndexV2 < existingRowCount) uomIndexV2 = existingRowCount;
-            const fromField = document.getElementById(v2id("BaseUnitCodeV2"));
-            const fromFieldVal = fromField && String(fromField.value || "").trim();
-            const baseUomValue = (baseUom != null && String(baseUom).trim() !== "") ? String(baseUom).trim() : (fromFieldVal || "");
-            const numStr = numerator !== undefined && numerator !== null && numerator !== "" ? String(numerator) : "";
-            const denStr = denominator !== undefined && denominator !== null && denominator !== "" ? String(denominator) : "1";
-            const rowId = "v2row" + V2_ID_AFFIX.replace(/-/g, "_") + "_" + uomIndexV2;
-            const idx = uomIndexV2;
-            const html =
-                '<tr id="' + rowId + '">' +
-                '<td>' + buildUomAltSelectHtmlV2(idx, altUnit) + '</td>' +
-                '<td><input name="Conversions[' + uomIndexV2 + '].Numerator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(numStr) + '" /></td>' +
-                '<td class="mat-uom-eq">=</td>' +
-                '<td><input name="Conversions[' + uomIndexV2 + '].Denominator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(denStr) + '" /></td>' +
-                '<td><input class="form-control form-control-sm sap-readonly" value="' + escapeAttr(baseUomValue) + '" readonly /></td>' +
-                '<td class="mat-uom-action"><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'' + rowId + '\').remove()">X</button></td>' +
-                '</tr>';
-            tbody.insertAdjacentHTML("beforeend", html);
-            uomIndexV2++;
-        }
-
-        function syncMrpQtyFieldsV2() {
-            const baseEl = document.getElementById(v2id("BaseUnitCodeV2"));
-            const code = baseEl && String(baseEl.value || "").trim();
-            const has = !!code;
-            const opt = baseEl && baseEl.options && baseEl.selectedIndex >= 0 ? baseEl.options[baseEl.selectedIndex] : null;
-            const uomText = has && opt ? String(opt.text || "").trim() : "—";
-            const lblS = document.getElementById(v2id("mrpSafetyUomLbl"));
-            const lblR = document.getElementById(v2id("mrpReorderUomLbl"));
-            if (lblS) lblS.textContent = has ? uomText : "—";
-            if (lblR) lblR.textContent = has ? uomText : "—";
-            const safety = document.getElementById(v2id("SafetyStockV2"));
-            const reorder = document.getElementById(v2id("ReorderPointV2"));
-            if (safety) {
-                safety.readOnly = !has;
-                if (!has) safety.value = "";
-            }
-            if (reorder) {
-                reorder.readOnly = !has;
-                if (!has) reorder.value = "";
-            }
-        }
-
-        window['addUomRowV2@(v2HandlerKey)'] = function () {
-            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
-            if (!tbody) return;
-            const baseUomField = document.getElementById(v2id("BaseUnitCodeV2"));
-            const baseUomValue = baseUomField && String(baseUomField.value || "").trim();
-            if (!baseUomValue) {
-                const form = document.getElementById(v2id("createMaterialV2Form"));
-                const msg = "Select a base unit of measure (Basic Data) before adding a conversion row.";
-                if (form && typeof window.auShowInlineValidation === "function")
-                    window.auShowInlineValidation(form, [], msg);
-                return;
-            }
-            addUomRowV2WithValues("", "", "1", baseUomValue);
-            const formAfter = document.getElementById(v2id("createMaterialV2Form"));
-            if (formAfter && typeof window.auClearInlineValidation === "function")
-                window.auClearInlineValidation(formAfter);
-            const sb = document.getElementById(v2id("statusBarV2"));
-            if (sb) sb.innerText = "Row added to conversion table.";
-        };
-
-        function applyCreateV2EditData(m, conversions) {
+        function applyCreateV2EditData(m, selectedAlternateUomIds) {
             const form = document.getElementById(v2id("createMaterialV2Form"));
             if (!form || !m) return;
             function pick(obj, camel, pascal) {
@@ -564,6 +573,10 @@
             setVal("EAN", pick(m, "ean", "EAN"));
             setVal("DeliveringPlantCode", pick(m, "deliveringPlantCode", "DeliveringPlantCode"));
             setVal("ItemCategoryGroup", pick(m, "itemCategoryGroup", "ItemCategoryGroup"));
+            setVal("SalesPriceGradeAPerBaseUom", pick(m, "salesPriceGradeAPerBaseUom", "SalesPriceGradeAPerBaseUom"));
+            setVal("SalesPriceGradeBPerBaseUom", pick(m, "salesPriceGradeBPerBaseUom", "SalesPriceGradeBPerBaseUom"));
+            setVal("SalesPriceGradeCPerBaseUom", pick(m, "salesPriceGradeCPerBaseUom", "SalesPriceGradeCPerBaseUom"));
+            setVal("ScrapCostPerBaseUom", pick(m, "scrapCostPerBaseUom", "ScrapCostPerBaseUom"));
             setVal("PurchasingGroupCode", pick(m, "purchasingGroupCode", "PurchasingGroupCode"));
             var gr = pick(m, "grProcessingTime", "GrProcessingTime");
             setVal("GrProcessingTime", gr !== "" && gr != null ? gr : "");
@@ -573,27 +586,19 @@
             setVal("StrategyGroup", pick(m, "strategyGroup", "StrategyGroup"));
             var lt = pick(m, "leadTimeDays", "LeadTimeDays");
             setVal("LeadTimeDays", lt !== "" && lt != null ? lt : "");
-            var ss = pick(m, "safetyStock", "SafetyStock");
-            setVal("SafetyStock", ss !== "" && ss != null ? ss : "");
-            var rp = pick(m, "reorderPoint", "ReorderPoint");
-            setVal("ReorderPoint", rp !== "" && rp != null ? rp : "");
             setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
 
-            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
-            if (tbody) tbody.innerHTML = "";
-            uomIndexV2 = 0;
-            const baseUom = pick(m, "baseUnitCode", "BaseUnitCode") || "";
-            (conversions || []).forEach(function (c) {
-                if (!c) return;
-                var alt = c.altUnitId != null ? c.altUnitId : c.AltUnitId;
-                if (alt === undefined || alt === null || alt === "" || alt === 0) return;
-                var num = c.numerator != null ? c.numerator : c.Numerator;
-                var den = c.denominator != null ? c.denominator : c.Denominator;
-                addUomRowV2WithValues(alt, num, den, baseUom);
-            });
+            var selAlts = selectedAlternateUomIds;
+            if (selAlts == null && m) {
+                if (m.selectedAlternateUomIds) selAlts = m.selectedAlternateUomIds;
+                else if (m.SelectedAlternateUomIds) selAlts = m.SelectedAlternateUomIds;
+            }
             const sb = document.getElementById(v2id("statusBarV2"));
-            if (sb) sb.innerText = "Loaded for edit.";
-            syncMrpQtyFieldsV2();
+            updateV2MatSalesState();
+            refreshAlternateUomMenuV2(Array.isArray(selAlts) ? selAlts : []).then(function () {
+                if (sb) sb.innerText = "Loaded for edit.";
+                updateV2MatSalesState();
+            });
 
             var origNum = pick(m, "materialNumber", "MaterialNumber");
             var origH = document.getElementById(v2id("createV2OriginalMaterialNumber"));
@@ -610,9 +615,6 @@
             if (origH) origH.value = "";
             const form = document.getElementById(v2id("createMaterialV2Form"));
             if (form) form.reset();
-            const tbody = document.querySelector("#" + v2id("uomTableV2") + " tbody");
-            if (tbody) tbody.innerHTML = "";
-            uomIndexV2 = 0;
             const num = document.getElementById(v2id("txtMaterialNumberV2"));
             if (num) num.value = "";
             const matType = document.getElementById(v2id("matTypeV2"));
@@ -629,6 +631,7 @@
                 bootstrap.Tab.getOrCreateInstance(firstTabBtn).show();
             handleTabVisibilityV2();
             syncMrpQtyFieldsV2();
+            updateV2MatSalesState();
         }
 
         if (createV2Embedded)
@@ -643,9 +646,10 @@
             handleTabVisibilityV2();
             const baseUomSel = document.getElementById(v2id("BaseUnitCodeV2"));
             if (baseUomSel) {
-                baseUomSel.addEventListener("change", syncMrpQtyFieldsV2);
+                baseUomSel.addEventListener("change", function () { refreshAlternateUomMenuV2(); updateV2MatSalesState(); });
             }
-            syncMrpQtyFieldsV2();
+            refreshAlternateUomMenuV2();
+            updateV2MatSalesState();
             const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
             if (saveBtn) {
                 saveBtn.addEventListener("click", function () {
@@ -729,7 +733,8 @@
             }
         });
 
-        window.auMaterialV2MrpSyncByAffix = window.auMaterialV2MrpSyncByAffix || {};
-        window.auMaterialV2MrpSyncByAffix[V2_ID_AFFIX || ""] = syncMrpQtyFieldsV2;
+        window[v2id("auV2AfterEditLoad")] = function (m, selectedAlternateUomIds) {
+            applyCreateV2EditData(m, selectedAlternateUomIds);
+        };
     })();
 </script>

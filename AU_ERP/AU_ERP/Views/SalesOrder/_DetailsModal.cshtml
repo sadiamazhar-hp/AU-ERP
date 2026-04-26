@@ -1,0 +1,112 @@
+@model AU_ERP.Models.ViewModels.SalesOrderDetailsFullVm
+@using System.Globalization
+@using AU_ERP.Models.ViewModels
+@{
+    var d = Model?.Order;
+    var p = Model?.Pricing;
+    string FmtDate(DateTime t) => t.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+    string FmtMoney(decimal n) => n.ToString("N2", CultureInfo.InvariantCulture);
+    string FmtQty(decimal n) => n.ToString("0.####", CultureInfo.InvariantCulture);
+    string FmtChgVal(SalesLineChargeColVm c, IReadOnlyDictionary<int, decimal> vals)
+    {
+        if (!vals.TryGetValue(c.ChargeId, out var v)) return "—";
+        return c.IsPercentage ? (v.ToString("0.####", CultureInfo.InvariantCulture) + " %") : FmtMoney(v);
+    }
+    var pdfUrl = d != null ? (Url.Action("DownloadPdf", "SalesOrder", new { id = d.Id }) ?? "") : "";
+    var itemCols = p?.ItemChargeColumns ?? Array.Empty<SalesLineChargeColVm>();
+    var lines = p?.Lines ?? Array.Empty<SalesLineDisplayVm>();
+    var docSteps = p?.DocumentChargeSteps ?? Array.Empty<SalesDocChargeStepVm>();
+}
+@if (d == null || p == null)
+{
+    <p class="text-secondary mb-0">Not found.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
+        <div>
+            <h6 class="mb-0" style="color: var(--dark, #354a5e);">@d.SalesOrderNumber</h6>
+            <p class="small text-muted mb-0">@FmtDate(d.OrderDate) · @(d.Plant?.PlantName ?? "—") · <span class="so-badge so-badge-confirmed">Confirmed</span></p>
+        </div>
+        @if (!string.IsNullOrEmpty(pdfUrl))
+        {
+            <a class="btn btn-sm btn-primary" href="@pdfUrl" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+        }
+    </div>
+    <div class="row g-2 small mb-2">
+        <div class="col-6 col-md-4">
+            <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Quotation</div>
+            <div class="fw-semibold">@(d.SalesQuotation?.QuotationNumber ?? "—")</div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Channel</div>
+            <div class="fw-semibold">@(d.DistributionChannel?.DistributionChannelName ?? "—")</div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Customer</div>
+            <div class="fw-semibold">@(d.CustomerName ?? "—")</div>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(d.ShipToAddress))
+    {
+        <p class="small text-muted border rounded p-2 mb-2 mb-md-3">@d.ShipToAddress</p>
+    }
+    <div class="table-responsive" style="max-height: 48vh; overflow-y: auto;">
+        <table class="table table-sm table-bordered align-middle mb-0" style="font-size: .75rem;">
+            <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                <tr>
+                    <th style="width:2rem">#</th>
+                    <th>Material</th>
+                    <th>Description</th>
+                    <th>UoM</th>
+                    <th class="text-end">Qty</th>
+                    <th class="text-end">Unit (PKR)</th>
+                    <th class="text-end">Subtotal<br/><span class="fw-normal" style="font-size:.65rem">(before line chg.)</span></th>
+                    @foreach (var c in itemCols)
+                    {
+                        <th class="text-end small">@c.Symbol@(c.IsPercentage ? " (%)" : "")</th>
+                    }
+                    <th class="text-end">Line total (PKR)</th>
+                </tr>
+            </thead>
+            <tbody>
+            @{ var n = 0; }
+            @foreach (var li in lines)
+            {
+                n++;
+                <tr>
+                    <td class="text-muted">@n</td>
+                    <td class="text-nowrap">@li.MaterialNumber</td>
+                    <td>@(li.MaterialDescription ?? "—")</td>
+                    <td>@(li.UomCode ?? "—")</td>
+                    <td class="text-end">@FmtQty(li.Qty)</td>
+                    <td class="text-end">@FmtMoney(li.UnitPrice)</td>
+                    <td class="text-end">@FmtMoney(li.SubtotalBeforeItemCharges)</td>
+                    @foreach (var c in itemCols)
+                    {
+                        <td class="text-end">@FmtChgVal(c, li.ItemChargeValues)</td>
+                    }
+                    <td class="text-end fw-semibold">@FmtMoney(li.LineNet)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <div class="mt-2 pt-2 border-top small">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span>Subtotal (line totals, before order charges)</span>
+            <span class="fw-semibold">@FmtMoney(p.SubtotalLineTotals)</span>
+        </div>
+        @foreach (var s in docSteps)
+        {
+            <div class="d-flex justify-content-between align-items-center mb-1 text-muted">
+                <span>@s.Symbol · @(s.IsPercentage ? (s.InputValue.ToString("0.####", CultureInfo.InvariantCulture) + " %") : FmtMoney(s.InputValue))</span>
+                <span>@(s.Delta >= 0 ? "+" : "")@FmtMoney(s.Delta)</span>
+            </div>
+        }
+        <div class="d-flex justify-content-between align-items-center pt-1 mt-1 border-top text-primary">
+            <span class="fw-bold">Grand total (PKR)</span>
+            <span class="fw-bold">@FmtMoney(p.GrandTotal)</span>
+        </div>
+    </div>
+}

@@ -1,0 +1,169 @@
+@model List<AU_ERP.Models.GlobalUnitConversion>
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Unit Conversion";
+    ViewBag.Title = "Unit Conversion";
+    var safeModel = Model ?? new List<AU_ERP.Models.GlobalUnitConversion>();
+    var uoms = ViewBag.Uoms as List<AU_ERP.Models.UnitOfMeasurement> ?? new List<AU_ERP.Models.UnitOfMeasurement>();
+    var uomItems = uoms.Select(u => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+    {
+        Value = u.Id.ToString(),
+        Text = (u.Code ?? "") + " — " + (u.Description ?? "")
+    }).ToList();
+}
+
+@if (TempData["GucMessage"] is string ok)
+{
+    <div class="alert alert-success py-2 small mb-2" role="status">@ok</div>
+}
+@if (TempData["GucError"] is string err)
+{
+    <div class="alert alert-danger py-2 small mb-2" role="status">@err</div>
+}
+
+<div class="sap-window au-ucg-page" id="app">
+    <form id="gucForm" method="post" action="@Url.Action("Index", "UnitConversionConfig")">
+        @Html.AntiForgeryToken()
+        <p class="small text-muted mb-2">1 [Unit] = [Qty] of [Alt unit] (e.g. 1 box = 12 piece).</p>
+        <div class="sap-toolbar">
+            <div class="d-flex">
+                <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">Edit</button>
+                <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>New Entries</button>
+                <button type="button" id="btnSave" class="btn btn-sap" onclick="handleSave()" disabled>Save</button>
+                <button type="button" id="btnDelete" class="btn btn-sap text-danger" onclick="handleDelete()" disabled>Delete</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table class="table-sap">
+                <thead>
+                    <tr>
+                        <th style="width: 35px;">Sel</th>
+                        <th style="min-width: 160px;">Unit</th>
+                        <th style="min-width: 160px;">Alt unit</th>
+                        <th style="min-width: 100px;">Qty</th>
+                    </tr>
+                </thead>
+                <tbody id="gridBody">
+                    @for (int i = 0; i < safeModel.Count; i++)
+                    {
+                        <tr>
+                            <td class="col-sel" onclick="selectRow(this)">
+                                <input type="hidden" name="[@i].Id" value="@safeModel[i].Id" class="row-id" />
+                            </td>
+                            <td>
+                                <select name="[@i].BaseUnitId" class="sap-input sap-select" disabled data-required="true">
+                                    <option value="0">—</option>
+                                    @foreach (var o in uomItems)
+                                    {
+                                        if (o.Value == safeModel[i].BaseUnitId.ToString())
+                                        {
+                                            <option value="@o.Value" selected="selected">@o.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@o.Value">@o.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <select name="[@i].AltUnitId" class="sap-input sap-select" disabled data-required="true">
+                                    <option value="0">—</option>
+                                    @foreach (var o in uomItems)
+                                    {
+                                        if (o.Value == safeModel[i].AltUnitId.ToString())
+                                        {
+                                            <option value="@o.Value" selected="selected">@o.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@o.Value">@o.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                <input name="[@i].Quantity" class="sap-input" type="number" step="any" min="0" value="@safeModel[i].Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" readonly data-required="true" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </form>
+</div>
+<style>
+    :root { --sap-border: #9fb2c5; --sap-header-bg: #dee6ef; --sap-readonly: #f4f4f4; --sap-selected: #b3d7ff; }
+    .sap-window { background: #fff; border: 1px solid var(--sap-border); min-height: 360px; }
+    .sap-toolbar { padding: 12px; border-bottom: 2px solid var(--sap-border); display: flex; justify-content: flex-end; }
+    .btn-sap { border-radius: 2px; font-size: 12px; border: 1px solid #bbb; margin-right: 5px; background: #fdfdfd; }
+    .table-container { overflow: auto; }
+    .table-sap { width: 100%; border-collapse: collapse; }
+    .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-weight: normal; }
+    .table-sap td { border: 1px solid #ccc; padding: 0; height: 32px; }
+    .sap-input { width: 100%; min-height: 32px; border: none; padding: 0 8px; background: var(--sap-readonly); box-sizing: border-box; }
+    select.sap-input.sap-select { cursor: default; }
+    .edit-mode .sap-input:not([readonly]) { background: #fff; }
+    .edit-mode select.sap-input.sap-select:not([disabled]) { background: #fff; cursor: pointer; }
+    .col-sel { width: 35px; background: #f0f0f0; cursor: pointer; }
+    .row-selected { background: var(--sap-selected) !important; }
+</style>
+<script>
+    let isEditMode = false, selectedRow = null, rowCount = @(safeModel.Count);
+    const uomOptionHtml = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+        uomItems.Select(x => new { v = x.Value, t = x.Text })));
+    function setMode(edit) {
+        isEditMode = edit;
+        document.getElementById('app').classList.toggle('edit-mode', edit);
+        document.querySelectorAll('.sap-input:not(.sap-select)').forEach(i => { i.readOnly = !edit; });
+        document.querySelectorAll('select.sap-select').forEach(s => { s.disabled = !edit; });
+        document.getElementById('btnEdit').disabled = edit;
+        document.getElementById('btnNew').disabled = !edit;
+        document.getElementById('btnSave').disabled = !edit;
+    }
+    function uomOptionsHtml() {
+        let o = '<option value="0">—</option>';
+        (uomOptionHtml || []).forEach(function (x) {
+            const v = String(x.v || ""), t = String(x.t || "");
+            o += '<option value="' + v + '">' + t.replace(/</g, "&lt;") + '</option>';
+        });
+        return o;
+    }
+    function addNewRow() {
+        const body = document.getElementById('gridBody');
+        const tr = document.createElement('tr');
+        const o = uomOptionsHtml();
+        tr.innerHTML = '<td class="col-sel" onclick="selectRow(this)"><input type="hidden" name="[' + rowCount + '].Id" value="0" class="row-id" /></td><td><select name="[' + rowCount + '].BaseUnitId" class="sap-input sap-select" data-required="true">' + o + '</select></td><td><select name="[' + rowCount + '].AltUnitId" class="sap-input sap-select" data-required="true">' + o + '</select></td><td><input name="[' + rowCount + '].Quantity" class="sap-input" type="number" step="any" min="0" data-required="true" value="1" /></td>';
+        body.appendChild(tr);
+        rowCount++;
+        if (isEditMode) { tr.querySelectorAll('select.sap-select').forEach(s => s.disabled = false); tr.querySelector('input[type=number]').readOnly = false; }
+    }
+    function selectRow(cell) { if (!isEditMode) return; if (selectedRow) selectedRow.classList.remove('row-selected'); selectedRow = cell.parentElement; selectedRow.classList.add('row-selected'); document.getElementById('btnDelete').disabled = false; }
+    function handleSave() {
+        document.querySelectorAll('select.sap-select').forEach(s => s.disabled = false);
+        const fd = new FormData(document.getElementById('gucForm'));
+        fetch(document.getElementById('gucForm').action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.message || 'Save failed'); });
+    }
+    function handleDelete() {
+        if (!selectedRow) return;
+        const id = selectedRow.querySelector('.row-id')?.value;
+        if (!id || id === '0') { selectedRow.remove(); selectedRow = null; document.getElementById('btnDelete').disabled = true; reIndex(); return; }
+        if (!confirm('Delete this row?')) return;
+        fetch('@Url.Action("Delete", "UnitConversionConfig")', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) })
+            .then(r => r.json()).then(d => { if (d.success) { selectedRow.remove(); selectedRow = null; document.getElementById('btnDelete').disabled = true; reIndex(); } else alert(d.message); });
+    }
+    function reIndex() {
+        const rows = document.querySelectorAll('#gridBody tr');
+        rows.forEach((row, index) => {
+            row.querySelectorAll('[name]').forEach(el => {
+                if (el.name && el.name.includes('.')) {
+                    const p = el.name.split('.').slice(1).join('.');
+                    el.name = '[' + index + '].' + p;
+                }
+            });
+        });
+        rowCount = rows.length;
+    }
+    (function () { document.querySelectorAll('select.sap-select').forEach(s => s.disabled = true); })();
+</script>

@@ -28,6 +28,16 @@
         && string.Equals(act, "DocumentRanges", StringComparison.OrdinalIgnoreCase);
     var uomActive = string.Equals(ctrl, "UOM", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var unitConvCfgActive = string.Equals(ctrl, "UnitConversionConfig", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var chargesActive = string.Equals(ctrl, "Charges", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var configurationSchemaActive = string.Equals(ctrl, "Schema", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var configMaterialGroupActive = string.Equals(ctrl, "ConfigMaterialGroup", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var configPlantActive = string.Equals(ctrl, "ConfigPlant", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var pvActive = string.Equals(ctrl, "ProductionVersion", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var mrpActive = string.Equals(ctrl, "MRP", StringComparison.OrdinalIgnoreCase)
@@ -42,9 +52,21 @@
     var usersActive = string.Equals(ctrl, "Users", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var isAdminDept = User.HasClaim(AuClaimTypes.Department, "Admin");
+    var isSalesDept = User.HasClaim(AuClaimTypes.Department, "Sales");
     var isProductionDept = User.HasClaim(AuClaimTypes.Department, "Production");
-    var homeActive = string.Equals(ctrl, "Home", StringComparison.OrdinalIgnoreCase)
+    var isStoreDept = User.HasClaim(AuClaimTypes.Department, "Store");
+    var salesQuotationActive = string.Equals(ctrl, "SalesQuotation", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var salesOrderActive = string.Equals(ctrl, "SalesOrder", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var deliveryChallanActive = string.Equals(ctrl, "DeliveryChallan", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var dashboardActive = string.Equals(ctrl, "Dashboard", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
+    var configMaterialNavActive = materialTypeActive || numberRangesActive || configMaterialGroupActive;
+    var configBpNavActive = bpTypesActive || bpGroupingsActive || bpTypeNumberRangesActive;
+    var configDocumentNavActive = docTypesActive || docRangesActive;
+    var configUomNavActive = uomActive || unitConvCfgActive;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -64,7 +86,7 @@
 <body class="au-shell-body">
         <header class="au-header">
             <div class="au-header-brand">
-                <a asp-controller="Home" asp-action="Index" class="au-logo-tile" aria-label="Home — A&amp;U Tiles">
+                <a asp-controller="Dashboard" asp-action="Index" class="au-logo-tile" aria-label="Dashboard — A&amp;U Tiles">
                     <img src="@Url.Content("~/AU_Tiles_logo 2.png")" asp-append-version="true" alt="A&amp;U Tiles" />
                 </a>
                 <span class="au-header-title">AU MANUFACTURERS</span>
@@ -83,7 +105,7 @@
         </header>
 
             <aside class="au-sidebar" aria-label="Main navigation">
-                <a class="au-sidebar-link @(homeActive ? "active" : null)" asp-controller="Home" asp-action="Index">Home</a>
+                <a class="au-sidebar-link @(dashboardActive ? "active" : null)" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
 
                 @if (isAdminDept)
                 {
@@ -94,9 +116,18 @@
                     <a class="au-sidebar-link @(wcActive ? "active" : null)" asp-controller="WorkCentre" asp-action="Index">Work Centres</a>
                     <a class="au-sidebar-link @(rtActive ? "active" : null)" asp-controller="Routing" asp-action="Index">Routing</a>
                     <a class="au-sidebar-link @(pvActive ? "active" : null)" asp-controller="ProductionVersion" asp-action="Index">Product Version</a>
-
+                }
+                @if (isStoreDept)
+                {
                     <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Inventory</div>
                     <a class="au-sidebar-link @(stockOverviewActive ? "active" : null)" asp-controller="StockOverview" asp-action="Index">Stock Overview</a>
+                }
+                @if (isSalesDept)
+                {
+                    <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Sales</div>
+                    <a class="au-sidebar-link @(salesQuotationActive ? "active" : null)" asp-controller="SalesQuotation" asp-action="Index">Sales Quotation</a>
+                    <a class="au-sidebar-link @(salesOrderActive ? "active" : null)" asp-controller="SalesOrder" asp-action="Index">Sales Order</a>
+                    <a class="au-sidebar-link @(deliveryChallanActive ? "active" : null)" asp-controller="DeliveryChallan" asp-action="Index">Delivery challan</a>
                 }
                 @if (isProductionDept)
                 {
@@ -112,14 +143,36 @@
                     <a class="au-sidebar-link @(usersActive ? "active" : null)" asp-controller="Users" asp-action="Index">Users</a>
 
                     <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Configuration</div>
-                    <a class="au-sidebar-link @(materialTypeActive ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Material Types</a>
-                    <a class="au-sidebar-link @(numberRangesActive ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Material Ranges</a>
-                    <a class="au-sidebar-link @(bpTypesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeSamples">BP Types</a>
-                    <a class="au-sidebar-link @(bpGroupingsActive ? "active" : null)" asp-controller="BP" asp-action="BPGroupings">BP Groupings</a>
-                    <a class="au-sidebar-link @(bpTypeNumberRangesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeNumberRanges">BP Ranges</a>
-                    <a class="au-sidebar-link @(docTypesActive ? "active" : null)" asp-controller="Document" asp-action="DocumentTypes">Document Types</a>
-                    <a class="au-sidebar-link @(docRangesActive ? "active" : null)" asp-controller="Document" asp-action="DocumentRanges">Document Ranges</a>
-                    <a class="au-sidebar-link @(uomActive ? "active" : null)" asp-controller="UOM" asp-action="Index">UOM</a>
+
+                    <div class="au-sidebar-group">
+                        <div class="au-sidebar-group-title @(configMaterialNavActive ? "au-sidebar-group-title--active" : null)">Material</div>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(materialTypeActive ? "active" : null)" asp-controller="Material" asp-action="MaterialType">Types</a>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(numberRangesActive ? "active" : null)" asp-controller="Material" asp-action="NumberRanges">Ranges</a>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(configMaterialGroupActive ? "active" : null)" asp-controller="ConfigMaterialGroup" asp-action="Index">Groups</a>
+                    </div>
+
+                    <div class="au-sidebar-group">
+                        <div class="au-sidebar-group-title @(configBpNavActive ? "au-sidebar-group-title--active" : null)">Business partner</div>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(bpTypesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeSamples">Types</a>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(bpTypeNumberRangesActive ? "active" : null)" asp-controller="BP" asp-action="BPTypeNumberRanges">Ranges</a>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(bpGroupingsActive ? "active" : null)" asp-controller="BP" asp-action="BPGroupings">Groups</a>
+                    </div>
+
+                    <div class="au-sidebar-group">
+                        <div class="au-sidebar-group-title @(configDocumentNavActive ? "au-sidebar-group-title--active" : null)">Document</div>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(docTypesActive ? "active" : null)" asp-controller="Document" asp-action="DocumentTypes">Types</a>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(docRangesActive ? "active" : null)" asp-controller="Document" asp-action="DocumentRanges">Ranges</a>
+                    </div>
+
+                    <div class="au-sidebar-group">
+                        <div class="au-sidebar-group-title @(configUomNavActive ? "au-sidebar-group-title--active" : null)">UOM</div>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(uomActive ? "active" : null)" asp-controller="UOM" asp-action="Index">Unit of measurement</a>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(unitConvCfgActive ? "active" : null)" asp-controller="UnitConversionConfig" asp-action="Index">Unit conversion</a>
+                    </div>
+
+                    <a class="au-sidebar-link @(configPlantActive ? "active" : null)" asp-controller="ConfigPlant" asp-action="Index">Plants</a>
+                    <a class="au-sidebar-link @(chargesActive ? "active" : null)" asp-controller="Charges" asp-action="Index">Charges</a>
+                    <a class="au-sidebar-link @(configurationSchemaActive ? "active" : null)" asp-controller="Schema" asp-action="Index">Schemas</a>
                 }
             </aside>
 

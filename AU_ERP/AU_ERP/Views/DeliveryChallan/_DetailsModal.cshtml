@@ -1,0 +1,67 @@
+@model AU_ERP.Models.DeliveryChallan
+@using System.Globalization
+@{
+    var d = Model;
+    var lines = d?.Items?.OrderBy(i => i.Id).ToList() ?? new List<DeliveryChallanItem>();
+    string FmtDate(DateTime t) => t.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+    string FmtQty(decimal q) => q.ToString("0.####", CultureInfo.InvariantCulture);
+    var pdfUrl = d != null ? (Url.Action("DownloadPdf", "DeliveryChallan", new { id = d.Id }) ?? "") : "";
+}
+@if (d == null)
+{
+    <p class="text-secondary mb-0">Not found.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
+        <div>
+            <h6 class="mb-0" style="color: var(--dark, #354a5e);">@d.DeliveryChallanNumber</h6>
+            <p class="small text-muted mb-0">@FmtDate(d.DocumentDate) · @(d.Plant?.PlantName ?? "—") · @d.DeliveryType</p>
+        </div>
+        @if (!string.IsNullOrEmpty(pdfUrl))
+        {
+            <a class="btn btn-sm btn-primary" href="@pdfUrl" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+        }
+    </div>
+    <div class="row g-2 small mb-2">
+        <div class="col-6">
+            <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Ref. sales order</div>
+            <div class="fw-semibold">@(d.ReferenceSalesOrderNumber ?? d.SalesOrder?.SalesOrderNumber ?? "—")</div>
+        </div>
+        <div class="col-6">
+            <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Ship-to</div>
+            <div class="fw-semibold">@(d.ShipToDisplayName ?? d.ShipToBusinessPartner?.FullName ?? "—")</div>
+        </div>
+    </div>
+    <div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">
+        <table class="table table-sm table-bordered align-middle mb-0" style="font-size: .8rem;">
+            <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                <tr>
+                    <th style="width:2rem">#</th>
+                    <th>Ref. SO</th>
+                    <th>Material</th>
+                    <th>Description</th>
+                    <th class="text-end">Qty</th>
+                    <th>UoM</th>
+                    <th>Batch / lot</th>
+                </tr>
+            </thead>
+            <tbody>
+            @{ var n = 0; }
+            @foreach (var li in lines)
+            {
+                n++;
+                <tr>
+                    <td class="text-muted">@n</td>
+                    <td class="text-nowrap">@(li.ReferenceSalesOrderNumber ?? "—")</td>
+                    <td class="text-nowrap">@li.MaterialNumber</td>
+                    <td>@(li.MaterialDescription ?? "—")</td>
+                    <td class="text-end">@FmtQty(li.DeliveryQuantity)</td>
+                    <td>@(li.QuantityUom?.Code ?? "—")</td>
+                    <td>@(string.IsNullOrWhiteSpace(li.Batch) ? "—" : li.Batch)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

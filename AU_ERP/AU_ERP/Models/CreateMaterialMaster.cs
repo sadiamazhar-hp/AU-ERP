@@ -19,6 +19,20 @@ namespace AU_ERP.Models
         public string? DeliveringPlantCode { get; set; }
         public string? ItemCategoryGroup { get; set; }
 
+        /// <summary>Sales list price in PKR per <see cref="BaseUnitCode"/> (Grade A / first quality).</summary>
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? SalesPriceGradeAPerBaseUom { get; set; }
+
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? SalesPriceGradeBPerBaseUom { get; set; }
+
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? SalesPriceGradeCPerBaseUom { get; set; }
+
+        /// <summary>Scrap valuation in PKR per base UOM.</summary>
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? ScrapCostPerBaseUom { get; set; }
+
         [MaxLength(20)]
         public string? PurchasingGroupCode { get; set; }
         public int? GrProcessingTime { get; set; }

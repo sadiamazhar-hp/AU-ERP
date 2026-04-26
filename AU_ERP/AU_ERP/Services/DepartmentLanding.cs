@@ -9,10 +9,6 @@ public static class DepartmentLanding
     {
         if (user?.Identity?.IsAuthenticated != true)
             return "/Account/Login";
-        if (user.HasClaim(AuClaimTypes.Department, "Admin"))
-            return "/Material/GetMaterialList";
-        if (user.HasClaim(AuClaimTypes.Department, "Production"))
-            return "/MRP/Index";
-        return "/Home/Index";
+        return "/Dashboard/Index";
     }
 }

@@ -6,7 +6,7 @@ using AU_ERP.Services;
 
 namespace AU_ERP.Controllers
 {
-    [Authorize(Policy = "AdminDepartment")]
+    [Authorize(Policy = "StoreDepartment")]
     public class StockOverviewController : Controller
     {
         private readonly AppDbContext _db;
@@ -43,6 +43,7 @@ namespace AU_ERP.Controllers
             var items = await query
                 .OrderByDescending(s => s.UpdatedAt)
                 .ThenBy(s => s.MaterialNumber)
+                .ThenBy(s => s.Grade)
                 .ToListAsync(ct);
 
             var vm = new StockOverviewPageVm
@@ -115,21 +116,22 @@ namespace AU_ERP.Controllers
             var mat = await _db.CreateMaterialMaster.AsNoTracking()
                 .FirstOrDefaultAsync(m => m.MaterialNumber == row.MaterialNumber, ct);
 
-            return Json(new
-            {
-                success = true,
-                data = new
+                return Json(new
                 {
-                    row.Id,
-                    row.MaterialNumber,
-                    MaterialTypeCode = mat?.MaterialTypeCode,
-                    row.Quantity,
-                    row.QuantityUomId,
-                    row.Status,
-                    row.StandardCostPerUom,
-                    row.StockValue
-                }
-            });
+                    success = true,
+                    data = new
+                    {
+                        row.Id,
+                        row.MaterialNumber,
+                        MaterialTypeCode = mat?.MaterialTypeCode,
+                        row.Quantity,
+                        row.QuantityUomId,
+                        row.Status,
+                        row.StandardCostPerUom,
+                        row.StockValue,
+                        row.Grade
+                    }
+                });
         }
 
         [HttpPost]
@@ -142,13 +144,35 @@ namespace AU_ERP.Controllers
                     return Json(new { success = false, message = err });
 
                 var now = DateTime.UtcNow;
+                var st = NormalizeStatus(dto.Status);
+                var g = NormalizeGrade(dto.Grade);
+                var key = dto.MaterialNumber!.Trim();
+                var existing = await _db.StockInventoryLines
+                    .FirstOrDefaultAsync(
+                        s => s.MaterialNumber == key
+                             && s.QuantityUomId == dto.QuantityUomId
+                             && s.Status == st
+                             && s.Grade == g,
+                        ct)
+                    .ConfigureAwait(false);
+
+                if (existing != null)
+                {
+                    existing.Quantity += dto.Quantity;
+                    existing.StockValue = ComputeStockValue(existing.Quantity, existing.StandardCostPerUom);
+                    existing.UpdatedAt = now;
+                    await _db.SaveChangesAsync(ct);
+                    return Json(new { success = true, message = "Quantity added to existing stock line (same material, UOM, status, and grade)." });
+                }
+
                 var stockValue = ComputeStockValue(dto.Quantity, dto.StandardCostPerUom);
                 var entity = new StockInventoryLine
                 {
-                    MaterialNumber = dto.MaterialNumber!.Trim(),
+                    MaterialNumber = key,
                     Quantity = dto.Quantity,
                     QuantityUomId = dto.QuantityUomId,
-                    Status = NormalizeStatus(dto.Status),
+                    Status = st,
+                    Grade = g,
                     StandardCostPerUom = dto.StandardCostPerUom,
                     StockValue = stockValue,
                     CreatedAt = now,
@@ -182,6 +206,7 @@ namespace AU_ERP.Controllers
                 entity.Quantity = dto.Quantity;
                 entity.QuantityUomId = dto.QuantityUomId;
                 entity.Status = NormalizeStatus(dto.Status);
+                entity.Grade = NormalizeGrade(dto.Grade);
                 entity.StandardCostPerUom = dto.StandardCostPerUom;
                 entity.StockValue = ComputeStockValue(dto.Quantity, dto.StandardCostPerUom);
                 entity.UpdatedAt = DateTime.UtcNow;
@@ -224,6 +249,14 @@ namespace AU_ERP.Controllers
             return StockInventoryLine.StatusActive;
         }
 
+        private static string NormalizeGrade(string? grade)
+        {
+            var s = (grade ?? "").Trim();
+            if (s.Length > 32)
+                s = s.Substring(0, 32);
+            return s;
+        }
+
         private async Task<string?> ValidateDtoAsync(StockInventoryLineDto dto, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(dto.MaterialNumber))
@@ -260,6 +293,8 @@ namespace AU_ERP.Controllers
         public int QuantityUomId { get; set; }
         public string? Status { get; set; }
         public decimal StandardCostPerUom { get; set; }
+        /// <summary>Empty for ungraded; A/B/C/Scrap for finished goods from production.</summary>
+        public string? Grade { get; set; }
     }
 
     public class StockInventoryLineUpdateDto : StockInventoryLineDto

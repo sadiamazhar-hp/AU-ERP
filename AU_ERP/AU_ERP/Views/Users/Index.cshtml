@@ -40,11 +40,11 @@
                     <td>
                         @if (u.PasswordSetupCompleted)
                         {
-                            <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Set</span>
+                            <span class="sq-badge sq-badge-sent">Set</span>
                         }
                         else
                         {
-                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Pending</span>
+                            <span class="sq-badge sq-badge-draft">Unset</span>
                         }
                     </td>
                     <td class="text-end">
@@ -151,13 +151,27 @@
                             @{
                                 var deptsE = (deptList ?? Array.Empty<Department>()).OrderBy(d => d.Name).ToList();
                                 var selectedE = Model.EditForm.DepartmentIds ?? Array.Empty<int>();
+                                var seededUid = ViewBag.SeededAdminUserId as string;
+                                var isSeededUserEdit = !string.IsNullOrEmpty(seededUid) && string.Equals(Model.EditForm.UserId, seededUid, StringComparison.Ordinal);
+                                var adminDeptE = deptsE.FirstOrDefault(d => d.Code == "Admin");
                             }
                             @foreach (var d in deptsE)
                             {
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="EditForm.DepartmentIds" value="@d.Id" id="editUserDept_@d.Id" checked="@(selectedE.Contains(d.Id))" />
-                                    <label class="form-check-label" for="editUserDept_@d.Id">@d.Name <span class="text-muted">(@d.Code)</span></label>
-                                </div>
+                                if (isSeededUserEdit && adminDeptE != null && d.Id == adminDeptE.Id)
+                                {
+                                    <input type="hidden" name="EditForm.DepartmentIds" value="@d.Id" />
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="editUserDept_admin_ro" checked disabled />
+                                        <label class="form-check-label" for="editUserDept_admin_ro">@d.Name <span class="text-muted">(@d.Code)</span> <span class="badge bg-secondary">read-only</span></label>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="EditForm.DepartmentIds" value="@d.Id" id="editUserDept_@d.Id" checked="@(selectedE.Contains(d.Id))" />
+                                        <label class="form-check-label" for="editUserDept_@d.Id">@d.Name <span class="text-muted">(@d.Code)</span></label>
+                                    </div>
+                                }
                             }
                         </div>
                         <div class="form-text">Select at least one department.</div>

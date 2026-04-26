@@ -244,6 +244,162 @@ body {
     font-size: 0.875rem;
 }
 
+/* First paint after splash: form fades in as one unit */
+.login-shell--animate {
+    animation: login-shell-reveal 0.8s ease-out 0.08s both;
+}
+
+@keyframes login-shell-reveal {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Splash (default route) → login */
+.au-splash-page {
+    margin: 0;
+    min-height: 100%;
+    background: #020617;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.au-splash {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: #fff;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.au-splash--out {
+    opacity: 0;
+    transform: scale(1.02);
+    pointer-events: none;
+}
+
+.au-splash-pulse {
+    position: absolute;
+    inset: -30%;
+    background:
+        radial-gradient(ellipse 50% 45% at 50% 40%, rgba(37, 99, 235, 0.45), transparent 60%),
+        radial-gradient(ellipse 40% 40% at 15% 80%, rgba(6, 182, 212, 0.12), transparent 55%),
+        linear-gradient(165deg, #020617 0%, #0f172a 50%, #020617 100%);
+    animation: au-splash-pulse-move 2.2s ease-in-out infinite alternate;
+}
+
+@keyframes au-splash-pulse-move {
+    0% {
+        transform: translate(0, 0) scale(1);
+    }
+    100% {
+        transform: translate(2%, -1%) scale(1.04);
+    }
+}
+
+.au-splash-inner {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 2rem 1.5rem;
+    animation: au-splash-fade-in 0.9s ease-out 0.15s both;
+}
+
+@keyframes au-splash-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.au-splash-mark {
+    font-size: clamp(3.25rem, 9vw, 4.5rem);
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    margin-bottom: 0.35rem;
+}
+
+.au-splash-mark-a,
+.au-splash-mark-u {
+    display: inline-block;
+    text-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+}
+
+.au-splash-mark-a {
+    animation: au-splash-letter 1.1s ease-out 0.2s both;
+}
+
+.au-splash-mark-u {
+    animation: au-splash-letter 1.1s ease-out 0.45s both;
+}
+
+@keyframes au-splash-letter {
+    from {
+        opacity: 0;
+        transform: translateY(1rem) rotateX(-20deg);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) rotateX(0);
+    }
+}
+
+.au-splash-line {
+    margin: 0 0 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.42em;
+    color: rgba(226, 232, 240, 0.85);
+    animation: au-splash-fade-in 0.6s ease-out 0.55s both;
+}
+
+.au-splash-tag {
+    margin: 0 0 2.25rem;
+    font-size: 0.9rem;
+    color: rgba(148, 163, 184, 0.9);
+    font-weight: 400;
+    animation: au-splash-fade-in 0.6s ease-out 0.75s both;
+}
+
+.au-splash-bar {
+    max-width: 200px;
+    height: 3px;
+    margin: 0 auto;
+    border-radius: 99px;
+    background: rgba(30, 41, 59, 0.9);
+    overflow: hidden;
+    animation: au-splash-fade-in 0.5s ease-out 0.9s both;
+}
+
+.au-splash-bar-fill {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2563eb, #38bdf8);
+    animation: au-splash-bar 2.4s ease-out 0.4s forwards;
+}
+
+@keyframes au-splash-bar {
+    0% {
+        width: 0;
+    }
+    100% {
+        width: 100%;
+    }
+}
+
 @media (max-width: 960px) {
     .login-shell {
         grid-template-columns: 1fr;

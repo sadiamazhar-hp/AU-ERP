@@ -1,0 +1,993 @@
+@model AU_ERP.Models.ViewModels.SalesQuotationListVm
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Sales Quotation";
+    ViewBag.Title = "Sales Quotation";
+    int? openEditId = ViewBag.OpenEditId as int?;
+    var list = Model?.Items ?? new List<SalesQuotation>();
+    var plants = ViewBag.Plants as List<PlantsSample> ?? new List<PlantsSample>();
+    var chans = ViewBag.DistributionChannels as List<DistributionChannel> ?? new List<DistributionChannel>();
+    var customers = ViewBag.Customers as List<BusinessPartnerMasterSample> ?? new List<BusinessPartnerMasterSample>();
+    var schemas = ViewBag.ConfigurationSchemas as List<ConfigurationSchema> ?? new List<ConfigurationSchema>();
+    var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    var twoWeeks = DateTime.Today.AddDays(14).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    var firstPlant = plants.FirstOrDefault()?.PlantID ?? "";
+    var firstChan = chans.FirstOrDefault()?.DistributionChannelID;
+    string FmtDate(DateTime d) => d.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+    var listQ = Model?.Q ?? "";
+    var listStatus = (Model == null || string.IsNullOrWhiteSpace(Model.Status) || string.Equals(Model.Status, "All", StringComparison.OrdinalIgnoreCase)) ? "All" : Model.Status;
+    var listPlantId = Model?.PlantId ?? "";
+    int? listDcId = Model?.DistributionChannelId;
+    var stSel = listStatus;
+    var sqDetailsModalUrlPlaceholder = Url.Action("DetailsModal", "SalesQuotation", new { id = 900000001 }) ?? "";
+}
+
+@section Styles {
+<style>
+    .sq-page { color: var(--text, #32363a); }
+    .sq-page .sq-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+    .sq-page .sq-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .25rem 0; }
+    .sq-page .sq-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
+    .sq-btn-new { background: var(--blue, #0070f2); color: #fff; border: 1px solid var(--blue, #0070f2); border-radius: 4px; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
+    .sq-btn-new:hover { filter: brightness(1.05); color: #fff; }
+    .sq-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; max-width: 32rem; margin-bottom: 1.25rem; }
+    @@media (max-width: 500px) { .sq-stats { grid-template-columns: 1fr; } }
+    .sq-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); border-top: 3px solid var(--blue, #0070f2); }
+    .sq-stat-card .sq-stat-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--subtle, #6a7c8e); text-transform: uppercase; }
+    .sq-stat-card .sq-stat-val { font-size: 1.65rem; font-weight: 600; color: var(--dark, #354a5e); line-height: 1.2; margin-top: .2rem; }
+    .sq-table-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+    .sq-table-card .sq-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+    .sq-table-card .sq-table-title { font-size: 1rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0; }
+    .sq-table-card .sq-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .sq-table-card .sq-toolbar .form-control-sm { min-width: 10rem; }
+    .sq-table-wrap { overflow-x: auto; }
+    .sq-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .sq-table thead th { background: var(--dark, #354a5e); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+    .sq-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+    .sq-table tbody tr:nth-child(even) { background: #fafafa; }
+    .sq-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
+    .sq-badge-draft { background: #e2e3e5; color: #41464b; }
+    .sq-badge-sent { background: #d1e7dd; color: #0f5132; }
+    .sq-actions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+    .sq-actions .btn { font-size: .75rem; padding: .2rem .5rem; }
+</style>
+}
+
+<style>
+    .bom-mat-picker { position: relative; }
+    .bom-mat-picker-dropdown {
+        display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px;
+        max-height: 220px; overflow-y: auto; z-index: 1060; background: #fff; border: 1px solid #ccc;
+        border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+    .bom-mat-picker-dropdown.show { display: block; }
+    .bom-mat-picker-item { padding: 6px 10px; font-size: .78rem; cursor: pointer; border-bottom: 1px solid #eee; }
+    .bom-mat-picker-item:hover { background: var(--sap-selected, #b3d7ff); }
+    .bom-mat-picker-empty { padding: 8px 10px; font-size: .75rem; color: #666; }
+    .sq-line-charges { display: flex; flex-wrap: wrap; gap: 0.35rem; max-width: 14rem; font-size: .68rem; line-height: 1.2; }
+    .sq-line-charges label { margin: 0; white-space: nowrap; }
+    .sq-doc-charges { display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: .75rem; }
+    .sq-summary { min-width: 16rem; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.75rem 1rem; background: #fafafa; }
+    .sq-summary .sq-grand { color: #0d6efd; font-weight: 600; border-top: 1px solid #dee2e6; margin-top: 0.35rem; padding-top: 0.35rem; }
+    .sq-items-table-wrap { overflow-x: auto; min-width: 0; }
+    .sq-items-table { font-size: .78rem; white-space: nowrap; }
+    .sq-items-table th, .sq-items-table td { vertical-align: middle; }
+    .sq-chg-menu { max-height: 240px; overflow-y: auto; }
+    #addQuotationModal.sq-quotation-modal .modal-dialog {
+        max-height: calc(100vh - 1rem);
+        margin: 0.5rem auto;
+    }
+    #addQuotationModal.sq-quotation-modal .modal-content {
+        max-height: calc(100vh - 1rem);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    #addQuotationModal.sq-quotation-modal .modal-body {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        min-height: 0;
+        flex: 1 1 auto;
+    }
+    .btn-sq-so { background: #354E68; border-color: #354E68; color: #fff; }
+    .btn-sq-so:hover, .btn-sq-so:focus { background: #2a3d52; border-color: #2a3d52; color: #fff; }
+</style>
+
+<div class="sq-page">
+    <div class="sq-hero">
+        <div>
+            <h1>Sales Quotation</h1>
+            <p>Customer price offers and follow-up to sales orders.</p>
+        </div>
+        <button type="button" class="sq-btn-new" data-bs-toggle="modal" data-bs-target="#addQuotationModal">
+            <i class="bi bi-plus-lg"></i> New Quotation
+        </button>
+</div>
+
+    @if (TempData["QuotationMessage"] is string okMsg2)
+    {
+        <div class="alert alert-success py-2 small mb-3" role="status">@okMsg2</div>
+    }
+    @if (TempData["QuotationError"] is string errMsg2)
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="status">@errMsg2</div>
+    }
+
+    <div class="sq-table-card">
+        <div class="sq-table-head">
+            <h2 class="sq-table-title">Quotations (@list.Count)</h2>
+            <form id="sqListFilterForm" method="get" asp-controller="SalesQuotation" asp-action="Index" class="sq-toolbar">
+                <input type="search" name="q" id="sqListQ" class="form-control form-control-sm" placeholder="Quotation # or customer…" value="@listQ" />
+                <input type="hidden" name="status" id="sqListStatus" value="@stSel" />
+                <input type="hidden" name="plantId" id="sqListPlant" value="@listPlantId" />
+                <input type="hidden" name="distributionChannelId" id="sqListDc" value="@(listDcId?.ToString() ?? "")" />
+                @if (openEditId is int eid)
+                {
+                    <input type="hidden" name="editId" value="@eid" />
+                }
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#sqFilterModal">Filter</button>
+                <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear</a>
+            </form>
+        </div>
+        <div class="sq-table-wrap">
+            <table class="sq-table">
+                <thead>
+            <tr>
+                <th>Quotation #</th>
+                <th>Plant</th>
+                <th>Distribution channel</th>
+                <th>Customer (sold-to)</th>
+                <th>Quotation date</th>
+                <th>Status</th>
+                        <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        @if (list.Count == 0)
+        {
+                    <tr><td colspan="7" class="text-secondary">No quotations yet.</td></tr>
+        }
+        else foreach (var q in list)
+        {
+                    var isDraft = q.Status == SalesQuotation.StatusDraft;
+                    var deleteConfirm = isDraft ? "Delete this draft quotation?" : "Delete this sent quotation? This cannot be undone.";
+            <tr>
+                <td class="text-nowrap"><strong>@q.QuotationNumber</strong></td>
+                <td>@(q.Plant?.PlantName ?? "—")</td>
+                <td>@(q.DistributionChannel?.DistributionChannelName ?? "—")</td>
+                <td>@(q.CustomerName ?? "—")</td>
+                        <td class="text-nowrap">@FmtDate(q.QuotationDate)</td>
+                        <td>
+                            @if (isDraft)
+                            { <span class="sq-badge sq-badge-draft">Draft</span> }
+                            else
+                            { <span class="sq-badge sq-badge-sent">Sent</span> }
+                        </td>
+                        <td>
+                            <div class="sq-actions">
+                                @if (isDraft)
+                                {
+                                    <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("Index", "SalesQuotation", new { editId = q.Id, q = listQ, status = listStatus, plantId = string.IsNullOrEmpty(listPlantId) ? null : listPlantId, distributionChannelId = listDcId })" title="Edit"><i class="bi bi-pencil"></i> Edit</a>
+                    }
+                    else
+                    {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm sq-btn-view" data-sq-id="@q.Id" title="View"><i class="bi bi-eye"></i> View</button>
+                                    <a class="btn btn-sq-so btn-sm" title="Create sales order from this quotation" href="@Url.Action("CreateFromQuotation", "SalesOrder", new { quotationId = q.Id, returnQ = listQ, returnStatus = listStatus, returnPlantId = string.IsNullOrEmpty(listPlantId) ? null : listPlantId, returnDistributionChannelId = listDcId })"><i class="bi bi-cart"></i> SO</a>
+                                }
+                                <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "SalesQuotation", new { id = q.Id })" title="Download PDF"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+                                <form asp-action="EmailToCustomer" asp-controller="SalesQuotation" asp-route-id="@q.Id" method="post" class="d-inline" onsubmit="return confirm('Send the quotation PDF to the customer email (from the business partner Communication tab)?');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="returnQ" value="@listQ" />
+                                    <input type="hidden" name="returnStatus" value="@listStatus" />
+                                    <input type="hidden" name="returnPlantId" value="@listPlantId" />
+                                    <input type="hidden" name="returnDistributionChannelId" value="@(listDcId?.ToString() ?? "")" />
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="Email quotation to customer"><i class="bi bi-envelope"></i> Email</button>
+                                </form>
+                                <form asp-action="Delete" asp-controller="SalesQuotation" asp-route-id="@q.Id" method="post" class="d-inline" onsubmit="return confirm('@deleteConfirm');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="returnQ" value="@listQ" />
+                                    <input type="hidden" name="returnStatus" value="@listStatus" />
+                                    <input type="hidden" name="returnPlantId" value="@listPlantId" />
+                                    <input type="hidden" name="returnDistributionChannelId" value="@(listDcId?.ToString() ?? "")" />
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i> Delete</button>
+                                </form>
+                            </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sqViewModal" tabindex="-1" aria-labelledby="sqViewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="sqViewModalLabel">Sales quotation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-2" id="sqViewModalBody">
+                <p class="text-secondary small mb-0">Loading…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sqFilterModal" tabindex="-1" aria-labelledby="sqFilterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="sqFilterModalLabel">Filter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small">Status</label>
+                    <select id="sqModStatus" class="form-select form-select-sm">
+                        <option value="All">All</option>
+                        <option value="@SalesQuotation.StatusDraft">Draft</option>
+                        <option value="@SalesQuotation.StatusSent">Sent</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Plant</label>
+                    <select id="sqModPlant" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var p in plants)
+                        {
+                            <option value="@p.PlantID">@p.PlantName</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Distribution channel</label>
+                    <select id="sqModDc" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        @foreach (var ch in chans)
+                        {
+                            <option value="@ch.DistributionChannelID">@ch.DistributionChannelName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm sq-btn-new" onclick="sqApplyFilterModal()">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addQuotationModal" tabindex="-1" aria-labelledby="sqModalTitle" aria-hidden="true" data-sq-action-create="@Url.Action("Create", "SalesQuotation")" data-sq-action-update-tpl="@Url.Action("Update", "SalesQuotation", new { id = 0 })">
+    <div class="modal-dialog modal-xl sq-quotation-modal">
+        <div class="modal-content">
+            <form asp-action="Create" asp-controller="SalesQuotation" method="post" id="sqForm" data-sq-form-mode="create">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="ReturnQ" id="sqReturnQ" value="@listQ" />
+                <input type="hidden" name="ReturnStatus" id="sqReturnStatus" value="@listStatus" />
+                <input type="hidden" name="ReturnPlantId" id="sqReturnPlantId" value="@listPlantId" />
+                <input type="hidden" name="ReturnDistributionChannelId" id="sqReturnDcId" value="@(listDcId?.ToString() ?? "")" />
+                <input type="hidden" name="QuotationLevelChargeIds" id="sqQuotationLevelChargeIds" value="" />
+                <input type="hidden" name="ItemChargeColumnIds" id="sqItemChargeColumnIds" value="" />
+                <input type="hidden" name="QuotationChargeValuesJson" id="sqQuotationChargeValuesJson" value="" />
+                <div class="modal-header py-2">
+                    <h5 class="modal-title" id="sqModalTitle">New Sales Quotation</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-2">
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="form-label small mb-0" for="sqNum">Quotation number</label>
+                            <input class="form-control form-control-sm" id="sqNum" readonly style="background:#f0f0f0;" autocomplete="off" />
+                        </div>
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="form-label small mb-0" for="sqPlant">Plant <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" name="PlantId" id="sqPlant" required>
+                                <option value="">— Select —</option>
+                                @foreach (var p in plants)
+                                {
+                                    if (p.PlantID == firstPlant)
+                                    {
+                                        <option value="@p.PlantID" selected="selected">@p.PlantName</option>
+                                    }
+                                    else
+                                {
+                                    <option value="@p.PlantID">@p.PlantName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="form-label small mb-0" for="sqDc">Distribution channel <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" name="DistributionChannelId" id="sqDc" required>
+                                <option value="">— Select —</option>
+                                @foreach (var ch in chans)
+                                {
+                                    if (ch.DistributionChannelID == firstChan)
+                                    {
+                                        <option value="@ch.DistributionChannelID" selected="selected">@ch.DistributionChannelName</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@ch.DistributionChannelID">@ch.DistributionChannelName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0" for="sqCustomer">Customer name (Sold to party) <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" name="CustomerBusinessPartnerId" id="sqCustomer" required>
+                                <option value="">— Select —</option>
+                                @foreach (var c in customers)
+                                {
+                                    var ship = string.Join(", ", new[] { c.HouseNo, c.Street, c.City, c.PostalCode, c.Country }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                                    <option value="@c.BPID" data-ship="@ship">@(c.FullName ?? c.BPID)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0" for="sqAddr">Address (Ship to party) <span class="text-danger">*</span></label>
+                            <input class="form-control form-control-sm" name="ShipToAddress" id="sqAddr" type="text" maxlength="1000" autocomplete="street-address" required />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2 align-items-end">
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0" for="sqQd">Quotation date <span class="text-danger">*</span></label>
+                            <input class="form-control form-control-sm" type="date" name="QuotationDate" id="sqQd" value="@today" required />
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0" for="sqVd">Validity date <span class="text-danger">*</span></label>
+                            <input class="form-control form-control-sm" type="date" name="ValidityDate" id="sqVd" value="@twoWeeks" required />
+                        </div>
+                        <div class="col-12 col-md-4 col-lg-3">
+                            <label class="form-label small mb-0" for="sqSchema">Configuration schema <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" name="ConfigurationSchemaId" id="sqSchema" required>
+                                <option value="">— Select —</option>
+                                @foreach (var s in schemas)
+                                {
+                                    <option value="@s.Id">@s.Title</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-5" id="sqChargeSelectRow">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small mb-0" for="sqItemChgDropBtn">Item charges</label>
+                                    <div class="dropdown w-100">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" id="sqItemChgDropBtn">Select…</button>
+                                        <ul class="dropdown-menu p-2 shadow sq-chg-menu" id="sqItemChargeMenu" onclick="event.stopPropagation();"></ul>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small mb-0" for="sqDocChgDropBtn">Quotation charges</label>
+                                    <div class="dropdown w-100">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" id="sqDocChgDropBtn">Select…</button>
+                                        <ul class="dropdown-menu p-2 shadow sq-chg-menu" id="sqQuotationChargeMenu" onclick="event.stopPropagation();"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <h6 class="border-bottom pb-1 mb-2 small">Line items</h6>
+                    <div class="sq-items-table-wrap">
+                        <table class="table table-sm table-bordered sq-items-table mb-2">
+                            <thead class="table-light">
+                                <tr id="sqItemsHeadRow">
+                                    <th>#</th>
+                                    <th>Item</th>
+                                    <th>Description</th>
+                                    <th>UOM</th>
+                                    <th>Grade</th>
+                                    <th>Qty</th>
+                                    <th>Unit price</th>
+                                    <th class="text-end">Net Price</th>
+                                    <th class="text-end" id="sqThLineTotal">Line total (PKR)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="sqItemsBody"></tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="btnSqAddRow">+ Add Line</button>
+
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <h6 class="border-bottom pb-1 mb-2 small">Quotation charge inputs</h6>
+                            <div class="text-muted small" id="sqDocChargeInputsHint">Select quotation charges above to enter amounts here.</div>
+                            <div class="vstack gap-2 mt-2" id="sqQuotationChargeInputs"></div>
+                        </div>
+                        <div class="col-lg-6 ms-lg-auto">
+                            <div class="sq-summary ms-lg-auto" style="max-width:20rem">
+                                <div class="d-flex justify-content-between"><span>Subtotal (PKR)</span><input type="text" class="form-control form-control-sm text-end border-0 bg-transparent p-0" id="sqSumSub" value="0.00" readonly style="max-width:8rem" aria-readonly="true" /></div>
+                                <div class="d-flex justify-content-between sq-grand align-items-center pt-1"><span>Grand total (PKR)</span><input type="text" class="form-control form-control-sm text-end border-0 p-0 fw-semibold text-primary" id="sqSumGrand" value="0.00" readonly style="max-width:8rem" aria-readonly="true" /></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer flex-wrap gap-2 py-2">
+                    <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-outline-primary btn-sm" name="SubmitAction" value="draft" formnovalidate><i class="bi bi-floppy me-1"></i>Save Draft</button>
+                    <button type="submit" class="btn btn-outline-success btn-sm" name="SubmitAction" value="email"><i class="bi bi-envelope me-1"></i>Send email to customer</button>
+                    <button type="submit" class="btn btn-primary btn-sm" name="SubmitAction" value="send"><i class="bi bi-send me-1"></i>Send to Customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        (function ensureSqViewModalOnBody() {
+            var el = document.getElementById("sqViewModal");
+            if (!el) return;
+            function move() {
+                if (el.parentElement !== document.body) document.body.appendChild(el);
+            }
+            el.addEventListener("show.bs.modal", move);
+            if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", move);
+            else move();
+        })();
+        const sqDetailsModalUrlPlaceholder = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(sqDetailsModalUrlPlaceholder));
+        function sqDetailsModalUrl(id) { return (sqDetailsModalUrlPlaceholder || "").replace("900000001", id); }
+        document.querySelectorAll(".sq-btn-view").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                var id = btn.getAttribute("data-sq-id");
+                if (!id) return;
+                var body = document.getElementById("sqViewModalBody");
+                var m = document.getElementById("sqViewModal");
+                if (body) body.innerHTML = '<p class="text-secondary small mb-0">Loading…</p>';
+                if (window.bootstrap) {
+                    var addM = document.getElementById("addQuotationModal");
+                    var fM = document.getElementById("sqFilterModal");
+                    if (addM && addM.classList.contains("show")) bootstrap.Modal.getOrCreateInstance(addM).hide();
+                    if (fM && fM.classList.contains("show")) bootstrap.Modal.getOrCreateInstance(fM).hide();
+                }
+                if (m && window.bootstrap) { bootstrap.Modal.getOrCreateInstance(m).show(); }
+                fetch(sqDetailsModalUrl(id), { headers: { "X-Requested-With": "XMLHttpRequest" } })
+                    .then(function (r) { if (!r.ok) throw new Error(); return r.text(); })
+                    .then(function (html) { if (body) body.innerHTML = html; })
+                    .catch(function () { if (body) body.innerHTML = '<p class="text-danger small">Could not load details.</p>'; });
+            });
+        });
+        const defaults = { today: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(today)), twoW: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(twoWeeks)) };
+        const uomBase = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("MaterialUomContextForQuotation", "SalesQuotation") ?? ""));
+        const unitCostUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("QuotationLineUnitCost", "SalesQuotation") ?? ""));
+        const sqFertSearchBase = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SearchFertMaterialsForQuotation", "SalesQuotation") ?? ""));
+        const nextQuotationUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("NextQuotationNumber", "SalesQuotation") ?? ""));
+        const schemaUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SchemaDetails", "SalesQuotation") ?? ""));
+        const sqQuotationDataBase = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("QuotationData", "SalesQuotation", new { id = 0 }) ?? ""));
+        const sqOpenEditId = @Html.Raw(openEditId is int oei ? oei.ToString() : "null");
+        const sqUpdateUrlTpl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Update", "SalesQuotation", new { id = 0 }) ?? ""));
+        const sqCreateFormAction = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Create", "SalesQuotation") ?? ""));
+        let schemaCharges = [];
+        let _sqSkipFormReset = false;
+        function quotationDataFor(quotationId) {
+            if (!sqQuotationDataBase) return "";
+            if (sqQuotationDataBase.indexOf("id=0") >= 0) return sqQuotationDataBase.replace("id=0", "id=" + quotationId);
+            return sqQuotationDataBase.replace(/\/0(\?|$)/, "/" + quotationId + "$1");
+        }
+        function setSqFormToCreate() {
+            var f = document.getElementById("sqForm");
+            if (f && sqCreateFormAction) { f.action = sqCreateFormAction; f.setAttribute("data-sq-form-mode", "create"); }
+        }
+        function setSqFormToUpdate(quotationId) {
+            var f = document.getElementById("sqForm");
+            if (!f) return;
+            if (sqUpdateUrlTpl) f.action = sqUpdateUrlTpl.replace("Update/0", "Update/" + quotationId).replace(/\/0(\?.*)?$/, "/" + quotationId + "$1");
+            f.setAttribute("data-sq-form-mode", "update");
+        }
+        function applyQuotationData(d) {
+            var h = d.h, items = d.items || [];
+            schemaCharges = d.schemaCharges || [];
+            if (h.plantId && document.getElementById("sqPlant")) document.getElementById("sqPlant").value = h.plantId;
+            if (h.distributionChannelId != null && document.getElementById("sqDc")) document.getElementById("sqDc").value = String(h.distributionChannelId);
+            if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = h.configurationSchemaId != null && h.configurationSchemaId !== "" ? String(h.configurationSchemaId) : "";
+            if (h.quotationDate && document.getElementById("sqQd")) document.getElementById("sqQd").value = h.quotationDate;
+            if (h.validityDate && document.getElementById("sqVd")) document.getElementById("sqVd").value = h.validityDate;
+            if (document.getElementById("sqNum")) document.getElementById("sqNum").value = h.quotationNumber || "";
+            if (document.getElementById("sqModalTitle")) document.getElementById("sqModalTitle").textContent = "Edit — " + (h.quotationNumber || "");
+            if (document.getElementById("sqCustomer")) document.getElementById("sqCustomer").value = h.customerBusinessPartnerId || "";
+            if (document.getElementById("sqAddr")) document.getElementById("sqAddr").value = h.shipToAddress || "";
+            if (document.getElementById("sqItemChargeColumnIds")) document.getElementById("sqItemChargeColumnIds").value = h.itemChargeColumnIds || "";
+            if (document.getElementById("sqQuotationLevelChargeIds")) document.getElementById("sqQuotationLevelChargeIds").value = h.quotationLevelChargeIds || "";
+            if (document.getElementById("sqQuotationChargeValuesJson")) document.getElementById("sqQuotationChargeValuesJson").value = h.quotationChargeValuesJson || "";
+            buildChargeDropdowns();
+            var itemIds = parseIds(h.itemChargeColumnIds);
+            var docIds = parseIds(h.quotationLevelChargeIds);
+            document.querySelectorAll("#sqItemChargeMenu .sq-m-item-chk").forEach(function (cb) {
+                var cid = parseInt(cb.getAttribute("data-cid"), 10);
+                cb.checked = itemIds.indexOf(cid) >= 0;
+            });
+            document.querySelectorAll("#sqQuotationChargeMenu .sq-m-doc-chk").forEach(function (cb) {
+                var cid = parseInt(cb.getAttribute("data-cid"), 10);
+                cb.checked = docIds.indexOf(cid) >= 0;
+            });
+            renderItemChargeThead();
+            var body = document.getElementById("sqItemsBody");
+            if (body) body.innerHTML = "";
+            (items || []).forEach(function (it) {
+                var tr = parseTrFromRowHtml();
+                if (!body) return;
+                body.appendChild(tr);
+                reindex();
+                if (it.materialNumber) {
+                    if (tr.querySelector(".sq-matno")) tr.querySelector(".sq-matno").value = it.materialNumber;
+                    if (tr.querySelector(".bom-mat-picker-search")) tr.querySelector(".bom-mat-picker-search").value = (it.materialNumber + (it.materialDescription ? " — " + it.materialDescription : ""));
+                }
+                if (tr.querySelector(".sq-desc") && it.materialDescription) tr.querySelector(".sq-desc").value = it.materialDescription;
+                if (tr.querySelector(".sq-grade") && (it.salesPriceGrade != null && it.salesPriceGrade !== "")) tr.querySelector(".sq-grade").value = String(it.salesPriceGrade);
+                if (tr.querySelector(".sq-qty") && it.orderQuantity != null) tr.querySelector(".sq-qty").value = String(it.orderQuantity);
+                if (tr.querySelector(".sq-unit") && it.unitPrice != null) tr.querySelector(".sq-unit").value = String(it.unitPrice);
+                if (tr.querySelector(".sq-del") && it.deliveryDate) tr.querySelector(".sq-del").value = it.deliveryDate;
+                appendItemChargeTds(tr);
+                reindex();
+                var chObj = {};
+                try { if (it.itemChargeValuesJson) chObj = JSON.parse(it.itemChargeValuesJson); } catch (e) { chObj = {}; }
+                tr.querySelectorAll(".sq-ln-chg").forEach(function (inp) {
+                    var k = String(inp.getAttribute("data-cid"));
+                    if (chObj.hasOwnProperty(k) && chObj[k] != null) inp.value = String(chObj[k]);
+                });
+                wireRow(tr);
+                if (it.materialNumber) uomFill(tr, it.materialNumber, it.materialDescription || "", { preserveUnitPrice: it.unitPrice, savedUomId: it.quantityUomId });
+            });
+            if (!items.length) {
+                if (body) { body.innerHTML = rowHtml().trim(); reindex(); renderItemChargeThead(); body.querySelectorAll("tr.sq-item-row").forEach(function (tr) { tr.querySelector(".sq-del") && (tr.querySelector(".sq-del").value = document.getElementById("sqQd") && document.getElementById("sqQd").value || defaults.today); appendItemChargeTds(tr); }); reindex(); body.querySelectorAll("tr.sq-item-row").forEach(wireRow); }
+            }
+            buildQuotationChargeInputs();
+            var docObj = {};
+            try { if (h.quotationChargeValuesJson) docObj = JSON.parse(h.quotationChargeValuesJson); } catch (e) { docObj = {}; }
+            document.querySelectorAll(".sq-doc-chg-val").forEach(function (inp) {
+                var k = String(inp.getAttribute("data-cid"));
+                if (docObj.hasOwnProperty(k) && docObj[k] != null) inp.value = String(docObj[k]);
+            });
+            reindex();
+            recalcFooter();
+            syncHiddens();
+            if (h.id) setSqFormToUpdate(h.id);
+        }
+        function esc(s) { if (s == null) return ""; return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+        function chMap() { const m = {}; (schemaCharges || []).forEach(function (c) { m[c.id] = c; }); return m; }
+        function parseIds(s) { if (!s) return []; return s.split(",").map(function (x) { return parseInt(x, 10); }).filter(function (n) { return n > 0; }); }
+        function selectedItemChgOrder() {
+            var s = new Set();
+            document.querySelectorAll("#sqItemChargeMenu .sq-m-item-chk:checked").forEach(function (x) { s.add(parseInt(x.getAttribute("data-cid"), 10)); });
+            return (schemaCharges || []).map(function (c) { return c.id; }).filter(function (id) { return s.has(id); });
+        }
+        function selectedQuotChgOrder() {
+            var s = new Set();
+            document.querySelectorAll("#sqQuotationChargeMenu .sq-m-doc-chk:checked").forEach(function (x) { s.add(parseInt(x.getAttribute("data-cid"), 10)); });
+            return (schemaCharges || []).map(function (c) { return c.id; }).filter(function (id) { return s.has(id); });
+        }
+        function syncHiddens() {
+            var a = selectedItemChgOrder();
+            var b = selectedQuotChgOrder();
+            var h1 = document.getElementById("sqItemChargeColumnIds"), h2 = document.getElementById("sqQuotationLevelChargeIds");
+            if (h1) h1.value = a.join(",");
+            if (h2) h2.value = b.join(",");
+            var o = {};
+            b.forEach(function (cid) {
+                var el = document.querySelector(".sq-doc-chg-val[data-cid=\"" + cid + "\"]");
+                if (el && el.value !== "") o[String(cid)] = el.value;
+            });
+            var hj = document.getElementById("sqQuotationChargeValuesJson");
+            if (hj) hj.value = Object.keys(o).length ? JSON.stringify(o) : "";
+        }
+        function readLineValObj(tr) {
+            var o = {};
+            tr.querySelectorAll(".sq-ln-chg").forEach(function (inp) {
+                var id = parseInt(inp.getAttribute("data-cid"), 10);
+                if (id > 0 && inp.value !== "") o[String(id)] = inp.value;
+            });
+            return o;
+        }
+        function syncLineJson(tr) {
+            var h = tr.querySelector(".sq-line-chg-json");
+            if (h) h.value = JSON.stringify(readLineValObj(tr));
+        }
+        function applyUserCharge(c, running, uval) {
+            if (c.valueType === "Numeric") {
+                var abs = Math.abs(parseFloat(uval) || 0);
+                return c.sign === "Add" ? running + abs : running - abs;
+            }
+            var pct = Math.max(0, parseFloat(uval) || 0);
+            var delta = Math.round(running * (pct / 100) * 10000) / 10000;
+            return c.sign === "Add" ? running + delta : running - delta;
+        }
+        function effPct(c, o, idStr) { if (o.hasOwnProperty(idStr) && o[idStr] !== "") return parseFloat(o[idStr]) || 0; if (c.defaultPercent != null) return c.defaultPercent; return 0; }
+        function effNum(o, idStr) { if (o.hasOwnProperty(idStr) && o[idStr] !== "") return Math.abs(parseFloat(o[idStr]) || 0); return 0; }
+        function lineAmountsV2(qty, unit, o) {
+            o = o || {};
+            var hasSch = (schemaCharges || []).length > 0;
+            var net = Math.round(qty * unit * 10000) / 10000;
+            if (!hasSch) return { sub: net, tot: net };
+            var running = net, order = selectedItemChgOrder();
+            order.forEach(function (cid) {
+                var c = chMap()[cid];
+                if (!c) return;
+                var idStr = String(cid);
+                if (c.valueType === "Percentage") {
+                    var p = effPct(c, o, idStr);
+                    if (p === 0) return;
+                    running = applyUserCharge(c, running, p);
+                } else {
+                    var n = effNum(o, idStr);
+                    if (n === 0) return;
+                    running = applyUserCharge(c, running, n);
+                }
+            });
+            return { sub: net, tot: Math.round(running * 10000) / 10000 };
+        }
+        function recalcLine(tr) {
+            var qty = parseFloat(tr.querySelector(".sq-qty") && tr.querySelector(".sq-qty").value) || 0;
+            var unit = parseFloat(tr.querySelector(".sq-unit") && tr.querySelector(".sq-unit").value) || 0;
+            var o = readLineValObj(tr);
+            var a = lineAmountsV2(qty, unit, o);
+            var ns = tr.querySelector(".sq-net"), lt = tr.querySelector(".sq-line-tot");
+            if (ns) ns.value = a.sub.toFixed(2);
+            if (lt) lt.value = a.tot.toFixed(2);
+            tr.setAttribute("data-line-sub", a.sub);
+            tr.setAttribute("data-line-tot", a.tot);
+            syncLineJson(tr);
+            recalcFooter();
+        }
+        function recalcFooter() {
+            var lineSum = 0;
+            document.querySelectorAll("tr.sq-item-row").forEach(function (tr) {
+                lineSum += parseFloat(tr.getAttribute("data-line-tot") || 0) || 0;
+            });
+            var run = lineSum, qOrder = selectedQuotChgOrder();
+            qOrder.forEach(function (cid) {
+                var c = chMap()[cid], el = document.querySelector(".sq-doc-chg-val[data-cid=\"" + cid + "\"]");
+                if (!c) return;
+                var raw = el ? el.value : "";
+                if (c.valueType === "Percentage") {
+                    var p = (raw !== "") ? (parseFloat(raw) || 0) : (c.defaultPercent != null ? c.defaultPercent : 0);
+                    if (p === 0) return;
+                    run = applyUserCharge(c, run, p);
+                } else {
+                    var n = (raw !== "") ? Math.abs(parseFloat(raw) || 0) : 0;
+                    if (n === 0) return;
+                    run = applyUserCharge(c, run, n);
+                }
+            });
+            run = Math.round(run * 10000) / 10000;
+            var elS = document.getElementById("sqSumSub"), elG = document.getElementById("sqSumGrand");
+            if (elS) elS.value = lineSum.toFixed(2);
+            if (elG) elG.value = run.toFixed(2);
+            syncHiddens();
+        }
+        function renderItemChargeThead() {
+            var row = document.getElementById("sqItemsHeadRow");
+            if (!row) return;
+            row.querySelectorAll("th.sq-dyn-chg-th").forEach(function (n) { n.remove(); });
+            var before = document.getElementById("sqThLineTotal");
+            if (!before) return;
+            selectedItemChgOrder().forEach(function (cid) {
+                var c = chMap()[cid];
+                if (!c) return;
+                var th = document.createElement("th");
+                th.className = "text-end small sq-dyn-chg-th";
+                th.textContent = (c.symbol || "") + (c.valueType === "Numeric" ? " (amt)" : " (%)");
+                before.parentNode.insertBefore(th, before);
+            });
+        }
+        function appendItemChargeTds(tr) {
+            tr.querySelectorAll("td.sq-dyn-chg-td").forEach(function (n) { n.remove(); });
+            var before = tr.querySelector(".sq-td-linetot");
+            if (!before) return;
+            selectedItemChgOrder().forEach(function (cid) {
+                var c = chMap()[cid];
+                if (!c) return;
+                var td = document.createElement("td");
+                td.className = "sq-dyn-chg-td";
+                var inp = document.createElement("input");
+                inp.type = "number";
+                inp.className = "form-control form-control-sm sq-ln-chg";
+                inp.setAttribute("data-cid", String(cid));
+                inp.style.maxWidth = "5.2rem";
+                if (c.valueType === "Percentage" && c.defaultPercent != null) inp.placeholder = String(c.defaultPercent);
+                if (c.valueType === "Numeric") inp.setAttribute("step", "0.01");
+                else inp.setAttribute("step", "0.0001");
+                td.appendChild(inp);
+                before.parentNode.insertBefore(td, before);
+            });
+        }
+        function buildChargeDropdowns() {
+            var mItem = document.getElementById("sqItemChargeMenu"), mDoc = document.getElementById("sqQuotationChargeMenu");
+            var row = document.getElementById("sqChargeSelectRow");
+            if (!mItem || !mDoc) return;
+            mItem.innerHTML = ""; mDoc.innerHTML = "";
+            if (!schemaCharges || !schemaCharges.length) { if (row) row.classList.add("d-none"); return; }
+            if (row) row.classList.remove("d-none");
+            (schemaCharges || []).forEach(function (c) {
+                var li = document.createElement("li");
+                li.className = "form-check";
+                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\"><input type=\"checkbox\" class=\"form-check-input sq-m-item-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + "</label>";
+                mItem.appendChild(li);
+            });
+            (schemaCharges || []).forEach(function (c) {
+                var li = document.createElement("li");
+                li.className = "form-check";
+                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\"><input type=\"checkbox\" class=\"form-check-input sq-m-doc-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + "</label>";
+                mDoc.appendChild(li);
+            });
+            mItem.querySelectorAll(".sq-m-item-chk").forEach(function (cb) {
+                cb.addEventListener("change", function () { renderItemChargeThead(); document.querySelectorAll("tr.sq-item-row").forEach(function (tr) { appendItemChargeTds(tr); reindex(); recalcLine(tr); }); });
+            });
+            mDoc.querySelectorAll(".sq-m-doc-chk").forEach(function (cb) {
+                cb.addEventListener("change", function () { buildQuotationChargeInputs(); recalcFooter(); });
+            });
+        }
+        function buildQuotationChargeInputs() {
+            var v = document.getElementById("sqQuotationChargeInputs"), h = document.getElementById("sqDocChargeInputsHint");
+            if (!v) return; v.innerHTML = "";
+            var order = selectedQuotChgOrder();
+            if (h) h.classList.toggle("d-none", order.length > 0);
+            if (!order.length) return;
+            order.forEach(function (cid) {
+                var c = chMap()[cid];
+                if (!c) return;
+                var d = document.createElement("div");
+                d.className = "d-flex flex-wrap align-items-center gap-2";
+                d.innerHTML = "<label class=\"small mb-0 text-nowrap flex-shrink-0\">" + esc(c.symbol) + (c.valueType === "Numeric" ? " (PKR)" : " (%)") + "</label><input type=\"number\" class=\"form-control form-control-sm sq-doc-chg-val\" data-cid=\"" + cid + "\" style=\"max-width:8rem\" />";
+                v.appendChild(d);
+            });
+            v.querySelectorAll(".sq-doc-chg-val").forEach(function (inp) { inp.addEventListener("input", recalcFooter); inp.addEventListener("change", recalcFooter); });
+        }
+        function rowHtml() {
+            return "<tr class=\"sq-item-row\">" +
+                "<td class=\"text-muted sq-idx\">1</td>" +
+                "<td><div class=\"bom-mat-picker sq-fert-picker\">" +
+                "<input type=\"text\" class=\"form-control form-control-sm bom-mat-picker-search\" placeholder=\"Search #…\" autocomplete=\"off\" />" +
+                "<input type=\"hidden\" class=\"form-control form-control-sm sq-matno bom-mat-picker-value\" name=\"Items[0].MaterialNumber\" />" +
+                "<div class=\"bom-mat-picker-dropdown\"></div></div>" +
+                "<div class=\"d-none\">" +
+                "<input type=\"date\" class=\"sq-del form-control form-control-sm\" name=\"Items[0].DeliveryDate\" />" +
+                "<input type=\"hidden\" name=\"Items[0].DiscountPercent\" value=\"0\" />" +
+                "</div></td>" +
+                "<td><input class=\"form-control form-control-sm sq-desc\" name=\"Items[0].MaterialDescription\" readonly style=\"min-width:8rem\" /></td>" +
+                "<td><select class=\"form-select form-select-sm sq-uom\" name=\"Items[0].QuantityUomId\"><option value=\"\">—</option></select></td>" +
+                "<td><select class=\"form-select form-select-sm sq-grade\" name=\"Items[0].SalesPriceGrade\" title=\"Price tier from material master (per base UOM)\">" +
+                "<option value=\"A\" selected>Grade A</option><option value=\"B\">Grade B</option><option value=\"C\">Grade C</option><option value=\"Scrap\">Scrap</option></select></td>" +
+                "<td><input class=\"form-control form-control-sm sq-qty\" name=\"Items[0].OrderQuantity\" type=\"number\" step=\"0.0001\" min=\"0\" value=\"1\" style=\"max-width:5rem\" /></td>" +
+                "<td><input class=\"form-control form-control-sm sq-unit\" name=\"Items[0].UnitPrice\" type=\"number\" step=\"0.0001\" min=\"0\" value=\"0\" style=\"max-width:6rem\" /></td>" +
+                "<td class=\"sq-td-afterdisc\"><input class=\"form-control form-control-sm sq-net text-end\" type=\"text\" readonly value=\"0\" style=\"min-width:5rem;background:#f8f8f8\" /></td>" +
+                "<td class=\"sq-td-linetot\"><input type=\"hidden\" class=\"sq-line-chg-json\" name=\"Items[0].ItemChargeValuesJson\" value=\"{}\" /><input class=\"form-control form-control-sm sq-line-tot text-end\" type=\"text\" readonly value=\"0\" style=\"min-width:5.5rem;background:#f0f6ff\" /></td>" +
+                "<td><button type=\"button\" class=\"btn btn-sm btn-link text-danger p-0 sq-rm\" title=\"Remove\">&times;</button></td>" +
+                "</tr>";
+        }
+        function parseTrFromRowHtml() {
+            var t = document.createElement("template");
+            t.innerHTML = rowHtml().trim();
+            return t.content.querySelector("tr.sq-item-row");
+        }
+        function wireRow(tr) {
+            tr.querySelectorAll(".sq-qty, .sq-unit").forEach(function (x) { x.addEventListener("input", function () { recalcLine(tr); }); x.addEventListener("change", function () { recalcLine(tr); }); });
+            tr.querySelectorAll(".sq-ln-chg").forEach(function (x) { x.addEventListener("input", function () { recalcLine(tr); }); x.addEventListener("change", function () { recalcLine(tr); }); });
+            var u = tr.querySelector(".sq-uom");
+            if (u) u.addEventListener("change", function () {
+                var mat = (tr.querySelector(".sq-matno") && tr.querySelector(".sq-matno").value || "").trim();
+                if (mat) fetchUnit(mat, u.value, tr);
+            });
+            var g = tr.querySelector(".sq-grade");
+            if (g) g.addEventListener("change", function () {
+                var mat = (tr.querySelector(".sq-matno") && tr.querySelector(".sq-matno").value || "").trim();
+                var uel = tr.querySelector(".sq-uom");
+                if (mat && uel && uel.value) fetchUnit(mat, uel.value, tr);
+            });
+            recalcLine(tr);
+        }
+        function reindex() {
+            var body = document.getElementById("sqItemsBody");
+            if (!body) return;
+            var trs = body.querySelectorAll("tr.sq-item-row");
+            trs.forEach(function (tr, i) {
+                tr.querySelectorAll("[name*=\"Items[\"]").forEach(function (el) {
+                    var n = el.name;
+                    if (!n || n.indexOf("Items[") < 0) return;
+                    var rest = n.split("].");
+                    if (rest.length < 2) return;
+                    el.name = "Items[" + i + "]." + rest[1];
+                });
+                tr.querySelector(".sq-idx").textContent = String(i + 1);
+            });
+        }
+        function syncAllBeforeSubmit() {
+            document.querySelectorAll("tr.sq-item-row").forEach(function (tr) { syncLineJson(tr); });
+            syncHiddens();
+        }
+        var sqFertBuildUrl = function (q) { return sqFertSearchBase + (sqFertSearchBase.indexOf("?") >= 0 ? "&" : "?") + "q=" + encodeURIComponent(q || ""); };
+        document.addEventListener("mousedown", function (e) { if (e.target.closest(".sq-fert-picker .bom-mat-picker-dropdown")) e.preventDefault(); });
+        document.addEventListener("focusin", function (e) { if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search") || !e.target.closest(".sq-fert-picker")) return; sqFertFetch(e.target); });
+        var _fertT = 0;
+        document.addEventListener("input", function (e) { if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search") || !e.target.closest(".sq-fert-picker")) return; clearTimeout(_fertT); var inp = e.target; _fertT = setTimeout(function () { sqFertFetch(inp); }, 250); });
+        function sqClose() { document.querySelectorAll(".sq-fert-picker .bom-mat-picker-dropdown.show").forEach(function (d) { d.classList.remove("show"); d.innerHTML = ""; }); }
+        function sqFertFetch(searchInput) {
+            var w = searchInput && searchInput.closest(".sq-fert-picker");
+            if (!w) return;
+            var dd = w.querySelector(".bom-mat-picker-dropdown"); if (!dd) return;
+            fetch(sqFertBuildUrl(searchInput.value)).then(function (r) { return r.json(); }).then(function (d) {
+                if (!d || !d.success) { dd.innerHTML = "<div class=\"bom-mat-picker-empty\">Error</div>"; dd.classList.add("show"); return; }
+                var its = d.items || [];
+                if (!its.length) dd.innerHTML = "<div class=\"bom-mat-picker-empty\">No matches</div>";
+                else dd.innerHTML = its.map(function (it) { return "<div class=\"bom-mat-picker-item\" data-n=\"" + esc(it.n) + "\" data-d=\"" + esc(it.d) + "\"><strong>" + esc(it.n) + "</strong> <span class=\"text-muted\">" + esc(it.d) + "</span></div>"; }).join("");
+                dd.classList.add("show");
+            });
+        }
+        document.addEventListener("click", function (e) {
+            var it = e.target.closest(".sq-fert-picker .bom-mat-picker-item");
+            if (!it) { if (!e.target.closest(".sq-fert-picker")) sqClose(); return; }
+            e.preventDefault();
+            var w = it.closest(".sq-fert-picker"), dd = w.querySelector(".bom-mat-picker-dropdown");
+            var hid = w.querySelector(".sq-matno"), s = w.querySelector(".bom-mat-picker-search");
+            var n = it.getAttribute("data-n") || "", d0 = it.getAttribute("data-d") || "";
+            if (hid) hid.value = n; if (s) s.value = n + (d0 ? " — " + d0 : "");
+            if (dd) { dd.classList.remove("show"); dd.innerHTML = ""; }
+            var tr = w.closest("tr.sq-item-row");
+            uomFill(tr, n, d0);
+        });
+        function uomFill(tr, mat, descText, opts) {
+            opts = opts || {};
+            if (!uomBase || !tr || !mat) return;
+            var uSel = tr.querySelector(".sq-uom");
+            if (!uSel) return; uSel.innerHTML = "<option value=\"\">—</option>";
+            var dIn = tr.querySelector(".sq-desc");
+            if (dIn && (descText || "") !== "" && dIn.value === "") dIn.value = descText || "";
+            fetch(uomBase + (uomBase.indexOf("?") >= 0 ? "&" : "?") + "materialNumber=" + encodeURIComponent(mat)).then(function (r) { return r.json(); }).then(function (res) {
+                if (!res.success || !res.data) return;
+                var d = res.data, uoms = d.uoms || d.Uoms || [];
+                uoms.forEach(function (u) { var o = document.createElement("option"); o.value = u.id; o.textContent = u.code || u.Id; uSel.appendChild(o); });
+                var bid = d.baseUomId != null ? d.baseUomId : d.BaseUomId;
+                if (opts.savedUomId != null) {
+                    uSel.value = String(opts.savedUomId);
+                } else if (bid != null) uSel.value = String(bid);
+                if (opts.preserveUnitPrice != null) {
+                    var uu = tr.querySelector(".sq-unit");
+                    if (uu) uu.value = String(opts.preserveUnitPrice);
+                    recalcLine(tr);
+                } else
+                    fetchUnit(mat, uSel.value, tr);
+            });
+        }
+        function fetchUnit(mat, uom, tr) {
+            if (!unitCostUrl) return;
+            var gEl = tr && tr.querySelector && tr.querySelector(".sq-grade");
+            var g = (gEl && gEl.value) ? gEl.value : "A";
+            var url = unitCostUrl + (unitCostUrl.indexOf("?") >= 0 ? "&" : "?") + "materialNumber=" + encodeURIComponent(mat) + "&uomId=" + encodeURIComponent(uom || "") + "&priceGrade=" + encodeURIComponent(g);
+            fetch(url).then(function (r) { return r.json(); }).then(function (r) { if (r.success && r.stdCostPerUom != null) { var u = tr.querySelector(".sq-unit"); if (u) u.value = r.stdCostPerUom; recalcLine(tr); } });
+        }
+        document.getElementById("btnSqAddRow") && document.getElementById("btnSqAddRow").addEventListener("click", function () {
+            var tr = parseTrFromRowHtml();
+            document.getElementById("sqItemsBody").appendChild(tr);
+            reindex();
+            appendItemChargeTds(tr);
+            reindex();
+            tr.querySelector(".sq-del") && (tr.querySelector(".sq-del").value = document.getElementById("sqQd") && document.getElementById("sqQd").value || defaults.today);
+            wireRow(tr);
+            recalcFooter();
+        });
+        function loadSchema(id) {
+            if (!id) {
+                schemaCharges = [];
+                buildChargeDropdowns();
+                var b = document.getElementById("sqItemsBody");
+                if (b) {
+                    b.innerHTML = rowHtml().trim();
+                    reindex();
+                    renderItemChargeThead();
+                    b.querySelectorAll("tr.sq-item-row").forEach(function (tr) {
+                        tr.querySelector(".sq-del") && (tr.querySelector(".sq-del").value = document.getElementById("sqQd") && document.getElementById("sqQd").value || defaults.today);
+                        appendItemChargeTds(tr);
+                    });
+                    reindex();
+                    b.querySelectorAll("tr.sq-item-row").forEach(wireRow);
+                }
+                buildQuotationChargeInputs();
+                recalcFooter();
+                return;
+            }
+            if (!schemaUrl) return;
+            fetch(schemaUrl + (schemaUrl.indexOf("?") >= 0 ? "&" : "?") + "id=" + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (d) {
+                schemaCharges = (d && d.charges) ? d.charges : [];
+                buildChargeDropdowns();
+                var b = document.getElementById("sqItemsBody");
+                if (b) {
+                    b.innerHTML = rowHtml().trim();
+                    reindex();
+                    renderItemChargeThead();
+                    b.querySelectorAll("tr.sq-item-row").forEach(function (tr) {
+                        tr.querySelector(".sq-del") && (tr.querySelector(".sq-del").value = document.getElementById("sqQd") && document.getElementById("sqQd").value || defaults.today);
+                        appendItemChargeTds(tr);
+                    });
+                    reindex();
+                    b.querySelectorAll("tr.sq-item-row").forEach(wireRow);
+                }
+                buildQuotationChargeInputs();
+                recalcFooter();
+            });
+        }
+        document.getElementById("sqSchema") && document.getElementById("sqSchema").addEventListener("change", function () { loadSchema(this.value); });
+        var modal = document.getElementById("addQuotationModal");
+        if (modal) modal.addEventListener("show.bs.modal", function () {
+            if (_sqSkipFormReset) { _sqSkipFormReset = false; return; }
+            setSqFormToCreate();
+            var f = document.getElementById("sqForm"); if (f) f.reset();
+            document.getElementById("sqQd") && (document.getElementById("sqQd").value = defaults.today);
+            document.getElementById("sqVd") && (document.getElementById("sqVd").value = defaults.twoW);
+            document.getElementById("sqPlant") && (document.getElementById("sqPlant").value = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(firstPlant)));
+            document.getElementById("sqDc") && (document.getElementById("sqDc").value = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(firstChan?.ToString() ?? "")));
+            if (document.getElementById("sqItemChargeColumnIds")) document.getElementById("sqItemChargeColumnIds").value = "";
+            if (document.getElementById("sqQuotationLevelChargeIds")) document.getElementById("sqQuotationLevelChargeIds").value = "";
+            if (document.getElementById("sqQuotationChargeValuesJson")) document.getElementById("sqQuotationChargeValuesJson").value = "";
+            if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = "";
+            fetch(nextQuotationUrl).then(function (r) { return r.json(); }).then(function (d) {
+                var n = d.number || d.display;
+                if (document.getElementById("sqNum")) document.getElementById("sqNum").value = n || "";
+                if (document.getElementById("sqModalTitle")) document.getElementById("sqModalTitle").textContent = "New Sales Quotation — " + (n || "");
+            });
+            var sch = document.getElementById("sqSchema") && document.getElementById("sqSchema").value;
+            if (sch) loadSchema(sch); else loadSchema("");
+        });
+        (function init() {
+            var sqForm = document.getElementById("sqForm");
+            if (sqForm) sqForm.addEventListener("submit", function () { syncAllBeforeSubmit(); });
+            loadSchema("");
+        })();
+        document.addEventListener("click", function (e) {
+            if (!e.target.classList || !e.target.classList.contains("sq-rm")) return;
+            var tr = e.target.closest("tr.sq-item-row");
+            var b = document.getElementById("sqItemsBody");
+            if (!tr || !b) return;
+            if (b.querySelectorAll("tr.sq-item-row").length <= 1) { tr.querySelectorAll("input,select").forEach(function (i) { if (i.classList && i.classList.contains("sq-matno")) i.value = ""; if (i.classList && i.classList.contains("bom-mat-picker-search")) i.value = ""; }); recalcFooter(); return; }
+            tr.remove();
+            reindex();
+            recalcFooter();
+        });
+        document.getElementById("sqCustomer") && document.getElementById("sqCustomer").addEventListener("change", function () {
+            var o = this.options[this.selectedIndex];
+            var a = o && o.getAttribute("data-ship");
+            if (a) document.getElementById("sqAddr").value = a;
+        });
+        function sqSyncReturnFields() {
+            var q = document.getElementById("sqListQ"), st = document.getElementById("sqListStatus"), pl = document.getElementById("sqListPlant"), dc = document.getElementById("sqListDc");
+            if (document.getElementById("sqReturnQ")) document.getElementById("sqReturnQ").value = q ? q.value : "";
+            if (document.getElementById("sqReturnStatus")) document.getElementById("sqReturnStatus").value = st ? st.value : "All";
+            if (document.getElementById("sqReturnPlantId")) document.getElementById("sqReturnPlantId").value = pl ? pl.value : "";
+            if (document.getElementById("sqReturnDcId")) document.getElementById("sqReturnDcId").value = dc ? dc.value : "";
+        }
+        document.getElementById("addQuotationModal") && document.getElementById("addQuotationModal").addEventListener("show.bs.modal", function () { sqSyncReturnFields(); });
+        var sqF = document.getElementById("sqFilterModal");
+        if (sqF) sqF.addEventListener("show.bs.modal", function () {
+            var st = document.getElementById("sqListStatus"), pl = document.getElementById("sqListPlant"), dc = document.getElementById("sqListDc");
+            if (document.getElementById("sqModStatus")) document.getElementById("sqModStatus").value = (st && st.value) || "All";
+            if (document.getElementById("sqModPlant") && pl) document.getElementById("sqModPlant").value = pl.value || "";
+            if (document.getElementById("sqModDc") && dc) document.getElementById("sqModDc").value = dc.value || "";
+        });
+        window.sqApplyFilterModal = function () {
+            if (document.getElementById("sqListStatus")) document.getElementById("sqListStatus").value = document.getElementById("sqModStatus").value || "All";
+            if (document.getElementById("sqListPlant")) document.getElementById("sqListPlant").value = document.getElementById("sqModPlant").value || "";
+            if (document.getElementById("sqListDc")) document.getElementById("sqListDc").value = document.getElementById("sqModDc").value || "";
+            var m = document.getElementById("sqFilterModal");
+            if (m && typeof bootstrap !== "undefined") { var i = bootstrap.Modal.getInstance(m); if (i) i.hide(); }
+            var f = document.getElementById("sqListFilterForm");
+            if (f) f.submit();
+        };
+        if (sqOpenEditId != null && sqOpenEditId > 0) {
+            _sqSkipFormReset = true;
+            fetch(quotationDataFor(sqOpenEditId)).then(function (r) { return r.json(); }).then(function (d) {
+                if (!d || !d.success) { if (d && d.message) window.alert(d.message); return; }
+                if (d.h && d.h.quotationNumber && document.getElementById("sqNum")) document.getElementById("sqNum").value = d.h.quotationNumber;
+                applyQuotationData(d);
+                var el = document.getElementById("addQuotationModal");
+                if (el && typeof bootstrap !== "undefined") { bootstrap.Modal.getOrCreateInstance(el).show(); }
+            }).catch(function () { window.alert("Could not load quotation for editing."); });
+        }
+    })();
+</script>

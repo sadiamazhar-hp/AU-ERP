@@ -1,0 +1,861 @@
+using System.Globalization;
+using System.IO;
+using AU_ERP.Models;
+using AU_ERP.Models.ViewModels;
+using AU_ERP.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace AU_ERP.Controllers;
+
+[Authorize(Policy = "SalesDepartment")]
+public class SalesOrderController : Controller
+{
+    private readonly AppDbContext _db;
+
+    public SalesOrderController(AppDbContext db)
+    {
+        _db = db;
+    }
+
+    /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
+    [HttpGet]
+    public async Task<JsonResult> SearchFertMaterialsForSalesOrder(string? q, CancellationToken ct = default)
+    {
+        IQueryable<CreateMaterialMaster> query = _db.CreateMaterialMaster.AsNoTracking()
+            .Where(m => m.MaterialTypeCode == "FERT");
+        var qq = (q ?? "").Trim();
+        if (qq.Length > 0)
+            query = query.Where(m =>
+                m.MaterialNumber.Contains(qq) ||
+                (m.Description != null && m.Description.Contains(qq)));
+        var mats = await query
+            .OrderBy(m => m.MaterialNumber)
+            .Take(50)
+            .Select(m => new
+            {
+                m.MaterialNumber,
+                Description = m.Description ?? "",
+                m.MaterialTypeCode,
+                m.BaseUnitCode
+            })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var codes = mats
+            .Where(m => !string.IsNullOrEmpty(m.BaseUnitCode))
+            .Select(m => m.BaseUnitCode!)
+            .Distinct()
+            .ToList();
+        var uomMap = await _db.UnitOfMeasurements.AsNoTracking()
+            .Where(u => u.Code != null && codes.Contains(u.Code))
+            .ToDictionaryAsync(u => u.Code!, u => u.Id, ct)
+            .ConfigureAwait(false);
+        var items = mats.Select(m => new
+        {
+            n = m.MaterialNumber,
+            d = m.Description,
+            t = m.MaterialTypeCode,
+            baseUom = m.BaseUnitCode ?? "",
+            uomId = m.BaseUnitCode != null && uomMap.TryGetValue(m.BaseUnitCode, out var uid) ? (int?)uid : null
+        }).ToList();
+        return Json(new { success = true, items });
+    }
+
+    [HttpGet]
+    public async Task<JsonResult> NextSalesOrderNumber(CancellationToken ct = default)
+    {
+        var n = await NextSalesOrderNumberAsync(ct).ConfigureAwait(false);
+        return Json(new { success = true, number = n, display = n });
+    }
+
+    [HttpGet]
+    public async Task<JsonResult> SchemaDetails(int? id, CancellationToken ct = default)
+    {
+        if (id is not > 0)
+            return Json(new { success = false, message = "Schema is required." });
+        var list = await _db.ConfigurationSchemaCharges.AsNoTracking()
+            .Where(x => x.ConfigurationSchemaId == id)
+            .Join(_db.Charges.AsNoTracking(), c => c.ChargeId, ch => ch.Id, (_, ch) => ch)
+            .OrderBy(ch => ch.Symbol)
+            .Select(ch => new
+            {
+                id = ch.Id,
+                symbol = ch.Symbol,
+                description = ch.Description,
+                valueType = ch.ValueType,
+                sign = ch.Sign,
+                defaultPercent = ch.DefaultPercent
+            })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return Json(new { success = true, charges = list });
+    }
+
+    /// <summary>All defined charges for quotation line/summary pickers (no configuration schema on the form).</summary>
+    [HttpGet]
+    public async Task<JsonResult> AllCharges(CancellationToken ct = default)
+    {
+        var list = await _db.Charges.AsNoTracking()
+            .OrderBy(ch => ch.Symbol)
+            .Select(ch => new
+            {
+                id = ch.Id,
+                symbol = ch.Symbol,
+                description = ch.Description,
+                valueType = ch.ValueType,
+                sign = ch.Sign,
+                defaultPercent = ch.DefaultPercent
+            })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return Json(new { success = true, charges = list });
+    }
+
+    [HttpGet]
+    public async Task<JsonResult> MaterialUomContextForSalesOrder(string? materialNumber, int? includeUomIdForEdit, CancellationToken ct = default)
+    {
+        var (success, errorMessage, data) =
+            await MaterialUomForMaterialHelper.TryBuildMaterialUomContextAsync(_db, materialNumber, includeUomIdForEdit, ct);
+        if (!success)
+            return Json(new { success = false, message = errorMessage });
+        return Json(new { success = true, data });
+    }
+
+    [HttpGet]
+    public async Task<JsonResult> SalesOrderLineUnitCost(string? materialNumber, int? uomId, string? priceGrade, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(materialNumber) || uomId is not > 0)
+            return Json(new { success = false, message = "Material and UOM are required." });
+        var g = (priceGrade ?? "").Trim();
+        if (string.IsNullOrEmpty(g)) g = StockInventoryGradeCodes.FirstQuality;
+        var std = await InventoryStandardCostService.ResolveStandardCostPerUomAsync(
+                _db, materialNumber.Trim(), uomId.Value, ct, g)
+            .ConfigureAwait(false);
+        return Json(new { success = true, stdCostPerUom = std });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Index(
+        int? editId,
+        string? q,
+        string? status,
+        string? plantId,
+        int? distributionChannelId,
+        CancellationToken ct = default)
+    {
+        if (editId is > 0)
+            ViewBag.OpenEditId = editId;
+        var plants = await _db.PlantsSamples.AsNoTracking()
+            .OrderBy(p => p.PlantName)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var channels = await _db.DistributionChannels.AsNoTracking()
+            .OrderBy(c => c.DistributionChannelName)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        IQueryable<SalesOrder> query = _db.SalesOrders.AsNoTracking()
+            .Include(so => so.Plant)
+            .Include(so => so.DistributionChannel)
+            .Include(so => so.SalesQuotation);
+
+        var qq = (q ?? "").Trim();
+        if (qq.Length > 0)
+        {
+            query = query.Where(x =>
+                x.SalesOrderNumber.Contains(qq)
+                || (x.CustomerName != null && x.CustomerName.Contains(qq)));
+        }
+
+        var st = (status ?? "All").Trim();
+        if (string.Equals(st, SalesOrder.StatusOpen, StringComparison.OrdinalIgnoreCase))
+            query = query.Where(x => x.Status == SalesOrder.StatusOpen);
+        else if (string.Equals(st, SalesOrder.StatusConfirmed, StringComparison.OrdinalIgnoreCase))
+            query = query.Where(x => x.Status == SalesOrder.StatusConfirmed);
+
+        if (!string.IsNullOrWhiteSpace(plantId))
+            query = query.Where(x => x.PlantId == plantId);
+        if (distributionChannelId is { } dcid && dcid > 0)
+            query = query.Where(x => x.DistributionChannelId == dcid);
+
+        var list = await query
+            .OrderByDescending(so => so.OrderDate)
+            .ThenBy(so => so.SalesOrderNumber)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var customers = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+            .OrderBy(c => c.FullName)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var schemas = await _db.ConfigurationSchemas.AsNoTracking()
+            .Where(s => s.SchemaType == ConfigurationSchemaType.Sales)
+            .OrderBy(s => s.Title)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        ViewBag.Plants = plants;
+        ViewBag.DistributionChannels = channels;
+        ViewBag.Customers = customers;
+        ViewBag.ConfigurationSchemas = schemas;
+        var withDcIds = await _db.DeliveryChallans.AsNoTracking()
+            .Where(d => d.SalesOrderId != null)
+            .Select(d => d.SalesOrderId!.Value)
+            .Distinct()
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var vm = new SalesOrderListVm
+        {
+            Items = list,
+            Q = string.IsNullOrEmpty(qq) ? null : qq,
+            Status = string.IsNullOrEmpty(st) ? "All" : st,
+            PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,
+            DistributionChannelId = distributionChannelId is > 0 ? distributionChannelId : null,
+            SalesOrderIdsWithChallan = withDcIds.ToHashSet()
+        };
+        return View(vm);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DownloadPdf(int id, CancellationToken ct = default)
+    {
+        var o = await LoadSalesOrderForPdfAsync(id, ct).ConfigureAwait(false);
+        if (o == null)
+            return NotFound();
+        var bytes = SalesOrderPdfService.BuildPdf(o, o.Items.OrderBy(i => i.Id).ToList());
+        var fileName = SafeSalesOrderPdfName(o.SalesOrderNumber);
+        return File(bytes, "application/pdf", fileName);
+    }
+
+    /// <summary>Read-only details for list “View” modal (confirmed orders only; no layout).</summary>
+    [HttpGet]
+    public async Task<IActionResult> DetailsModal(int id, CancellationToken ct = default)
+    {
+        var o = await _db.SalesOrders.AsNoTracking()
+            .Include(x => x.Plant)
+            .Include(x => x.DistributionChannel)
+            .Include(x => x.ConfigurationSchema)
+            .Include(x => x.SalesQuotation)
+            .Include(x => x.Items)!.ThenInclude(i => i.QuantityUom)
+            .FirstOrDefaultAsync(x => x.Id == id, ct)
+            .ConfigureAwait(false);
+        if (o == null)
+            return NotFound();
+        if (o.Status != SalesOrder.StatusConfirmed)
+            return NotFound();
+        var full = await SalesDocumentDetailsModalBuilder.BuildSalesOrderAsync(o, _db, ct).ConfigureAwait(false);
+        return PartialView("_DetailsModal", full);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(SalesOrderCreateFormModel model, CancellationToken ct = default, int? updateOrderId = null)
+    {
+        var isDraftSubmit = string.Equals(model.SubmitAction, "draft", StringComparison.OrdinalIgnoreCase);
+        var isConfirmSubmit = string.Equals(model.SubmitAction, "send", StringComparison.OrdinalIgnoreCase);
+        var strict = isConfirmSubmit;
+
+        if (strict)
+        {
+            if (!model.OrderDate.HasValue || !model.RequestedDeliveryDate.HasValue)
+            {
+                TempData["OrderError"] = "This action requires order date and requested delivery date.";
+                return RedirectToOrderListFromModel(model);
+            }
+            if (string.IsNullOrWhiteSpace(model.PlantId)
+                || !model.DistributionChannelId.HasValue
+                || !model.ConfigurationSchemaId.HasValue
+                || model.ConfigurationSchemaId is not > 0)
+            {
+                TempData["OrderError"] = "This action requires plant, distribution channel, and configuration schema.";
+                return RedirectToOrderListFromModel(model);
+            }
+            var schemaOk = await _db.ConfigurationSchemas.AsNoTracking()
+                .AnyAsync(s => s.Id == model.ConfigurationSchemaId.Value && s.SchemaType == ConfigurationSchemaType.Sales, ct)
+                .ConfigureAwait(false);
+            if (!schemaOk)
+            {
+                TempData["OrderError"] = "Invalid configuration schema.";
+                return RedirectToOrderListFromModel(model);
+            }
+        }
+
+        var now = DateTime.Today;
+        var orderDay = (model.OrderDate?.Date) ?? now;
+        var reqDel = (model.RequestedDeliveryDate?.Date) ?? now;
+        if (strict && reqDel < orderDay)
+        {
+            TempData["OrderError"] = "Requested delivery must be on or after order date.";
+            return RedirectToOrderListFromModel(model);
+        }
+
+        string? customerName = null;
+        if (!string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId))
+        {
+            var bp = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.BPID == model.CustomerBusinessPartnerId, ct)
+                .ConfigureAwait(false);
+            if (bp == null)
+            {
+                TempData["OrderError"] = "Invalid customer.";
+                return RedirectToOrderListFromModel(model);
+            }
+            customerName = (bp.FullName ?? "").Trim();
+        }
+        else if (strict)
+        {
+            TempData["OrderError"] = "Select a customer.";
+            return RedirectToOrderListFromModel(model);
+        }
+
+        var shipTo = (model.ShipToAddress ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(shipTo) && !string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId))
+        {
+            var bp2 = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.BPID == model.CustomerBusinessPartnerId, ct)
+                .ConfigureAwait(false);
+            if (bp2 != null)
+            {
+                var parts = new[] { bp2.HouseNo, bp2.Street, bp2.City, bp2.PostalCode, bp2.Country }
+                    .Where(s => !string.IsNullOrWhiteSpace(s));
+                shipTo = string.Join(", ", parts);
+            }
+        }
+        if (strict && string.IsNullOrWhiteSpace(shipTo))
+        {
+            TempData["OrderError"] = "Confirm order requires a ship-to address (enter or fill from customer).";
+            return RedirectToOrderListFromModel(model);
+        }
+
+        IReadOnlyList<int> schemaChargeIds = Array.Empty<int>();
+        if (model.ConfigurationSchemaId is int schId2 && schId2 > 0)
+        {
+            schemaChargeIds = await _db.ConfigurationSchemaCharges.AsNoTracking()
+                .Where(x => x.ConfigurationSchemaId == schId2)
+                .Select(x => x.ChargeId)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+        var schemaSet = new HashSet<int>(schemaChargeIds);
+        var itemColList = SalesQuotationPricing.ParseIdList(model.ItemChargeColumnIds);
+        foreach (var cid in itemColList)
+        {
+            if (!schemaSet.Contains(cid))
+            {
+                TempData["OrderError"] = "An item charge is not in the selected configuration schema.";
+                return RedirectToOrderListFromModel(model);
+            }
+        }
+        var qLevelList = SalesQuotationPricing.ParseIdList(model.QuotationLevelChargeIds);
+        foreach (var qid in qLevelList)
+        {
+            if (!schemaSet.Contains(qid))
+            {
+                TempData["OrderError"] = "A document charge is not in the selected configuration schema.";
+                return RedirectToOrderListFromModel(model);
+            }
+        }
+        if (itemColList.Count > 0 && schemaSet.Count == 0)
+        {
+            TempData["OrderError"] = "Item charges require a configuration schema (with linked charges).";
+            return RedirectToOrderListFromModel(model);
+        }
+        if (qLevelList.Count > 0 && schemaSet.Count == 0)
+        {
+            TempData["OrderError"] = "Document charges require a configuration schema (with linked charges).";
+            return RedirectToOrderListFromModel(model);
+        }
+        IReadOnlyDictionary<int, Charge> chargeById = new Dictionary<int, Charge>();
+        if (itemColList.Count > 0)
+        {
+            var needIds = itemColList.Distinct().ToList();
+            var forLines = await _db.Charges.AsNoTracking()
+                .Where(c => needIds.Contains(c.Id))
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            chargeById = forLines.ToDictionary(c => c.Id);
+        }
+        var itemColSet = new HashSet<int>(itemColList);
+        var docValuesPosted = SalesQuotationPricing.ParseChargeValuesJson(model.QuotationChargeValuesJson);
+        foreach (var kv in docValuesPosted.Keys)
+        {
+            if (!qLevelList.Contains(kv))
+            {
+                TempData["OrderError"] = "Document charge values do not match selected document charges.";
+                return RedirectToOrderListFromModel(model);
+            }
+        }
+
+        var lineEntities = new List<SalesOrderItem>();
+        var rows = model.Items ?? new List<SalesQuotationItemFormRow>();
+        foreach (var r in rows)
+        {
+            var mat = (r.MaterialNumber ?? "").Trim();
+            if (string.IsNullOrEmpty(mat)) continue;
+
+            var qty = r.OrderQuantity.GetValueOrDefault();
+            if (qty <= 0) continue;
+            if (r.QuantityUomId is not > 0) continue;
+            var delDay = (r.DeliveryDate?.Date) ?? orderDay;
+            if (strict)
+            {
+                if (r.UnitPrice is not > 0)
+                {
+                    TempData["OrderError"] = "Each line needs a valid unit price.";
+                    return RedirectToOrderListFromModel(model);
+                }
+            }
+
+            if (r.QuantityUomId is int uid && uid > 0)
+            {
+                var vUom = await MaterialUomForMaterialHelper.ValidateUomForMaterialAsync(_db, mat, uid, ct)
+                    .ConfigureAwait(false);
+                if (vUom != null)
+                {
+                    TempData["OrderError"] = vUom;
+                    return RedirectToOrderListFromModel(model);
+                }
+            }
+
+            var lineVals = SalesQuotationPricing.ParseChargeValuesJson(r.ItemChargeValuesJson);
+            foreach (var kv in lineVals.Keys)
+            {
+                if (!itemColSet.Contains(kv))
+                {
+                    TempData["OrderError"] = "A line has item charge values for charges not selected as line columns.";
+                    return RedirectToOrderListFromModel(model);
+                }
+            }
+
+            var unitP = r.UnitPrice.GetValueOrDefault();
+            if (unitP < 0) unitP = 0;
+            const decimal discP = 0m;
+
+            decimal sub;
+            decimal lineTot;
+            if (itemColList.Count == 0)
+            {
+                var baseAmt = Math.Round(qty * unitP, 4, MidpointRounding.AwayFromZero);
+                sub = baseAmt;
+                lineTot = sub;
+            }
+            else
+            {
+                (sub, lineTot) = SalesQuotationPricing.ComputeLineWithChargeValues(
+                    itemColList, chargeById, lineVals, qty, unitP, discP);
+            }
+            if (strict && lineTot < 0)
+            {
+                TempData["OrderError"] = "Invalid line calculation.";
+                return RedirectToOrderListFromModel(model);
+            }
+
+            var desc = (r.MaterialDescription ?? "").Trim();
+            if (string.IsNullOrEmpty(desc))
+            {
+                desc = await _db.CreateMaterialMaster.AsNoTracking()
+                    .Where(m => m.MaterialNumber == mat)
+                    .Select(m => m.Description ?? "")
+                    .FirstOrDefaultAsync(ct) ?? "";
+            }
+
+            string? storeLineJson = (r.ItemChargeValuesJson ?? "").Trim();
+            if (itemColList.Count > 0 && string.IsNullOrEmpty(storeLineJson))
+                storeLineJson = "{}";
+            else if (string.IsNullOrEmpty(storeLineJson))
+                storeLineJson = null;
+
+            lineEntities.Add(new SalesOrderItem
+            {
+                MaterialNumber = mat,
+                MaterialDescription = string.IsNullOrEmpty(desc) ? null : desc[..Math.Min(500, desc.Length)],
+                QuantityUomId = r.QuantityUomId,
+                SalesPriceGrade = NormalizeQuotationLineGrade(r.SalesPriceGrade),
+                OrderQuantity = qty,
+                UnitPrice = unitP,
+                DiscountPercent = 0,
+                SubtotalAfterDiscount = sub,
+                TaxAmount = 0,
+                NetPrice = lineTot,
+                LineTaxChargeId = null,
+                ItemAppliedChargeIds = null,
+                ItemChargeValuesJson = storeLineJson,
+                DeliveryDate = DateTime.SpecifyKind(delDay, DateTimeKind.Unspecified)
+            });
+        }
+
+        if (strict)
+        {
+            if (lineEntities.Count == 0)
+            {
+                TempData["OrderError"] = "Confirm order requires at least one line with quantity.";
+                return RedirectToOrderListFromModel(model);
+            }
+        }
+
+        if (updateOrderId is int uoid)
+        {
+            var toUpdate = await _db.SalesOrders
+                .Include(s => s.Items)
+                .FirstOrDefaultAsync(s => s.Id == uoid, ct)
+                .ConfigureAwait(false);
+            if (toUpdate == null)
+            {
+                TempData["OrderError"] = "Sales order not found.";
+                return RedirectToOrderListFromModel(model);
+            }
+            if (toUpdate.Status != SalesOrder.StatusOpen)
+            {
+                TempData["OrderError"] = "Only open orders can be updated.";
+                return RedirectToOrderListFromModel(model);
+            }
+            _db.SalesOrderItems.RemoveRange(toUpdate.Items);
+            toUpdate.PlantId = string.IsNullOrWhiteSpace(model.PlantId) ? null : model.PlantId;
+            toUpdate.DistributionChannelId = model.DistributionChannelId;
+            toUpdate.ConfigurationSchemaId = model.ConfigurationSchemaId is int schemaId && schemaId > 0 ? schemaId : null;
+            toUpdate.CustomerBusinessPartnerId = string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId) ? null : model.CustomerBusinessPartnerId;
+            toUpdate.CustomerName = string.IsNullOrWhiteSpace(customerName) ? null : customerName;
+            toUpdate.ShipToAddress = string.IsNullOrWhiteSpace(shipTo) ? null : shipTo;
+            toUpdate.SalesPersonId = string.IsNullOrWhiteSpace(model.SalesPersonId) ? null : model.SalesPersonId;
+            toUpdate.PriceListCode = string.IsNullOrWhiteSpace(model.PriceListCode) ? null : model.PriceListCode;
+            toUpdate.PaymentTerm = string.IsNullOrWhiteSpace(model.PaymentTerm) ? null : model.PaymentTerm!.Trim();
+            toUpdate.Remarks = string.IsNullOrWhiteSpace(model.Remarks) ? null : model.Remarks!.Trim();
+            toUpdate.QuotationLevelChargeIds = string.IsNullOrWhiteSpace(model.QuotationLevelChargeIds) ? null : model.QuotationLevelChargeIds!.Trim();
+            toUpdate.ItemChargeColumnIds = string.IsNullOrWhiteSpace(model.ItemChargeColumnIds) ? null : model.ItemChargeColumnIds!.Trim();
+            toUpdate.QuotationChargeValuesJson = string.IsNullOrWhiteSpace(model.QuotationChargeValuesJson) ? null : model.QuotationChargeValuesJson!.Trim();
+            toUpdate.OrderDate = orderDay;
+            toUpdate.RequestedDeliveryDate = reqDel;
+            toUpdate.Status = isDraftSubmit
+                ? SalesOrder.StatusOpen
+                : (isConfirmSubmit ? SalesOrder.StatusConfirmed : SalesOrder.StatusOpen);
+            foreach (var li in lineEntities) toUpdate.Items.Add(li);
+            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            TempData["OrderMessage"] = isDraftSubmit
+                ? "Sales order updated (open)."
+                : "Sales order confirmed.";
+            return RedirectToOrderListFromModel(model);
+        }
+
+        var number = await NextSalesOrderNumberAsync(ct).ConfigureAwait(false);
+
+        var header = new SalesOrder
+        {
+            SalesOrderNumber = number,
+            PlantId = string.IsNullOrWhiteSpace(model.PlantId) ? null : model.PlantId,
+            DistributionChannelId = model.DistributionChannelId,
+            ConfigurationSchemaId = model.ConfigurationSchemaId is int cs && cs > 0 ? cs : null,
+            CustomerBusinessPartnerId = string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId) ? null : model.CustomerBusinessPartnerId,
+            CustomerName = string.IsNullOrWhiteSpace(customerName) ? null : customerName,
+            ShipToAddress = string.IsNullOrWhiteSpace(shipTo) ? null : shipTo,
+            SalesPersonId = string.IsNullOrWhiteSpace(model.SalesPersonId) ? null : model.SalesPersonId,
+            PriceListCode = string.IsNullOrWhiteSpace(model.PriceListCode) ? null : model.PriceListCode,
+            PaymentTerm = string.IsNullOrWhiteSpace(model.PaymentTerm) ? null : model.PaymentTerm!.Trim(),
+            Remarks = string.IsNullOrWhiteSpace(model.Remarks) ? null : model.Remarks!.Trim(),
+            QuotationLevelChargeIds = string.IsNullOrWhiteSpace(model.QuotationLevelChargeIds) ? null : model.QuotationLevelChargeIds!.Trim(),
+            ItemChargeColumnIds = string.IsNullOrWhiteSpace(model.ItemChargeColumnIds) ? null : model.ItemChargeColumnIds!.Trim(),
+            QuotationChargeValuesJson = string.IsNullOrWhiteSpace(model.QuotationChargeValuesJson) ? null : model.QuotationChargeValuesJson!.Trim(),
+            OrderDate = orderDay,
+            RequestedDeliveryDate = reqDel,
+            Status = isDraftSubmit
+                ? SalesOrder.StatusOpen
+                : (isConfirmSubmit ? SalesOrder.StatusConfirmed : SalesOrder.StatusOpen)
+        };
+        foreach (var li in lineEntities) header.Items.Add(li);
+
+        _db.SalesOrders.Add(header);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        TempData["OrderMessage"] = isDraftSubmit
+            ? "Sales order saved (open)."
+            : "Sales order confirmed.";
+        return RedirectToOrderListFromModel(model);
+    }
+
+    [HttpGet]
+    public async Task<JsonResult> OrderData(int? id, CancellationToken ct = default)
+    {
+        if (id is not > 0)
+            return Json(new { success = false, message = "Invalid id." });
+        var o = await _db.SalesOrders.AsNoTracking()
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.Id == id, ct)
+            .ConfigureAwait(false);
+        if (o == null)
+            return Json(new { success = false, message = "Sales order not found." });
+        if (o.Status != SalesOrder.StatusOpen)
+            return Json(new { success = false, message = "Only open orders can be opened for editing." });
+
+        object? schemaCharges = null;
+        if (o.ConfigurationSchemaId is int sch && sch > 0)
+        {
+            schemaCharges = await _db.ConfigurationSchemaCharges.AsNoTracking()
+                .Where(x => x.ConfigurationSchemaId == sch)
+                .Join(_db.Charges.AsNoTracking(), c => c.ChargeId, ch => ch.Id, (_, ch) => ch)
+                .OrderBy(ch => ch.Symbol)
+                .Select(ch => new
+                {
+                    id = ch.Id,
+                    symbol = ch.Symbol,
+                    description = ch.Description,
+                    valueType = ch.ValueType,
+                    sign = ch.Sign,
+                    defaultPercent = ch.DefaultPercent
+                })
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+
+        return Json(new
+        {
+            success = true,
+            h = new
+            {
+                id = o.Id,
+                salesOrderNumber = o.SalesOrderNumber,
+                plantId = o.PlantId,
+                distributionChannelId = o.DistributionChannelId,
+                configurationSchemaId = o.ConfigurationSchemaId,
+                customerBusinessPartnerId = o.CustomerBusinessPartnerId,
+                customerName = o.CustomerName,
+                shipToAddress = o.ShipToAddress,
+                itemChargeColumnIds = o.ItemChargeColumnIds,
+                quotationLevelChargeIds = o.QuotationLevelChargeIds,
+                quotationChargeValuesJson = o.QuotationChargeValuesJson,
+                orderDate = o.OrderDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                requestedDeliveryDate = o.RequestedDeliveryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            },
+            items = o.Items.OrderBy(x => x.Id).Select(i => new
+            {
+                i.MaterialNumber,
+                i.MaterialDescription,
+                i.QuantityUomId,
+                i.SalesPriceGrade,
+                orderQuantity = i.OrderQuantity,
+                i.UnitPrice,
+                i.DiscountPercent,
+                i.ItemChargeValuesJson,
+                deliveryDate = i.DeliveryDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? ""
+            }).ToList(),
+            schemaCharges
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Update(int id, SalesOrderCreateFormModel model, CancellationToken ct = default) =>
+        await Create(model, ct, updateOrderId: id).ConfigureAwait(false);
+
+    [HttpGet]
+    public async Task<IActionResult> CreateFromQuotation(
+        int quotationId,
+        string? returnQ,
+        string? returnStatus,
+        string? returnPlantId,
+        int? returnDistributionChannelId,
+        CancellationToken ct = default)
+    {
+        var q = await _db.SalesQuotations
+            .AsNoTracking()
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.Id == quotationId, ct)
+            .ConfigureAwait(false);
+        if (q == null)
+        {
+            TempData["QuotationError"] = "Quotation not found.";
+            return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
+        if (q.Status != SalesQuotation.StatusSent)
+        {
+            TempData["QuotationError"] = "Only sent quotations can be converted to a sales order.";
+            return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
+
+        var existing = await _db.SalesOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.SalesQuotationId == quotationId, ct)
+            .ConfigureAwait(false);
+        if (existing != null)
+        {
+            TempData["QuotationMessage"] = "A sales order already exists for this quotation. Open Sales Order to edit it.";
+            return RedirectToAction(nameof(Index), "SalesOrder", new { editId = existing.Id });
+        }
+
+        var number = await NextSalesOrderNumberAsync(ct).ConfigureAwait(false);
+        var now = DateTime.Today;
+        var header = new SalesOrder
+        {
+            SalesQuotationId = q.Id,
+            SalesOrderNumber = number,
+            PlantId = q.PlantId,
+            DistributionChannelId = q.DistributionChannelId,
+            ConfigurationSchemaId = q.ConfigurationSchemaId,
+            CustomerBusinessPartnerId = q.CustomerBusinessPartnerId,
+            CustomerName = q.CustomerName,
+            ShipToAddress = q.ShipToAddress,
+            SalesPersonId = q.SalesPersonId,
+            PriceListCode = q.PriceListCode,
+            PaymentTerm = q.PaymentTerm,
+            Remarks = q.Remarks,
+            QuotationLevelChargeIds = q.QuotationLevelChargeIds,
+            ItemChargeColumnIds = q.ItemChargeColumnIds,
+            QuotationChargeValuesJson = q.QuotationChargeValuesJson,
+            OrderDate = now,
+            RequestedDeliveryDate = q.ValidityDate >= now ? q.ValidityDate : now,
+            Status = SalesOrder.StatusOpen
+        };
+        var itemColList = SalesQuotationPricing.ParseIdList(q.ItemChargeColumnIds);
+        IReadOnlyDictionary<int, Charge> chargeById = new Dictionary<int, Charge>();
+        if (itemColList.Count > 0)
+        {
+            var needIds = itemColList.Distinct().ToList();
+            var forLines = await _db.Charges.AsNoTracking()
+                .Where(c => needIds.Contains(c.Id))
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            chargeById = forLines.ToDictionary(c => c.Id);
+        }
+        foreach (var li in q.Items)
+        {
+            var qty = li.OrderQuantity;
+            var unitP = li.UnitPrice;
+            var lineVals = SalesQuotationPricing.ParseChargeValuesJson(li.ItemChargeValuesJson);
+            decimal sub;
+            decimal lineTot;
+            if (itemColList.Count == 0)
+            {
+                sub = Math.Round(qty * unitP, 4, MidpointRounding.AwayFromZero);
+                lineTot = sub;
+            }
+            else
+            {
+                (sub, lineTot) = SalesQuotationPricing.ComputeLineWithChargeValues(
+                    itemColList, chargeById, lineVals, qty, unitP, 0m);
+            }
+            header.Items.Add(new SalesOrderItem
+            {
+                MaterialNumber = li.MaterialNumber,
+                MaterialDescription = li.MaterialDescription,
+                SalesPriceGrade = li.SalesPriceGrade,
+                QuantityUomId = li.QuantityUomId,
+                OrderQuantity = li.OrderQuantity,
+                UnitPrice = li.UnitPrice,
+                DiscountPercent = 0,
+                SubtotalAfterDiscount = sub,
+                TaxAmount = li.TaxAmount,
+                NetPrice = lineTot,
+                LineTaxChargeId = li.LineTaxChargeId,
+                ItemAppliedChargeIds = li.ItemAppliedChargeIds,
+                ItemChargeValuesJson = li.ItemChargeValuesJson,
+                DeliveryDate = li.DeliveryDate
+            });
+        }
+        _db.SalesOrders.Add(header);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        TempData["OrderMessage"] = $"Sales order {header.SalesOrderNumber} was created from quotation {q.QuotationNumber}.";
+        return RedirectToAction(nameof(Index), new { editId = header.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(
+        int id,
+        [FromForm] string? returnQ,
+        [FromForm] string? returnStatus,
+        [FromForm] string? returnPlantId,
+        [FromForm] int? returnDistributionChannelId,
+        CancellationToken ct = default)
+    {
+        var o = await _db.SalesOrders
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.Id == id, ct)
+            .ConfigureAwait(false);
+        if (o == null)
+        {
+            TempData["OrderError"] = "Sales order not found.";
+            return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
+        _db.SalesOrderItems.RemoveRange(o.Items);
+        _db.SalesOrders.Remove(o);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        TempData["OrderMessage"] = "Sales order deleted.";
+        return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+    }
+
+    private async Task<SalesOrder?> LoadSalesOrderForPdfAsync(int id, CancellationToken ct) =>
+        await _db.SalesOrders.AsNoTracking()
+            .Include(x => x.Items)!.ThenInclude(i => i.QuantityUom)
+            .FirstOrDefaultAsync(x => x.Id == id, ct)
+            .ConfigureAwait(false);
+
+    private static string SafeSalesOrderPdfName(string number)
+    {
+        var s = (number ?? "order").Trim();
+        foreach (var c in Path.GetInvalidFileNameChars())
+            s = s.Replace(c, '-');
+        if (string.IsNullOrEmpty(s)) s = "order";
+        if (!s.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) s += ".pdf";
+        return s;
+    }
+
+    private IActionResult RedirectToOrderList(
+        string? returnQ, string? returnStatus, string? returnPlantId, int? returnDistributionChannelId) =>
+        RedirectToAction(nameof(Index), new
+        {
+            q = string.IsNullOrWhiteSpace(returnQ) ? null : returnQ,
+            status = string.IsNullOrWhiteSpace(returnStatus) ? null : returnStatus,
+            plantId = string.IsNullOrWhiteSpace(returnPlantId) ? null : returnPlantId,
+            distributionChannelId = returnDistributionChannelId
+        });
+
+    private IActionResult RedirectToQuotationList(
+        string? returnQ, string? returnStatus, string? returnPlantId, int? returnDistributionChannelId) =>
+        RedirectToAction("Index", "SalesQuotation", new
+        {
+            q = string.IsNullOrWhiteSpace(returnQ) ? null : returnQ,
+            status = string.IsNullOrWhiteSpace(returnStatus) ? null : returnStatus,
+            plantId = string.IsNullOrWhiteSpace(returnPlantId) ? null : returnPlantId,
+            distributionChannelId = returnDistributionChannelId
+        });
+
+    private IActionResult RedirectToOrderListFromModel(SalesOrderCreateFormModel? m) =>
+        RedirectToOrderList(m?.ReturnQ, m?.ReturnStatus, m?.ReturnPlantId, m?.ReturnDistributionChannelId);
+
+    private const int OrderSequenceFloor = 2000;
+
+    private async Task<string> NextSalesOrderNumberAsync(CancellationToken ct)
+    {
+        var existing = await _db.SalesOrders.AsNoTracking()
+            .Select(o => o.SalesOrderNumber)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var max = OrderSequenceFloor - 1;
+        foreach (var raw in existing)
+        {
+            var s = (raw ?? "").Trim();
+            if (string.IsNullOrEmpty(s)) continue;
+            if (s.StartsWith("SO-", StringComparison.OrdinalIgnoreCase) && s.Length > 3
+                && int.TryParse(s.AsSpan(3), NumberStyles.None, CultureInfo.InvariantCulture, out var seq))
+            {
+                if (seq > max) max = seq;
+            }
+            else if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= OrderSequenceFloor)
+            {
+                if (n > max) max = n;
+            }
+        }
+        var next = Math.Max(OrderSequenceFloor, max + 1);
+        return "SO-" + next.ToString("D5", CultureInfo.InvariantCulture);
+    }
+
+    private static string NormalizeQuotationLineGrade(string? g)
+    {
+        var s = (g ?? "").Trim();
+        if (string.IsNullOrEmpty(s) || s.Equals(StockInventoryGradeCodes.FirstQuality, StringComparison.OrdinalIgnoreCase))
+            return StockInventoryGradeCodes.FirstQuality;
+        if (s.Equals(StockInventoryGradeCodes.SecondQuality, StringComparison.OrdinalIgnoreCase) || s.Equals("B", StringComparison.OrdinalIgnoreCase))
+            return StockInventoryGradeCodes.SecondQuality;
+        if (s.Equals(StockInventoryGradeCodes.ThirdQuality, StringComparison.OrdinalIgnoreCase) || s.Equals("C", StringComparison.OrdinalIgnoreCase))
+            return StockInventoryGradeCodes.ThirdQuality;
+        if (s.Equals(StockInventoryGradeCodes.Scrap, StringComparison.OrdinalIgnoreCase))
+            return StockInventoryGradeCodes.Scrap;
+        return StockInventoryGradeCodes.FirstQuality;
+    }
+}

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Services;
 
 namespace AU_ERP.Controllers
 {
@@ -534,15 +535,87 @@ namespace AU_ERP.Controllers
                 };
 
                 _db.GoodsProduceBatches.Add(row);
+                await UpsertInventoryFromGoodsReceiptAsync(po, dto, ct).ConfigureAwait(false);
                 await _db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
 
-                return Json(new { success = true, message = "Goods receipt posted." });
+                return Json(new { success = true, message = "Goods receipt posted. Inventory updated for finished / semi-finished material." });
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync(ct);
                 return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// For FERT/HALB (finished / semi-finished), add GR quantities into stock by grade (A/B/C/Scrap).
+        /// Merges into an existing line when material + UOM + status + grade already exist.
+        /// </summary>
+        private async Task UpsertInventoryFromGoodsReceiptAsync(ProductionOrder po, PostGoodsReceiptDto dto, CancellationToken ct)
+        {
+            var mat = await _db.CreateMaterialMaster.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.MaterialNumber == po.FinishedMaterialNumber, ct)
+                .ConfigureAwait(false);
+            if (mat == null)
+                return;
+            var mt = mat.MaterialTypeCode ?? "";
+            if (mt != "FERT" && mt != "HALB")
+                return;
+
+            var now = DateTime.UtcNow;
+            var status = StockInventoryLine.StatusActive;
+            var splits = new[]
+            {
+                (dto.QtyFirstQuality, StockInventoryGradeCodes.FirstQuality),
+                (dto.QtySecondQuality, StockInventoryGradeCodes.SecondQuality),
+                (dto.QtyThirdQuality, StockInventoryGradeCodes.ThirdQuality),
+                (dto.RejectedScrapQty, StockInventoryGradeCodes.Scrap)
+            };
+
+            foreach (var (qty, grade) in splits)
+            {
+                if (qty <= 0)
+                    continue;
+
+                var stdCost = await InventoryStandardCostService.ResolveStandardCostPerUomAsync(
+                        _db,
+                        po.FinishedMaterialNumber,
+                        po.UomId,
+                        ct,
+                        grade)
+                    .ConfigureAwait(false);
+
+                var line = await _db.StockInventoryLines
+                    .FirstOrDefaultAsync(
+                        s => s.MaterialNumber == po.FinishedMaterialNumber
+                             && s.QuantityUomId == po.UomId
+                             && s.Status == status
+                             && s.Grade == grade,
+                        ct)
+                    .ConfigureAwait(false);
+
+                if (line == null)
+                {
+                    _db.StockInventoryLines.Add(new StockInventoryLine
+                    {
+                        MaterialNumber = po.FinishedMaterialNumber,
+                        QuantityUomId = po.UomId,
+                        Status = status,
+                        Grade = grade,
+                        Quantity = qty,
+                        StandardCostPerUom = stdCost,
+                        StockValue = Math.Round(qty * stdCost, 2, MidpointRounding.AwayFromZero),
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+                else
+                {
+                    line.Quantity += qty;
+                    line.StockValue = Math.Round(line.Quantity * line.StandardCostPerUom, 2, MidpointRounding.AwayFromZero);
+                    line.UpdatedAt = now;
+                }
             }
         }
     }

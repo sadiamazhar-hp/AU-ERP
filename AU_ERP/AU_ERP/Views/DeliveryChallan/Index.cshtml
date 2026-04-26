@@ -1,0 +1,703 @@
+@model AU_ERP.Models.ViewModels.DeliveryChallanListVm
+@using System.Globalization
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Delivery Challan";
+    ViewBag.Title = "Delivery Challan";
+    var list = Model?.Items ?? new List<AU_ERP.Models.DeliveryChallan>();
+    var plants = ViewBag.Plants as List<PlantsSample> ?? new List<PlantsSample>();
+    var customers = ViewBag.Customers as List<BusinessPartnerMasterSample> ?? new List<BusinessPartnerMasterSample>();
+    var listQ = Model?.Q ?? "";
+    var listPlant = Model?.PlantId ?? "";
+    var df = Model?.DateFrom is DateTime d0 ? d0.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "";
+    var dt = Model?.DateTo is DateTime d1 ? d1.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "";
+    var today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    int? fromSo = ViewBag.FromSalesOrderId as int?;
+    string FmtDate(DateTime d) => d.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+    var prepareFromSoUrl = Url.Action("PrepareFromSalesOrder", "DeliveryChallan") ?? "";
+    var searchSoForDcUrl = Url.Action("SearchSalesOrdersForChallan", "DeliveryChallan") ?? "";
+    var getSoLinesForDcUrl = Url.Action("GetSalesOrderLinesForChallan", "DeliveryChallan") ?? "";
+    var detailsModalUrlPlaceholder = Url.Action("DetailsModal", "DeliveryChallan", new { id = 900000001 });
+}
+
+@section Styles {
+<style>
+    .dc-page { color: var(--text, #32363a); }
+    .dc-page .dc-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+    .dc-page .dc-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .25rem 0; }
+    .dc-page .dc-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
+    .dc-btn-new { background: var(--blue, #0070f2); color: #fff; border: 1px solid var(--blue, #0070f2); border-radius: 4px; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
+    .dc-btn-new:hover { filter: brightness(1.05); color: #fff; }
+    .dc-table-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+    .dc-table-card .dc-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+    .dc-table-card .dc-table-title { font-size: 1rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0; }
+    .dc-table-card .dc-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .dc-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .dc-table thead th { background: var(--dark, #354a5e); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+    .dc-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+    .dc-table tbody tr:nth-child(even) { background: #fafafa; }
+    #addDeliveryChallanModal.dc-challan-modal .modal-dialog { max-width: 1100px; max-height: calc(100vh - 1rem); margin: 0.5rem auto; }
+    /* Do not clip absolute dropdowns in line pickers; scroll only the table area */
+    #addDeliveryChallanModal.dc-challan-modal .modal-content { max-height: calc(100vh - 1rem); display: flex; flex-direction: column; overflow: visible; }
+    #addDeliveryChallanModal.dc-challan-modal .modal-body { overflow: visible; min-height: 0; flex: 1 1 auto; }
+    #addDeliveryChallanModal .dc-items-table-wrap { max-height: min(52vh, 24rem); overflow: auto; -webkit-overflow-scrolling: touch; }
+    /* View modal z-index: site.css (#dcViewModal) — also reparent node to body in script to avoid backdrop stacking. */
+    .dc-items-table { font-size: .75rem; }
+    .dc-items-table th, .dc-items-table td { vertical-align: middle; }
+    .dc-mat-picker, .dc-so-line-picker { position: relative; }
+    .dc-mat-picker .dc-dd, .dc-so-line-picker .dc-dd {
+        display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px;
+        max-height: 200px; overflow-y: auto; z-index: 2000; background: #fff; border: 1px solid #ccc;
+        border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+    .dc-mat-picker .dc-dd.show, .dc-so-line-picker .dc-dd.show { display: block; }
+    .dc-mat-item, .dc-so-item { padding: 6px 10px; font-size: .78rem; cursor: pointer; border-bottom: 1px solid #eee; }
+    .dc-mat-item:hover, .dc-so-item:hover, .dc-mat-item.active, .dc-so-item.active { background: #b3d7ff; }
+    .dc-dd-empty { padding: 8px 10px; font-size: .75rem; color: #666; }
+    .dc-ref-readonly { background: #f4f4f4 !important; }
+    #dcViewModal .modal-body { min-height: 8rem; }
+</style>
+}
+
+<div class="dc-page">
+    <div class="dc-hero">
+        <div>
+            <h1>Delivery challan</h1>
+            <p>Shipments against confirmed sales orders (one challan per order).</p>
+        </div>
+        <button type="button" class="dc-btn-new" data-bs-toggle="modal" data-bs-target="#addDeliveryChallanModal" id="btnDcNewNoPrefill">
+            <i class="bi bi-plus-lg"></i> New challan
+        </button>
+    </div>
+
+    @if (TempData["DcMessage"] is string okDc)
+    {
+        <div class="alert alert-success py-2 small mb-3" role="status">@okDc</div>
+    }
+    @if (TempData["DcError"] is string errDc)
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="status">@errDc</div>
+    }
+
+    <div class="dc-table-card">
+        <div class="dc-table-head">
+            <h2 class="dc-table-title">Challans (@list.Count)</h2>
+            <form id="dcListFilterForm" method="get" asp-controller="DeliveryChallan" asp-action="Index" class="dc-toolbar">
+                <input type="search" name="q" id="dcListQ" class="form-control form-control-sm" placeholder="DC #, order #, customer…" value="@listQ" />
+                <input type="hidden" name="plantId" id="dcListPlant" value="@listPlant" />
+                <input type="hidden" name="dateFrom" id="dcListDateFrom" value="@df" />
+                <input type="hidden" name="dateTo" id="dcListDateTo" value="@dt" />
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#dcFilterModal">Filter</button>
+                <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear</a>
+            </form>
+        </div>
+        <div class="table-responsive">
+            <table class="dc-table">
+                <thead>
+                    <tr>
+                        <th>Challan #</th>
+                        <th>Document date</th>
+                        <th>Plant</th>
+                        <th>Delivery type</th>
+                        <th>Ship-to</th>
+                        <th>Ref. sales order</th>
+                        <th>Lines</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (list.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-secondary">No delivery challans yet.</td></tr>
+                }
+                else foreach (var d in list)
+                {
+                    <tr>
+                        <td class="text-nowrap"><strong>@d.DeliveryChallanNumber</strong></td>
+                        <td class="text-nowrap">@FmtDate(d.DocumentDate)</td>
+                        <td>@(d.Plant?.PlantName ?? "—")</td>
+                        <td>@d.DeliveryType</td>
+                        <td>@(d.ShipToDisplayName ?? d.ShipToBusinessPartner?.FullName ?? "—")</td>
+                        <td class="text-nowrap">@(d.ReferenceSalesOrderNumber ?? d.SalesOrder?.SalesOrderNumber ?? "—")</td>
+                        <td>@(d.Items?.Count ?? 0)</td>
+                        <td class="text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary dc-btn-view" data-dc-id="@d.Id" title="View">View</button>
+                            <a class="btn btn-sm btn-outline-primary" asp-action="DownloadPdf" asp-route-id="@d.Id" title="Download PDF" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dcViewModal" tabindex="-1" aria-labelledby="dcViewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="dcViewModalLabel">Delivery challan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-2" id="dcViewModalBody">
+                <p class="text-secondary small mb-0">Loading…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dcFilterModal" tabindex="-1" aria-labelledby="dcFilterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="dcFilterModalLabel">Filter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-2">
+                <div class="mb-2">
+                    <label class="form-label small mb-0">Plant</label>
+                    <select class="form-select form-select-sm" id="dcFPlant">
+                        <option value="">All</option>
+                        @foreach (var p in plants)
+                        {
+                            if (p.PlantID == listPlant)
+                            { <option value="@p.PlantID" selected>@p.PlantName</option> }
+                            else
+                            { <option value="@p.PlantID">@p.PlantName</option> }
+                        }
+                    </select>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small mb-0">Document from</label>
+                        <input type="date" class="form-control form-control-sm" id="dcFDateFrom" value="@df" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small mb-0">Document to</label>
+                        <input type="date" class="form-control form-control-sm" id="dcFDateTo" value="@dt" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-primary" id="dcFilterApply">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade dc-challan-modal" id="addDeliveryChallanModal" tabindex="-1" aria-labelledby="addDeliveryChallanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="addDeliveryChallanModalLabel">New delivery challan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="dcForm" method="post" asp-controller="DeliveryChallan" asp-action="Create">
+                @Html.AntiForgeryToken()
+                <div class="modal-body py-2">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Plant</label>
+                            <select class="form-select form-select-sm" name="PlantId" id="dcPlant" required>
+                                <option value="">—</option>
+                                @foreach (var p in plants)
+                                {
+                                    <option value="@p.PlantID">@p.PlantName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Delivery type</label>
+                            <select class="form-select form-select-sm" name="DeliveryType" id="dcDelType">
+                                <option value="Standard" selected>Standard</option>
+                                <option value="Return">Return</option>
+                                <option value="Sample">Sample</option>
+                                <option value="Transfer">Transfer</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Document date</label>
+                            <input type="date" class="form-control form-control-sm" name="DocumentDate" id="dcDocDate" value="@today" required />
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">Ship-to party</label>
+                        <select class="form-select form-select-sm" name="ShipToBusinessPartnerId" id="dcShipTo" required>
+                            <option value="">—</option>
+                            @foreach (var c in customers)
+                            {
+                                <option value="@c.BPID">@c.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <input type="hidden" name="SalesOrderId" id="dcSalesOrderId" value="" />
+                    <input type="hidden" name="ReferenceSalesOrderNumber" id="dcRefSoNum" value="" />
+                    <h6 class="border-bottom pb-1 mb-2 small">Line items</h6>
+                    <p class="text-muted small mb-2" style="font-size: .75rem;">Choose a <strong>sales order</strong> (without an existing challan) on each line, then pick a <strong>material</strong> from that order. Quantity and UoM default from the order line. Batch is taken from stock when the challan is posted.</p>
+                    <div class="table-responsive dc-items-table-wrap">
+                        <table class="table table-sm table-bordered dc-items-table mb-2">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:2rem">#</th>
+                                    <th style="min-width:8rem">Ref. (sales order)</th>
+                                    <th style="min-width:9rem">Material</th>
+                                    <th>Description</th>
+                                    <th style="min-width:4.5rem">UoM</th>
+                                    <th>Del. qty</th>
+                                    <th>Batch <span class="text-muted">(on save)</span></th>
+                                    <th style="width:1.5rem"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="dcItemsBody">
+                                <tr class="dc-item-row" data-idx="0">
+                                    <td class="text-muted dc-line-idx">1</td>
+                                    <td class="dc-td-ref"></td>
+                                    <td class="dc-td-mat"></td>
+                                    <td><input type="text" class="form-control form-control-sm dc-desc" readonly tabindex="-1" style="min-width:5rem;background:#f8f8f8" title="From material / line" /></td>
+                                    <td>
+                                        <select class="form-select form-select-sm dc-uom-sel" name="Items[0].QuantityUomId" required>
+                                            <option value="">—</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="number" class="form-control form-control-sm dc-qty" name="Items[0].DeliveryQuantity" step="0.0001" min="0" value="" required /></td>
+                                    <td><input type="text" class="form-control form-control-sm bg-light" readonly tabindex="-1" value="" placeholder="—" title="Set from stock when the challan is created" /></td>
+                                    <td><input type="hidden" class="dc-soitem" name="Items[0].SalesOrderItemId" value="" />
+                                        <input type="hidden" class="dc-refso" name="Items[0].ReferenceSalesOrderNumber" value="" />
+                                        <input type="hidden" class="dc-mat" name="Items[0].MaterialNumber" value="" />
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 dc-rm" title="Remove line">&times;</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-0" id="btnDcAddRow">+ Add line</button>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Create challan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        (function ensureDcViewModalOnBody() {
+            var el = document.getElementById("dcViewModal");
+            if (!el) return;
+            function move() {
+                if (el.parentElement !== document.body) document.body.appendChild(el);
+            }
+            el.addEventListener("show.bs.modal", move);
+            if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", move);
+            else move();
+        })();
+
+        const prepareFromSoUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(prepareFromSoUrl));
+        const fromSalesOrderId = @Html.Raw(fromSo.HasValue ? fromSo.Value.ToString() : "null");
+        const today = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(today));
+        const descUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("GetMaterialDescription", "DeliveryChallan") ?? ""));
+        const uomUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("MaterialUomContextForDeliveryChallan", "DeliveryChallan") ?? ""));
+        const searchSoForDcUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(searchSoForDcUrl));
+        const getSoLinesForDcUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(getSoLinesForDcUrl));
+        const detailsModalUrlPlaceholder = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(detailsModalUrlPlaceholder));
+
+        var dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [] };
+
+        function detailsModalUrl(id) { return detailsModalUrlPlaceholder.replace("900000001", id); }
+        document.querySelectorAll(".dc-btn-view").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                var id = btn.getAttribute("data-dc-id");
+                if (!id) return;
+                var body = document.getElementById("dcViewModalBody");
+                var m = document.getElementById("dcViewModal");
+                if (body) body.innerHTML = '<p class="text-secondary small mb-0">Loading…</p>';
+                if (window.bootstrap) {
+                    var addM = document.getElementById("addDeliveryChallanModal");
+                    var fM = document.getElementById("dcFilterModal");
+                    if (addM && addM.classList.contains("show")) bootstrap.Modal.getOrCreateInstance(addM).hide();
+                    if (fM && fM.classList.contains("show")) bootstrap.Modal.getOrCreateInstance(fM).hide();
+                }
+                if (m && window.bootstrap) {
+                    var vm = window.bootstrap.Modal.getOrCreateInstance(m);
+                    vm.show();
+                }
+                fetch(detailsModalUrl(id), { headers: { "X-Requested-With": "XMLHttpRequest" } })
+                    .then(function (r) { if (!r.ok) throw new Error(); return r.text(); })
+                    .then(function (html) { if (body) body.innerHTML = html; })
+                    .catch(function () { if (body) body.innerHTML = '<p class="text-danger small">Could not load details.</p>'; });
+            });
+        });
+        function reindex() {
+            var body = document.getElementById("dcItemsBody");
+            if (!body) return;
+            var rows = body.querySelectorAll("tr.dc-item-row");
+            rows.forEach(function (tr, i) {
+                tr.setAttribute("data-idx", String(i));
+                tr.querySelectorAll("[name*=\"Items[\"]").forEach(function (el) {
+                    var n = el.name;
+                    if (!n || n.indexOf("Items[") < 0) return;
+                    var rest = n.split("].");
+                    if (rest.length < 2) return;
+                    el.name = "Items[" + i + "]." + rest[1];
+                });
+                var li = tr.querySelector(".dc-line-idx");
+                if (li) li.textContent = String(i + 1);
+            });
+        }
+        function buildRefCell(isFirst) {
+            if (!isFirst) {
+                var o = document.createElement("div");
+                o.className = "dc-so-locked-label small text-dark py-1";
+                o.style.minHeight = "1.4rem";
+                o.textContent = (dcSoContext && dcSoContext.salesOrderNumber) ? dcSoContext.salesOrderNumber : "—";
+                return o;
+            }
+            var s = document.createElement("div");
+            s.className = "dc-so-line-picker";
+            s.innerHTML = "<input type=\"text\" class=\"form-control form-control-sm dc-so-search\" placeholder=\"Search order #…\" autocomplete=\"off\" />" +
+                "<div class=\"dc-dd\" role=\"listbox\"></div>";
+            return s;
+        }
+        function buildMatCell() {
+            var s = document.createElement("div");
+            s.className = "dc-mat-picker";
+            s.innerHTML = "<input type=\"text\" class=\"form-control form-control-sm dc-mat-search\" placeholder=\"Select SO first\" autocomplete=\"off\" disabled />" +
+                "<div class=\"dc-dd\" role=\"listbox\"></div>";
+            return s;
+        }
+        function syncRefReadonly() {
+            var n = (dcSoContext.salesOrderNumber || "").trim();
+            document.getElementById("dcRefSoNum").value = n;
+            document.querySelectorAll("tr.dc-item-row .dc-refso").forEach(function (h) { h.value = n; });
+        }
+        function closeAllLineDds() {
+            document.querySelectorAll(".dc-so-line-picker .dc-dd, .dc-mat-picker .dc-dd").forEach(function (d) { d.classList.remove("show"); d.innerHTML = ""; });
+        }
+        document.addEventListener("click", function (e) {
+            if (e.target.closest(".dc-so-line-picker") || e.target.closest(".dc-mat-picker")) return;
+            closeAllLineDds();
+        });
+        function runSoSearch(wrap, q) {
+            if (!searchSoForDcUrl) return;
+            var url = searchSoForDcUrl + (searchSoForDcUrl.indexOf("?") >= 0 ? "&" : "?") + "q=" + encodeURIComponent((q || "").trim());
+            fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+                if (!j || !j.success || !wrap) return;
+                var dd = wrap.querySelector(".dc-dd");
+                if (!dd) return;
+                var items = j.items || [];
+                if (items.length === 0) { dd.innerHTML = "<div class=\"dc-dd-empty\">No orders (conflict: already has a challan or not confirmed)</div>"; dd.classList.add("show"); return; }
+                dd.innerHTML = items.map(function (it) {
+                    return "<button type=\"button\" class=\"dc-so-item w-100 text-start border-0 bg-transparent\" data-id=\"" + it.id + "\">" +
+                        "<span class=\"fw-semibold\">" + (it.salesOrderNumber || "") + "</span> · " + (it.customerName || "") + "</button>";
+                }).join("");
+                dd.classList.add("show");
+                dd.querySelectorAll(".dc-so-item").forEach(function (b) {
+                    b.addEventListener("click", function () {
+                        var soId = b.getAttribute("data-id");
+                        if (soId) applySalesOrderPicked(parseInt(soId, 10));
+                    });
+                });
+            });
+        }
+        function applySalesOrderPicked(salesOrderId) {
+            if (!getSoLinesForDcUrl) return;
+            var u = getSoLinesForDcUrl + (getSoLinesForDcUrl.indexOf("?") >= 0 ? "&" : "?") + "salesOrderId=" + salesOrderId;
+            fetch(u).then(function (r) { return r.json(); }).then(function (j) {
+                if (!j || !j.success) { alert((j && j.message) || "Could not load order lines."); return; }
+                dcSoContext = { salesOrderId: j.salesOrderId, salesOrderNumber: j.salesOrderNumber || "", lines: j.lines || [] };
+                if (j.plantId && document.getElementById("dcPlant")) document.getElementById("dcPlant").value = j.plantId;
+                if (j.shipToBusinessPartnerId && document.getElementById("dcShipTo")) document.getElementById("dcShipTo").value = j.shipToBusinessPartnerId;
+                if (j.salesOrderId) document.getElementById("dcSalesOrderId").value = String(j.salesOrderId);
+                syncRefReadonly();
+                document.querySelectorAll("tr.dc-item-row .dc-so-search").forEach(function (inp) {
+                    inp.value = j.salesOrderNumber || "";
+                    inp.classList.add("dc-ref-readonly");
+                    inp.readOnly = true;
+                });
+                document.querySelectorAll(".dc-so-locked-label").forEach(function (lb) { lb.textContent = j.salesOrderNumber || "—"; });
+                document.querySelectorAll("tr.dc-item-row .dc-mat-search").forEach(function (m) { m.disabled = false; m.placeholder = "Search material…"; if (!m.value) m.value = ""; });
+                closeAllLineDds();
+                if (document.querySelectorAll("tr.dc-item-row").length > 1) restructureRefColumnCells();
+            });
+        }
+        function filterMatLines(q) {
+            var L = (dcSoContext && dcSoContext.lines) ? dcSoContext.lines : [];
+            var t = (q || "").trim().toLowerCase();
+            if (!t) return L.slice(0, 30);
+            return L.filter(function (x) {
+                return ((x.materialNumber || "").toLowerCase().indexOf(t) >= 0) || ((x.materialDescription || "").toLowerCase().indexOf(t) >= 0);
+            }).slice(0, 30);
+        }
+        function showMatPicker(wrap) {
+            if (!dcSoContext.lines || !dcSoContext.lines.length) {
+                var dd0 = wrap.querySelector(".dc-dd");
+                if (dd0) { dd0.innerHTML = "<div class=\"dc-dd-empty\">Select a sales order first (Ref. column)</div>"; dd0.classList.add("show"); }
+                return;
+            }
+            var q = (wrap.querySelector(".dc-mat-search") && wrap.querySelector(".dc-mat-search").value) || "";
+            var list = filterMatLines(q);
+            var dd = wrap.querySelector(".dc-dd");
+            if (!dd) return;
+            if (list.length === 0) { dd.innerHTML = "<div class=\"dc-dd-empty\">No matching lines</div>"; dd.classList.add("show"); return; }
+            dd.innerHTML = list.map(function (li, k) {
+                var oq = li.orderQuantity != null ? li.orderQuantity : li.deliveryQuantity;
+                return "<button type=\"button\" class=\"dc-mat-item w-100 text-start border-0 bg-transparent\" data-k=\"" + k + "\" data-sid=\"" + (li.salesOrderItemId || "") + "\">" +
+                    "<span class=\"fw-semibold\">" + (li.materialNumber || "") + "</span> — " + (li.materialDescription || "") + "<br><span class=\"text-muted small\">" + (oq != null ? oq : "") + " " + (li.uomCode || "") + "</span></button>";
+            }).join("");
+            dd.classList.add("show");
+            var tr = wrap.closest("tr.dc-item-row");
+            dd.querySelectorAll(".dc-mat-item").forEach(function (b) {
+                b.addEventListener("click", function () {
+                    var k = parseInt(b.getAttribute("data-k") || "0", 10);
+                    var li = list[k];
+                    if (!li || !tr) return;
+                    tr.querySelector(".dc-mat").value = li.materialNumber || "";
+                    var ms = tr.querySelector(".dc-mat-search");
+                    if (ms) ms.value = (li.materialNumber || "") + " — " + (li.materialDescription || "");
+                    if (tr.querySelector(".dc-desc")) tr.querySelector(".dc-desc").value = li.materialDescription || "";
+                    if (tr.querySelector(".dc-qty")) {
+                        var oq = li.orderQuantity != null ? li.orderQuantity : li.deliveryQuantity;
+                        tr.querySelector(".dc-qty").value = oq != null ? String(oq) : "";
+                    }
+                    if (tr.querySelector(".dc-soitem")) tr.querySelector(".dc-soitem").value = (li.salesOrderItemId != null) ? String(li.salesOrderItemId) : "";
+                    syncRefReadonly();
+                    dd.classList.remove("show");
+                    var pU = li.quantityUomId != null ? parseInt(li.quantityUomId, 10) : NaN;
+                    if (!isNaN(pU) && pU > 0) applyUom(tr, pU);
+                    else if ((li.materialNumber || "").trim()) applyUom(tr, null);
+                });
+            });
+        }
+        function uomInList(uoms, id) {
+            if (!uoms || id == null || isNaN(id)) return false;
+            for (var k = 0; k < uoms.length; k++) if (Number(uoms[k].id) === Number(id)) return true;
+            return false;
+        }
+        function applyUom(tr, preferUomId) {
+            var mat = (tr.querySelector(".dc-mat") && tr.querySelector(".dc-mat").value || "").trim();
+            var sel = tr.querySelector(".dc-uom-sel");
+            if (!sel || !uomUrl) return;
+            if (!mat) { sel.innerHTML = "<option value=\"\">—</option>"; return; }
+            var keep = (preferUomId != null && !isNaN(preferUomId)) ? preferUomId : (function () { var v = parseInt(sel.value, 10); return v > 0 ? v : null; })();
+            var q = uomUrl + (uomUrl.indexOf("?") >= 0 ? "&" : "?") + "materialNumber=" + encodeURIComponent(mat);
+            if (keep) q += "&includeUomIdForEdit=" + keep;
+            fetch(q).then(function (r) { return r.json(); }).then(function (j) {
+                if (!j || !j.success || !j.data) { sel.innerHTML = "<option value=\"\">—</option>"; return; }
+                var d = j.data; var uoms = d.uoms || [];
+                sel.innerHTML = "";
+                uoms.forEach(function (u) { var o = document.createElement("option"); o.value = String(u.id); o.textContent = u.code || u.description || String(u.id); sel.appendChild(o); });
+                if (uoms.length === 0) { var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "—"; sel.appendChild(o0); return; }
+                var pick = null;
+                if (keep != null && uomInList(uoms, keep)) pick = keep;
+                else if (d.baseUomId != null && uomInList(uoms, d.baseUomId)) pick = d.baseUomId;
+                else pick = uoms[0].id;
+                if (pick != null) sel.value = String(pick);
+            });
+        }
+        function wireLine(tr) {
+            var tds = tr.querySelectorAll("td");
+            if (tds.length < 2) return;
+            if (!tds[1].querySelector(".dc-so-line-picker, .dc-so-locked-label")) tds[1].appendChild(buildRefCell(tr.getAttribute("data-idx") === "0"));
+            if (!tds[2].querySelector(".dc-mat-picker")) tds[2].appendChild(buildMatCell());
+            var soW = tds[1].querySelector(".dc-so-line-picker");
+            var mW = tds[2].querySelector(".dc-mat-picker");
+        }
+        (function bindDcItemsBodyDelegation() {
+            var b = document.getElementById("dcItemsBody");
+            if (!b || b._dcDeleg) return;
+            b._dcDeleg = true;
+            b.addEventListener("input", function (e) {
+                var t = e.target;
+                if (t.classList.contains("dc-so-search") && !t.readOnly) {
+                    var w = t.closest(".dc-so-line-picker");
+                    if (w) runSoSearch(w, t.value);
+                }
+                if (t.classList.contains("dc-mat-search") && !t.disabled) {
+                    var mw = t.closest(".dc-mat-picker");
+                    if (mw) showMatPicker(mw);
+                }
+            });
+            b.addEventListener("focusin", function (e) {
+                var t = e.target;
+                if (t.classList.contains("dc-so-search") && !t.readOnly) {
+                    var w = t.closest(".dc-so-line-picker");
+                    if (w) runSoSearch(w, t.value);
+                }
+                if (t.classList.contains("dc-mat-search") && !t.disabled) {
+                    var mw = t.closest(".dc-mat-picker");
+                    if (mw) showMatPicker(mw);
+                }
+            });
+            b.addEventListener("click", function (e) {
+                var btn = e.target.closest(".dc-rm");
+                if (!btn || !b.contains(btn)) return;
+                var tr = btn.closest("tr.dc-item-row");
+                if (!tr) return;
+                if (b.querySelectorAll("tr.dc-item-row").length <= 1) return;
+                tr.remove();
+                reindex();
+                restructureRefColumnCells();
+            });
+        })();
+        function restructureRefColumnCells() {
+            var rows = document.querySelectorAll("#dcItemsBody tr.dc-item-row");
+            rows.forEach(function (tr, i) {
+                var tdR = tr.querySelectorAll("td")[1];
+                if (!tdR) return;
+                tdR.innerHTML = "";
+                if (i === 0) tdR.appendChild(buildRefCell(true));
+                else tdR.appendChild(buildRefCell(false));
+            });
+            rows.forEach(wireLine);
+            if (dcSoContext.salesOrderNumber) {
+                document.querySelectorAll(".dc-so-locked-label").forEach(function (l) { l.textContent = dcSoContext.salesOrderNumber; });
+                var s0 = rows[0] && rows[0].querySelector(".dc-so-search");
+                if (s0) { s0.value = dcSoContext.salesOrderNumber; s0.readOnly = true; s0.classList.add("dc-ref-readonly"); }
+            }
+        }
+        function initAllLines() {
+            document.querySelectorAll("#dcItemsBody tr.dc-item-row").forEach(wireLine);
+        }
+        function clearModalForNew() {
+            document.getElementById("dcForm").reset();
+            if (document.getElementById("dcDocDate")) document.getElementById("dcDocDate").value = today;
+            document.getElementById("dcDelType") && (document.getElementById("dcDelType").value = "Standard");
+            document.getElementById("dcSalesOrderId").value = "";
+            document.getElementById("dcRefSoNum").value = "";
+            dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [] };
+            var body = document.getElementById("dcItemsBody");
+            if (body) {
+                body.innerHTML = "<tr class=\"dc-item-row\" data-idx=\"0\">" +
+                    "<td class=\"text-muted dc-line-idx\">1</td><td class=\"dc-td-ref\"></td><td class=\"dc-td-mat\"></td>" +
+                    "<td><input type=\"text\" class=\"form-control form-control-sm dc-desc\" readonly tabindex=\"-1\" style=\"min-width:5rem;background:#f8f8f8\" /></td>" +
+                    "<td><select class=\"form-select form-select-sm dc-uom-sel\" name=\"Items[0].QuantityUomId\" required><option value=\"\">—</option></select></td>" +
+                    "<td><input type=\"number\" class=\"form-control form-control-sm dc-qty\" name=\"Items[0].DeliveryQuantity\" step=\"0.0001\" min=\"0\" value=\"\" required /></td>" +
+                    "<td><input type=\"text\" class=\"form-control form-control-sm bg-light\" readonly tabindex=\"-1\" value=\"\" placeholder=\"—\" /></td>" +
+                    "<td><input type=\"hidden\" class=\"dc-soitem\" name=\"Items[0].SalesOrderItemId\" value=\"\" />" +
+                    "<input type=\"hidden\" class=\"dc-refso\" name=\"Items[0].ReferenceSalesOrderNumber\" value=\"\" />" +
+                    "<input type=\"hidden\" class=\"dc-mat\" name=\"Items[0].MaterialNumber\" value=\"\" />" +
+                    "<button type=\"button\" class=\"btn btn-sm btn-link text-danger p-0 dc-rm\" title=\"Remove line\">&times;</button></td></tr>";
+                reindex();
+                initAllLines();
+            }
+            if (document.getElementById("addDeliveryChallanModalLabel")) document.getElementById("addDeliveryChallanModalLabel").textContent = "New delivery challan";
+        }
+        function applyFromSoData(d) {
+            clearModalForNew();
+            if (d.plantId && document.getElementById("dcPlant")) document.getElementById("dcPlant").value = d.plantId || "";
+            if (d.deliveryType && document.getElementById("dcDelType")) document.getElementById("dcDelType").value = d.deliveryType || "Standard";
+            if (d.documentDate && document.getElementById("dcDocDate")) document.getElementById("dcDocDate").value = d.documentDate;
+            if (d.shipToBusinessPartnerId && document.getElementById("dcShipTo")) document.getElementById("dcShipTo").value = d.shipToBusinessPartnerId || "";
+            if (d.salesOrderId) document.getElementById("dcSalesOrderId").value = String(d.salesOrderId);
+            if (d.salesOrderNumber) { document.getElementById("dcRefSoNum").value = d.salesOrderNumber; }
+            if (document.getElementById("addDeliveryChallanModalLabel")) document.getElementById("addDeliveryChallanModalLabel").textContent = "New challan (from " + (d.salesOrderNumber || "order") + ")";
+            if (d.items) {
+                dcSoContext = {
+                    salesOrderId: d.salesOrderId,
+                    salesOrderNumber: d.salesOrderNumber || "",
+                    lines: d.items.map(function (x) {
+                        return {
+                            salesOrderItemId: x.salesOrderItemId,
+                            materialNumber: x.materialNumber,
+                            materialDescription: x.materialDescription,
+                            orderQuantity: x.orderQuantity != null ? x.orderQuantity : x.deliveryQuantity,
+                            deliveryQuantity: x.deliveryQuantity,
+                            quantityUomId: x.quantityUomId,
+                            uomCode: x.uomCode
+                        };
+                    })
+                };
+            }
+            if (d.items && d.items.length) {
+                var body = document.getElementById("dcItemsBody");
+                body.innerHTML = "";
+                d.items.forEach(function (it, idx) {
+                    body.insertAdjacentHTML("beforeend", "<tr class=\"dc-item-row\" data-idx=\"" + idx + "\">" +
+                        "<td class=\"text-muted dc-line-idx\">" + (idx + 1) + "</td><td class=\"dc-td-ref\"></td><td class=\"dc-td-mat\"></td>" +
+                        "<td><input type=\"text\" class=\"form-control form-control-sm dc-desc\" readonly tabindex=\"-1\" style=\"min-width:5rem;background:#f8f8f8\" /></td>" +
+                        "<td><select class=\"form-select form-select-sm dc-uom-sel\" name=\"Items[" + idx + "].QuantityUomId\" required><option value=\"\">—</option></select></td>" +
+                        "<td><input type=\"number\" class=\"form-control form-control-sm dc-qty\" name=\"Items[" + idx + "].DeliveryQuantity\" step=\"0.0001\" min=\"0\" value=\"\" required /></td>" +
+                        "<td><input type=\"text\" class=\"form-control form-control-sm bg-light\" readonly tabindex=\"-1\" value=\"\" placeholder=\"—\" /></td>" +
+                        "<td><input type=\"hidden\" class=\"dc-soitem\" name=\"Items[" + idx + "].SalesOrderItemId\" value=\"\" />" +
+                        "<input type=\"hidden\" class=\"dc-refso\" name=\"Items[" + idx + "].ReferenceSalesOrderNumber\" value=\"\" />" +
+                        "<input type=\"hidden\" class=\"dc-mat\" name=\"Items[" + idx + "].MaterialNumber\" value=\"\" />" +
+                        "<button type=\"button\" class=\"btn btn-sm btn-link text-danger p-0 dc-rm\" title=\"Remove line\">&times;</button></td></tr>");
+                    var tr = body.querySelector("tr.dc-item-row:last-child");
+                    if (tr) {
+                        if (tr.querySelector(".dc-refso")) tr.querySelector(".dc-refso").value = d.salesOrderNumber || "";
+                        if (tr.querySelector(".dc-mat")) tr.querySelector(".dc-mat").value = it.materialNumber || "";
+                        if (tr.querySelector(".dc-desc") && it.materialDescription) tr.querySelector(".dc-desc").value = it.materialDescription;
+                        if (tr.querySelector(".dc-qty") && it.deliveryQuantity != null) tr.querySelector(".dc-qty").value = String(it.deliveryQuantity);
+                        if (tr.querySelector(".dc-soitem") && it.salesOrderItemId) tr.querySelector(".dc-soitem").value = String(it.salesOrderItemId);
+                    }
+                });
+                reindex();
+                initAllLines();
+                document.querySelectorAll("tr.dc-item-row .dc-mat-search").forEach(function (m, mi) { m.disabled = false; m.placeholder = "Search material…"; m.value = ""; });
+                document.querySelectorAll("tr.dc-item-row").forEach(function (tr) {
+                    var it = d.items[Array.prototype.indexOf.call(document.querySelectorAll("tr.dc-item-row"), tr)]; if (!it) return;
+                    if (tr.querySelector(".dc-mat-search")) {
+                        tr.querySelector(".dc-mat-search").value = (it.materialNumber || "") + (it.materialDescription ? " — " + it.materialDescription : "");
+                    }
+                });
+                restructureRefColumnCells();
+                d.items.forEach(function (it, idx) {
+                    var rows = document.querySelectorAll("tr.dc-item-row");
+                    var tr = rows[idx];
+                    if (tr) {
+                        var pU = it.quantityUomId != null ? parseInt(it.quantityUomId, 10) : NaN;
+                        if (!isNaN(pU) && pU > 0) applyUom(tr, pU);
+                        else if ((it.materialNumber || "").trim()) applyUom(tr, null);
+                    }
+                });
+            }
+        }
+        document.getElementById("btnDcAddRow") && document.getElementById("btnDcAddRow").addEventListener("click", function () {
+            var body = document.getElementById("dcItemsBody");
+            if (!body) return;
+            var n = body.querySelectorAll("tr.dc-item-row").length;
+            body.insertAdjacentHTML("beforeend", "<tr class=\"dc-item-row\" data-idx=\"" + n + "\">" +
+                "<td class=\"text-muted dc-line-idx\">" + (n + 1) + "</td><td class=\"dc-td-ref\"></td><td class=\"dc-td-mat\"></td>" +
+                "<td><input type=\"text\" class=\"form-control form-control-sm dc-desc\" readonly tabindex=\"-1\" style=\"min-width:5rem;background:#f8f8f8\" /></td>" +
+                "<td><select class=\"form-select form-select-sm dc-uom-sel\" name=\"Items[" + n + "].QuantityUomId\" required><option value=\"\">—</option></select></td>" +
+                "<td><input type=\"number\" class=\"form-control form-control-sm dc-qty\" name=\"Items[" + n + "].DeliveryQuantity\" step=\"0.0001\" min=\"0\" value=\"\" required /></td>" +
+                "<td><input type=\"text\" class=\"form-control form-control-sm bg-light\" readonly tabindex=\"-1\" value=\"\" placeholder=\"—\" /></td>" +
+                "<td><input type=\"hidden\" class=\"dc-soitem\" name=\"Items[" + n + "].SalesOrderItemId\" value=\"\" />" +
+                "<input type=\"hidden\" class=\"dc-refso\" name=\"Items[" + n + "].ReferenceSalesOrderNumber\" value=\"\" />" +
+                "<input type=\"hidden\" class=\"dc-mat\" name=\"Items[" + n + "].MaterialNumber\" value=\"\" />" +
+                "<button type=\"button\" class=\"btn btn-sm btn-link text-danger p-0 dc-rm\" title=\"Remove line\">&times;</button></td></tr>");
+            reindex();
+            if (body.querySelectorAll("tr.dc-item-row").length > 1) restructureRefColumnCells();
+            else { var last = body.querySelector("tr.dc-item-row:last-child"); if (last) wireLine(last); }
+            if (dcSoContext.salesOrderNumber) {
+                var last2 = body.querySelector("tr.dc-item-row:last-child");
+                if (last2 && last2.querySelector(".dc-refso")) last2.querySelector(".dc-refso").value = dcSoContext.salesOrderNumber;
+                if (last2) { var ms = last2.querySelector(".dc-mat-search"); if (ms) { ms.disabled = !dcSoContext.lines || !dcSoContext.lines.length; ms.placeholder = "Search material…"; } }
+            }
+        });
+        document.getElementById("dcFilterApply") && document.getElementById("dcFilterApply").addEventListener("click", function () {
+            var fp = document.getElementById("dcFPlant");
+            var fd = document.getElementById("dcFDateFrom");
+            var ft = document.getElementById("dcFDateTo");
+            if (document.getElementById("dcListPlant") && fp) document.getElementById("dcListPlant").value = fp.value || "";
+            if (document.getElementById("dcListDateFrom") && fd) document.getElementById("dcListDateFrom").value = fd.value || "";
+            if (document.getElementById("dcListDateTo") && ft) document.getElementById("dcListDateTo").value = ft.value || "";
+            var modal = document.getElementById("dcFilterModal");
+            if (modal && window.bootstrap) window.bootstrap.Modal.getOrCreateInstance(modal).hide();
+            if (document.getElementById("dcListFilterForm")) document.getElementById("dcListFilterForm").submit();
+        });
+        document.getElementById("btnDcNewNoPrefill") && document.getElementById("btnDcNewNoPrefill").addEventListener("click", function () { clearModalForNew(); });
+        if (fromSalesOrderId && prepareFromSoUrl) {
+            fetch(prepareFromSoUrl + (prepareFromSoUrl.indexOf("?") >= 0 ? "&" : "?") + "id=" + fromSalesOrderId)
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d && d.success) { var el = document.getElementById("addDeliveryChallanModal"); applyFromSoData(d); if (el && window.bootstrap) { window.bootstrap.Modal.getOrCreateInstance(el).show(); } }
+                    else if (d && d.message) { alert(d.message); }
+                }).catch(function () { });
+        }
+        initAllLines();
+    })();
+</script>

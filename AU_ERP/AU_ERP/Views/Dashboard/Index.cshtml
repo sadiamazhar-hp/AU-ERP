@@ -1,0 +1,255 @@
+@model AU_ERP.Models.ViewModels.DashboardPageVm
+@using System.Globalization
+@using AU_ERP.Models.ViewModels
+@using AU_ERP.Services
+@{
+    ViewData["Title"] = "Dashboard";
+    string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.InvariantCulture);
+}
+
+@section Styles {
+    <style>
+        .db-page { color: var(--text, #32363a); }
+        .db-hero { margin-bottom: 1.25rem; }
+        .db-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .35rem 0; }
+        .db-hero .db-sub { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
+        .db-hero .db-depts { margin: .5rem 0 0 0; font-size: .8rem; color: var(--subtle, #6a7c8e); }
+        .db-hero .db-depts strong { color: var(--dark, #354a5e); font-weight: 500; }
+        .db-section { margin-top: 1.5rem; }
+        .db-section-title { font-size: 1.05rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .75rem 0; display: flex; align-items: center; gap: .5rem; }
+        .db-section-title i { color: var(--blue, #0070f2); }
+        .db-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .65rem; margin-bottom: 1rem; }
+        .db-kpi { background: #f8fafc; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .65rem .75rem; }
+        .db-kpi .db-kpi-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .02em; color: var(--subtle, #6a7c8e); margin: 0 0 .2rem 0; }
+        .db-kpi .db-kpi-val { font-size: 1.15rem; font-weight: 600; color: var(--dark, #354a5e); font-family: "IBM Plex Mono", monospace; }
+        .db-chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; align-items: start; }
+        .db-chart-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .75rem 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.08)); }
+        .db-chart-card h3 { font-size: .88rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .5rem 0; }
+        .db-chart-wrap { position: relative; height: 220px; max-width: 100%; }
+        .db-chart-wrap.db-chart-tall { height: 280px; }
+        .db-quick { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+        .db-quick a { font-size: .8rem; padding: .25rem .55rem; border-radius: 4px; border: 1px solid var(--border, #d9d9d9); color: var(--blue, #0070f2); text-decoration: none; }
+        .db-quick a:hover { background: #f0f7ff; }
+    </style>
+}
+
+<div class="db-page">
+    <div class="db-hero">
+        <h1>Welcome, @Model.UserDisplayName</h1>
+        <p class="db-sub">@Model.TodayLabel</p>
+        @if (Model.DepartmentNames.Count > 0)
+        {
+            <p class="db-depts"><strong>Departments:</strong> @string.Join(", ", Model.DepartmentNames)</p>
+        }
+    </div>
+
+    @if (!Model.HasAnyModule)
+    {
+        <div class="alert alert-warning mb-0" role="alert">
+            No department modules are assigned to your account. Contact an administrator to grant access to Master data, Inventory, Sales, or Production.
+        </div>
+    }
+    else
+    {
+        @if (Model.ShowAdmin && Model.Admin != null)
+        {
+            var a = Model.Admin;
+            <section class="db-section" aria-labelledby="db-admin-title">
+                <h2 class="db-section-title" id="db-admin-title"><i class="bi bi-database"></i> Master data &amp; admin</h2>
+                <div class="db-kpi-grid">
+                    <div class="db-kpi"><div class="db-kpi-label">Materials</div><div class="db-kpi-val">@a.MaterialCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Business partners</div><div class="db-kpi-val">@a.BusinessPartnerCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">BOMs</div><div class="db-kpi-val">@a.BomCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Work centres</div><div class="db-kpi-val">@a.WorkCentreCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Routings</div><div class="db-kpi-val">@a.RoutingCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Users</div><div class="db-kpi-val">@a.UserCount</div></div>
+                </div>
+                <div class="db-chart-row">
+                    <div class="db-chart-card">
+                        <h3>Record counts (overview)</h3>
+                        <div class="db-chart-wrap"><canvas id="dbChartAdminBar"></canvas></div>
+                    </div>
+                    <div class="db-chart-card">
+                        <h3>Materials by type (top types)</h3>
+                        @if (a.MaterialByType.Count == 0)
+                        {
+                            <p class="text-muted small mb-0">No material type breakdown yet.</p>
+                        }
+                        else
+                        {
+                            <div class="db-chart-wrap"><canvas id="dbChartAdminMatType"></canvas></div>
+                        }
+                    </div>
+                </div>
+                <div class="db-quick">
+                    <a asp-controller="Material" asp-action="GetMaterialList">Materials</a>
+                    <a asp-controller="BP" asp-action="Index">Business partners</a>
+                    <a asp-controller="BOM" asp-action="Index">BOMs</a>
+                    <a asp-controller="WorkCentre" asp-action="Index">Work centres</a>
+                    <a asp-controller="Routing" asp-action="Index">Routings</a>
+                    <a asp-controller="Users" asp-action="Index">Users</a>
+                </div>
+            </section>
+        }
+
+        @if (Model.ShowStore && Model.Store != null)
+        {
+            var s = Model.Store;
+            <section class="db-section" aria-labelledby="db-store-title">
+                <h2 class="db-section-title" id="db-store-title"><i class="bi bi-box-seam"></i> Inventory &amp; store</h2>
+                <div class="db-kpi-grid">
+                    <div class="db-kpi"><div class="db-kpi-label">Active stock lines</div><div class="db-kpi-val">@s.ActiveStockLineCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Distinct materials</div><div class="db-kpi-val">@s.DistinctMaterialCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Total stock value (PKR)</div><div class="db-kpi-val">@FmtMoney(s.TotalStockValue)</div></div>
+                </div>
+                <div class="db-chart-row">
+                    <div class="db-chart-card">
+                        <h3>Stock value by grade</h3>
+                        @if (s.ValueByGrade.Count == 0)
+                        {
+                            <p class="text-muted small mb-0">No graded stock lines yet.</p>
+                        }
+                        else
+                        {
+                            <div class="db-chart-wrap db-chart-tall"><canvas id="dbChartStoreGrade"></canvas></div>
+                        }
+                    </div>
+                </div>
+                <div class="db-quick">
+                    <a asp-controller="StockOverview" asp-action="Index">Stock overview</a>
+                </div>
+            </section>
+        }
+
+        @if (Model.ShowSales && Model.Sales != null)
+        {
+            var sa = Model.Sales;
+            <section class="db-section" aria-labelledby="db-sales-title">
+                <h2 class="db-section-title" id="db-sales-title"><i class="bi bi-receipt"></i> Sales</h2>
+                <div class="db-kpi-grid">
+                    <div class="db-kpi"><div class="db-kpi-label">Quotations (draft)</div><div class="db-kpi-val">@sa.QuotationDraft</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Quotations (sent)</div><div class="db-kpi-val">@sa.QuotationSent</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Orders (open)</div><div class="db-kpi-val">@sa.OrderOpen</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Orders (confirmed)</div><div class="db-kpi-val">@sa.OrderConfirmed</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Delivery challans</div><div class="db-kpi-val">@sa.DeliveryChallanCount</div></div>
+                </div>
+                <div class="db-chart-row">
+                    <div class="db-chart-card" style="grid-column: 1 / -1;">
+                        <h3>Quotations &amp; sales orders (last 6 months)</h3>
+                        <div class="db-chart-wrap db-chart-tall"><canvas id="dbChartSalesTrend"></canvas></div>
+                    </div>
+                </div>
+                <div class="db-quick">
+                    <a asp-controller="SalesQuotation" asp-action="Index">Sales quotation</a>
+                    <a asp-controller="SalesOrder" asp-action="Index">Sales order</a>
+                    <a asp-controller="DeliveryChallan" asp-action="Index">Delivery challan</a>
+                </div>
+            </section>
+        }
+
+        @if (Model.ShowProduction && Model.Production != null)
+        {
+            var p = Model.Production;
+            <section class="db-section" aria-labelledby="db-prod-title">
+                <h2 class="db-section-title" id="db-prod-title"><i class="bi bi-gear"></i> Production</h2>
+                <div class="db-kpi-grid">
+                    <div class="db-kpi"><div class="db-kpi-label">FERT + HALB materials (MRP scope)</div><div class="db-kpi-val">@p.MrpBomCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Released / in progress (routed)</div><div class="db-kpi-val">@p.OperationTrackingOpen</div></div>
+                </div>
+                <div class="db-kpi-grid">
+                    @foreach (var kv in p.ProductionOrdersByStatus.OrderBy(x => x.Key))
+                    {
+                        <div class="db-kpi"><div class="db-kpi-label">PO: @kv.Key</div><div class="db-kpi-val">@kv.Value</div></div>
+                    }
+                </div>
+                @if (p.ProductionOrdersByStatusChart.Count > 0)
+                {
+                    <div class="db-chart-row">
+                        <div class="db-chart-card">
+                            <h3>Production orders by status</h3>
+                            <div class="db-chart-wrap db-chart-tall"><canvas id="dbChartProdStatus"></canvas></div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted small">No production orders in the system yet.</p>
+                }
+                <div class="db-quick">
+                    <a asp-controller="MRP" asp-action="Index">MRP</a>
+                    <a asp-controller="ProductionOrder" asp-action="Index">Production order</a>
+                    <a asp-controller="OperationTracking" asp-action="Index">Operation tracking</a>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script>
+        (function () {
+            const grid = { color: "rgba(0,0,0,0.06)" };
+            const commonOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+
+            @if (Model.ShowAdmin && Model.Admin != null)
+            {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartAdminBar");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonForLabelsValues(Model.Admin.BarLabels.ToList(), Model.Admin.BarValues.ToList()));
+                new Chart(el, { type: "bar", data, options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } } });
+            })();
+                </text>
+                if (Model.Admin.MaterialByType.Count > 0)
+                {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartAdminMatType");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonDoughnut(Model.Admin.MaterialByType, new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6" }));
+                new Chart(el, { type: "doughnut", data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } } });
+            })();
+                </text>
+                }
+            }
+
+            @if (Model.ShowStore && Model.Store != null && Model.Store.ValueByGrade.Count > 0)
+            {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartStoreGrade");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonDoughnut(Model.Store.ValueByGrade, new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6" }));
+                new Chart(el, { type: "doughnut", data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: function (ctx) { const v = ctx.parsed; return (ctx.label || "") + ": " + (v != null ? Number(v).toFixed(2) : ""); } } } } } });
+            })();
+                </text>
+            }
+
+            @if (Model.ShowSales && Model.Sales != null)
+            {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartSalesTrend");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonLineQuotationsAndOrders(Model.Sales.QuotationByMonth, Model.Sales.SalesOrderByMonth));
+                new Chart(el, { type: "line", data, options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } } });
+            })();
+                </text>
+            }
+
+            @if (Model.ShowProduction && Model.Production != null && Model.Production.ProductionOrdersByStatusChart.Count > 0)
+            {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartProdStatus");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonDoughnut(Model.Production.ProductionOrdersByStatusChart, new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6", "#34495e" }));
+                new Chart(el, { type: "doughnut", data, options: commonOpts });
+            })();
+                </text>
+            }
+        })();
+    </script>
+}

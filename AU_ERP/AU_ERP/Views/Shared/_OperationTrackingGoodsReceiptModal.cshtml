@@ -35,22 +35,23 @@
                     <div class="fw-semibold small mb-2 text-secondary text-uppercase" style="letter-spacing:.04em;">Split of total produced (pieces)</div>
                     <div class="row g-2 g-md-3">
                         <div class="col-md-6">
-                            <label class="form-label small mb-1" for="otGrFirst">First quality (premium)</label>
+                            <label class="form-label small mb-1" for="otGrFirst">Grade A — first quality (premium)</label>
                             <input type="number" class="form-control otl-gr-qty" id="otGrFirst" min="0" step="0.0001" inputmode="decimal" value="0" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small mb-1" for="otGrSecond">Second quality</label>
+                            <label class="form-label small mb-1" for="otGrSecond">Grade B — second quality</label>
                             <input type="number" class="form-control otl-gr-qty" id="otGrSecond" min="0" step="0.0001" inputmode="decimal" value="0" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small mb-1" for="otGrThird">Third quality / downgrade</label>
+                            <label class="form-label small mb-1" for="otGrThird">Grade C — third quality / downgrade</label>
                             <input type="number" class="form-control otl-gr-qty" id="otGrThird" min="0" step="0.0001" inputmode="decimal" value="0" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small mb-1" for="otGrScrap">Rejected / scrap</label>
+                            <label class="form-label small mb-1" for="otGrScrap">Scrap / rejected (not sellable FGI)</label>
                             <input type="number" class="form-control otl-gr-qty" id="otGrScrap" min="0" step="0.0001" inputmode="decimal" value="0" />
                         </div>
                     </div>
+                    <p class="small text-muted mt-2 mb-0">For FERT/HALB finished material, these buckets post to <strong>Stock Overview</strong> as grades A, B, C, and Scrap (same grade adds to an existing line).</p>
                     <div class="mt-3 pt-2 border-top small">
                         <span id="otGrSumLine" class="otl-gr-sum-bad">Pieces accounted for: <strong id="otGrSumVal">0</strong> / <strong id="otGrProducedEcho">0</strong></span>
                     </div>

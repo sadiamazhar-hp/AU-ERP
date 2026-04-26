@@ -25,12 +25,21 @@ namespace AU_ERP.Models
         [MaxLength(20)]
         public string Status { get; set; } = StatusActive;
 
+        /// <summary>Quality grade for finished goods (e.g. A, B, C, Scrap). Empty for ungraded materials.</summary>
+        [Required]
+        [MaxLength(32)]
+        public string Grade { get; set; } = string.Empty;
+
         /// <summary>Standard cost in PKR per quantity UOM.</summary>
         [Column(TypeName = "decimal(18,4)")]
         public decimal StandardCostPerUom { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal StockValue { get; set; }
+
+        /// <summary>Batch or lot on this bin row (e.g. production lot); shown on issues such as delivery challan.</summary>
+        [MaxLength(64)]
+        public string? BatchOrLot { get; set; }
 
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }

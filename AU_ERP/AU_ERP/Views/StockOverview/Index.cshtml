@@ -40,7 +40,7 @@
     <div class="so-hero">
         <div>
             <h1>Stock overview</h1>
-            <p>Inventory lines with quantity, UOM, standard cost (PKR), and stock value.</p>
+            <p>Inventory lines with quantity, UOM, optional <strong>grade</strong> (A/B/C/Scrap for finished goods from production), standard cost, and stock value. Same material+UOM+status+grade merges when adding quantity.</p>
         </div>
         <button type="button" class="so-btn-new" data-bs-toggle="modal" data-bs-target="#soCreateModal">
             <i class="bi bi-plus-lg"></i> New stock entry
@@ -69,6 +69,7 @@
                         <th>Material number</th>
                         <th>Material name</th>
                         <th>Type</th>
+                        <th>Grade</th>
                         <th>Quantity</th>
                         <th>Status</th>
                         <th>Std cost (PKR)</th>
@@ -79,7 +80,7 @@
                 <tbody>
                     @if (Model.Items.Count == 0)
                     {
-                        <tr><td colspan="8" class="text-secondary">No stock lines match the current filters.</td></tr>
+                        <tr><td colspan="9" class="text-secondary">No stock lines match the current filters.</td></tr>
                     }
                     else
                     {
@@ -91,10 +92,12 @@
                                 : (mat?.MaterialTypeCode ?? "—");
                             var name = mat?.Description ?? "—";
                             var uom = row.QuantityUom?.Code ?? "—";
+                            var gradeLabel = string.IsNullOrEmpty(row.Grade) ? "—" : row.Grade;
                             <tr>
                                 <td><strong>@row.MaterialNumber</strong></td>
                                 <td>@name</td>
                                 <td>@typeLabel</td>
+                                <td>@gradeLabel</td>
                                 <td>@FmtQty(row.Quantity) @uom</td>
                                 <td><span class="@StatusBadge(row.Status)">@StatusUi(row.Status)</span></td>
                                 <td>@FmtMoney(row.StandardCostPerUom)</td>
@@ -139,6 +142,11 @@
                 <div class="mb-2">
                     <label class="form-label small">Quantity UOM</label>
                     <select id="soCreateUom" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Grade</label>
+                    <input type="text" id="soCreateGrade" class="form-control form-control-sm" maxlength="32" placeholder="Optional: A, B, C, Scrap" autocomplete="off" />
+                    <div class="form-text">Leave blank for raw materials. Same grade merges into one line on save.</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">Status</label>
@@ -190,6 +198,10 @@
                 <div class="mb-2">
                     <label class="form-label small">Quantity UOM</label>
                     <select id="soEditUom" class="form-select form-select-sm"></select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Grade</label>
+                    <input type="text" id="soEditGrade" class="form-control form-control-sm" maxlength="32" placeholder="Optional" autocomplete="off" />
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">Status</label>
@@ -297,17 +309,27 @@
     soBindCalc("soCreate");
     soBindCalc("soEdit");
 
-    function soFillMatTypeSelect(sel, includeAll) {
+    function soFillMatTypeSelect(sel, includeAll, excludeTypeCodes) {
         return fetch("@Url.Action("MaterialTypes", "StockOverview")").then(function (r) { return r.json(); }).then(function (res) {
             if (!res.success) return;
             var types = res.data || [];
+            var excl = excludeTypeCodes && excludeTypeCodes.length
+                ? new Set(excludeTypeCodes.map(function (x) { return String(x || "").toUpperCase(); }))
+                : null;
             sel.innerHTML = "";
+            if (!includeAll && excl && excl.size) {
+                var oBlank = document.createElement("option");
+                oBlank.value = "";
+                oBlank.textContent = "— Select material type —";
+                sel.appendChild(oBlank);
+            }
             if (includeAll) {
                 var o0 = document.createElement("option");
                 o0.value = "All"; o0.textContent = "All"; sel.appendChild(o0);
             }
             types.forEach(function (t) {
                 var code = t.materialTypeCode || t.MaterialTypeCode || "";
+                if (excl && excl.has(String(code).toUpperCase())) return;
                 var d = t.description || t.Description || "";
                 var o = document.createElement("option");
                 o.value = code;
@@ -430,6 +452,10 @@
     }
 
     function soFillMaterialsForType(matSel, typeCode, selectedMat) {
+        if (!typeCode) {
+            matSel.innerHTML = '<option value="">— Select a material type first —</option>';
+            return Promise.resolve();
+        }
         var url = "@Url.Action("Materials", "StockOverview")";
         if (typeCode && typeCode !== "All") url += "?materialTypeCode=" + encodeURIComponent(typeCode);
         return fetch(url).then(function (r) { return r.json(); }).then(function (res) {
@@ -451,9 +477,9 @@
     function soEnsureLookups() {
         if (soLookupsLoaded) return Promise.resolve();
         return Promise.all([
-            soFillMatTypeSelect(document.getElementById("soCreateMatType"), false),
-            soFillMatTypeSelect(document.getElementById("soEditMatType"), false),
-            soFillMatTypeSelect(document.getElementById("soModMatType"), true),
+            soFillMatTypeSelect(document.getElementById("soCreateMatType"), false, ["FERT"]),
+            soFillMatTypeSelect(document.getElementById("soEditMatType"), false, null),
+            soFillMatTypeSelect(document.getElementById("soModMatType"), true, null),
             soFillUomSelect(document.getElementById("soModUom"), true)
         ]).then(function () {
             soLookupsLoaded = true;
@@ -513,13 +539,15 @@
     document.getElementById("soCreateModal").addEventListener("show.bs.modal", function () {
         soEnsureLookups().then(function () {
             soClearInline(soFormRoot("soCreateModal"));
-            document.getElementById("soCreateMatType").value = document.getElementById("soCreateMatType").options[0] ? document.getElementById("soCreateMatType").options[0].value : "";
+            document.getElementById("soCreateMatType").value = "";
             return soFillMaterialsForType(document.getElementById("soCreateMaterial"), document.getElementById("soCreateMatType").value, null);
         }).then(function () {
             document.getElementById("soCreateMaterial").value = "";
             document.getElementById("soCreateQty").value = "";
             soInitStockUomPlaceholder(document.getElementById("soCreateUom"));
             document.getElementById("soCreateStatus").value = "@StockInventoryLine.StatusActive";
+            var cg = document.getElementById("soCreateGrade");
+            if (cg) cg.value = "";
             document.getElementById("soCreateCost").value = "";
             document.getElementById("soCreateStockVal").value = "";
         });
@@ -552,7 +580,8 @@
             Quantity: parseFloat(document.getElementById("soCreateQty").value) || 0,
             QuantityUomId: parseInt(document.getElementById("soCreateUom").value, 10) || 0,
             Status: document.getElementById("soCreateStatus").value,
-            StandardCostPerUom: parseFloat(document.getElementById("soCreateCost").value) || 0
+            StandardCostPerUom: parseFloat(document.getElementById("soCreateCost").value) || 0,
+            Grade: (document.getElementById("soCreateGrade").value || "").trim()
         };
         fetch("@Url.Action("Create", "StockOverview")", {
             method: "POST",
@@ -591,6 +620,8 @@
                 var st = (d.status || d.Status || "").toString();
                 document.getElementById("soEditStatus").value = (st === "NotActive") ? "NotActive" : "Active";
                 document.getElementById("soEditCost").value = d.standardCostPerUom != null ? d.standardCostPerUom : d.StandardCostPerUom;
+                var g = d.grade != null ? d.grade : d.Grade;
+                document.getElementById("soEditGrade").value = (g != null && g !== undefined) ? g : "";
                 soRecalc("soEdit");
                 var modalEl = document.getElementById("soEditModal");
                 if (modalEl && typeof bootstrap !== "undefined")
@@ -610,7 +641,8 @@
             Quantity: parseFloat(document.getElementById("soEditQty").value) || 0,
             QuantityUomId: parseInt(document.getElementById("soEditUom").value, 10) || 0,
             Status: document.getElementById("soEditStatus").value,
-            StandardCostPerUom: parseFloat(document.getElementById("soEditCost").value) || 0
+            StandardCostPerUom: parseFloat(document.getElementById("soEditCost").value) || 0,
+            Grade: (document.getElementById("soEditGrade").value || "").trim()
         };
         fetch("@Url.Action("Update", "StockOverview")", {
             method: "POST",

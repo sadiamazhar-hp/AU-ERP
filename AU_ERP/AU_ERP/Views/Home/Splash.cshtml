@@ -1,0 +1,44 @@
+@{
+    Layout = null;
+    ViewData["Title"] = "Welcome";
+    var loginUrl = Url.Action("Login", "Account") ?? "/Account/Login";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"]) — AU ERP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+</head>
+<body class="au-splash-page">
+    <div class="au-splash" role="status" aria-live="polite" aria-busy="true">
+        <div class="au-splash-pulse" aria-hidden="true"></div>
+        <div class="au-splash-inner">
+            <div class="au-splash-mark">
+                <span class="au-splash-mark-a">A</span><span class="au-splash-mark-u">U</span>
+            </div>
+            <p class="au-splash-line">MANUFACTURERS</p>
+            <p class="au-splash-tag">Enterprise resource planning</p>
+            <div class="au-splash-bar" aria-hidden="true">
+                <div class="au-splash-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var loginUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(loginUrl));
+            var el = document.querySelector(".au-splash");
+            window.setTimeout(function () {
+                if (el) el.classList.add("au-splash--out");
+            }, 2100);
+            window.setTimeout(function () {
+                window.location.replace(loginUrl);
+            }, 2800);
+        })();
+    </script>
+</body>
+</html>

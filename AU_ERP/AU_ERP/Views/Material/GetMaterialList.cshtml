@@ -2,16 +2,11 @@
 @using Microsoft.AspNetCore.Mvc.ViewFeatures
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using System.Linq
-@using System.Text.Json
-
 @{
     ViewData["Title"] = "Materials";
     var mTypes = (List<SelectListItem>)ViewBag.MaterialTypes ?? new List<SelectListItem>();
     var safeModel = Model ?? new List<AU_ERP.Models.CreateMaterialMaster>();
     var materialsTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
-    var uomAltOptsModalJson = JsonSerializer.Serialize(
-        (ViewBag.UomIdList as IEnumerable<SelectListItem> ?? Enumerable.Empty<SelectListItem>())
-        .Select(x => new { value = x.Value ?? "", text = x.Text ?? "" }));
 }
 
 <style>
@@ -311,21 +306,6 @@
 </div>
 
 <script>
-       const uomAltOptionListModal = @Html.Raw(uomAltOptsModalJson);
-       function buildUomAltSelectCellModal(idx, selectedVal) {
-           function esc(s) {
-               if (s == null || s === undefined) return "";
-               return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-           }
-           var sel = selectedVal != null && selectedVal !== undefined ? String(selectedVal) : "";
-           var opts = '<option value="0">-- Select UOM --</option>';
-           (uomAltOptionListModal || []).forEach(function (o) {
-               var v = String(o.value ?? "");
-               var isSel = v !== "" && v === sel ? " selected" : "";
-               opts += '<option value="' + esc(v) + '"' + isSel + '>' + esc(String(o.text ?? "")) + '</option>';
-           });
-           return '<select name="Conversions[' + idx + '].AltUnitId" class="form-select form-select-sm">' + opts + '</select>';
-       }
        let isEditMode = false;
     let selectedRow = null;
     let rowCount = @safeModel.Count;
@@ -345,75 +325,19 @@
                     alert("Material editor is not available.");
                     return;
                 }
+                var loadFn = window["auV2AfterEditLoad-modal"];
+                if (typeof loadFn !== "function") {
+                    alert("Material editor is not available.");
+                    return;
+                }
                 var m = data.material;
-                var conversions = data.conversions || [];
                 function pick(obj, camel, pascal) {
                     if (obj[camel] !== undefined && obj[camel] !== null) return obj[camel];
                     if (obj[pascal] !== undefined && obj[pascal] !== null) return obj[pascal];
                     return "";
                 }
-                function setVal(name, value) {
-                    var el = form.querySelector('[name="' + name + '"]');
-                    if (!el) return;
-                    el.value = value != null && value !== undefined ? value : "";
-                }
-                function escapeAttr(s) {
-                    if (s == null || s === undefined) return "";
-                    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-                }
-                setVal("MaterialNumber", pick(m, "materialNumber", "MaterialNumber"));
-                setVal("IndustrySectorCode", pick(m, "industrySectorCode", "IndustrySectorCode"));
-                setVal("MaterialTypeCode", pick(m, "materialTypeCode", "MaterialTypeCode"));
-                setVal("Description", pick(m, "description", "Description"));
-                setVal("BaseUnitCode", pick(m, "baseUnitCode", "BaseUnitCode"));
-                setVal("MaterialGroupCode", pick(m, "materialGroupCode", "MaterialGroupCode"));
-                setVal("EAN", pick(m, "ean", "EAN"));
-                setVal("DeliveringPlantCode", pick(m, "deliveringPlantCode", "DeliveringPlantCode"));
-                setVal("ItemCategoryGroup", pick(m, "itemCategoryGroup", "ItemCategoryGroup"));
-                setVal("PurchasingGroupCode", pick(m, "purchasingGroupCode", "PurchasingGroupCode"));
-                var gr = pick(m, "grProcessingTime", "GrProcessingTime");
-                setVal("GrProcessingTime", gr !== "" && gr != null ? gr : "");
-                setVal("GrProcessingUom", pick(m, "grProcessingUom", "GrProcessingUom"));
-                setVal("MrpTypeCode", pick(m, "mrpTypeCode", "MrpTypeCode"));
-                setVal("ProcurementTypeCode", pick(m, "procurementTypeCode", "ProcurementTypeCode"));
-                setVal("StrategyGroup", pick(m, "strategyGroup", "StrategyGroup"));
-                var ltEd = pick(m, "leadTimeDays", "LeadTimeDays");
-                setVal("LeadTimeDays", ltEd !== "" && ltEd != null ? ltEd : "");
-                var ssEd = pick(m, "safetyStock", "SafetyStock");
-                setVal("SafetyStock", ssEd !== "" && ssEd != null ? ssEd : "");
-                var rpEd = pick(m, "reorderPoint", "ReorderPoint");
-                setVal("ReorderPoint", rpEd !== "" && rpEd != null ? rpEd : "");
-                setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
-                var tbody = document.querySelector("#uomTableV2-modal tbody");
-                if (tbody) tbody.innerHTML = "";
-                var uomIdx = 0;
-                var baseUom = pick(m, "baseUnitCode", "BaseUnitCode") || "";
-                (conversions || []).forEach(function (c) {
-                    if (!c) return;
-                    var alt = c.altUnitId != null ? c.altUnitId : c.AltUnitId;
-                    if (alt === undefined || alt === null || alt === "" || alt === 0) return;
-                    var num = c.numerator != null ? c.numerator : c.Numerator;
-                    var den = c.denominator != null ? c.denominator : c.Denominator;
-                    var numStr = num !== undefined && num !== null && num !== "" ? String(num) : "";
-                    var denStr = den !== undefined && den !== null && den !== "" ? String(den) : "1";
-                    var rowId = "v2row_modal_" + uomIdx;
-                    var html =
-                        '<tr id="' + rowId + '">' +
-                        '<td>' + buildUomAltSelectCellModal(uomIdx, alt) + '</td>' +
-                        '<td><input name="Conversions[' + uomIdx + '].Numerator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(numStr) + '" /></td>' +
-                        '<td class="text-center align-middle">=</td>' +
-                        '<td><input name="Conversions[' + uomIdx + '].Denominator" class="form-control form-control-sm" type="number" step="any" value="' + escapeAttr(denStr) + '" /></td>' +
-                        '<td><input class="form-control form-control-sm sap-readonly" value="' + escapeAttr(baseUom) + '" readonly /></td>' +
-                        '<td><button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById(\'' + rowId + '\').remove()">X</button></td>' +
-                        '</tr>';
-                    if (tbody) tbody.insertAdjacentHTML("beforeend", html);
-                    uomIdx++;
-                });
-                var syncMrp = window.auMaterialV2MrpSyncByAffix && window.auMaterialV2MrpSyncByAffix["-modal"];
-                if (typeof syncMrp === "function") syncMrp();
+                loadFn(m, data.selectedAlternateUomIds);
                 var origNum = pick(m, "materialNumber", "MaterialNumber");
-                var origH = document.getElementById("createV2OriginalMaterialNumber-modal");
-                if (origH) origH.value = origNum || "";
                 if (typeof window.setCreateV2ModalCommittedFromLoaded === "function")
                     window.setCreateV2ModalCommittedFromLoaded(
                         pick(m, "materialTypeCode", "MaterialTypeCode") || "",
@@ -434,7 +358,7 @@
                 var purchLi = document.getElementById("nav-purch-v2-modal");
                 if (salesLi) salesLi.style.display = "";
                 if (purchLi) purchLi.style.display = "";
-                if (type === "ROH" && salesLi) salesLi.style.display = "none";
+                if ((type === "ROH" || type === "HALB" || type === "VERP") && salesLi) salesLi.style.display = "none";
                 if (type === "FERT" && purchLi) purchLi.style.display = "none";
                 if (typeof window.setCreateV2ModalEditState === "function")
                     window.setCreateV2ModalEditState(true);

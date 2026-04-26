@@ -67,6 +67,17 @@ namespace AU_ERP.Main_Controller
                 id = p.ConditionID,
                 label = $"{p.ConditionType} — {p.ConditionSchema}"
             }));
+
+            var salesConfigSchemas = await _db.ConfigurationSchemas.AsNoTracking()
+                .Where(s => s.SchemaType == ConfigurationSchemaType.Sales)
+                .OrderBy(s => s.Title)
+                .ToListAsync(ct);
+            var purchaseConfigSchemas = await _db.ConfigurationSchemas.AsNoTracking()
+                .Where(s => s.SchemaType == ConfigurationSchemaType.Purchase)
+                .OrderBy(s => s.Title)
+                .ToListAsync(ct);
+            ViewBag.SalesConfigurationSchemas = salesConfigSchemas;
+            ViewBag.PurchaseConfigurationSchemas = purchaseConfigSchemas;
         }
 
         private static void NormalizePartnerFkIds(BusinessPartnerMasterSample m)
@@ -82,7 +93,7 @@ namespace AU_ERP.Main_Controller
         private static readonly string[] BpPaymentTermsAllowed = { "10-days", "15-days", "30-days" };
         private static readonly string[] BpPaymentMethodsAllowed = { "Cash", "Cheque", "Online" };
 
-        private void ValidateBpPaymentAndSalesFields(BusinessPartnerMasterSample m)
+        private async Task ValidateBpPaymentAndSchemaFieldsAsync(BusinessPartnerMasterSample m, CancellationToken ct = default)
         {
             var pt = m.PaymentTerms?.Trim();
             if (!string.IsNullOrEmpty(pt) && Array.IndexOf(BpPaymentTermsAllowed, pt) < 0)
@@ -93,21 +104,30 @@ namespace AU_ERP.Main_Controller
                 ModelState.AddModelError(nameof(BusinessPartnerMasterSample.PaymentMethods), "Payment method must be Cash, Cheque, or Online.");
 
             var ss = m.SalesSchema?.Trim();
-            if (string.IsNullOrEmpty(ss))
-                return;
-            if (string.Equals(ss, "Walk-in", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(ss, "Walk-In", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(ss, "WALKIN", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(ss))
             {
-                m.SalesSchema = "Walk-in";
-                return;
+                if (!int.TryParse(ss, out var salesSchId) || salesSchId <= 0
+                    || !await _db.ConfigurationSchemas.AsNoTracking()
+                        .AnyAsync(s => s.Id == salesSchId && s.SchemaType == ConfigurationSchemaType.Sales, ct))
+                {
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.SalesSchema), "Select a valid sales configuration schema.");
+                }
+                else
+                    m.SalesSchema = salesSchId.ToString();
             }
-            if (string.Equals(ss, "Dealer", StringComparison.OrdinalIgnoreCase))
+
+            var ps = m.PurchSchema?.Trim();
+            if (!string.IsNullOrEmpty(ps))
             {
-                m.SalesSchema = "Dealer";
-                return;
+                if (!int.TryParse(ps, out var purchSchId) || purchSchId <= 0
+                    || !await _db.ConfigurationSchemas.AsNoTracking()
+                        .AnyAsync(s => s.Id == purchSchId && s.SchemaType == ConfigurationSchemaType.Purchase, ct))
+                {
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.PurchSchema), "Select a valid purchase configuration schema.");
+                }
+                else
+                    m.PurchSchema = purchSchId.ToString();
             }
-            ModelState.AddModelError(nameof(BusinessPartnerMasterSample.SalesSchema), "Sales schema must be Walk-in or Dealer.");
         }
 
         private async Task<string> AllocateNewBpIdAsync(CancellationToken ct = default)
@@ -269,7 +289,7 @@ namespace AU_ERP.Main_Controller
         {
             await PrepareBpLookupListsAsync(ct);
             NormalizePartnerFkIds(model);
-            ValidateBpPaymentAndSalesFields(model);
+            await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
 
             if (string.IsNullOrWhiteSpace(model.FullName))
             {
@@ -391,7 +411,7 @@ namespace AU_ERP.Main_Controller
         public async Task<JsonResult> UpdatePartner(BusinessPartnerMasterSample model, CancellationToken ct = default)
         {
             NormalizePartnerFkIds(model);
-            ValidateBpPaymentAndSalesFields(model);
+            await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)

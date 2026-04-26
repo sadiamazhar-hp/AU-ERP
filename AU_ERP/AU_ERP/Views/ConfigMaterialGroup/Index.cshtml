@@ -1,0 +1,204 @@
+@model List<AU_ERP.Models.MaterialGroup>
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Material Groups";
+    ViewBag.Title = "Material Groups";
+    var safeModel = Model ?? new List<AU_ERP.Models.MaterialGroup>();
+    var delUrl = Url.Action("Delete", "ConfigMaterialGroup") ?? "";
+}
+
+@if (TempData["ConfigMgMessage"] is string ok)
+{
+    <div class="alert alert-success py-2 small mb-2" role="status">@ok</div>
+}
+@if (TempData["ConfigMgError"] is string err)
+{
+    <div class="alert alert-danger py-2 small mb-2" role="status">@err</div>
+}
+
+<div class="sap-window" id="app">
+    <form id="mgConfigForm" method="post" action="@Url.Action("Index", "ConfigMaterialGroup")">
+        @Html.AntiForgeryToken()
+        <div class="au-validation-summary" style="display:none;" role="alert"></div>
+
+        <div class="sap-toolbar">
+            <div class="d-flex">
+                <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">Edit</button>
+                <button type="button" id="btnNew" class="btn btn-sap" onclick="addNewRow()" disabled>New Entries</button>
+                <button type="button" id="btnSave" class="btn btn-sap" onclick="handleSave()" disabled>Save</button>
+                <button type="button" id="btnDelete" class="btn btn-sap text-danger" onclick="handleDelete()" disabled>Delete</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table-sap">
+                <thead>
+                    <tr>
+                        <th style="width: 35px;">Sel</th>
+                        <th style="width: 180px;">Code</th>
+                        <th>Title</th>
+                    </tr>
+                </thead>
+                <tbody id="gridBody">
+                    @for (var i = 0; i < safeModel.Count; i++)
+                    {
+                        <tr class="tr-existing">
+                            <td class="col-sel" onclick="selectRow(this)"></td>
+                            <td>
+                                <input name="[@i].MaterialGroupCode" class="sap-input mg-code-locked" value="@safeModel[i].MaterialGroupCode" readonly maxlength="32" data-required="true" />
+                            </td>
+                            <td>
+                                <input name="[@i].Description" class="sap-input" value="@(safeModel[i].Description ?? "")" readonly maxlength="200" data-required="true" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </form>
+</div>
+
+<style>
+    :root {
+        --sap-bg: #e5ebf1;
+        --sap-border: #9fb2c5;
+        --sap-header-bg: #dee6ef;
+        --sap-readonly: #f4f4f4;
+        --sap-selected: #b3d7ff;
+        --sap-focus: #fff9c4;
+    }
+    .sap-window { background: white; border: 1px solid var(--sap-border); display: flex; flex-direction: column; min-height: 360px; }
+    .sap-toolbar { padding: 12px; border-bottom: 2px solid var(--sap-border); background: #fff; display: flex; justify-content: flex-end; align-items: center; }
+    .btn-sap { border-radius: 2px; font-size: 12px; border: 1px solid #bbb; margin-right: 5px; background: #fdfdfd; cursor: pointer; }
+    .btn-sap:disabled { opacity: 0.4; cursor: default; }
+    .table-container { overflow-y: auto; flex-grow: 1; }
+    .table-sap { width: 100%; border-collapse: collapse; }
+    .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; text-align: left; }
+    .table-sap td { border: 1px solid #ccc; padding: 0; height: 30px; }
+    .sap-input { width: 100%; height: 100%; border: none; padding: 0 10px; background: var(--sap-readonly); outline: none; box-sizing: border-box; }
+    .edit-mode .sap-input:not([readonly]):not(.mg-code-locked) { background: #fff; }
+    .edit-mode .sap-input.mg-code-locked { background: #eceff1; }
+    .sap-input:focus { background: var(--sap-focus); outline: 1px solid orange; }
+    .col-sel { width: 35px; background: #f0f0f0; cursor: pointer; }
+    .row-selected { background-color: var(--sap-selected) !important; }
+    .row-selected .sap-input { background-color: transparent !important; }
+    .edit-mode .row-selected .sap-input:not(.mg-code-locked) { background: #fff !important; }
+    .edit-mode .row-selected .sap-input.mg-code-locked { background: #eceff1 !important; }
+</style>
+<script>
+    let isEditMode = false;
+    let selectedRow = null;
+    let rowCount = @(safeModel.Count);
+    const deleteUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(delUrl));
+
+    function setMode(edit) {
+        isEditMode = edit;
+        document.getElementById('app').classList.toggle('edit-mode', edit);
+        document.querySelectorAll('.sap-input').forEach(input => {
+            if (input.classList.contains('mg-code-locked')) {
+                input.readOnly = true;
+            } else {
+                input.readOnly = !edit;
+            }
+        });
+        document.getElementById('btnEdit').disabled = edit;
+        document.getElementById('btnNew').disabled = !edit;
+        document.getElementById('btnSave').disabled = !edit;
+        var f = document.getElementById('mgConfigForm');
+        if (f && typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(f);
+    }
+
+    function addNewRow() {
+        const body = document.getElementById('gridBody');
+        const tr = document.createElement('tr');
+        tr.className = 'tr-new';
+        tr.innerHTML = `
+            <td class="col-sel" onclick="selectRow(this)"></td>
+            <td><input name="[${rowCount}].MaterialGroupCode" class="sap-input" maxlength="32" data-required="true"></td>
+            <td><input name="[${rowCount}].Description" class="sap-input" maxlength="200" data-required="true"></td>`;
+        body.appendChild(tr);
+        rowCount++;
+        if (isEditMode) {
+            tr.querySelectorAll('.sap-input').forEach(i => { i.readOnly = false; });
+        }
+        tr.querySelector('input').focus();
+    }
+
+    function selectRow(cell) {
+        if (!isEditMode) return;
+        if (selectedRow) selectedRow.classList.remove('row-selected');
+        selectedRow = cell.parentElement;
+        selectedRow.classList.add('row-selected');
+        document.getElementById('btnDelete').disabled = false;
+    }
+
+    function collectInvalidRows() {
+        var bad = [];
+        document.querySelectorAll('#gridBody tr').forEach(tr => {
+            tr.querySelectorAll('.sap-input[data-required]').forEach(inp => {
+                if (!inp.value.trim()) bad.push(inp);
+            });
+        });
+        return bad;
+    }
+
+    function handleSave() {
+        var form = document.getElementById('mgConfigForm');
+        if (typeof window.auClearInlineValidation === 'function') window.auClearInlineValidation(form);
+        var bad = collectInvalidRows();
+        if (bad.length) {
+            if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, bad);
+            return;
+        }
+        var fd = new FormData(form);
+        fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) { location.reload(); }
+                else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], data.message || 'Save failed');
+                else alert(data.message || 'Save failed');
+            })
+            .catch(() => {
+                if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(form, [], 'Request failed');
+                else alert('Request failed');
+            });
+    }
+
+    function handleDelete() {
+        if (!selectedRow) return;
+        const codeInp = selectedRow.querySelector('input[name*="MaterialGroupCode"]');
+        const code = codeInp ? codeInp.value.trim() : '';
+        function doDelete() {
+            if (code) {
+                $.post(deleteUrl, { id: code }, function (response) {
+                    if (response.success) {
+                        selectedRow.remove(); selectedRow = null;
+                        document.getElementById('btnDelete').disabled = true;
+                        reIndexAllRows();
+                        if (typeof window.materialShowSuccessModal === 'function')
+                            window.materialShowSuccessModal(response.message || 'Deleted.');
+                    } else if (typeof window.auShowInlineValidation === 'function') window.auShowInlineValidation(document.getElementById('mgConfigForm'), [], response.message || 'Delete failed');
+                    else alert(response.message || 'Delete failed');
+                });
+            } else {
+                selectedRow.remove(); selectedRow = null; reIndexAllRows();
+                document.getElementById('btnDelete').disabled = true;
+            }
+        }
+        if (typeof window.materialShowDeleteConfirmModalThen === 'function')
+            window.materialShowDeleteConfirmModalThen('Delete this material group?', doDelete);
+        else if (confirm('Delete this entry?')) doDelete();
+    }
+
+    function reIndexAllRows() {
+        const rows = document.querySelectorAll('#gridBody tr');
+        rows.forEach((row, index) => {
+            const inputs = row.querySelectorAll('input.sap-input');
+            if (inputs.length >= 2) {
+                inputs[0].name = `[${index}].MaterialGroupCode`;
+                inputs[1].name = `[${index}].Description`;
+            }
+        });
+        rowCount = rows.length;
+    }
+</script>

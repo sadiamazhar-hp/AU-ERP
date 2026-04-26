@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Infrastructure;
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,9 +42,16 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim(AuClaimTypes.Department, "Admin"));
     options.AddPolicy("ProductionDepartment", policy =>
         policy.RequireClaim(AuClaimTypes.Department, "Production"));
+    // Quotation, sales order, delivery challan: users with Sales department claim only.
+    options.AddPolicy("SalesDepartment", policy =>
+        policy.RequireClaim(AuClaimTypes.Department, "Sales"));
+    // Stock overview: users with Store department claim (seed data).
+    options.AddPolicy("StoreDepartment", policy =>
+        policy.RequireClaim(AuClaimTypes.Department, "Store"));
 });
 
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<DashboardDataService>();
 
 builder.Services.AddControllersWithViews(options =>
 {
@@ -69,8 +79,9 @@ app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    pattern: "{controller=Home}/{action=Splash}/{id?}");
 
 await IdentityDataSeeder.SeedAsync(app.Services, app.Configuration).ConfigureAwait(false);
+await ConfigurationLookupSeeder.SeedAsync(app.Services).ConfigureAwait(false);
 
 await app.RunAsync().ConfigureAwait(false);

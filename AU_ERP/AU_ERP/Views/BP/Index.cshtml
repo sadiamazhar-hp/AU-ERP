@@ -128,7 +128,8 @@
     var editTypeOptions = ViewBag.TypeOptions as List<AU_ERP.Models.BPTypeSample> ?? new List<AU_ERP.Models.BPTypeSample>();
     var editGroupOptions = ViewBag.GroupOptions as List<AU_ERP.Models.BPGrouping> ?? new List<AU_ERP.Models.BPGrouping>();
     var editDistChannels = ViewBag.DistributionChannels as List<AU_ERP.Models.DistributionChannel> ?? new List<AU_ERP.Models.DistributionChannel>();
-    var editPurchaseSchemes = ViewBag.PurchaseSchemeRows as List<AU_ERP.Models.PurchaseSchemeRow> ?? new List<AU_ERP.Models.PurchaseSchemeRow>();
+    var editSalesConfigSchemas = ViewBag.SalesConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
+    var editPurchaseConfigSchemas = ViewBag.PurchaseConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
 }
 <div class="modal fade" id="bpEditModal" tabindex="-1" aria-labelledby="bpEditModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -331,8 +332,10 @@
                                         <label class="form-label">Sales schema</label>
                                         <select name="SalesSchema" id="bpEditSalesSchema" class="form-select req">
                                             <option value="">-- Select --</option>
-                                            <option value="Walk-in">Walk-in</option>
-                                            <option value="Dealer">Dealer</option>
+                                            @foreach (var s in editSalesConfigSchemas)
+                                            {
+                                                <option value="@s.Id">@s.Title</option>
+                                            }
                                         </select>
                                     </div>
                                 </div>
@@ -344,12 +347,12 @@
                                 <div class="v2-frame-title">Purchasing Data</div>
                                 <div class="row g-2">
                                     <div class="col-md-12">
-                                        <label class="form-label">Purch. Schema</label>
+                                        <label class="form-label">Purchase schema</label>
                                         <select name="PurchSchema" id="bpEditPurchSchema" class="form-select req">
                                             <option value="">-- Select --</option>
-                                            @foreach (var p in editPurchaseSchemes)
+                                            @foreach (var sch in editPurchaseConfigSchemas)
                                             {
-                                                <option value="@p.ConditionID">@p.ConditionType — @p.ConditionSchema</option>
+                                                <option value="@sch.Id">@sch.Title</option>
                                             }
                                         </select>
                                     </div>
@@ -374,16 +377,21 @@
 
 @section Scripts {
     <script>
-        function bpEditNormalizeSalesSchemaVal(v) {
-            v = String(v || '').trim();
-            if (v === 'Walk-In' || v === 'WALK-IN' || v === 'WALKIN') return 'Walk-in';
-            return v;
-        }
         function bpEditApplySalesSchema(salesSchemaVal) {
             var sel = document.getElementById('bpEditSalesSchema');
             if (!sel) return;
-            var v = bpEditNormalizeSalesSchemaVal(salesSchemaVal);
-            sel.value = (v === 'Walk-in' || v === 'Dealer') ? v : '';
+            var v = String(salesSchemaVal || '').trim();
+            if (!v) { sel.value = ''; return; }
+            if ([].some.call(sel.options, function (o) { return o.value === v; })) sel.value = v;
+            else sel.value = '';
+        }
+        function bpEditApplyPurchSchema(purchSchemaVal) {
+            var sel = document.getElementById('bpEditPurchSchema');
+            if (!sel) return;
+            var v = String(purchSchemaVal || '').trim();
+            if (!v) { sel.value = ''; return; }
+            if ([].some.call(sel.options, function (o) { return o.value === v; })) sel.value = v;
+            else sel.value = '';
         }
         function bpReloadToListTab() {
             try {
@@ -564,7 +572,7 @@
                     setEditField("bpEditAccountNumber", p.accountNumber || p.AccountNumber);
                     setEditField("bpEditDistChannel", p.distChannel || p.DistChannel);
                     bpEditApplySalesSchema(String(p.salesSchema || p.SalesSchema || "").trim());
-                    setEditField("bpEditPurchSchema", p.purchSchema || p.PurchSchema);
+                    bpEditApplyPurchSchema(String(p.purchSchema || p.PurchSchema || "").trim());
                     bpEditHandleRoleUI();
 
                     var firstTab = document.getElementById("bpEditTab-info");

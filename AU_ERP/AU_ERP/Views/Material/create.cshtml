@@ -243,6 +243,30 @@
                             <div class="col-md-6">
                                 <label class="form-label">Delivering Plant</label>
                                 @Html.DropDownListFor(m => m.DeliveringPlantCode, plantItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
+                                <label class="form-label mt-2">Grade A cost (per base UOM)</label>
+                                <div class="input-group input-group-sm mb-1">
+                                    @Html.EditorFor(m => m.SalesPriceGradeAPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                    <span class="input-group-text text-muted" id="matSalesBaseUomLabelA">—</span>
+                                    <span class="input-group-text">PKR</span>
+                                </div>
+                                <label class="form-label mt-1 small mb-0">Grade B cost (per base UOM)</label>
+                                <div class="input-group input-group-sm mb-1">
+                                    @Html.EditorFor(m => m.SalesPriceGradeBPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                    <span class="input-group-text text-muted mat-sales-base-suffix">—</span>
+                                    <span class="input-group-text">PKR</span>
+                                </div>
+                                <label class="form-label mt-1 small mb-0">Grade C cost (per base UOM)</label>
+                                <div class="input-group input-group-sm mb-1">
+                                    @Html.EditorFor(m => m.SalesPriceGradeCPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                    <span class="input-group-text text-muted mat-sales-base-suffix">—</span>
+                                    <span class="input-group-text">PKR</span>
+                                </div>
+                                <label class="form-label mt-1 small mb-0">Scrap cost (per base UOM)</label>
+                                <div class="input-group input-group-sm mb-1">
+                                    @Html.EditorFor(m => m.ScrapCostPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
+                                    <span class="input-group-text text-muted mat-sales-base-suffix">—</span>
+                                    <span class="input-group-text">PKR</span>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Item Category Group</label>
@@ -291,13 +315,15 @@
                 <div class="tab-pane fade" id="mrp">
                     <div class="sap-frame">
                         <span class="sap-frame-title">MRP Data</span>
-                        <div class="row">
+                        <div class="row g-2">
                             <div class="col-md-6">
                                 <label class="form-label">MRP Type</label>
                                 @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
                                 <label class="form-label mt-2">Procurement Type</label>
                                 @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
-                                <label class="form-label mt-2">Strategy Group</label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Strategy Group</label>
                                 @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
                             </div>
                         </div>
@@ -377,7 +403,7 @@
         salesTab.style.display = "block";
         purchTab.style.display = "block";
 
-        if (type === "ROH") {
+        if (type === "ROH" || type === "HALB" || type === "VERP") {
             salesTab.style.display = "none";
         } else if (type === "FERT") {
             purchTab.style.display = "none";
@@ -471,14 +497,30 @@
         }
     }
 
+    function syncMatSalesFromBase() {
+        const baseEl = document.getElementById("BaseUnitCode");
+        const code = baseEl && String(baseEl.value || "").trim();
+        const has = !!code;
+        const dis = (code) => (has ? code : "—");
+        const l1 = document.getElementById("matSalesBaseUomLabelA");
+        if (l1) l1.textContent = dis(code);
+        document.querySelectorAll("#sales .mat-sales-base-suffix").forEach(function (s) { s.textContent = dis(code); });
+        document.querySelectorAll("#sales .mat-sale-pkr").forEach(function (el) {
+            el.readOnly = !has;
+            el.classList.toggle("bg-light", !has);
+            if (!has) el.value = "";
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         handleTabVisibility();
         const bu = document.getElementById("BaseUnitCode");
         if (bu) {
-            bu.addEventListener("input", syncMrpQtyFieldsClassic);
-            bu.addEventListener("change", syncMrpQtyFieldsClassic);
+            bu.addEventListener("input", function () { syncMrpQtyFieldsClassic(); syncMatSalesFromBase(); });
+            bu.addEventListener("change", function () { syncMrpQtyFieldsClassic(); syncMatSalesFromBase(); });
         }
         syncMrpQtyFieldsClassic();
+        syncMatSalesFromBase();
 
         // Success (Materials/Create POST redirect)
         var message = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"] as string ?? ""));

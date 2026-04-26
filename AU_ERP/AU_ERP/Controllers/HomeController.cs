@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AU_ERP.Models;
+using AU_ERP.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,8 +16,18 @@ namespace AU_ERP.Controllers
             _logger = logger;
         }
 
+        /// <summary>Entry screen (default route): brief animation, then unauthenticated users continue to login.</summary>
+        public IActionResult Splash()
+        {
+            if (User.Identity?.IsAuthenticated == true)
+                return Redirect(DepartmentLanding.GetPath(User));
+            return View();
+        }
+
         public IActionResult Index()
         {
+            if (User.Identity?.IsAuthenticated == true)
+                return Redirect(DepartmentLanding.GetPath(User));
             return View();
         }
 

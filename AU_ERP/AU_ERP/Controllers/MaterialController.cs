@@ -111,27 +111,60 @@ namespace AU_ERP.Main_Controller
             };
         }
 
-        /// <summary>Bind posted conversions to the material number from the info tab and drop binder noise for server-filled fields.</summary>
-        private void HarmonizeConversionsWithMaterial(string materialNumber, List<UnitConversion>? conversions)
-        {
-            if (conversions == null) return;
-            var mn = materialNumber ?? "";
-            foreach (var c in conversions)
-                c.MaterialNumber = mn;
-
-            foreach (var key in ModelState.Keys.Where(k =>
-                         k.StartsWith("Conversions[", StringComparison.OrdinalIgnoreCase) &&
-                         k.Contains(".MaterialNumber", StringComparison.OrdinalIgnoreCase)).ToList())
-                ModelState.Remove(key);
-        }
-
-        /// <summary>Quantity-based MRP fields require a base unit; clear them when base unit is missing (including tampered posts).</summary>
         private static void HarmonizeMaterialMrpFields(CreateMaterialMaster material)
         {
-            if (!string.IsNullOrWhiteSpace(material.BaseUnitCode))
-                return;
             material.SafetyStock = null;
             material.ReorderPoint = null;
+        }
+
+        /// <summary>Builds per-material <see cref="UnitConversion"/> rows from <see cref="GlobalUnitConversions"/> and selected alternate UOM ids (1 base = Qty alt → Numerator=1, Denominator=Qty).</summary>
+        private async Task<(List<UnitConversion> Conversions, string? ErrorMessage)> BuildUnitConversionsFromSelectionAsync(
+            string? materialNumber,
+            string? baseUnitCode,
+            int[]? selectedAlternateUomIds,
+            CancellationToken ct = default)
+        {
+            var list = new List<UnitConversion>();
+            if (selectedAlternateUomIds == null || selectedAlternateUomIds.Length == 0)
+                return (list, null);
+            if (string.IsNullOrWhiteSpace(baseUnitCode))
+                return (list, "Select a base unit of measure before choosing alternate units.");
+            if (string.IsNullOrWhiteSpace(materialNumber))
+                return (list, "Material number is required for unit conversions.");
+            var baseUom = await _context.UnitOfMeasurements.AsNoTracking()
+                .FirstOrDefaultAsync(
+                    u => u.Code != null && u.Code.Trim().ToLower() == baseUnitCode.Trim().ToLower(), ct);
+            if (baseUom == null)
+                return (list, "No unit of measurement matches the base unit. Add the UOM or correct the base unit.");
+            var distinct = selectedAlternateUomIds.Where(x => x > 0).Distinct().ToList();
+            var mn = materialNumber!.Trim();
+            foreach (var altId in distinct)
+            {
+                if (altId == baseUom.Id)
+                    continue;
+                var g = await _context.GlobalUnitConversions.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.BaseUnitId == baseUom.Id && x.AltUnitId == altId, ct);
+                if (g == null)
+                {
+                    var alt = await _context.UnitOfMeasurements.AsNoTracking()
+                        .FirstOrDefaultAsync(u => u.Id == altId, ct);
+                    var altLabel = alt?.Code ?? altId.ToString();
+                    return (list, $"Add a unit conversion in Configuration → Unit Conversion (base to \"{altLabel}\") before selecting it as an alternate unit.");
+                }
+                if (g.Quantity <= 0)
+                    return (list, "Invalid master conversion quantity for one of the selected alternate units.");
+                var d = (float)g.Quantity;
+                if (d <= 0f)
+                    return (list, "Invalid master conversion quantity for one of the selected alternate units.");
+                list.Add(new UnitConversion
+                {
+                    MaterialNumber = mn,
+                    AltUnitId = altId,
+                    Numerator = 1f,
+                    Denominator = d
+                });
+            }
+            return (list, null);
         }
 
         private static string NormalizeMaterialDescription(string? description) => (description ?? "").Trim();
@@ -161,15 +194,6 @@ namespace AU_ERP.Main_Controller
             return null;
         }
 
-        private static string? ValidateConversionsRequireBaseUnit(CreateMaterialMaster material, List<UnitConversion>? conversions)
-        {
-            if (conversions == null || !conversions.Any(c => c != null && c.AltUnitId > 0))
-                return null;
-            if (string.IsNullOrWhiteSpace(material.BaseUnitCode))
-                return "Select a base unit of measure before adding unit conversions.";
-            return null;
-        }
-
         private async Task TouchMaterialNumberRangeAfterIssueAsync(string? materialTypeCode, string materialNumber)
         {
             if (string.IsNullOrEmpty(materialTypeCode))
@@ -193,9 +217,8 @@ namespace AU_ERP.Main_Controller
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(CreateMaterialMaster material, List<UnitConversion> conversions)
+        public async Task<IActionResult> Create(CreateMaterialMaster material, int[]? selectedAlternateUomIds)
         {
-            HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
             HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
             {
@@ -204,7 +227,7 @@ namespace AU_ERP.Main_Controller
                 return View(material);
             }
 
-            var (ok, error) = await TryPersistNewMaterialAsync(material, conversions);
+            var (ok, error) = await TryPersistNewMaterialAsync(material, selectedAlternateUomIds);
             if (ok)
             {
                 TempData["SuccessMessage"] = "Material Added Successfully !";
@@ -226,9 +249,8 @@ namespace AU_ERP.Main_Controller
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateV2(CreateMaterialMaster material, List<UnitConversion> conversions)
+        public async Task<IActionResult> CreateV2(CreateMaterialMaster material, int[]? selectedAlternateUomIds)
         {
-            HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
             HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
             {
@@ -237,7 +259,7 @@ namespace AU_ERP.Main_Controller
                 return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
             }
 
-            var (ok, error) = await TryPersistNewMaterialAsync(material, conversions);
+            var (ok, error) = await TryPersistNewMaterialAsync(material, selectedAlternateUomIds);
             if (ok)
                 return Json(new { success = true, message = "Material Added Successfully !" });
 
@@ -267,6 +289,10 @@ namespace AU_ERP.Main_Controller
                 m.EAN,
                 m.DeliveringPlantCode,
                 m.ItemCategoryGroup,
+                m.SalesPriceGradeAPerBaseUom,
+                m.SalesPriceGradeBPerBaseUom,
+                m.SalesPriceGradeCPerBaseUom,
+                m.ScrapCostPerBaseUom,
                 m.PurchasingGroupCode,
                 m.GrProcessingTime,
                 m.GrProcessingUom,
@@ -274,25 +300,53 @@ namespace AU_ERP.Main_Controller
                 m.ProcurementTypeCode,
                 m.StrategyGroup,
                 m.LeadTimeDays,
-                m.SafetyStock,
-                m.ReorderPoint,
                 m.ValuationClassCode
             };
 
-            var conversions = await _context.UnitConversions.AsNoTracking()
+            var convRows = await _context.UnitConversions.AsNoTracking()
                 .Where(u => u.MaterialNumber == id)
                 .OrderBy(u => u.Id)
                 .Select(u => new { u.AltUnitId, u.Numerator, u.Denominator })
                 .ToListAsync();
 
-            return Json(new { success = true, material, conversions });
+            var selectedAlternateUomIds = convRows.Select(c => c.AltUnitId).ToList();
+
+            return Json(new { success = true, material, conversions = convRows, selectedAlternateUomIds });
+        }
+
+        /// <summary>Alternates with a global conversion from the given base UOM (for material Basic Data multiselect).</summary>
+        [HttpGet]
+        public async Task<JsonResult> GetAlternateUomsForBaseCode(string? baseCode, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(baseCode))
+                return Json(new { success = true, alts = Array.Empty<object>() });
+            var code = baseCode.Trim();
+            var baseUom = await _context.UnitOfMeasurements.AsNoTracking()
+                .FirstOrDefaultAsync(
+                    u => u.Code != null && u.Code.Trim().ToLower() == code.ToLower(), ct);
+            if (baseUom == null)
+                return Json(new { success = true, alts = Array.Empty<object>() });
+            var alts = await _context.GlobalUnitConversions.AsNoTracking()
+                .Where(x => x.BaseUnitId == baseUom.Id)
+                .Join(_context.UnitOfMeasurements,
+                    g => g.AltUnitId,
+                    u => u.Id,
+                    (g, u) => new
+                    {
+                        id = g.AltUnitId,
+                        code = u.Code,
+                        desc = u.Description,
+                        quantity = g.Quantity
+                    })
+                .OrderBy(x => x.code)
+                .ToListAsync(ct);
+            return Json(new { success = true, alts, baseUomId = baseUom.Id });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, List<UnitConversion> conversions)
+        public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, int[]? selectedAlternateUomIds)
         {
-            HarmonizeConversionsWithMaterial(material.MaterialNumber ?? "", conversions);
             HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
             {
@@ -304,8 +358,8 @@ namespace AU_ERP.Main_Controller
             var original = Request.Form["OriginalMaterialNumber"].ToString();
             var (ok, error) = !string.IsNullOrWhiteSpace(original)
                 && !string.Equals(original, material.MaterialNumber, StringComparison.Ordinal)
-                ? await TryReplaceMaterialWithRenumberAsync(original, material, conversions)
-                : await TryUpdateMaterialAsync(material, conversions);
+                ? await TryReplaceMaterialWithRenumberAsync(original, material, selectedAlternateUomIds)
+                : await TryUpdateMaterialAsync(material, selectedAlternateUomIds);
 
             if (ok)
                 return Json(new { success = true, message = "Material Updated Successfully !" });
@@ -317,14 +371,15 @@ namespace AU_ERP.Main_Controller
         private async Task<(bool Success, string? ErrorMessage)> TryReplaceMaterialWithRenumberAsync(
             string originalMaterialNumber,
             CreateMaterialMaster material,
-            List<UnitConversion>? conversions)
+            int[]? selectedAlternateUomIds)
         {
+            var (conversions, cErr) = await BuildUnitConversionsFromSelectionAsync(
+                material.MaterialNumber, material.BaseUnitCode, selectedAlternateUomIds);
+            if (cErr != null)
+                return (false, cErr);
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var vBase = ValidateConversionsRequireBaseUnit(material, conversions);
-                if (vBase != null)
-                    return (false, vBase);
                 var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
                 if (vPur != null)
                     return (false, vPur);
@@ -381,14 +436,15 @@ namespace AU_ERP.Main_Controller
 
         private async Task<(bool Success, string? ErrorMessage)> TryUpdateMaterialAsync(
             CreateMaterialMaster material,
-            List<UnitConversion>? conversions)
+            int[]? selectedAlternateUomIds)
         {
+            var (conversions, cErr) = await BuildUnitConversionsFromSelectionAsync(
+                material.MaterialNumber, material.BaseUnitCode, selectedAlternateUomIds);
+            if (cErr != null)
+                return (false, cErr);
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var vBase = ValidateConversionsRequireBaseUnit(material, conversions);
-                if (vBase != null)
-                    return (false, vBase);
                 var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
                 if (vPur != null)
                     return (false, vPur);
@@ -410,6 +466,10 @@ namespace AU_ERP.Main_Controller
                 existing.EAN = material.EAN;
                 existing.DeliveringPlantCode = material.DeliveringPlantCode;
                 existing.ItemCategoryGroup = material.ItemCategoryGroup;
+                existing.SalesPriceGradeAPerBaseUom = material.SalesPriceGradeAPerBaseUom;
+                existing.SalesPriceGradeBPerBaseUom = material.SalesPriceGradeBPerBaseUom;
+                existing.SalesPriceGradeCPerBaseUom = material.SalesPriceGradeCPerBaseUom;
+                existing.ScrapCostPerBaseUom = material.ScrapCostPerBaseUom;
                 existing.PurchasingGroupCode = material.PurchasingGroupCode;
                 existing.GrProcessingTime = material.GrProcessingTime;
                 existing.GrProcessingUom = material.GrProcessingUom;
@@ -417,8 +477,8 @@ namespace AU_ERP.Main_Controller
                 existing.ProcurementTypeCode = material.ProcurementTypeCode;
                 existing.StrategyGroup = material.StrategyGroup;
                 existing.LeadTimeDays = material.LeadTimeDays;
-                existing.SafetyStock = material.SafetyStock;
-                existing.ReorderPoint = material.ReorderPoint;
+                existing.SafetyStock = null;
+                existing.ReorderPoint = null;
                 existing.ValuationClassCode = material.ValuationClassCode;
 
                 var oldUom = await _context.UnitConversions
@@ -455,14 +515,15 @@ namespace AU_ERP.Main_Controller
 
         private async Task<(bool Success, string? ErrorMessage)> TryPersistNewMaterialAsync(
             CreateMaterialMaster material,
-            List<UnitConversion>? conversions)
+            int[]? selectedAlternateUomIds)
         {
+            var (conversions, cErr) = await BuildUnitConversionsFromSelectionAsync(
+                material.MaterialNumber, material.BaseUnitCode, selectedAlternateUomIds);
+            if (cErr != null)
+                return (false, cErr);
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var vBase = ValidateConversionsRequireBaseUnit(material, conversions);
-                if (vBase != null)
-                    return (false, vBase);
                 var vPur = ValidatePurchasingGroupLength(material.PurchasingGroupCode);
                 if (vPur != null)
                     return (false, vPur);
@@ -862,7 +923,7 @@ namespace AU_ERP.Main_Controller
             }
         }
 
-        public IActionResult MaterialGroup() => View("materialgroup");
+        public IActionResult MaterialGroup() => RedirectToAction("Index", "ConfigMaterialGroup");
 
         public IActionResult UnitOfMeasure() => RedirectToAction("Index", "UOM");
 

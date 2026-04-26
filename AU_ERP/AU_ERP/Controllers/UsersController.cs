@@ -71,6 +71,7 @@ public class UsersController : Controller
             .OrderBy(d => d.Code)
             .ToListAsync()
             .ConfigureAwait(false);
+        ViewBag.SeededAdminUserId = await GetSeededAdminUserIdAsync().ConfigureAwait(false);
 
         return View(page);
     }
@@ -84,6 +85,7 @@ public class UsersController : Controller
             .OrderBy(d => d.Code)
             .ToListAsync()
             .ConfigureAwait(false);
+        ViewBag.SeededAdminUserId = await GetSeededAdminUserIdAsync().ConfigureAwait(false);
 
         if (model.DepartmentIds == null || model.DepartmentIds.Length == 0)
             ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "Select at least one department.");
@@ -95,6 +97,26 @@ public class UsersController : Controller
         var user = await _userManager.FindByIdAsync(model.UserId).ConfigureAwait(false);
         if (user == null)
             ModelState.AddModelError(string.Empty, "User not found.");
+        else
+        {
+            var adminEmail = (_configuration["AdminUser:Email"] ?? "").Trim();
+            if (adminEmail.Length > 0
+                && !string.IsNullOrEmpty(user.Email)
+                && string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                var adminDeptId = await _db.Departments.AsNoTracking()
+                    .Where(d => d.Code == "Admin")
+                    .Select(d => d.Id)
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+                if (adminDeptId > 0)
+                {
+                    var ids = (model.DepartmentIds ?? Array.Empty<int>()).ToList();
+                    if (!ids.Contains(adminDeptId)) ids.Add(adminDeptId);
+                    model.DepartmentIds = ids.Distinct().ToArray();
+                }
+            }
+        }
 
         if (!ModelState.IsValid)
         {
@@ -257,5 +279,13 @@ public class UsersController : Controller
             PasswordSetupCompleted = u.PasswordSetupCompleted,
             Departments = u.UserDepartments.Select(ud => ud.Department.Code).OrderBy(c => c).ToList()
         }).ToList();
+    }
+
+    private async Task<string?> GetSeededAdminUserIdAsync()
+    {
+        var email = (_configuration["AdminUser:Email"] ?? "").Trim();
+        if (email.Length == 0) return null;
+        var u = await _userManager.FindByEmailAsync(email).ConfigureAwait(false);
+        return u?.Id;
     }
 }
