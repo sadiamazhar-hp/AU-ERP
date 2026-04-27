@@ -4,7 +4,7 @@
 @using AU_ERP.Services
 @{
     ViewData["Title"] = "Dashboard";
-    string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.InvariantCulture);
+    string FmtMoney(decimal v) => UiNumberFormat.D2(v);
 }
 
 @section Styles {

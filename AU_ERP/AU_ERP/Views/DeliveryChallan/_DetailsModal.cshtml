@@ -4,7 +4,7 @@
     var d = Model;
     var lines = d?.Items?.OrderBy(i => i.Id).ToList() ?? new List<DeliveryChallanItem>();
     string FmtDate(DateTime t) => t.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
-    string FmtQty(decimal q) => q.ToString("0.####", CultureInfo.InvariantCulture);
+    string FmtQty(decimal q) => UiNumberFormat.D2(q);
     var pdfUrl = d != null ? (Url.Action("DownloadPdf", "DeliveryChallan", new { id = d.Id }) ?? "") : "";
 }
 @if (d == null)

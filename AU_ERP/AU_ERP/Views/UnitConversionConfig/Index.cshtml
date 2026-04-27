@@ -83,7 +83,7 @@
                                 </select>
                             </td>
                             <td>
-                                <input name="[@i].Quantity" class="sap-input" type="number" step="any" min="0" value="@safeModel[i].Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)" readonly data-required="true" />
+                                <input name="[@i].Quantity" class="sap-input" type="number" step="any" min="0" value="@safeModel[i].Quantity.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)" readonly data-required="true" />
                             </td>
                         </tr>
                     }

@@ -82,7 +82,7 @@
         <div class="otd-po-grid">
             <div><div class="k">Document</div><div class="v">PO-@Model.ProductionNumber</div></div>
             <div><div class="k">Finished item</div><div class="v sm">@(string.IsNullOrWhiteSpace(Model.FinishedItemLabel) ? "—" : Model.FinishedItemLabel)</div></div>
-            <div><div class="k">Target quantity</div><div class="v">@Model.TargetQuantity @uom</div></div>
+            <div><div class="k">Target quantity</div><div class="v">@UiNumberFormat.D2(Model.TargetQuantity) @uom</div></div>
             <div><div class="k">Planned start</div><div class="v sm">@FmtDate(Model.PlannedStartDate)</div></div>
             <div><div class="k">Planned end</div><div class="v sm">@FmtDate(Model.PlannedEndDate)</div></div>
             <div><div class="k">Priority</div><div class="v"><span class="@PriClass(Model.Priority)">@Model.Priority</span></div></div>
@@ -153,8 +153,8 @@
                                             mi++;
                                             var u = string.IsNullOrWhiteSpace(m.TimeUom) ? "" : m.TimeUom;
                                             var lab = m.DisplayName.Length > 22 ? m.DisplayName[..22] + "…" : m.DisplayName;
-                                            var lt = m.LaborTime.HasValue ? m.LaborTime.Value.ToString("0.###", CultureInfo.InvariantCulture) : "—";
-                                            var mt = m.MachineTime.HasValue ? m.MachineTime.Value.ToString("0.###", CultureInfo.InvariantCulture) : "—";
+                                            var lt = m.LaborTime.HasValue ? UiNumberFormat.D2(m.LaborTime.Value) : "—";
+                                            var mt = m.MachineTime.HasValue ? UiNumberFormat.D2(m.MachineTime.Value) : "—";
                                             <div class="otd-h-subcol">
                                                 <div class="otd-h-sublabel" title="@m.DisplayName">@lab</div>
                                                 <div class="otd-h-submeta">Labor @lt @u · Mach @mt @u</div>
@@ -207,12 +207,12 @@
                                 decimal? act = s.ActualHours;
                                 string eff;
                                 if (act.HasValue && act.Value > 0)
-                                    eff = ((s.PlannedHours / act.Value) * 100m).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+                                    eff = UiNumberFormat.D2((s.PlannedHours / act.Value) * 100m) + "%";
                                 else
                                     eff = "—";
                                 string wast = "—";
                                 if (s.InputQuantity.HasValue && s.OutputQuantity.HasValue)
-                                    wast = (s.InputQuantity.Value - s.OutputQuantity.Value).ToString("0.####", CultureInfo.InvariantCulture);
+                                    wast = UiNumberFormat.D2(s.InputQuantity.Value - s.OutputQuantity.Value);
                                 var stLabel = s.StageStatus switch
                                 {
                                     ProductionOrderStageProgress.StageCompleted => "Completed",
@@ -224,11 +224,11 @@
                                 <tr>
                                     <td>@ri</td>
                                     <td>@(string.IsNullOrWhiteSpace(s.StageTitle) ? "—" : s.StageTitle)</td>
-                                    <td>@s.PlannedHours.ToString("0.####", CultureInfo.InvariantCulture)</td>
-                                    <td>@(s.ActualHours.HasValue ? s.ActualHours.Value.ToString("0.####", CultureInfo.InvariantCulture) : "—")</td>
+                                    <td>@UiNumberFormat.D2(s.PlannedHours)</td>
+                                    <td>@(s.ActualHours.HasValue ? UiNumberFormat.D2(s.ActualHours.Value) : "—")</td>
                                     <td>@eff</td>
-                                    <td>@(s.InputQuantity.HasValue ? s.InputQuantity.Value.ToString("0.####", CultureInfo.InvariantCulture) : "—")</td>
-                                    <td>@(s.OutputQuantity.HasValue ? s.OutputQuantity.Value.ToString("0.####", CultureInfo.InvariantCulture) : "—")</td>
+                                    <td>@(s.InputQuantity.HasValue ? UiNumberFormat.D2(s.InputQuantity.Value) : "—")</td>
+                                    <td>@(s.OutputQuantity.HasValue ? UiNumberFormat.D2(s.OutputQuantity.Value) : "—")</td>
                                     <td>@wast</td>
                                     <td>@stLabel</td>
                                 </tr>
@@ -325,7 +325,7 @@
         if (!wEl) return;
         if (isNaN(a) || isNaN(b)) { wEl.value = ""; return; }
         var w = Math.max(0, a - b);
-        wEl.value = w.toFixed(4);
+        wEl.value = w.toFixed(2);
     }
     document.getElementById("otInQty").addEventListener("input", otSyncWastageFromIo);
     document.getElementById("otOutQty").addEventListener("input", otSyncWastageFromIo);

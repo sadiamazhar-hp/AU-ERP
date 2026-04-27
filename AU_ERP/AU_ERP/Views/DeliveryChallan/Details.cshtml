@@ -5,7 +5,7 @@
     var d = Model;
     var lines = d?.Items?.OrderBy(i => i.Id).ToList() ?? new List<AU_ERP.Models.DeliveryChallanItem>();
     string FmtDate(DateTime t) => t.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
-    string FmtQty(decimal q) => q.ToString("0.####", CultureInfo.InvariantCulture);
+    string FmtQty(decimal q) => UiNumberFormat.D2(q);
     ViewData["Title"] = d != null ? "Delivery challan " + d.DeliveryChallanNumber : "Delivery challan";
     ViewBag.Title = ViewData["Title"];
     var listUrl = Url.Action("Index", "DeliveryChallan") ?? "";

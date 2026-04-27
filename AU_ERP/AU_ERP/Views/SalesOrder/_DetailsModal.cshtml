@@ -5,12 +5,12 @@
     var d = Model?.Order;
     var p = Model?.Pricing;
     string FmtDate(DateTime t) => t.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
-    string FmtMoney(decimal n) => n.ToString("N2", CultureInfo.InvariantCulture);
-    string FmtQty(decimal n) => n.ToString("0.####", CultureInfo.InvariantCulture);
+    string FmtMoney(decimal n) => UiNumberFormat.D2(n);
+    string FmtQty(decimal n) => UiNumberFormat.D2(n);
     string FmtChgVal(SalesLineChargeColVm c, IReadOnlyDictionary<int, decimal> vals)
     {
         if (!vals.TryGetValue(c.ChargeId, out var v)) return "—";
-        return c.IsPercentage ? (v.ToString("0.####", CultureInfo.InvariantCulture) + " %") : FmtMoney(v);
+        return c.IsPercentage ? (UiNumberFormat.D2(v) + " %") : FmtMoney(v);
     }
     var pdfUrl = d != null ? (Url.Action("DownloadPdf", "SalesOrder", new { id = d.Id }) ?? "") : "";
     var itemCols = p?.ItemChargeColumns ?? Array.Empty<SalesLineChargeColVm>();
@@ -100,7 +100,7 @@ else
         @foreach (var s in docSteps)
         {
             <div class="d-flex justify-content-between align-items-center mb-1 text-muted">
-                <span>@s.Symbol · @(s.IsPercentage ? (s.InputValue.ToString("0.####", CultureInfo.InvariantCulture) + " %") : FmtMoney(s.InputValue))</span>
+                <span>@s.Symbol · @(s.IsPercentage ? (UiNumberFormat.D2(s.InputValue) + " %") : FmtMoney(s.InputValue))</span>
                 <span>@(s.Delta >= 0 ? "+" : "")@FmtMoney(s.Delta)</span>
             </div>
         }

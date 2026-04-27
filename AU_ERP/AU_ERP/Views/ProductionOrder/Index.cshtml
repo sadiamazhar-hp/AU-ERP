@@ -157,7 +157,7 @@
                                 <td><strong>PO-@p.ProductionNumber</strong></td>
                                 <td>@FmtDate(p.CreatedAt)</td>
                                 <td>@itemTxt</td>
-                                <td>@p.TargetQuantity @uomCode</td>
+                                <td>@UiNumberFormat.D2(p.TargetQuantity) @uomCode</td>
                                 <td>@FmtDate(p.PlannedStartDate)</td>
                                 <td>@FmtDate(p.PlannedEndDate)</td>
                                 <td><span class="@PriorityBadgeClass(p.Priority)">@p.Priority</span></td>
@@ -1030,7 +1030,7 @@
         var wEl = document.getElementById("poOpWastQty");
         if (!wEl) return;
         if (isNaN(a) || isNaN(b)) { wEl.value = ""; return; }
-        wEl.value = Math.max(0, a - b).toFixed(4);
+        wEl.value = Math.max(0, a - b).toFixed(2);
     }
     (function poOpBindWastage() {
         var a = document.getElementById("poOpInQty");

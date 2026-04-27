@@ -170,3 +170,23 @@
         clampNonNegative(e.target);
     }, true);
 })();
+
+/**
+ * After navigation, the window scrolls to top. Scroll the fixed sidebar so the active link remains in view.
+ */
+(function () {
+    function auScrollSidebarToActive() {
+        var side = document.querySelector(".au-sidebar");
+        if (!side) return;
+        var active = side.querySelector(".au-sidebar-link.active");
+        if (!active) return;
+        var sr = side.getBoundingClientRect();
+        var ar = active.getBoundingClientRect();
+        var delta = (ar.top + ar.height / 2) - (sr.top + sr.height / 2);
+        side.scrollTop = Math.max(0, Math.min(side.scrollTop + delta, side.scrollHeight - side.clientHeight));
+    }
+    if (document.readyState === "loading")
+        document.addEventListener("DOMContentLoaded", auScrollSidebarToActive);
+    else
+        auScrollSidebarToActive();
+})();

@@ -144,7 +144,7 @@
     function mrpFmtQty(v) {
         var n = Number(v);
         if (isNaN(n)) return "—";
-        return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+        return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     var mrpBomMatSearchUrl = "@Url.Action("SearchBomMaterials", "BOM")";

@@ -3,8 +3,8 @@
 @using AU_ERP.Models
 @{
     ViewData["Title"] = "Stock Overview";
-    string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.InvariantCulture);
-    string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+    string FmtMoney(decimal v) => UiNumberFormat.D2(v);
+    string FmtQty(decimal v) => UiNumberFormat.D2(v);
     string StatusUi(string s) => s == StockInventoryLine.StatusNotActive ? "Not Active" : "Active";
     string StatusBadge(string s) => s == StockInventoryLine.StatusNotActive ? "so-badge so-badge-off" : "so-badge so-badge-on";
     var mtSel = string.IsNullOrWhiteSpace(Model.MaterialTypeCode) ? "All" : Model.MaterialTypeCode!;

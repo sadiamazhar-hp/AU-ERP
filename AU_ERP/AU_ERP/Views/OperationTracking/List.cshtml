@@ -75,7 +75,7 @@
                     </div>
                     <div class="otl-item">@(string.IsNullOrWhiteSpace(o.FinishedItemLabel) ? "—" : o.FinishedItemLabel)</div>
                     <div class="otl-meta">
-                        <div><span>Target</span>@o.TargetQuantity @uom</div>
+                        <div><span>Target</span>@UiNumberFormat.D2(o.TargetQuantity) @uom</div>
                         <div><span>Stages</span>@o.StagesCompleted / @o.StagesTotal · @o.OverallStatusLabel</div>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(o.ActiveStageTitle))

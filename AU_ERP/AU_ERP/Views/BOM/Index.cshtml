@@ -351,7 +351,7 @@
                                 <td><input class="sap-input" value="@asmLabel" readonly /></td>
                                 <td><input class="sap-input" value="@levelName" readonly /></td>
                                 <td><input class="sap-input" value="@plantName" readonly /></td>
-                                <td><input class="sap-input" value="@(h.BaseQty.HasValue ? (h.BaseQty.Value == Math.Truncate(h.BaseQty.Value) ? h.BaseQty.Value.ToString("0") : h.BaseQty.Value.ToString("0.00")) : "")" readonly /></td>
+                                <td><input class="sap-input" value="@(h.BaseQty.HasValue ? h.BaseQty.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture) : "")" readonly /></td>
                                 <td class="col-action">
                                     <div class="dropdown">
                                         <button class="btn btn-sm btn-link text-secondary p-0" type="button" id="bomRowActions@(bomIdx)" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" aria-label="Actions">
