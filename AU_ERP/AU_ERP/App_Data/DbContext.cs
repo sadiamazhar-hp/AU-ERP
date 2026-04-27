@@ -121,6 +121,16 @@ namespace AU_ERP.Models
                 .HasForeignKey(u => u.AltUnitId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<UnitConversion>()
+                .HasOne(u => u.GlobalUnitConversion)
+                .WithMany()
+                .HasForeignKey(u => u.GlobalUnitConversionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<UnitConversion>()
+                .HasIndex(u => new { u.MaterialNumber, u.AltUnitId })
+                .IsUnique();
+
             modelBuilder.Entity<BomItemsSample>()
                 .Property(e => e.ItemID)
                 .ValueGeneratedOnAdd();
@@ -767,8 +777,15 @@ namespace AU_ERP.Models
                 .HasPrecision(18, 6);
 
             modelBuilder.Entity<GlobalUnitConversion>()
-                .HasIndex(x => new { x.BaseUnitId, x.AltUnitId })
+                .Property(x => x.Title)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<GlobalUnitConversion>()
+                .HasIndex(x => x.Title)
                 .IsUnique();
+
+            modelBuilder.Entity<GlobalUnitConversion>()
+                .HasIndex(x => new { x.BaseUnitId, x.AltUnitId });
 
             modelBuilder.Entity<GlobalUnitConversion>()
                 .HasOne(x => x.BaseUnit)

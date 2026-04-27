@@ -192,7 +192,7 @@
                                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" id="@("v2altUomBtn" + V2IdAffix)">
                                     <span id="@("v2altUomSummary" + V2IdAffix)">—</span> <span class="text-muted small" id="@("v2altUomCount" + V2IdAffix)">(0)</span>
                                 </button>
-                                <ul class="dropdown-menu p-2 shadow" style="min-width: 16rem; max-height: 220px; overflow-y: auto; z-index: 1055;" id="@("v2altUomMenu" + V2IdAffix)">
+                                <ul class="dropdown-menu p-2 shadow" style="min-width: 20rem; max-width: 100vw; max-height: 320px; overflow-y: auto; z-index: 1055;" id="@("v2altUomMenu" + V2IdAffix)">
                                     <li class="small text-muted px-2 py-1">Select base unit first.</li>
                                 </ul>
                             </div>
@@ -450,20 +450,22 @@
             const countEl = document.getElementById(v2id("v2altUomCount"));
             const sumEl = document.getElementById(v2id("v2altUomSummary"));
             if (!menu || !countEl || !sumEl) return;
-            const checks = menu.querySelectorAll('input[name="SelectedAlternateUomIds"]:checked');
+            const sels = menu.querySelectorAll("select.v2-guc");
             const bits = [];
-            checks.forEach(function (c) {
-                const lab = c.closest("div.form-check");
-                if (lab) {
-                    const L = lab.querySelector("label");
-                    if (L) bits.push(String(L.textContent || "").trim().replace(/\s+/g, " "));
+            var n = 0;
+            sels.forEach(function (sel) {
+                const v = parseInt(sel.value, 10);
+                if (!isNaN(v) && v > 0) {
+                    n++;
+                    const t = (sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].text) ? sel.options[sel.selectedIndex].text : "";
+                    if (t) bits.push(t.trim());
                 }
             });
-            countEl.textContent = "(" + checks.length + ")";
-            sumEl.textContent = bits.length ? (bits.join(", ").length > 80 ? bits.join(", ").slice(0, 77) + "…" : bits.join(", ")) : "—";
+            countEl.textContent = "(" + n + ")";
+            sumEl.textContent = bits.length ? (bits.join("; ").length > 80 ? bits.join("; ").slice(0, 77) + "…" : bits.join("; ")) : "—";
         }
 
-        function refreshAlternateUomMenuV2(presetSelectedIds) {
+        function refreshAlternateUomMenuV2(presetGlobalUnitConversionIds) {
             const menu = document.getElementById(v2id("v2altUomMenu"));
             const baseEl = document.getElementById(v2id("BaseUnitCodeV2"));
             if (!menu) return Promise.resolve();
@@ -481,36 +483,46 @@
                         menu.innerHTML = '<li class="small text-danger px-2 py-1">Could not load alternates.</li>';
                         return;
                     }
-                    const alts = data.alts || [];
-                    if (!alts.length) {
-                        menu.innerHTML = '<li class="small text-muted px-2 py-1">No conversions for this base. Add them under Configuration → Unit Conversion.</li>';
+                    const groups = data.altGroups || [];
+                    if (!groups.length) {
+                        menu.innerHTML = '<li class="small text-muted px-2 py-1">No conversions for this base. Add them under Configuration → Unit conversion (with a title per recipe).</li>';
                         updateAltUomSummaryV2();
                         return;
                     }
                     const preset = new Set();
-                    (presetSelectedIds || []).forEach(function (x) {
+                    (presetGlobalUnitConversionIds || []).forEach(function (x) {
                         var n = parseInt(x, 10);
-                        if (!isNaN(n)) preset.add(n);
+                        if (!isNaN(n) && n > 0) preset.add(n);
                     });
+                    const hasPreset = preset.size > 0;
                     var html = "";
-                    alts.forEach(function (a, i) {
-                        var id = a.id != null ? a.id : a.Id;
-                        var code = a.code != null ? a.code : a.Code;
-                        var desc = a.desc != null ? a.desc : a.Desc;
-                        var qty = a.quantity != null ? a.quantity : a.Quantity;
-                        var idNum = parseInt(id, 10);
-                        var checked = !isNaN(idNum) && preset.has(idNum) ? " checked" : "";
-                        var idAttr = "v2alt" + (V2_ID_AFFIX || "root").replace(/[^a-zA-Z0-9]/g, "_") + "_" + i + "_" + id;
-                        var line = String(code || "");
-                        if (desc) line += " — " + String(desc);
-                        if (qty !== null && qty !== undefined && String(qty) !== "")
-                            line += " (1 = " + String(qty) + ")";
-                        html += '<li class="px-0"><div class="form-check mb-0"><input class="form-check-input" type="checkbox" name="SelectedAlternateUomIds" value="' + escapeAttr(String(id)) + '" id="' + idAttr + '"' + checked + ' />' +
-                            '<label class="form-check-label small" for="' + idAttr + '">' + escapeAttr(line) + "</label></div></li>";
+                    groups.forEach(function (g, gi) {
+                        var code = (g.code != null ? g.code : g.Code) || "";
+                        var desc = (g.desc != null ? g.desc : g.Desc) || "";
+                        var opts = g.options || g.Options || [];
+                        var head = "Alt: " + String(code);
+                        if (desc) head += " — " + String(desc);
+                        html += '<li class="px-2 py-1 small border-bottom"><div class="text-muted mb-1" style="font-size:0.7rem;">' + escapeAttr(head) + "</div>";
+                        html += '<select class="form-select form-select-sm v2-guc" name="SelectedGlobalUnitConversionIds" data-alt-idx="' + gi + '">';
+                        html += '<option value="">— None —</option>';
+                        if (opts.length === 0) { html += "</select></li>"; return; }
+                        const onlyOne = opts.length === 1;
+                        opts.forEach(function (opt) {
+                            var oid = opt.id != null ? opt.id : opt.Id;
+                            var title = (opt.title != null ? opt.title : opt.Title) || "";
+                            var qty = opt.quantity != null ? opt.quantity : opt.Quantity;
+                            var gidi = parseInt(oid, 10);
+                            var label = String(title) + " (1 base = " + String(qty) + " " + String(code) + ")";
+                            var inPreset = !isNaN(gidi) && preset.has(gidi);
+                            var autoOne = !hasPreset && onlyOne;
+                            var sel = (inPreset || autoOne) ? " selected" : "";
+                            html += '<option value="' + escapeAttr(String(oid)) + '"' + sel + ">" + escapeAttr(label) + "</option>";
+                        });
+                        html += "</select></li>";
                     });
                     menu.innerHTML = html;
-                    menu.querySelectorAll('input[name="SelectedAlternateUomIds"]').forEach(function (cb) {
-                        cb.addEventListener("change", updateAltUomSummaryV2);
+                    menu.querySelectorAll("select.v2-guc").forEach(function (sel) {
+                        sel.addEventListener("change", updateAltUomSummaryV2);
                     });
                     updateAltUomSummaryV2();
                 })
@@ -551,7 +563,7 @@
             return bad;
         }
 
-        function applyCreateV2EditData(m, selectedAlternateUomIds) {
+        function applyCreateV2EditData(m, selectedGlobalUnitConversionIds) {
             const form = document.getElementById(v2id("createMaterialV2Form"));
             if (!form || !m) return;
             function pick(obj, camel, pascal) {
@@ -588,14 +600,14 @@
             setVal("LeadTimeDays", lt !== "" && lt != null ? lt : "");
             setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
 
-            var selAlts = selectedAlternateUomIds;
-            if (selAlts == null && m) {
-                if (m.selectedAlternateUomIds) selAlts = m.selectedAlternateUomIds;
-                else if (m.SelectedAlternateUomIds) selAlts = m.SelectedAlternateUomIds;
+            var selGuc = selectedGlobalUnitConversionIds;
+            if (selGuc == null && m) {
+                if (m.selectedGlobalUnitConversionIds) selGuc = m.selectedGlobalUnitConversionIds;
+                else if (m.SelectedGlobalUnitConversionIds) selGuc = m.SelectedGlobalUnitConversionIds;
             }
             const sb = document.getElementById(v2id("statusBarV2"));
             updateV2MatSalesState();
-            refreshAlternateUomMenuV2(Array.isArray(selAlts) ? selAlts : []).then(function () {
+            refreshAlternateUomMenuV2(Array.isArray(selGuc) ? selGuc : []).then(function () {
                 if (sb) sb.innerText = "Loaded for edit.";
                 updateV2MatSalesState();
             });
@@ -733,8 +745,8 @@
             }
         });
 
-        window[v2id("auV2AfterEditLoad")] = function (m, selectedAlternateUomIds) {
-            applyCreateV2EditData(m, selectedAlternateUomIds);
+        window[v2id("auV2AfterEditLoad")] = function (m, selectedGlobalUnitConversionIds) {
+            applyCreateV2EditData(m, selectedGlobalUnitConversionIds);
         };
     })();
 </script>

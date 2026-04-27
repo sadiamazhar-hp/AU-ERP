@@ -336,7 +336,7 @@
                     if (obj[pascal] !== undefined && obj[pascal] !== null) return obj[pascal];
                     return "";
                 }
-                loadFn(m, data.selectedAlternateUomIds);
+                loadFn(m, data.selectedGlobalUnitConversionIds);
                 var origNum = pick(m, "materialNumber", "MaterialNumber");
                 if (typeof window.setCreateV2ModalCommittedFromLoaded === "function")
                     window.setCreateV2ModalCommittedFromLoaded(

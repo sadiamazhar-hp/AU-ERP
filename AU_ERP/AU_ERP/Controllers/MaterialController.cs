@@ -117,18 +117,18 @@ namespace AU_ERP.Main_Controller
             material.ReorderPoint = null;
         }
 
-        /// <summary>Builds per-material <see cref="UnitConversion"/> rows from <see cref="GlobalUnitConversions"/> and selected alternate UOM ids (1 base = Qty alt → Numerator=1, Denominator=Qty).</summary>
-        private async Task<(List<UnitConversion> Conversions, string? ErrorMessage)> BuildUnitConversionsFromSelectionAsync(
+        /// <summary>Builds per-material <see cref="UnitConversion"/> from chosen <see cref="GlobalUnitConversion"/> rows (1 base = Qty alt → Numerator=1, Denominator=Qty).</summary>
+        private async Task<(List<UnitConversion> Conversions, string? ErrorMessage)> BuildUnitConversionsFromGlobalIdsAsync(
             string? materialNumber,
             string? baseUnitCode,
-            int[]? selectedAlternateUomIds,
+            int[]? selectedGlobalUnitConversionIds,
             CancellationToken ct = default)
         {
             var list = new List<UnitConversion>();
-            if (selectedAlternateUomIds == null || selectedAlternateUomIds.Length == 0)
+            if (selectedGlobalUnitConversionIds == null || selectedGlobalUnitConversionIds.Length == 0)
                 return (list, null);
             if (string.IsNullOrWhiteSpace(baseUnitCode))
-                return (list, "Select a base unit of measure before choosing alternate units.");
+                return (list, "Select a base unit of measure before choosing alternate unit conversions.");
             if (string.IsNullOrWhiteSpace(materialNumber))
                 return (list, "Material number is required for unit conversions.");
             var baseUom = await _context.UnitOfMeasurements.AsNoTracking()
@@ -136,32 +136,39 @@ namespace AU_ERP.Main_Controller
                     u => u.Code != null && u.Code.Trim().ToLower() == baseUnitCode.Trim().ToLower(), ct);
             if (baseUom == null)
                 return (list, "No unit of measurement matches the base unit. Add the UOM or correct the base unit.");
-            var distinct = selectedAlternateUomIds.Where(x => x > 0).Distinct().ToList();
+            var distinctIds = selectedGlobalUnitConversionIds.Where(x => x > 0).Distinct().ToList();
+            if (distinctIds.Count == 0)
+                return (list, null);
+            var globals = await _context.GlobalUnitConversions.AsNoTracking()
+                .Where(g => distinctIds.Contains(g.Id))
+                .ToListAsync(ct);
+            if (globals.Count != distinctIds.Count)
+                return (list, "One or more unit conversion definitions are missing. Refresh the page and try again (Configuration → Unit conversion).");
             var mn = materialNumber!.Trim();
-            foreach (var altId in distinct)
+            var seenPairs = new HashSet<(int BaseId, int AltId)>();
+            foreach (var g in globals)
             {
-                if (altId == baseUom.Id)
-                    continue;
-                var g = await _context.GlobalUnitConversions.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.BaseUnitId == baseUom.Id && x.AltUnitId == altId, ct);
-                if (g == null)
-                {
-                    var alt = await _context.UnitOfMeasurements.AsNoTracking()
-                        .FirstOrDefaultAsync(u => u.Id == altId, ct);
-                    var altLabel = alt?.Code ?? altId.ToString();
-                    return (list, $"Add a unit conversion in Configuration → Unit Conversion (base to \"{altLabel}\") before selecting it as an alternate unit.");
-                }
+                if (g.BaseUnitId != baseUom.Id)
+                    return (list, $"The conversion \"{g.Title}\" does not use the current base UOM. Pick another recipe or change the base unit.");
+                if (g.AltUnitId == baseUom.Id)
+                    return (list, "Invalid conversion: alternate unit cannot match the base unit.");
                 if (g.Quantity <= 0)
-                    return (list, "Invalid master conversion quantity for one of the selected alternate units.");
+                    return (list, "Invalid master conversion quantity for one of the selected definitions.");
+                if (!seenPairs.Add((g.BaseUnitId, g.AltUnitId)))
+                    return (list, "Select only one conversion recipe per base/alternate UOM pair (e.g. you cannot pick two different \"box → kg\" definitions).");
+            }
+            foreach (var g in globals)
+            {
                 var d = (float)g.Quantity;
                 if (d <= 0f)
-                    return (list, "Invalid master conversion quantity for one of the selected alternate units.");
+                    return (list, "Invalid master conversion quantity for one of the selected definitions.");
                 list.Add(new UnitConversion
                 {
                     MaterialNumber = mn,
-                    AltUnitId = altId,
+                    AltUnitId = g.AltUnitId,
                     Numerator = 1f,
-                    Denominator = d
+                    Denominator = d,
+                    GlobalUnitConversionId = g.Id
                 });
             }
             return (list, null);
@@ -217,7 +224,7 @@ namespace AU_ERP.Main_Controller
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(CreateMaterialMaster material, int[]? selectedAlternateUomIds)
+        public async Task<IActionResult> Create(CreateMaterialMaster material, int[]? selectedGlobalUnitConversionIds)
         {
             HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
@@ -227,7 +234,7 @@ namespace AU_ERP.Main_Controller
                 return View(material);
             }
 
-            var (ok, error) = await TryPersistNewMaterialAsync(material, selectedAlternateUomIds);
+            var (ok, error) = await TryPersistNewMaterialAsync(material, selectedGlobalUnitConversionIds);
             if (ok)
             {
                 TempData["SuccessMessage"] = "Material Added Successfully !";
@@ -249,7 +256,7 @@ namespace AU_ERP.Main_Controller
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateV2(CreateMaterialMaster material, int[]? selectedAlternateUomIds)
+        public async Task<IActionResult> CreateV2(CreateMaterialMaster material, int[]? selectedGlobalUnitConversionIds)
         {
             HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
@@ -259,7 +266,7 @@ namespace AU_ERP.Main_Controller
                 return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
             }
 
-            var (ok, error) = await TryPersistNewMaterialAsync(material, selectedAlternateUomIds);
+            var (ok, error) = await TryPersistNewMaterialAsync(material, selectedGlobalUnitConversionIds);
             if (ok)
                 return Json(new { success = true, message = "Material Added Successfully !" });
 
@@ -303,49 +310,94 @@ namespace AU_ERP.Main_Controller
                 m.ValuationClassCode
             };
 
+            var baseU = await _context.UnitOfMeasurements.AsNoTracking()
+                .FirstOrDefaultAsync(
+                    u => u.Code != null && m.BaseUnitCode != null &&
+                         u.Code.Trim().ToLower() == m.BaseUnitCode.Trim().ToLower());
             var convRows = await _context.UnitConversions.AsNoTracking()
                 .Where(u => u.MaterialNumber == id)
                 .OrderBy(u => u.Id)
-                .Select(u => new { u.AltUnitId, u.Numerator, u.Denominator })
                 .ToListAsync();
+            var convDtos = convRows
+                .Select(c => new { c.AltUnitId, c.Numerator, c.Denominator, c.GlobalUnitConversionId })
+                .ToList();
+            var altIds = convRows.Select(c => c.AltUnitId).Distinct().ToList();
+            var globalCandidates = baseU == null || altIds.Count == 0
+                ? new List<GlobalUnitConversion>()
+                : await _context.GlobalUnitConversions.AsNoTracking()
+                    .Where(g => g.BaseUnitId == baseU.Id && altIds.Contains(g.AltUnitId))
+                    .ToListAsync();
+            var selectedGlobalList = new List<int>();
+            foreach (var c in convRows)
+            {
+                if (c.GlobalUnitConversionId is int gid && gid > 0)
+                {
+                    selectedGlobalList.Add(gid);
+                    continue;
+                }
+                if (baseU == null) continue;
+                var match = globalCandidates.FirstOrDefault(
+                    g => g.AltUnitId == c.AltUnitId
+                         && Math.Abs((double)g.Quantity - c.Denominator) < 0.0001);
+                if (match != null) selectedGlobalList.Add(match.Id);
+            }
 
-            var selectedAlternateUomIds = convRows.Select(c => c.AltUnitId).ToList();
-
-            return Json(new { success = true, material, conversions = convRows, selectedAlternateUomIds });
+            return Json(new
+            {
+                success = true,
+                material,
+                conversions = convDtos,
+                selectedGlobalUnitConversionIds = selectedGlobalList
+            });
         }
 
-        /// <summary>Alternates with a global conversion from the given base UOM (for material Basic Data multiselect).</summary>
+        /// <summary>Alternate UOMs that have at least one global conversion from the given base, grouped by alt with recipe options (title, qty).</summary>
         [HttpGet]
         public async Task<JsonResult> GetAlternateUomsForBaseCode(string? baseCode, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(baseCode))
-                return Json(new { success = true, alts = Array.Empty<object>() });
+                return Json(new { success = true, altGroups = Array.Empty<object>(), baseUomId = (int?)null });
             var code = baseCode.Trim();
             var baseUom = await _context.UnitOfMeasurements.AsNoTracking()
                 .FirstOrDefaultAsync(
                     u => u.Code != null && u.Code.Trim().ToLower() == code.ToLower(), ct);
             if (baseUom == null)
-                return Json(new { success = true, alts = Array.Empty<object>() });
-            var alts = await _context.GlobalUnitConversions.AsNoTracking()
+                return Json(new { success = true, altGroups = Array.Empty<object>(), baseUomId = (int?)null });
+            var flat = await _context.GlobalUnitConversions.AsNoTracking()
                 .Where(x => x.BaseUnitId == baseUom.Id)
                 .Join(_context.UnitOfMeasurements,
                     g => g.AltUnitId,
                     u => u.Id,
                     (g, u) => new
                     {
-                        id = g.AltUnitId,
-                        code = u.Code,
-                        desc = u.Description,
-                        quantity = g.Quantity
+                        g.Id,
+                        g.Title,
+                        g.Quantity,
+                        g.AltUnitId,
+                        AltCode = u.Code,
+                        AltDesc = u.Description
                     })
-                .OrderBy(x => x.code)
                 .ToListAsync(ct);
-            return Json(new { success = true, alts, baseUomId = baseUom.Id });
+            var altGroups = flat
+                .GroupBy(x => x.AltUnitId)
+                .Select(grp => new
+                {
+                    altUnitId = grp.Key,
+                    code = grp.First().AltCode,
+                    desc = grp.First().AltDesc,
+                    options = grp
+                        .OrderBy(x => x.Title)
+                        .Select(x => new { id = x.Id, title = x.Title, quantity = x.Quantity })
+                        .ToList()
+                })
+                .OrderBy(x => x.code)
+                .ToList();
+            return Json(new { success = true, altGroups, baseUomId = baseUom.Id });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, int[]? selectedAlternateUomIds)
+        public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, int[]? selectedGlobalUnitConversionIds)
         {
             HarmonizeMaterialMrpFields(material);
             if (!ModelState.IsValid)
@@ -358,8 +410,8 @@ namespace AU_ERP.Main_Controller
             var original = Request.Form["OriginalMaterialNumber"].ToString();
             var (ok, error) = !string.IsNullOrWhiteSpace(original)
                 && !string.Equals(original, material.MaterialNumber, StringComparison.Ordinal)
-                ? await TryReplaceMaterialWithRenumberAsync(original, material, selectedAlternateUomIds)
-                : await TryUpdateMaterialAsync(material, selectedAlternateUomIds);
+                ? await TryReplaceMaterialWithRenumberAsync(original, material, selectedGlobalUnitConversionIds)
+                : await TryUpdateMaterialAsync(material, selectedGlobalUnitConversionIds);
 
             if (ok)
                 return Json(new { success = true, message = "Material Updated Successfully !" });
@@ -371,10 +423,10 @@ namespace AU_ERP.Main_Controller
         private async Task<(bool Success, string? ErrorMessage)> TryReplaceMaterialWithRenumberAsync(
             string originalMaterialNumber,
             CreateMaterialMaster material,
-            int[]? selectedAlternateUomIds)
+            int[]? selectedGlobalUnitConversionIds)
         {
-            var (conversions, cErr) = await BuildUnitConversionsFromSelectionAsync(
-                material.MaterialNumber, material.BaseUnitCode, selectedAlternateUomIds);
+            var (conversions, cErr) = await BuildUnitConversionsFromGlobalIdsAsync(
+                material.MaterialNumber, material.BaseUnitCode, selectedGlobalUnitConversionIds);
             if (cErr != null)
                 return (false, cErr);
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -416,7 +468,8 @@ namespace AU_ERP.Main_Controller
                             MaterialNumber = material.MaterialNumber,
                             AltUnitId = uom.AltUnitId,
                             Numerator = uom.Numerator,
-                            Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator
+                            Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator,
+                            GlobalUnitConversionId = uom.GlobalUnitConversionId
                         });
                     }
                 }
@@ -436,10 +489,10 @@ namespace AU_ERP.Main_Controller
 
         private async Task<(bool Success, string? ErrorMessage)> TryUpdateMaterialAsync(
             CreateMaterialMaster material,
-            int[]? selectedAlternateUomIds)
+            int[]? selectedGlobalUnitConversionIds)
         {
-            var (conversions, cErr) = await BuildUnitConversionsFromSelectionAsync(
-                material.MaterialNumber, material.BaseUnitCode, selectedAlternateUomIds);
+            var (conversions, cErr) = await BuildUnitConversionsFromGlobalIdsAsync(
+                material.MaterialNumber, material.BaseUnitCode, selectedGlobalUnitConversionIds);
             if (cErr != null)
                 return (false, cErr);
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -497,7 +550,8 @@ namespace AU_ERP.Main_Controller
                             MaterialNumber = material.MaterialNumber,
                             AltUnitId = uom.AltUnitId,
                             Numerator = uom.Numerator,
-                            Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator
+                            Denominator = uom.Denominator <= 0 ? 1 : uom.Denominator,
+                            GlobalUnitConversionId = uom.GlobalUnitConversionId
                         });
                     }
                 }
@@ -515,10 +569,10 @@ namespace AU_ERP.Main_Controller
 
         private async Task<(bool Success, string? ErrorMessage)> TryPersistNewMaterialAsync(
             CreateMaterialMaster material,
-            int[]? selectedAlternateUomIds)
+            int[]? selectedGlobalUnitConversionIds)
         {
-            var (conversions, cErr) = await BuildUnitConversionsFromSelectionAsync(
-                material.MaterialNumber, material.BaseUnitCode, selectedAlternateUomIds);
+            var (conversions, cErr) = await BuildUnitConversionsFromGlobalIdsAsync(
+                material.MaterialNumber, material.BaseUnitCode, selectedGlobalUnitConversionIds);
             if (cErr != null)
                 return (false, cErr);
             await using var transaction = await _context.Database.BeginTransactionAsync();

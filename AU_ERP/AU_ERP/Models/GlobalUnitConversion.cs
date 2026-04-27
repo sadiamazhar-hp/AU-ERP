@@ -9,6 +9,10 @@ public class GlobalUnitConversion
 {
     public int Id { get; set; }
 
+    /// <summary>Globally unique name for this conversion recipe (e.g. conA, conB). Multiple rows may share the same base/alt pair with different titles.</summary>
+    [MaxLength(100)]
+    public string Title { get; set; } = null!;
+
     public int BaseUnitId { get; set; }
     public UnitOfMeasurement? BaseUnit { get; set; }
 

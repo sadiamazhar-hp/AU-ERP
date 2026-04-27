@@ -24,7 +24,7 @@
 <div class="sap-window au-ucg-page" id="app">
     <form id="gucForm" method="post" action="@Url.Action("Index", "UnitConversionConfig")">
         @Html.AntiForgeryToken()
-        <p class="small text-muted mb-2">1 [Unit] = [Qty] of [Alt unit] (e.g. 1 box = 12 piece).</p>
+        <p class="small text-muted mb-2">1 [Unit] = [Qty] of [Alt unit]. Each row needs a <strong>globally unique title</strong> (e.g. conA) so the same base/alt pair can have multiple factors.</p>
         <div class="sap-toolbar">
             <div class="d-flex">
                 <button type="button" id="btnEdit" class="btn btn-sap" onclick="setMode(true)">Edit</button>
@@ -38,6 +38,7 @@
                 <thead>
                     <tr>
                         <th style="width: 35px;">Sel</th>
+                        <th style="min-width: 120px;">Title</th>
                         <th style="min-width: 160px;">Unit</th>
                         <th style="min-width: 160px;">Alt unit</th>
                         <th style="min-width: 100px;">Qty</th>
@@ -49,6 +50,9 @@
                         <tr>
                             <td class="col-sel" onclick="selectRow(this)">
                                 <input type="hidden" name="[@i].Id" value="@safeModel[i].Id" class="row-id" />
+                            </td>
+                            <td>
+                                <input name="[@i].Title" class="sap-input" type="text" maxlength="100" value="@(safeModel[i].Title ?? "")" readonly data-required="true" />
                             </td>
                             <td>
                                 <select name="[@i].BaseUnitId" class="sap-input sap-select" disabled data-required="true">
@@ -115,7 +119,8 @@
     function setMode(edit) {
         isEditMode = edit;
         document.getElementById('app').classList.toggle('edit-mode', edit);
-        document.querySelectorAll('.sap-input:not(.sap-select)').forEach(i => { i.readOnly = !edit; });
+        document.querySelectorAll('input[name$=".Title"]').forEach(t => { t.readOnly = !edit; });
+        document.querySelectorAll('input[name$=".Quantity"]').forEach(t => { t.readOnly = !edit; });
         document.querySelectorAll('select.sap-select').forEach(s => { s.disabled = !edit; });
         document.getElementById('btnEdit').disabled = edit;
         document.getElementById('btnNew').disabled = !edit;
@@ -133,14 +138,18 @@
         const body = document.getElementById('gridBody');
         const tr = document.createElement('tr');
         const o = uomOptionsHtml();
-        tr.innerHTML = '<td class="col-sel" onclick="selectRow(this)"><input type="hidden" name="[' + rowCount + '].Id" value="0" class="row-id" /></td><td><select name="[' + rowCount + '].BaseUnitId" class="sap-input sap-select" data-required="true">' + o + '</select></td><td><select name="[' + rowCount + '].AltUnitId" class="sap-input sap-select" data-required="true">' + o + '</select></td><td><input name="[' + rowCount + '].Quantity" class="sap-input" type="number" step="any" min="0" data-required="true" value="1" /></td>';
+        tr.innerHTML = '<td class="col-sel" onclick="selectRow(this)"><input type="hidden" name="[' + rowCount + '].Id" value="0" class="row-id" /></td><td><input name="[' + rowCount + '].Title" class="sap-input" type="text" maxlength="100" placeholder="e.g. conA" data-required="true" /></td><td><select name="[' + rowCount + '].BaseUnitId" class="sap-input sap-select" data-required="true">' + o + '</select></td><td><select name="[' + rowCount + '].AltUnitId" class="sap-input sap-select" data-required="true">' + o + '</select></td><td><input name="[' + rowCount + '].Quantity" class="sap-input" type="number" step="any" min="0" data-required="true" value="1" /></td>';
         body.appendChild(tr);
         rowCount++;
-        if (isEditMode) { tr.querySelectorAll('select.sap-select').forEach(s => s.disabled = false); tr.querySelector('input[type=number]').readOnly = false; }
+        if (isEditMode) {
+            tr.querySelectorAll('select.sap-select').forEach(s => s.disabled = false);
+            tr.querySelectorAll('input').forEach(i => { i.readOnly = false; });
+        }
     }
     function selectRow(cell) { if (!isEditMode) return; if (selectedRow) selectedRow.classList.remove('row-selected'); selectedRow = cell.parentElement; selectedRow.classList.add('row-selected'); document.getElementById('btnDelete').disabled = false; }
     function handleSave() {
         document.querySelectorAll('select.sap-select').forEach(s => s.disabled = false);
+        document.querySelectorAll('input[name$=".Title"], input[name$=".Quantity"]').forEach(i => { i.readOnly = false; });
         const fd = new FormData(document.getElementById('gucForm'));
         fetch(document.getElementById('gucForm').action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.message || 'Save failed'); });

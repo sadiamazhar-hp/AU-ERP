@@ -1,3 +1,4 @@
+using System.Globalization;
 using AU_ERP.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +21,7 @@ public class UnitConversionConfigController : Controller
             .Include(x => x.AltUnit)
             .OrderBy(x => x.BaseUnit!.Code)
             .ThenBy(x => x.AltUnit!.Code)
+            .ThenBy(x => x.Title)
             .ToListAsync(ct)
             .ConfigureAwait(false);
         var uoms = await _db.UnitOfMeasurements.AsNoTracking()
@@ -55,6 +57,8 @@ public class UnitConversionConfigController : Controller
                 continue;
             if (x.Quantity <= 0)
                 continue;
+            if (string.IsNullOrWhiteSpace((x.Title ?? "").Trim()))
+                continue;
             toProcess.Add(x);
         }
 
@@ -65,6 +69,12 @@ public class UnitConversionConfigController : Controller
         }
 
         var validUomIds = new HashSet<int>(await _db.UnitOfMeasurements.AsNoTracking().Select(u => u.Id).ToListAsync(ct).ConfigureAwait(false));
+
+        static string? NormTitle(string? s)
+        {
+            var t = (s ?? "").Trim();
+            return string.IsNullOrEmpty(t) ? null : t;
+        }
 
         foreach (var it in toProcess)
         {
@@ -86,13 +96,22 @@ public class UnitConversionConfigController : Controller
                 TempData["GucError"] = "Quantity must be greater than zero.";
                 return RedirectToAction(nameof(Index));
             }
+            var title = NormTitle(it.Title);
+            if (title == null)
+            {
+                if (isAjax) return Json(new { success = false, message = "Each conversion must have a title (globally unique)." });
+                TempData["GucError"] = "Each conversion must have a title (globally unique).";
+                return RedirectToAction(nameof(Index));
+            }
         }
 
-        var keyPairs = toProcess.Select(x => (x.BaseUnitId, x.AltUnitId)).ToList();
-        if (keyPairs.Count != keyPairs.Distinct().Count())
+        var titleGroups = toProcess
+            .Select(x => NormTitle(x.Title)!.ToUpperInvariant())
+            .ToList();
+        if (titleGroups.Count != titleGroups.Distinct().Count())
         {
-            if (isAjax) return Json(new { success = false, message = "Duplicate base / alternate pairs in the table." });
-            TempData["GucError"] = "Duplicate base / alternate pairs in the table.";
+            if (isAjax) return Json(new { success = false, message = "Duplicate conversion titles in the table (titles are globally unique)." });
+            TempData["GucError"] = "Duplicate conversion titles in the table (titles are globally unique).";
             return RedirectToAction(nameof(Index));
         }
 
@@ -100,13 +119,17 @@ public class UnitConversionConfigController : Controller
         {
             foreach (var it in toProcess)
             {
+                var t = NormTitle(it.Title)!;
+                var tLower = t.ToLowerInvariant();
                 var taken = await _db.GlobalUnitConversions.AsNoTracking()
-                    .AnyAsync(x => x.BaseUnitId == it.BaseUnitId && x.AltUnitId == it.AltUnitId && x.Id != it.Id, ct)
+                    .AnyAsync(
+                        x => x.Id != it.Id && x.Title != null && x.Title.ToLower() == tLower,
+                        ct)
                     .ConfigureAwait(false);
                 if (taken)
                 {
-                    if (isAjax) return Json(new { success = false, message = "This unit / alternate unit pair already exists." });
-                    TempData["GucError"] = "This unit / alternate unit pair already exists.";
+                    if (isAjax) return Json(new { success = false, message = $"Title \"{t}\" is already used by another conversion." });
+                    TempData["GucError"] = $"Title \"{t}\" is already used by another conversion.";
                     return RedirectToAction(nameof(Index));
                 }
             }
@@ -122,6 +145,7 @@ public class UnitConversionConfigController : Controller
                         TempData["GucError"] = "A row was removed. Refresh the page.";
                         return RedirectToAction(nameof(Index));
                     }
+                    row.Title = NormTitle(it.Title)!;
                     row.BaseUnitId = it.BaseUnitId;
                     row.AltUnitId = it.AltUnitId;
                     row.Quantity = it.Quantity;
@@ -130,6 +154,7 @@ public class UnitConversionConfigController : Controller
                 {
                     _db.GlobalUnitConversions.Add(new GlobalUnitConversion
                     {
+                        Title = NormTitle(it.Title)!,
                         BaseUnitId = it.BaseUnitId,
                         AltUnitId = it.AltUnitId,
                         Quantity = it.Quantity
@@ -159,6 +184,8 @@ public class UnitConversionConfigController : Controller
             var row = await _db.GlobalUnitConversions.FindAsync(new object?[] { id }, ct).ConfigureAwait(false);
             if (row == null)
                 return Json(new { success = false, message = "Record not found" });
+            if (await _db.UnitConversions.AsNoTracking().AnyAsync(u => u.GlobalUnitConversionId == id, ct).ConfigureAwait(false))
+                return Json(new { success = false, message = "Cannot delete: a material is using this conversion. Change the material or remove the alternate unit first." });
             _db.GlobalUnitConversions.Remove(row);
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
             return Json(new { success = true, message = "Row deleted." });

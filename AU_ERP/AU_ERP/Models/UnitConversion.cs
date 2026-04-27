@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AU_ERP.Models
 {
@@ -16,5 +17,11 @@ namespace AU_ERP.Models
 
         public float Numerator { get; set; }
         public float Denominator { get; set; }
+
+        /// <summary>Which master <see cref="GlobalUnitConversion"/> was chosen when this row was created (for edit/display).</summary>
+        public int? GlobalUnitConversionId { get; set; }
+
+        [ForeignKey(nameof(GlobalUnitConversionId))]
+        public GlobalUnitConversion? GlobalUnitConversion { get; set; }
     }
 }
