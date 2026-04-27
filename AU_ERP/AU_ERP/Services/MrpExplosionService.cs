@@ -43,6 +43,7 @@ namespace AU_ERP.Services
             decimal quantity,
             int uomId,
             bool requireFertMaterialOnly,
+            string? plantIdForStockOverride = null,
             CancellationToken ct = default)
         {
             var key = materialNumber.Trim();
@@ -113,6 +114,10 @@ namespace AU_ERP.Services
                 return resp;
             }
 
+            var plantResolved = string.IsNullOrWhiteSpace(plantIdForStockOverride)
+                ? (header.Plant ?? "").Trim()
+                : plantIdForStockOverride.Trim();
+
             var baseQty = header.BaseQty is > 0 ? header.BaseQty.Value : 1m;
             var factor = qtyInBase / baseQty;
 
@@ -132,6 +137,9 @@ namespace AU_ERP.Services
 
             var rows = new List<MrpRunResultRowDto>();
             var warnings = new List<string>();
+
+            if (string.IsNullOrEmpty(plantResolved))
+                warnings.Add("No plant scope for on-hand inventory (pick a plant on Run MRP, or assign plant on the BOM header); quantity on hand is treated as zero.");
 
             foreach (var item in items)
             {
@@ -172,20 +180,25 @@ namespace AU_ERP.Services
                     .Select(u => u.Code)
                     .FirstOrDefaultAsync(ct);
 
-                var stockLines = await db.StockInventoryLines.AsNoTracking()
-                    .Where(s => s.MaterialNumber == compNum && s.Status == StockInventoryLine.StatusActive)
-                    .Select(s => new { s.Quantity, s.QuantityUomId })
-                    .ToListAsync(ct);
-
                 decimal onHandInLineUom = 0;
-                foreach (var sl in stockLines)
+                if (!string.IsNullOrEmpty(plantResolved))
                 {
-                    var (cok, qConv, _) = await UnitConversionMath.ConvertAsync(
-                        db, compNum, sl.Quantity, sl.QuantityUomId, lineUomId.Value, ct);
-                    if (cok)
-                        onHandInLineUom += qConv;
-                    else
-                        warnings.Add($"Inventory line for '{compNum}' could not convert UOM to BOM line UOM; treated as 0.");
+                    var stockLines = await db.StockInventoryLines.AsNoTracking()
+                        .Where(s => s.MaterialNumber == compNum
+                                    && s.Status == StockInventoryLine.StatusActive
+                                    && s.PlantID == plantResolved)
+                        .Select(s => new { s.Quantity, s.QuantityUomId })
+                        .ToListAsync(ct);
+
+                    foreach (var sl in stockLines)
+                    {
+                        var (cok, qConv, _) = await UnitConversionMath.ConvertAsync(
+                            db, compNum, sl.Quantity, sl.QuantityUomId, lineUomId.Value, ct);
+                        if (cok)
+                            onHandInLineUom += qConv;
+                        else
+                            warnings.Add($"Inventory line for '{compNum}' could not convert UOM to BOM line UOM; treated as 0.");
+                    }
                 }
 
                 var shortage = onHandInLineUom + Epsilon < required;

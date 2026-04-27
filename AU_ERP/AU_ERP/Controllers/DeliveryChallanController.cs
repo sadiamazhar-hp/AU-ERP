@@ -424,7 +424,7 @@ public class DeliveryChallanController : Controller
         try
         {
             var (okSt, stErr, batchLabels) = await DeliveryChallanStockService
-                .DeductAndGetBatchLabelsAsync(_db, deducts, gradeBySoItem, ct)
+                .DeductAndGetBatchLabelsAsync(_db, deducts, gradeBySoItem, model.PlantId!.Trim(), ct)
                 .ConfigureAwait(false);
             if (!okSt)
             {

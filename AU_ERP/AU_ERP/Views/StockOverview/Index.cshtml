@@ -37,6 +37,16 @@
 }
 
 <div class="so-page">
+    @if (Model.MissingStorePlantAssignment)
+    {
+        <div class="alert alert-warning" role="status">
+            You have Store access but no plant is assigned to your profile. Ask an administrator to edit your user and select a plant for the Store department.
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(Model.PlantDisplay))
+    {
+        <p class="small text-muted mb-2">Showing inventory for plant <strong>@Model.PlantDisplay</strong>.</p>
+    }
     <div class="so-hero">
         <div>
             <h1>Stock overview</h1>

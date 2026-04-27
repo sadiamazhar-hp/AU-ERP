@@ -492,6 +492,7 @@ namespace AU_ERP.Controllers
             {
                 var po = await _db.ProductionOrders
                     .Include(p => p.StageProgresses)
+                    .Include(p => p.ReleasedRouting)
                     .FirstOrDefaultAsync(p => p.Id == dto.ProductionOrderId, ct);
 
                 if (po == null)
@@ -504,6 +505,12 @@ namespace AU_ERP.Controllers
                 {
                     await tx.RollbackAsync(ct);
                     return Json(new { success = false, message = "Only released production orders can post goods receipt." });
+                }
+
+                if (po.ReleasedRouting == null || string.IsNullOrWhiteSpace(po.ReleasedRouting.PlantID))
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Released routing must have a plant configured to post inventory." });
                 }
 
                 var stages = po.StageProgresses.OrderBy(s => s.SequenceOrder).ToList();
@@ -554,6 +561,10 @@ namespace AU_ERP.Controllers
         /// </summary>
         private async Task UpsertInventoryFromGoodsReceiptAsync(ProductionOrder po, PostGoodsReceiptDto dto, CancellationToken ct)
         {
+            var plantId = (po.ReleasedRouting?.PlantID ?? "").Trim();
+            if (plantId.Length == 0)
+                return;
+
             var mat = await _db.CreateMaterialMaster.AsNoTracking()
                 .FirstOrDefaultAsync(m => m.MaterialNumber == po.FinishedMaterialNumber, ct)
                 .ConfigureAwait(false);
@@ -583,12 +594,14 @@ namespace AU_ERP.Controllers
                         po.FinishedMaterialNumber,
                         po.UomId,
                         ct,
-                        grade)
+                        grade,
+                        plantId)
                     .ConfigureAwait(false);
 
                 var line = await _db.StockInventoryLines
                     .FirstOrDefaultAsync(
-                        s => s.MaterialNumber == po.FinishedMaterialNumber
+                        s => s.PlantID == plantId
+                             && s.MaterialNumber == po.FinishedMaterialNumber
                              && s.QuantityUomId == po.UomId
                              && s.Status == status
                              && s.Grade == grade,
@@ -600,6 +613,7 @@ namespace AU_ERP.Controllers
                     _db.StockInventoryLines.Add(new StockInventoryLine
                     {
                         MaterialNumber = po.FinishedMaterialNumber,
+                        PlantID = plantId,
                         QuantityUomId = po.UomId,
                         Status = status,
                         Grade = grade,

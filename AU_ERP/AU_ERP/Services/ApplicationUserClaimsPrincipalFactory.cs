@@ -9,6 +9,8 @@ namespace AU_ERP.Services
     public static class AuClaimTypes
     {
         public const string Department = "department";
+        /// <summary>Value is <see cref="PlantsSample.PlantID"/> for the user’s Store department assignment.</summary>
+        public const string StorePlant = "store_plant";
     }
 
     /// <summary>Adds department claims for lightweight UI checks (navigation). Authorization still uses DB-backed policy.</summary>
@@ -29,15 +31,20 @@ namespace AU_ERP.Services
         protected override async Task<ClaimsIdentity> GenerateClaimsAsync(ApplicationUser user)
         {
             var identity = await base.GenerateClaimsAsync(user).ConfigureAwait(false);
-            var codes = await _db.ApplicationUserDepartments
+            var deptRows = await _db.ApplicationUserDepartments
                 .AsNoTracking()
                 .Where(ud => ud.UserId == user.Id)
-                .Select(ud => ud.Department.Code)
+                .Select(ud => new { ud.Department!.Code, ud.PlantID })
                 .ToListAsync()
                 .ConfigureAwait(false);
 
-            foreach (var code in codes)
-                identity.AddClaim(new Claim(AuClaimTypes.Department, code));
+            foreach (var row in deptRows)
+            {
+                identity.AddClaim(new Claim(AuClaimTypes.Department, row.Code));
+                if (string.Equals(row.Code, "Store", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(row.PlantID))
+                    identity.AddClaim(new Claim(AuClaimTypes.StorePlant, row.PlantID!.Trim()));
+            }
 
             return identity;
         }

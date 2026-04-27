@@ -5,6 +5,8 @@ namespace AU_ERP.Models
         public string? MaterialNumber { get; set; }
         public decimal Quantity { get; set; }
         public int UomId { get; set; }
+
+        public string? PlantId { get; set; }
         /// <summary>When true (HALB drill-down), FERT-only restriction is skipped.</summary>
         public bool SubMrp { get; set; }
     }

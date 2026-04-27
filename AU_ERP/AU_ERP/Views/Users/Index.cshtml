@@ -1,7 +1,10 @@
 @model UsersIndexPageModel
+@using AU_ERP.Models
 @{
     ViewData["Title"] = "Users";
     var deptList = ViewBag.Departments as IEnumerable<Department>;
+    var storeDeptId = ViewBag.StoreDepartmentId is int sdi ? sdi : 0;
+    var plantsForUsers = ViewBag.Plants as IEnumerable<PlantsSample>;
 }
 
 @if (TempData["UserMessage"] is string um)
@@ -107,6 +110,20 @@
                         <div class="form-text">Select at least one department.</div>
                         <span asp-validation-for="CreateForm.DepartmentIds" class="text-danger small"></span>
                     </div>
+                    @{
+                        var hasStoreCreate = (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+                    }
+                    <div class="mb-3" id="createStorePlantRow" style="display:@(hasStoreCreate ? "block" : "none");">
+                        <label asp-for="CreateForm.StorePlantId" class="form-label"></label>
+                        <select asp-for="CreateForm.StorePlantId" class="form-select">
+                            <option value="">— Select plant —</option>
+                            @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
+                            {
+                                <option value="@p.PlantID">@p.PlantID — @p.PlantName</option>
+                            }
+                        </select>
+                        <span asp-validation-for="CreateForm.StorePlantId" class="text-danger small"></span>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -177,6 +194,20 @@
                         <div class="form-text">Select at least one department.</div>
                         <span asp-validation-for="EditForm.DepartmentIds" class="text-danger small"></span>
                     </div>
+                    @{
+                        var hasStoreEdit = (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+                    }
+                    <div class="mb-3" id="editStorePlantRow" style="display:@(hasStoreEdit ? "block" : "none");">
+                        <label asp-for="EditForm.StorePlantId" class="form-label"></label>
+                        <select asp-for="EditForm.StorePlantId" class="form-select">
+                            <option value="">— Select plant —</option>
+                            @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
+                            {
+                                <option value="@p.PlantID">@p.PlantID — @p.PlantName</option>
+                            }
+                        </select>
+                        <span asp-validation-for="EditForm.StorePlantId" class="text-danger small"></span>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -197,6 +228,24 @@
                     if (el && el.parentElement !== document.body) document.body.appendChild(el);
                 };
             }
+            function toggleStorePlantRow(cbSelector, rowId, storeDeptIdNum) {
+                var row = document.getElementById(rowId);
+                if (!row) return;
+                var any = Array.prototype.some.call(document.querySelectorAll(cbSelector), function (inp) {
+                    return inp.checked && inp.value === String(storeDeptIdNum);
+                });
+                row.style.display = any ? 'block' : 'none';
+            }
+
+            function wireStoreDeptToggle(cbSel, rowId, storeDeptIdNum) {
+                document.querySelectorAll(cbSel).forEach(function (inp) {
+                    inp.addEventListener('change', function () {
+                        toggleStorePlantRow(cbSel, rowId, storeDeptIdNum);
+                    });
+                });
+                toggleStorePlantRow(cbSel, rowId, storeDeptIdNum);
+            }
+
             function init() {
                 var create = document.getElementById('createUserModal');
                 if (create) {
@@ -207,6 +256,11 @@
                 if (edit) {
                     edit.addEventListener('show.bs.modal', moveToBody('editUserModal'));
                     moveToBody('editUserModal')();
+                }
+                var sd = @storeDeptId;
+                if (sd > 0) {
+                    wireStoreDeptToggle('input[name=\"CreateForm.DepartmentIds\"]', 'createStorePlantRow', sd);
+                    wireStoreDeptToggle('input[name=\"EditForm.DepartmentIds\"]', 'editStorePlantRow', sd);
                 }
             }
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

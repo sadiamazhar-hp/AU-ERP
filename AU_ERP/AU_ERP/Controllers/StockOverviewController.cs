@@ -1,13 +1,14 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
 using AU_ERP.Services;
 
-namespace AU_ERP.Controllers
-{
-    [Authorize(Policy = "StoreDepartment")]
-    public class StockOverviewController : Controller
+namespace AU_ERP.Controllers;
+
+[Authorize(Policy = "StoreDepartment")]
+public class StockOverviewController : Controller
     {
         private readonly AppDbContext _db;
 
@@ -20,11 +21,17 @@ namespace AU_ERP.Controllers
         {
             ViewData["Title"] = "Stock Overview";
 
+            var plantId = UserPlantResolution.TryGetStorePlantId(User);
+            var missingPlant = plantId == null && User.HasClaim(AuClaimTypes.Department, "Store");
+
             var query = _db.StockInventoryLines.AsNoTracking()
                 .Include(s => s.Material!)
                     .ThenInclude(m => m.MaterialType)
                 .Include(s => s.QuantityUom)
                 .AsQueryable();
+
+            if (!missingPlant && !string.IsNullOrEmpty(plantId))
+                query = query.Where(s => s.PlantID == plantId);
 
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -49,12 +56,20 @@ namespace AU_ERP.Controllers
             var vm = new StockOverviewPageVm
             {
                 Items = items,
+                MissingStorePlantAssignment = missingPlant,
+                PlantDisplay = plantId,
                 Q = q,
                 MaterialTypeCode = string.IsNullOrWhiteSpace(materialTypeCode) ? "All" : materialTypeCode,
                 UomId = uomId
             };
 
             return View(vm);
+        }
+
+        bool EnsureStorePlantForApi(ClaimsPrincipal user, out string plantId)
+        {
+            plantId = UserPlantResolution.TryGetStorePlantId(user) ?? "";
+            return plantId.Length > 0;
         }
 
         [HttpGet]
@@ -108,8 +123,11 @@ namespace AU_ERP.Controllers
         [HttpGet]
         public async Task<JsonResult> GetForEdit(int id, CancellationToken ct = default)
         {
+            if (!EnsureStorePlantForApi(User, out var plantId))
+                return Json(new { success = false, message = "Your user has no store plant assigned." });
+
             var row = await _db.StockInventoryLines.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == id, ct);
+                .FirstOrDefaultAsync(s => s.Id == id && s.PlantID == plantId, ct);
             if (row == null)
                 return Json(new { success = false, message = "Stock entry not found." });
 
@@ -124,6 +142,7 @@ namespace AU_ERP.Controllers
                         row.Id,
                         row.MaterialNumber,
                         MaterialTypeCode = mat?.MaterialTypeCode,
+                        row.PlantID,
                         row.Quantity,
                         row.QuantityUomId,
                         row.Status,
@@ -139,6 +158,9 @@ namespace AU_ERP.Controllers
         {
             try
             {
+                if (!EnsureStorePlantForApi(User, out var plantId))
+                    return Json(new { success = false, message = "Your user has no store plant assigned; an administrator must set the plant for your Store department." });
+
                 var err = await ValidateDtoAsync(dto, ct);
                 if (err != null)
                     return Json(new { success = false, message = err });
@@ -150,6 +172,7 @@ namespace AU_ERP.Controllers
                 var existing = await _db.StockInventoryLines
                     .FirstOrDefaultAsync(
                         s => s.MaterialNumber == key
+                             && s.PlantID == plantId
                              && s.QuantityUomId == dto.QuantityUomId
                              && s.Status == st
                              && s.Grade == g,
@@ -169,6 +192,7 @@ namespace AU_ERP.Controllers
                 var entity = new StockInventoryLine
                 {
                     MaterialNumber = key,
+                    PlantID = plantId,
                     Quantity = dto.Quantity,
                     QuantityUomId = dto.QuantityUomId,
                     Status = st,
@@ -194,7 +218,10 @@ namespace AU_ERP.Controllers
         {
             try
             {
-                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == dto.Id, ct);
+                if (!EnsureStorePlantForApi(User, out var plantId))
+                    return Json(new { success = false, message = "Your user has no store plant assigned." });
+
+                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == dto.Id && s.PlantID == plantId, ct);
                 if (entity == null)
                     return Json(new { success = false, message = "Stock entry not found." });
 
@@ -225,7 +252,10 @@ namespace AU_ERP.Controllers
         {
             try
             {
-                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == id, ct);
+                if (!EnsureStorePlantForApi(User, out var plantId))
+                    return Json(new { success = false, message = "Your user has no store plant assigned." });
+
+                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == id && s.PlantID == plantId, ct);
                 if (entity == null)
                     return Json(new { success = false, message = "Stock entry not found." });
 
@@ -301,4 +331,3 @@ namespace AU_ERP.Controllers
     {
         public int Id { get; set; }
     }
-}

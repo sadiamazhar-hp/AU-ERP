@@ -4,6 +4,7 @@ using AU_ERP.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AU_ERP.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260427234300_PlantScopedInventoryStockAndUserDept")]
+    partial class PlantScopedInventoryStockAndUserDept
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -104,15 +107,9 @@ namespace AU_ERP.Migrations
                     b.Property<int>("DepartmentId")
                         .HasColumnType("int");
 
-                    b.Property<string>("PlantID")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
                     b.HasKey("UserId", "DepartmentId");
 
                     b.HasIndex("DepartmentId");
-
-                    b.HasIndex("PlantID");
 
                     b.ToTable("ApplicationUserDepartments");
                 });
@@ -1693,11 +1690,6 @@ namespace AU_ERP.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("PlantID")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -1729,10 +1721,7 @@ namespace AU_ERP.Migrations
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("PlantID");
-
-                    b.HasIndex("PlantID", "MaterialNumber", "QuantityUomId", "Status", "Grade")
-                        .IsUnique();
+                    b.HasIndex("MaterialNumber", "QuantityUomId", "Status", "Grade");
 
                     b.ToTable("StockInventoryLines");
                 });
@@ -1984,11 +1973,6 @@ namespace AU_ERP.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("AU_ERP.Models.PlantsSample", "Plant")
-                        .WithMany()
-                        .HasForeignKey("PlantID")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AU_ERP.Models.ApplicationUser", "User")
                         .WithMany("UserDepartments")
                         .HasForeignKey("UserId")
@@ -1996,8 +1980,6 @@ namespace AU_ERP.Migrations
                         .IsRequired();
 
                     b.Navigation("Department");
-
-                    b.Navigation("Plant");
 
                     b.Navigation("User");
                 });
@@ -2462,12 +2444,6 @@ namespace AU_ERP.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("AU_ERP.Models.PlantsSample", "Plant")
-                        .WithMany()
-                        .HasForeignKey("PlantID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("AU_ERP.Models.UnitOfMeasurement", "QuantityUom")
                         .WithMany()
                         .HasForeignKey("QuantityUomId")
@@ -2475,8 +2451,6 @@ namespace AU_ERP.Migrations
                         .IsRequired();
 
                     b.Navigation("Material");
-
-                    b.Navigation("Plant");
 
                     b.Navigation("QuantityUom");
                 });

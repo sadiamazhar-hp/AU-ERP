@@ -73,6 +73,16 @@ namespace AU_ERP.Models
                 .HasForeignKey(ud => ud.DepartmentId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<ApplicationUserDepartment>()
+                .Property(ud => ud.PlantID)
+                .HasMaxLength(450);
+
+            modelBuilder.Entity<ApplicationUserDepartment>()
+                .HasOne(ud => ud.Plant)
+                .WithMany()
+                .HasForeignKey(ud => ud.PlantID)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<Department>().HasData(
                 new Department { Id = 1, Code = "Store", Name = "Store" },
                 new Department { Id = 2, Code = "Sales", Name = "Sales" },
@@ -495,6 +505,10 @@ namespace AU_ERP.Models
                 .HasIndex(s => s.Status);
 
             modelBuilder.Entity<StockInventoryLine>()
+                .Property(s => s.PlantID)
+                .HasMaxLength(450);
+
+            modelBuilder.Entity<StockInventoryLine>()
                 .Property(s => s.Grade)
                 .HasMaxLength(32)
                 .HasDefaultValue("");
@@ -504,7 +518,8 @@ namespace AU_ERP.Models
                 .HasMaxLength(64);
 
             modelBuilder.Entity<StockInventoryLine>()
-                .HasIndex(s => new { s.MaterialNumber, s.QuantityUomId, s.Status, s.Grade });
+                .HasIndex(s => new { s.PlantID, s.MaterialNumber, s.QuantityUomId, s.Status, s.Grade })
+                .IsUnique();
 
             modelBuilder.Entity<StockInventoryLine>()
                 .HasOne(s => s.Material)
@@ -516,6 +531,12 @@ namespace AU_ERP.Models
                 .HasOne(s => s.QuantityUom)
                 .WithMany()
                 .HasForeignKey(s => s.QuantityUomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockInventoryLine>()
+                .HasOne(s => s.Plant)
+                .WithMany()
+                .HasForeignKey(s => s.PlantID)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BOMLevelsSample>().HasData(

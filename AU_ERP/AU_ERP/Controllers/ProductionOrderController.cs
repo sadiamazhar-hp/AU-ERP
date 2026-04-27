@@ -198,6 +198,7 @@ namespace AU_ERP.Controllers
                     dto.TargetQuantity,
                     dto.UomId,
                     requireFertMaterialOnly: false,
+                    plantIdForStockOverride: null,
                     ct);
                 if (!mrp.Success)
                     return Json(new { success = false, message = mrp.Message ?? "MRP validation failed." });
@@ -335,12 +336,33 @@ namespace AU_ERP.Controllers
                     return Json(new { success = false, message = "This order was already released." });
                 }
 
+                var routing = await _db.RoutingHeadersSamples
+                    .Include(r => r.OperationHeaders)
+                    .ThenInclude(oh => oh.RoutingOperationsSamples)
+                    .Where(r => r.MaterialNumber == entity.FinishedMaterialNumber)
+                    .OrderByDescending(r => r.ValidFrom)
+                    .ThenByDescending(r => r.RoutingID)
+                    .FirstOrDefaultAsync(ct);
+
+                if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "No routing with operations is defined for this material." });
+                }
+
+                if (string.IsNullOrWhiteSpace(routing.PlantID))
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = "Routing must have a plant for release and inventory." });
+                }
+
                 var mrp = await MrpExplosionService.RunAsync(
                     _db,
                     entity.FinishedMaterialNumber.Trim(),
                     entity.TargetQuantity,
                     entity.UomId,
                     requireFertMaterialOnly: false,
+                    plantIdForStockOverride: routing.PlantID,
                     ct);
                 if (!mrp.Success)
                 {
@@ -367,20 +389,6 @@ namespace AU_ERP.Controllers
                 {
                     await tx.RollbackAsync(ct);
                     return Json(new { success = false, message = bomErr ?? "Could not build BOM snapshot for release." });
-                }
-
-                var routing = await _db.RoutingHeadersSamples
-                    .Include(r => r.OperationHeaders)
-                    .ThenInclude(oh => oh.RoutingOperationsSamples)
-                    .Where(r => r.MaterialNumber == entity.FinishedMaterialNumber)
-                    .OrderByDescending(r => r.ValidFrom)
-                    .ThenByDescending(r => r.RoutingID)
-                    .FirstOrDefaultAsync(ct);
-
-                if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
-                {
-                    await tx.RollbackAsync(ct);
-                    return Json(new { success = false, message = "No routing with operations is defined for this material." });
                 }
 
                 var orderedHeaders = routing.OperationHeaders.OrderBy(h => h.DisplayOrder).ToList();

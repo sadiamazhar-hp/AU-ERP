@@ -27,6 +27,9 @@ public class CreateUserViewModel
     public string Email { get; set; } = string.Empty;
 
     public int[] DepartmentIds { get; set; } = Array.Empty<int>();
+
+    [Display(Name = "Store plant")]
+    public string? StorePlantId { get; set; }
 }
 
 public class EditUserViewModel
@@ -48,6 +51,9 @@ public class EditUserViewModel
     public string Email { get; set; } = string.Empty;
 
     public int[] DepartmentIds { get; set; } = Array.Empty<int>();
+
+    [Display(Name = "Store plant")]
+    public string? StorePlantId { get; set; }
 }
 
 public class UsersIndexPageModel

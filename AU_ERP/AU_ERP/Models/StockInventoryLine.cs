@@ -16,6 +16,11 @@ namespace AU_ERP.Models
         [MaxLength(450)]
         public string MaterialNumber { get; set; } = null!;
 
+        /// <summary>Warehouse/manufacturing plant this bin row belongs to.</summary>
+        [Required]
+        [MaxLength(450)]
+        public string PlantID { get; set; } = null!;
+
         [Column(TypeName = "decimal(18,4)")]
         public decimal Quantity { get; set; }
 
@@ -49,5 +54,8 @@ namespace AU_ERP.Models
 
         [ForeignKey(nameof(QuantityUomId))]
         public virtual UnitOfMeasurement? QuantityUom { get; set; }
+
+        [ForeignKey(nameof(PlantID))]
+        public virtual PlantsSample? Plant { get; set; }
     }
 }

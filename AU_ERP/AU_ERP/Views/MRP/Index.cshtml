@@ -1,5 +1,7 @@
+@using AU_ERP.Models
 @{
     ViewData["Title"] = "MRP";
+    var mrpPlants = ViewBag.MrpPlants as IEnumerable<PlantsSample>;
 }
 
 @section Styles {
@@ -63,12 +65,22 @@
                 <label class="form-label small">Quantity</label>
                 <input type="number" id="mrpQty" class="form-control form-control-sm" min="0.0001" step="any" value="1" />
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <label class="form-label small">Plant</label>
+                <select id="mrpPlant" class="form-select form-select-sm" required>
+                    <option value="">— Select plant —</option>
+                    @foreach (var p in (mrpPlants ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
+                    {
+                        <option value="@p.PlantID">@p.PlantID</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small">Quantity UOM</label>
                 <select id="mrpUom" class="form-select form-select-sm"></select>
             </div>
-            <div class="col-md-3">
-                <button type="button" class="btn mrp-btn-run" id="mrpRunBtn">Run MRP</button>
+            <div class="col-md-2">
+                <button type="button" class="btn mrp-btn-run mt-4" id="mrpRunBtn">Run MRP</button>
             </div>
         </div>
     </div>
@@ -253,6 +265,8 @@
     window._mrpSubLoading = window._mrpSubLoading || {};
 
     function mrpFetchRun(mat, qty, uomId, subMrp) {
+        var plantSel = document.getElementById("mrpPlant");
+        var pid = plantSel ? String(plantSel.value || "").trim() : "";
         return fetch("@Url.Action("Run", "MRP")", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -260,6 +274,7 @@
                 MaterialNumber: mat,
                 Quantity: qty,
                 UomId: uomId,
+                PlantId: pid,
                 SubMrp: !!subMrp
             })
         }).then(function (r) { return r.json(); });
@@ -489,6 +504,11 @@
         }
         if (!uomId) {
             mrpShowFormError("Select a UOM.");
+            return Promise.resolve();
+        }
+        var plantSel = document.getElementById("mrpPlant");
+        if (!plantSel || !(String(plantSel.value || "").trim())) {
+            mrpShowFormError("Select a plant for inventory scope.");
             return Promise.resolve();
         }
         return mrpFetchRun(mat, qty, uomId, false).then(function (payload) {

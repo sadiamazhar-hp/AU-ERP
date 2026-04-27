@@ -12,16 +12,24 @@ public static class InventoryStandardCostService
         string materialNumber,
         int uomId,
         CancellationToken cancellationToken = default,
-        string? priceGrade = null)
+        string? priceGrade = null,
+        string? plantIdForStock = null)
     {
         var key = (materialNumber ?? "").Trim();
         if (key.Length == 0 || uomId <= 0)
             return 0;
 
-        var fromInv = await db.StockInventoryLines.AsNoTracking()
+        var trimmedPlant = (plantIdForStock ?? "").Trim();
+
+        var fromInvQuery = db.StockInventoryLines.AsNoTracking()
             .Where(s => s.MaterialNumber == key
                         && s.QuantityUomId == uomId
-                        && s.Status == StockInventoryLine.StatusActive)
+                        && s.Status == StockInventoryLine.StatusActive);
+
+        if (trimmedPlant.Length > 0)
+            fromInvQuery = fromInvQuery.Where(s => s.PlantID == trimmedPlant);
+
+        var fromInv = await fromInvQuery
             .Select(s => s.StandardCostPerUom)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);

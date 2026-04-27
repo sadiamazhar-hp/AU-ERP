@@ -33,10 +33,16 @@ public static class DeliveryChallanStockService
             AppDbContext db,
             IReadOnlyList<LineDeduct> lines,
             IReadOnlyDictionary<int, string?>? salesItemGradeById,
+            string inventoryPlantId,
             CancellationToken ct = default)
     {
-        var batches = new string?[lines.Count];
-        for (var li = 0; li < lines.Count; li++)
+            var batches = new string?[lines.Count];
+
+            inventoryPlantId = (inventoryPlantId ?? "").Trim();
+            if (inventoryPlantId.Length == 0)
+                return (false, "Delivery challan must have a plant for stock deduction.", batches);
+
+            for (var li = 0; li < lines.Count; li++)
         {
             var line = lines[li];
             var mat = (line.MaterialNumber ?? "").Trim();
@@ -57,7 +63,8 @@ public static class DeliveryChallanStockService
 
             var stockRows = await db.StockInventoryLines
                 .Where(s =>
-                    s.MaterialNumber == mat
+                    s.PlantID == inventoryPlantId
+                    && s.MaterialNumber == mat
                     && s.Status == StockInventoryLine.StatusActive
                     && s.Grade == grade
                     && s.Quantity > 0)

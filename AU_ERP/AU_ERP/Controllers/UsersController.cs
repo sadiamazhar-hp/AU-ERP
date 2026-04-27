@@ -1,9 +1,11 @@
+using System.Linq;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Controllers;
@@ -46,13 +48,29 @@ public class UsersController : Controller
                 .ConfigureAwait(false);
             if (toEdit != null)
             {
+                var storeDeptId = await _db.Departments.AsNoTracking()
+                    .Where(d => d.Code == "Store")
+                    .Select(d => d.Id)
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+                string? storePlant = null;
+                if (storeDeptId > 0)
+                {
+                    storePlant = await _db.ApplicationUserDepartments.AsNoTracking()
+                        .Where(ud => ud.UserId == toEdit.Id && ud.DepartmentId == storeDeptId)
+                        .Select(ud => ud.PlantID)
+                        .FirstOrDefaultAsync()
+                        .ConfigureAwait(false);
+                }
+
                 editForm = new EditUserViewModel
                 {
                     UserId = toEdit.Id,
                     FirstName = toEdit.FirstName?.Trim() ?? "",
                     LastName = toEdit.LastName?.Trim() ?? "",
                     Email = toEdit.Email ?? "",
-                    DepartmentIds = toEdit.UserDepartments.Select(ud => ud.DepartmentId).ToArray()
+                    DepartmentIds = toEdit.UserDepartments.Select(ud => ud.DepartmentId).ToArray(),
+                    StorePlantId = storePlant
                 };
                 openEdit = true;
             }
@@ -72,6 +90,7 @@ public class UsersController : Controller
             .ToListAsync()
             .ConfigureAwait(false);
         ViewBag.SeededAdminUserId = await GetSeededAdminUserIdAsync().ConfigureAwait(false);
+        await FillUserPlantLookupsAsync().ConfigureAwait(false);
 
         return View(page);
     }
@@ -86,6 +105,7 @@ public class UsersController : Controller
             .ToListAsync()
             .ConfigureAwait(false);
         ViewBag.SeededAdminUserId = await GetSeededAdminUserIdAsync().ConfigureAwait(false);
+        await FillUserPlantLookupsAsync().ConfigureAwait(false);
 
         if (model.DepartmentIds == null || model.DepartmentIds.Length == 0)
             ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "Select at least one department.");
@@ -93,6 +113,8 @@ public class UsersController : Controller
         var validDeptIds = await _db.Departments.Select(d => d.Id).ToListAsync().ConfigureAwait(false);
         if (model.DepartmentIds != null && model.DepartmentIds.Any(id => !validDeptIds.Contains(id)))
             ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "One or more departments are invalid.");
+
+        await ValidateStorePlantAssignmentAsync(ModelState, pfx, model.DepartmentIds, model.StorePlantId).ConfigureAwait(false);
 
         var user = await _userManager.FindByIdAsync(model.UserId).ConfigureAwait(false);
         if (user == null)
@@ -153,12 +175,22 @@ public class UsersController : Controller
             .ToListAsync()
             .ConfigureAwait(false);
         _db.ApplicationUserDepartments.RemoveRange(existing);
+        var storeDeptId = await _db.Departments.AsNoTracking()
+            .Where(d => d.Code == "Store").Select(d => d.Id).FirstOrDefaultAsync().ConfigureAwait(false);
         foreach (var deptId in model.DepartmentIds!.Distinct())
         {
+            string? plantIdLink = null;
+            if (storeDeptId > 0 && deptId == storeDeptId)
+            {
+                var p = (model.StorePlantId ?? "").Trim();
+                plantIdLink = p.Length > 0 ? p : null;
+            }
+
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
                 UserId = user.Id,
-                DepartmentId = deptId
+                DepartmentId = deptId,
+                PlantID = plantIdLink
             });
         }
 
@@ -184,6 +216,7 @@ public class UsersController : Controller
             .OrderBy(d => d.Code)
             .ToListAsync()
             .ConfigureAwait(false);
+        await FillUserPlantLookupsAsync().ConfigureAwait(false);
 
         if (model.DepartmentIds == null || model.DepartmentIds.Length == 0)
             ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "Select at least one department.");
@@ -191,6 +224,8 @@ public class UsersController : Controller
         var validDeptIds = await _db.Departments.Select(d => d.Id).ToListAsync().ConfigureAwait(false);
         if (model.DepartmentIds != null && model.DepartmentIds.Any(id => !validDeptIds.Contains(id)))
             ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "One or more departments are invalid.");
+
+        await ValidateStorePlantAssignmentAsync(ModelState, pfx, model.DepartmentIds, model.StorePlantId).ConfigureAwait(false);
 
         if (!ModelState.IsValid)
         {
@@ -243,12 +278,22 @@ public class UsersController : Controller
             });
         }
 
+        var storeDeptIdCreate = await _db.Departments.AsNoTracking()
+            .Where(d => d.Code == "Store").Select(d => d.Id).FirstOrDefaultAsync().ConfigureAwait(false);
         foreach (var deptId in (model.DepartmentIds ?? Array.Empty<int>()).Distinct())
         {
+            string? plantIdLink = null;
+            if (storeDeptIdCreate > 0 && deptId == storeDeptIdCreate)
+            {
+                var p = (model.StorePlantId ?? "").Trim();
+                plantIdLink = p.Length > 0 ? p : null;
+            }
+
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
                 UserId = user.Id,
-                DepartmentId = deptId
+                DepartmentId = deptId,
+                PlantID = plantIdLink
             });
         }
 
@@ -287,5 +332,57 @@ public class UsersController : Controller
         if (email.Length == 0) return null;
         var u = await _userManager.FindByEmailAsync(email).ConfigureAwait(false);
         return u?.Id;
+    }
+
+    private async Task FillUserPlantLookupsAsync()
+    {
+        ViewBag.StoreDepartmentId = await _db.Departments.AsNoTracking()
+            .Where(d => d.Code == "Store")
+            .Select(d => d.Id)
+            .FirstOrDefaultAsync()
+            .ConfigureAwait(false);
+        ViewBag.Plants = await _db.PlantsSamples.AsNoTracking()
+            .OrderBy(p => p.PlantName)
+            .ToListAsync()
+            .ConfigureAwait(false);
+    }
+
+    private async Task ValidateStorePlantAssignmentAsync(
+        ModelStateDictionary modelState,
+        string fieldPrefix,
+        int[]? departmentIds,
+        string? storePlantId)
+    {
+        var storeDeptId = await _db.Departments.AsNoTracking()
+            .Where(d => d.Code == "Store")
+            .Select(d => d.Id)
+            .FirstOrDefaultAsync()
+            .ConfigureAwait(false);
+        if (storeDeptId <= 0)
+            return;
+
+        var hasStore = departmentIds?.Contains(storeDeptId) ?? false;
+        var trimmed = (storePlantId ?? "").Trim();
+
+        if (hasStore)
+        {
+            if (trimmed.Length == 0)
+            {
+                modelState.AddModelError($"{fieldPrefix}StorePlantId",
+                    "Select a plant when the Store department is assigned.");
+                return;
+            }
+
+            var okPlant = await _db.PlantsSamples.AsNoTracking()
+                .AnyAsync(p => p.PlantID == trimmed)
+                .ConfigureAwait(false);
+            if (!okPlant)
+                modelState.AddModelError($"{fieldPrefix}StorePlantId", "Selected plant is invalid.");
+        }
+        else if (trimmed.Length > 0)
+        {
+            modelState.AddModelError($"{fieldPrefix}StorePlantId",
+                "Plant is only applicable when Store department is selected.");
+        }
     }
 }

@@ -13,9 +13,11 @@ namespace AU_ERP.Controllers
 
         public MRPController(AppDbContext db) => _db = db;
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index(CancellationToken ct = default)
         {
             ViewData["Title"] = "MRP";
+            ViewBag.MrpPlants = await _db.PlantsSamples.AsNoTracking()
+                .OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
             return View();
         }
 
@@ -43,12 +45,20 @@ namespace AU_ERP.Controllers
         [HttpPost]
         public async Task<JsonResult> Run([FromBody] MrpRunRequestDto dto, CancellationToken ct = default)
         {
+            var plant = (dto.PlantId ?? "").Trim();
+            if (plant.Length == 0)
+                return Json(new MrpRunResponseDto { Success = false, Message = "Plant is required to scope inventory for MRP." });
+            var plantOk = await _db.PlantsSamples.AsNoTracking().AnyAsync(p => p.PlantID == plant, ct).ConfigureAwait(false);
+            if (!plantOk)
+                return Json(new MrpRunResponseDto { Success = false, Message = "Invalid plant." });
+
             var result = await MrpExplosionService.RunAsync(
                 _db,
                 dto.MaterialNumber ?? "",
                 dto.Quantity,
                 dto.UomId,
                 requireFertMaterialOnly: false,
+                plantIdForStockOverride: plant,
                 ct);
             return Json(result);
         }

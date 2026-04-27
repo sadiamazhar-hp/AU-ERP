@@ -90,10 +90,21 @@ public sealed class DashboardDataService
         StoreModuleStats? store = null;
         if (showSt)
         {
-            var lines = await _db.StockInventoryLines.AsNoTracking()
-                .Where(s => s.Status == StockInventoryLine.StatusActive)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
+            var storePlant = user.FindFirst(AuClaimTypes.StorePlant)?.Value?.Trim();
+
+            List<StockInventoryLine> lines;
+            if (string.IsNullOrEmpty(storePlant))
+            {
+                lines = new List<StockInventoryLine>();
+            }
+            else
+            {
+                lines = await _db.StockInventoryLines.AsNoTracking()
+                    .Where(s => s.Status == StockInventoryLine.StatusActive && s.PlantID == storePlant)
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
+            }
+
             var byGrade = lines
                 .GroupBy(s => string.IsNullOrEmpty(s.Grade) ? "—" : s.Grade)
                 .Select(g => new LabelCountDto
