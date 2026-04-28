@@ -41,6 +41,8 @@ namespace AU_ERP.Models
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<GoodsProduceBatch> GoodsProduceBatches { get; set; }
         public DbSet<GoodReceiptDocument> GoodReceiptDocuments { get; set; }
+        public DbSet<GoodsIssueDocument> GoodsIssueDocuments { get; set; }
+        public DbSet<GoodsIssueDocumentLine> GoodsIssueDocumentLines { get; set; }
         public DbSet<Charge> Charges { get; set; }
         public DbSet<SalesQuotation> SalesQuotations { get; set; }
         public DbSet<SalesQuotationItem> SalesQuotationItems { get; set; }
@@ -522,6 +524,53 @@ namespace AU_ERP.Models
                 .HasOne(g => g.ProductionOrder)
                 .WithMany()
                 .HasForeignKey(g => g.ProductionOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GoodsIssueDocument>()
+                .HasIndex(g => g.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<GoodsIssueDocument>()
+                .HasIndex(g => g.ProductionOrderId)
+                .IsUnique();
+
+            modelBuilder.Entity<GoodsIssueDocument>()
+                .Property(g => g.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<GoodsIssueDocument>()
+                .Property(g => g.Status)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<GoodsIssueDocument>()
+                .HasOne(g => g.ProductionOrder)
+                .WithMany()
+                .HasForeignKey(g => g.ProductionOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .Property(l => l.RequiredQty)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .HasIndex(l => l.GoodsIssueDocumentId);
+
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .HasOne(l => l.GoodsIssueDocument)
+                .WithMany(g => g.Lines)
+                .HasForeignKey(l => l.GoodsIssueDocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .HasOne(l => l.Material)
+                .WithMany()
+                .HasForeignKey(l => l.MaterialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .HasOne(l => l.RequiredUom)
+                .WithMany()
+                .HasForeignKey(l => l.RequiredUomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<StockMovement>()

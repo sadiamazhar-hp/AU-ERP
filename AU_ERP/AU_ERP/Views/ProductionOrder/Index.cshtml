@@ -169,7 +169,7 @@
                                         {
                                             <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="poOpenEdit(@p.Id)"><i class="bi bi-pencil"></i></button>
                                             <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
-                                            <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Release" onclick="poRelease(@p.Id)"><i class="bi bi-play-fill"></i> Release</button>
+                                            <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Goods issue" onclick="poOpenGi(@p.Id)"><i class="bi bi-box-arrow-in-down"></i> GI</button>
                                         }
                                         else if (p.ReleasedRoutingId != null && (p.Status == ProductionOrder.StatusReleased || p.Status == ProductionOrder.StatusInProgress || p.Status == ProductionOrder.StatusCompleted))
                                         {
@@ -997,29 +997,19 @@
         else if (confirm("Delete this production order?")) run();
     }
 
-    function poRelease(id) {
+    function poOpenGi(id) {
         function run() {
-            fetch("@Url.Action("Release", "ProductionOrder")?id=" + encodeURIComponent(id), { method: "POST" })
-                .then(function (r) { return r.json(); })
-                .then(function (res) {
-                    if (res.success) {
-                        poHideActiveFormModalThen(function () {
-                            if (typeof window.materialShowSuccessModalThen === "function")
-                                window.materialShowSuccessModalThen(res.message, poReload);
-                            else { alert(res.message); poReload(); }
-                        });
-                    } else if (res.mrpShortage || res.MrpShortage) {
-                        poNavToMrpForShortage(
-                            res.mrpMaterialNumber || res.MrpMaterialNumber,
-                            res.mrpTargetQuantity != null ? res.mrpTargetQuantity : res.MrpTargetQuantity,
-                            res.mrpUomId != null ? res.mrpUomId : res.MrpUomId,
-                            res.message || "");
-                    } else poShowInline(document.querySelector(".po-page"), res.message || "Release failed.");
-                }).catch(function () { poShowInline(document.querySelector(".po-page"), "Release failed."); });
+            fetch("@Url.Action("CreateOrOpen", "GoodsIssue")?productionOrderId=" + encodeURIComponent(id), { method: "POST" })
+                .then(function () {
+                    window.location.href = "@Url.Action("Index", "GoodsIssue")" + "?productionOrderId=" + encodeURIComponent(id);
+                })
+                .catch(function () {
+                    poShowInline(document.querySelector(".po-page"), "Could not open goods issue.");
+                });
         }
         if (typeof window.materialShowDeleteConfirmModalThen === "function")
-            window.materialShowDeleteConfirmModalThen("Release this production order?", run);
-        else if (confirm("Release this production order?")) run();
+            window.materialShowDeleteConfirmModalThen("Create/open Goods Issue for this production order?", run);
+        else if (confirm("Create/open Goods Issue for this production order?")) run();
     }
 
     var poTrackingDetailsUrl = "@Url.Action("Details", "OperationTracking")";

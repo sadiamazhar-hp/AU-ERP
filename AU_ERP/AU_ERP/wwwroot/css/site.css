@@ -483,6 +483,19 @@ body.modal-open:has(#grViewModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+/* Goods issue view modal stacking (keep backdrop below modal). */
+#giViewModal.modal {
+  z-index: 100050 !important;
+}
+
+#giViewModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#giViewModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
 /* Status-style pills (Sales Quotation, Users, etc.) */
 .sq-badge {
   display: inline-block;

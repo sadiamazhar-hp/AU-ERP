@@ -1,0 +1,165 @@
+@model AU_ERP.Models.GoodsIssueIndexVm
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Goods Issue";
+    var total = Model.Documents.Count;
+    var pending = Model.Documents.Count(d => string.Equals(d.Status, GoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase));
+    var completed = Model.Documents.Count(d => string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase));
+}
+
+@section Styles {
+    <style>
+        .gi-page { color: var(--text, #32363a); }
+        .gi-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; }
+        .gi-hero h1 { font-size:1.35rem; font-weight:600; color:var(--dark,#354a5e); margin:0 0 .25rem 0; }
+        .gi-hero p { margin:0; color:var(--subtle,#6a7c8e); font-size:.9rem; }
+        .gi-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; margin-bottom:1.25rem; }
+        .gi-stat { background:#fff; border:1px solid var(--border,#d9d9d9); border-radius:4px; padding:.85rem 1rem; box-shadow:var(--sh,0 2px 8px rgba(0,0,0,.12)); border-top:3px solid var(--blue,#0070f2); }
+        .gi-stat .label { font-size:.72rem; font-weight:600; letter-spacing:.04em; color:var(--subtle,#6a7c8e); text-transform:uppercase; }
+        .gi-stat .val { font-size:1.55rem; font-weight:600; color:var(--dark,#354a5e); line-height:1.2; margin-top:.2rem; }
+        .gi-card { background:#fff; border:1px solid var(--border,#d9d9d9); border-radius:4px; padding:1rem 1.1rem; box-shadow:var(--sh,0 2px 8px rgba(0,0,0,.12)); }
+        .gi-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+        .gi-table thead th { background:var(--dark,#354a5e); color:#fff; font-weight:500; padding:.55rem .65rem; text-align:left; white-space:nowrap; }
+        .gi-table tbody td { border:1px solid #ddd; padding:.45rem .6rem; vertical-align:middle; }
+        .gi-table tbody tr:nth-child(even) { background:#fafafa; }
+        .gi-badge { display:inline-block; padding:.2rem .55rem; border-radius:999px; font-size:.75rem; font-weight:500; }
+        .gi-badge-pending { background:#fff3cd; color:#664d03; }
+        .gi-badge-done { background:#d1e7dd; color:#0f5132; }
+        .gi-badge-draft { background:#e2e3e5; color:#41464b; }
+        .gi-actions { display:flex; flex-wrap:wrap; gap:.35rem; }
+    </style>
+}
+
+<div class="gi-page">
+    <div class="gi-hero">
+        <div>
+            <h1>Goods Issue</h1>
+            <p>Review BOM consumption before releasing production orders to operations.</p>
+        </div>
+    </div>
+
+    <div class="gi-stats">
+        <div class="gi-stat"><div class="label">Total</div><div class="val">@total</div></div>
+        <div class="gi-stat"><div class="label">Pending</div><div class="val">@pending</div></div>
+        <div class="gi-stat"><div class="label">Completed</div><div class="val">@completed</div></div>
+    </div>
+
+    <div class="gi-card">
+        <h2 class="po-table-title mb-3">Goods Issue Documents (@total)</h2>
+        <div class="table-responsive">
+            <table class="gi-table">
+                <thead>
+                    <tr>
+                        <th>GI No.</th>
+                        <th>Date</th>
+                        <th>Production Order</th>
+                        <th>Material</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (!Model.Documents.Any())
+                {
+                    <tr><td colspan="6" class="text-secondary">No goods issue records found.</td></tr>
+                }
+                else
+                {
+                    foreach (var d in Model.Documents)
+                    {
+                        var mat = string.IsNullOrWhiteSpace(d.FinishedMaterialName)
+                            ? d.FinishedMaterialNumber
+                            : $"{d.FinishedMaterialNumber} — {d.FinishedMaterialName}";
+                        var badgeClass = string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase)
+                            ? "gi-badge gi-badge-done"
+                            : string.Equals(d.Status, GoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase)
+                                ? "gi-badge gi-badge-pending"
+                                : "gi-badge gi-badge-draft";
+                        <tr data-gi-id="@d.Id" @(Model.FocusProductionOrderId == d.ProductionOrderId ? "style=outline:2px solid #9ec5fe" : "")>
+                            <td><strong>@d.DocumentNumber</strong></td>
+                            <td>@d.DocumentDate.ToString("dd-MMM-yyyy")</td>
+                            <td>PO-@d.ProductionNumber</td>
+                            <td>@mat</td>
+                            <td><span class="@badgeClass">@d.Status</span></td>
+                            <td>
+                                <div class="gi-actions">
+                                    @if (!string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button type="button" class="btn btn-success btn-sm" onclick="giReceive(@d.Id)">Receive Goods</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Received</button>
+                                    }
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="giView(@d.Id)">View</button>
+                                    <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "GoodsIssue", new { id = d.Id })">Download PDF</a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="giViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Goods Issue</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="giViewBody">
+                <div class="text-secondary">Loading…</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function () {
+        const modalEl = document.getElementById("giViewModal");
+        if (!modalEl) return;
+        function ensureOnBody() {
+            if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+        }
+        ensureOnBody();
+        modalEl.addEventListener("show.bs.modal", ensureOnBody);
+    })();
+
+    function giReceive(id) {
+        if (!confirm("Receive goods for this GI? Inventory will be deducted and production order released to operations.")) return;
+        fetch("@Url.Action("ReceiveGoods", "GoodsIssue")?id=" + encodeURIComponent(id), { method: "POST" })
+            .then(r => r.json())
+            .then(res => {
+                if (res && res.success) {
+                    if (typeof window.materialShowSuccessModalThen === "function") {
+                        window.materialShowSuccessModalThen(res.message || "Goods issue completed.", function () { window.location.reload(); });
+                    } else {
+                        alert(res.message || "Goods issue completed.");
+                        window.location.reload();
+                    }
+                } else {
+                    if (typeof window.materialShowErrorModal === "function") window.materialShowErrorModal(res.message || "Receive goods failed.");
+                    else alert(res.message || "Receive goods failed.");
+                }
+            })
+            .catch(() => alert("Receive goods failed."));
+    }
+
+    function giView(id) {
+        fetch("@Url.Action("View", "GoodsIssue")?id=" + encodeURIComponent(id))
+            .then(r => r.text())
+            .then(html => {
+                var body = document.getElementById("giViewBody");
+                body.innerHTML = html;
+                var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("giViewModal"));
+                modal.show();
+            })
+            .catch(() => alert("Could not load details."));
+    }
+</script>
+}

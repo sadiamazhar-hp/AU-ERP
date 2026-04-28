@@ -54,6 +54,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<DashboardDataService>();
 builder.Services.AddScoped<GoodsReceiptPostingService>();
 builder.Services.AddScoped<GoodReceiptPdfService>();
+builder.Services.AddScoped<GoodsIssueService>();
+builder.Services.AddScoped<GoodsIssuePdfService>();
 builder.Services.AddScoped<StockMovementService>();
 
 builder.Services.AddControllersWithViews(options =>

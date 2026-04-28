@@ -50,6 +50,9 @@
     var goodReceiptActive = string.Equals(ctrl, "GoodReceipt", StringComparison.OrdinalIgnoreCase)
         && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
             || string.Equals(act, "CreateOrOpen", StringComparison.OrdinalIgnoreCase));
+    var goodsIssueActive = string.Equals(ctrl, "GoodsIssue", StringComparison.OrdinalIgnoreCase)
+        && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(act, "CreateOrOpen", StringComparison.OrdinalIgnoreCase));
     var stockMovementActive = string.Equals(ctrl, "StockMovement", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var stockOverviewActive = string.Equals(ctrl, "StockOverview", StringComparison.OrdinalIgnoreCase)
@@ -143,6 +146,7 @@
                     <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Production</div>
                     <a class="au-sidebar-link @(mrpActive ? "active" : null)" asp-controller="MRP" asp-action="Index">MRP</a>
                     <a class="au-sidebar-link @(productionOrderActive ? "active" : null)" asp-controller="ProductionOrder" asp-action="Index">Production Order</a>
+                    <a class="au-sidebar-link @(goodsIssueActive ? "active" : null)" asp-controller="GoodsIssue" asp-action="Index">Goods Issue</a>
                     <a class="au-sidebar-link @(operationTrackingActive ? "active" : null)" asp-controller="OperationTracking" asp-action="Index">Operation Tracking</a>
                     <a class="au-sidebar-link @(goodReceiptActive ? "active" : null)" asp-controller="GoodReceipt" asp-action="Index">Good Receipt</a>
                 }
