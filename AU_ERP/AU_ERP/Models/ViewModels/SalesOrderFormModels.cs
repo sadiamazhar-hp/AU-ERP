@@ -3,6 +3,7 @@ namespace AU_ERP.Models.ViewModels;
 public class SalesOrderCreateFormModel
 {
     public string? SalesOrderNumber { get; set; }
+    public int? SalesQuotationId { get; set; }
     public int? ConfigurationSchemaId { get; set; }
     public string? PlantId { get; set; }
     public int? DistributionChannelId { get; set; }

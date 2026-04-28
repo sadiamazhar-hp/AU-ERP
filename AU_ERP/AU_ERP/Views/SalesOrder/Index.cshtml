@@ -270,40 +270,34 @@
                         </div>
                         <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="soPlant">Plant <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="PlantId" id="soPlant" required>
+                            <select class="form-select form-select-sm" id="soPlant" required disabled>
                                 <option value="">— Select —</option>
                                 @foreach (var p in plants)
                                 {
-                                    if (p.PlantID == firstPlant)
-                                    {
-                                        <option value="@p.PlantID" selected="selected">@p.PlantName</option>
-                                    }
-                                    else
-                                {
                                     <option value="@p.PlantID">@p.PlantName</option>
-                                    }
                                 }
                             </select>
+                            <input type="hidden" name="PlantId" id="soPlantHidden" />
                         </div>
                         <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="soDc">Distribution channel <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="DistributionChannelId" id="soDc" required>
+                            <select class="form-select form-select-sm" id="soDc" required disabled>
                                 <option value="">— Select —</option>
                                 @foreach (var ch in chans)
                                 {
-                                    if (ch.DistributionChannelID == firstChan)
-                                    {
-                                        <option value="@ch.DistributionChannelID" selected="selected">@ch.DistributionChannelName</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="@ch.DistributionChannelID">@ch.DistributionChannelName</option>
-                                    }
+                                    <option value="@ch.DistributionChannelID">@ch.DistributionChannelName</option>
                                 }
                             </select>
+                            <input type="hidden" name="DistributionChannelId" id="soDcHidden" />
                         </div>
                     </div>
                     <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0" for="soSalesQuotationId">Sales quotation (optional)</label>
+                            <select class="form-select form-select-sm" name="SalesQuotationId" id="soSalesQuotationId">
+                                <option value="">— Select —</option>
+                            </select>
+                        </div>
                         <div class="col-md-6">
                             <label class="form-label small mb-0" for="soCustomer">Customer name (Sold to party) <span class="text-danger">*</span></label>
                             <select class="form-select form-select-sm" name="CustomerBusinessPartnerId" id="soCustomer" required>
@@ -331,13 +325,14 @@
                         </div>
                         <div class="col-12 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="soSchema">Configuration schema <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="ConfigurationSchemaId" id="soSchema" required>
+                            <select class="form-select form-select-sm" id="soSchema" required disabled>
                                 <option value="">— Select —</option>
                                 @foreach (var s in schemas)
                                 {
                                     <option value="@s.Id">@s.Title</option>
                                 }
                             </select>
+                            <input type="hidden" name="ConfigurationSchemaId" id="soSchemaHidden" />
                         </div>
                         <div class="col-12 col-lg-5" id="soChargeSelectRow">
                             <div class="row g-2">
@@ -459,6 +454,9 @@
         const nextOrderUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("NextSalesOrderNumber", "SalesOrder") ?? ""));
         const schemaUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SchemaDetails", "SalesOrder") ?? ""));
         const soOrderDataBase = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("OrderData", "SalesOrder", new { id = 0 }) ?? ""));
+        const soCustomerProfileUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CustomerCommercialProfile", "SalesOrder") ?? ""));
+        const soQuotationListUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("AvailableSalesQuotations", "SalesOrder") ?? ""));
+        const soQuotationItemsUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SalesQuotationItems", "SalesOrder") ?? ""));
         const soOpenEditId = @Html.Raw(openEditId is int oei ? oei.ToString() : "null");
         const soUpdateUrlTpl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Update", "SalesOrder", new { id = 0 }) ?? ""));
         const soCreateFormAction = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Create", "SalesOrder") ?? ""));
@@ -574,6 +572,15 @@
             });
             var hj = document.getElementById("soQuotationChargeValuesJson");
             if (hj) hj.value = Object.keys(o).length ? JSON.stringify(o) : "";
+            var plantSel = document.getElementById("soPlant");
+            var dcSel = document.getElementById("soDc");
+            var schemaSel = document.getElementById("soSchema");
+            var plantHidden = document.getElementById("soPlantHidden");
+            var dcHidden = document.getElementById("soDcHidden");
+            var schemaHidden = document.getElementById("soSchemaHidden");
+            if (plantHidden) plantHidden.value = plantSel ? (plantSel.value || "") : "";
+            if (dcHidden) dcHidden.value = dcSel ? (dcSel.value || "") : "";
+            if (schemaHidden) schemaHidden.value = schemaSel ? (schemaSel.value || "") : "";
         }
         function readLineValObj(tr) {
             var o = {};
@@ -601,7 +608,7 @@
         function lineAmountsV2(qty, unit, o) {
             o = o || {};
             var hasSch = (schemaCharges || []).length > 0;
-            var net = Math.round(qty * unit * 10000) / 10000;
+            var net = Math.round(unit * 10000) / 10000;
             if (!hasSch) return { sub: net, tot: net };
             var running = net, order = selectedItemChgOrder();
             order.forEach(function (cid) {
@@ -670,7 +677,9 @@
                 if (!c) return;
                 var th = document.createElement("th");
                 th.className = "text-end small so-dyn-chg-th";
-                th.textContent = (c.symbol || "") + (c.valueType === "Numeric" ? " (amt)" : " (%)");
+                var label = (c.symbol || "") + (c.description ? (" — " + c.description) : "");
+                th.textContent = label + (c.valueType === "Numeric" ? " (amt)" : " (%)");
+                th.title = label;
                 before.parentNode.insertBefore(th, before);
             });
         }
@@ -705,13 +714,13 @@
             (schemaCharges || []).forEach(function (c) {
                 var li = document.createElement("li");
                 li.className = "form-check";
-                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\"><input type=\"checkbox\" class=\"form-check-input so-m-item-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + "</label>";
+                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\"><input type=\"checkbox\" class=\"form-check-input so-m-item-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + (c.description ? (" <span class=\"text-muted\">" + esc(c.description) + "</span>") : "") + "</label>";
                 mItem.appendChild(li);
             });
             (schemaCharges || []).forEach(function (c) {
                 var li = document.createElement("li");
                 li.className = "form-check";
-                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\"><input type=\"checkbox\" class=\"form-check-input so-m-doc-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + "</label>";
+                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\"><input type=\"checkbox\" class=\"form-check-input so-m-doc-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + (c.description ? (" <span class=\"text-muted\">" + esc(c.description) + "</span>") : "") + "</label>";
                 mDoc.appendChild(li);
             });
             mItem.querySelectorAll(".so-m-item-chk").forEach(function (cb) {
@@ -732,7 +741,8 @@
                 if (!c) return;
                 var d = document.createElement("div");
                 d.className = "d-flex flex-wrap align-items-center gap-2";
-                d.innerHTML = "<label class=\"small mb-0 text-nowrap flex-shrink-0\">" + esc(c.symbol) + (c.valueType === "Numeric" ? " (PKR)" : " (%)") + "</label><input type=\"number\" class=\"form-control form-control-sm so-doc-chg-val\" data-cid=\"" + cid + "\" style=\"max-width:8rem\" />";
+                var label = esc(c.symbol) + (c.description ? (" <span class=\"text-muted\">" + esc(c.description) + "</span>") : "");
+                d.innerHTML = "<label class=\"small mb-0 text-nowrap flex-shrink-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\">" + label + (c.valueType === "Numeric" ? " (PKR)" : " (%)") + "</label><input type=\"number\" class=\"form-control form-control-sm so-doc-chg-val\" data-cid=\"" + cid + "\" style=\"max-width:8rem\" />";
                 v.appendChild(d);
             });
             v.querySelectorAll(".so-doc-chg-val").forEach(function (inp) { inp.addEventListener("input", recalcFooter); inp.addEventListener("change", recalcFooter); });
@@ -917,17 +927,19 @@
             var f = document.getElementById("soForm"); if (f) f.reset();
             document.getElementById("soQd") && (document.getElementById("soQd").value = defaults.today);
             document.getElementById("soVd") && (document.getElementById("soVd").value = defaults.twoW);
-            document.getElementById("soPlant") && (document.getElementById("soPlant").value = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(firstPlant)));
-            document.getElementById("soDc") && (document.getElementById("soDc").value = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(firstChan?.ToString() ?? "")));
+            document.getElementById("soPlant") && (document.getElementById("soPlant").value = "");
+            document.getElementById("soDc") && (document.getElementById("soDc").value = "");
             if (document.getElementById("soItemChargeColumnIds")) document.getElementById("soItemChargeColumnIds").value = "";
             if (document.getElementById("soQuotationLevelChargeIds")) document.getElementById("soQuotationLevelChargeIds").value = "";
             if (document.getElementById("soQuotationChargeValuesJson")) document.getElementById("soQuotationChargeValuesJson").value = "";
             if (document.getElementById("soSchema")) document.getElementById("soSchema").value = "";
+            syncHiddens();
             fetch(nextOrderUrl).then(function (r) { return r.json(); }).then(function (d) {
                 var n = d.number || d.display;
                 if (document.getElementById("soNum")) document.getElementById("soNum").value = n || "";
                 if (document.getElementById("soModalTitle")) document.getElementById("soModalTitle").textContent = "New sales order — " + (n || "");
             });
+            soLoadQuotationOptions(null, null);
             var sch = document.getElementById("soSchema") && document.getElementById("soSchema").value;
             if (sch) loadSchema(sch); else loadSchema("");
         });
@@ -947,9 +959,112 @@
             recalcFooter();
         });
         document.getElementById("soCustomer") && document.getElementById("soCustomer").addEventListener("change", function () {
-            var o = this.options[this.selectedIndex];
-            var a = o && o.getAttribute("data-ship");
-            if (a) document.getElementById("soAddr").value = a;
+            var customerId = this.value || "";
+            if (!customerId) {
+                if (document.getElementById("soPlant")) document.getElementById("soPlant").value = "";
+                if (document.getElementById("soDc")) document.getElementById("soDc").value = "";
+                if (document.getElementById("soSchema")) document.getElementById("soSchema").value = "";
+                loadSchema("");
+                syncHiddens();
+                return;
+            }
+            if (!soCustomerProfileUrl) return;
+            fetch(soCustomerProfileUrl + (soCustomerProfileUrl.indexOf("?") >= 0 ? "&" : "?") + "bpId=" + encodeURIComponent(customerId))
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success || !res.profile) return;
+                    var p = res.profile;
+                    if (document.getElementById("soPlant") && p.plantId) document.getElementById("soPlant").value = p.plantId;
+                    if (document.getElementById("soDc") && p.distributionChannelId != null) document.getElementById("soDc").value = String(p.distributionChannelId);
+                    // Fallback: if API can't resolve to an ID but returns a name, try matching by option text.
+                    if (document.getElementById("soDc") && (!p.distributionChannelId) && p.distributionChannel) {
+                        var dcSel = document.getElementById("soDc");
+                        var want = String(p.distributionChannel || "").trim().toLowerCase();
+                        if (want) {
+                            for (var i = 0; i < dcSel.options.length; i++) {
+                                var opt = dcSel.options[i];
+                                if ((opt.textContent || "").trim().toLowerCase() === want) { dcSel.value = opt.value; break; }
+                            }
+                        }
+                    }
+                    if (document.getElementById("soSchema") && p.configurationSchemaId != null) {
+                        document.getElementById("soSchema").value = String(p.configurationSchemaId);
+                        loadSchema(String(p.configurationSchemaId));
+                    }
+                    if (document.getElementById("soAddr") && p.shipToAddress) document.getElementById("soAddr").value = p.shipToAddress;
+                    syncHiddens();
+                });
+        });
+        function soGridHasAnyItems() {
+            var rows = Array.prototype.slice.call(document.querySelectorAll("#soItemsBody tr.so-item-row"));
+            return rows.some(function (tr) {
+                return (tr.querySelector(".so-matno") && tr.querySelector(".so-matno").value)
+                    || (parseFloat(tr.querySelector(".so-qty") && tr.querySelector(".so-qty").value) || 0) > 0;
+            });
+        }
+        function soLoadQuotationOptions(currentOrderId, selectedQuoteId) {
+            if (!soQuotationListUrl) return;
+            var url = soQuotationListUrl + (soQuotationListUrl.indexOf("?") >= 0 ? "&" : "?") + "currentOrderId=" + encodeURIComponent(currentOrderId || "");
+            fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+                var sel = document.getElementById("soSalesQuotationId");
+                if (!sel || !d || !d.success) return;
+                var html = "<option value=\"\">— Select —</option>";
+                (d.items || []).forEach(function (q) {
+                    html += "<option value=\"" + q.id + "\">" + (q.quotationNumber || ("SQ-" + q.id)) + (q.customerName ? (" — " + q.customerName) : "") + "</option>";
+                });
+                sel.innerHTML = html;
+                if (selectedQuoteId) sel.value = String(selectedQuoteId);
+            });
+        }
+        function soApplyQuotationData(d) {
+            if (!d || !d.success) return;
+            var h = d.header || {};
+            if (document.getElementById("soSalesQuotationId")) document.getElementById("soSalesQuotationId").value = h.id ? String(h.id) : "";
+            if (document.getElementById("soCustomer") && h.customerBusinessPartnerId) document.getElementById("soCustomer").value = h.customerBusinessPartnerId;
+            if (document.getElementById("soAddr")) document.getElementById("soAddr").value = h.shipToAddress || "";
+            if (document.getElementById("soPlant") && h.plantId) document.getElementById("soPlant").value = h.plantId;
+            if (document.getElementById("soDc") && h.distributionChannelId != null) document.getElementById("soDc").value = String(h.distributionChannelId);
+            if (document.getElementById("soSchema") && h.configurationSchemaId != null) {
+                document.getElementById("soSchema").value = String(h.configurationSchemaId);
+                loadSchema(String(h.configurationSchemaId));
+            }
+            var body = document.getElementById("soItemsBody");
+            if (!body) return;
+            body.innerHTML = "";
+            (d.items || []).forEach(function (it) {
+                var tr = parseTrFromRowHtml();
+                body.appendChild(tr);
+                appendItemChargeTds(tr);
+                if (tr.querySelector(".so-matno")) tr.querySelector(".so-matno").value = it.materialNumber || "";
+                if (tr.querySelector(".bom-mat-picker-search")) tr.querySelector(".bom-mat-picker-search").value = (it.materialNumber || "") + (it.materialDescription ? (" — " + it.materialDescription) : "");
+                if (tr.querySelector(".so-desc")) tr.querySelector(".so-desc").value = it.materialDescription || "";
+                if (tr.querySelector(".so-uom") && it.quantityUomId != null) tr.querySelector(".so-uom").value = String(it.quantityUomId);
+                if (tr.querySelector(".so-grade") && it.salesPriceGrade) tr.querySelector(".so-grade").value = String(it.salesPriceGrade);
+                if (tr.querySelector(".so-qty") && it.orderQuantity != null) tr.querySelector(".so-qty").value = String(it.orderQuantity);
+                if (tr.querySelector(".so-unit") && it.unitPrice != null) tr.querySelector(".so-unit").value = String(it.unitPrice);
+                if (tr.querySelector(".so-del") && it.deliveryDate) tr.querySelector(".so-del").value = it.deliveryDate;
+                if (tr.querySelector(".so-line-chg-json")) tr.querySelector(".so-line-chg-json").value = it.itemChargeValuesJson || "{}";
+                wireRow(tr);
+            });
+            if (!(d.items || []).length) {
+                body.innerHTML = rowHtml().trim();
+                appendItemChargeTds(body.querySelector("tr.so-item-row"));
+                body.querySelectorAll("tr.so-item-row").forEach(wireRow);
+            }
+            reindex();
+            recalcFooter();
+            syncHiddens();
+        }
+        document.getElementById("soSalesQuotationId") && document.getElementById("soSalesQuotationId").addEventListener("change", function () {
+            var qid = this.value || "";
+            if (!qid || !soQuotationItemsUrl) return;
+            if (soGridHasAnyItems() && !window.confirm("Replace current sales order items with selected quotation items?")) {
+                this.value = "";
+                return;
+            }
+            fetch(soQuotationItemsUrl + (soQuotationItemsUrl.indexOf("?") >= 0 ? "&" : "?") + "quotationId=" + encodeURIComponent(qid))
+                .then(function (r) { return r.json(); })
+                .then(soApplyQuotationData);
         });
         function soSyncReturnFields() {
             var q = document.getElementById("soListQ"), st = document.getElementById("soListStatus"), pl = document.getElementById("soListPlant"), dc = document.getElementById("soListDc");
@@ -981,9 +1096,11 @@
                 if (!d || !d.success) { if (d && d.message) window.alert(d.message); return; }
                 if (d.h && d.h.salesOrderNumber && document.getElementById("soNum")) document.getElementById("soNum").value = d.h.salesOrderNumber;
                 applyOrderData(d);
+                soLoadQuotationOptions(soOpenEditId, d.h && d.h.salesQuotationId ? d.h.salesQuotationId : null);
                 var el = document.getElementById("addSalesOrderModal");
                 if (el && typeof bootstrap !== "undefined") { bootstrap.Modal.getOrCreateInstance(el).show(); }
             }).catch(function () { window.alert("Could not load sales order for editing."); });
         }
+        if (!soOpenEditId) soLoadQuotationOptions(null, null);
     })();
 </script>

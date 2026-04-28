@@ -49,14 +49,35 @@ namespace AU_ERP.Main_Controller
 
         private async Task PrepareBpLookupListsAsync(CancellationToken ct = default)
         {
-            ViewBag.RoleOptions = await _db.BPRoles.AsNoTracking().OrderBy(r => r.RoleCode).ToListAsync(ct);
-            ViewBag.TypeOptions = await _db.BPTypeSamples.AsNoTracking()
+            var roles = await _db.BPRoles.AsNoTracking().OrderBy(r => r.RoleCode).ToListAsync(ct);
+            var types = await _db.BPTypeSamples.AsNoTracking()
                 .Where(t => t.IsActive == null || t.IsActive == true)
                 .OrderBy(t => t.TypeName)
                 .ToListAsync(ct);
-            ViewBag.GroupOptions = await _db.BPGroupings.AsNoTracking().OrderBy(g => g.GroupName).ToListAsync(ct);
+            var groups = await _db.BPGroupings.AsNoTracking().OrderBy(g => g.GroupName).ToListAsync(ct);
 
-            var dist = await _db.DistributionChannels.AsNoTracking().OrderBy(d => d.DistributionChannelID).ToListAsync(ct);
+            ViewBag.RoleOptions = roles;
+            ViewBag.TypeOptions = types;
+            ViewBag.GroupOptions = groups;
+            ViewBag.RoleBasicId = roles.FirstOrDefault(r => r.RoleCode == "FLCU00")?.Id ?? 0;
+            ViewBag.RoleCustomerId = roles.FirstOrDefault(r => r.RoleCode == "FLCU01")?.Id ?? 0;
+            ViewBag.RoleVendorId = roles.FirstOrDefault(r => r.RoleCode == "FLVN01")?.Id ?? 0;
+            ViewBag.TypeCustomerId = types.FirstOrDefault(t => string.Equals(t.TypeName, "Customer", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+            ViewBag.TypeVendorId = types.FirstOrDefault(t => string.Equals(t.TypeName, "Vendor", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+            ViewBag.GroupLocalId = groups.FirstOrDefault(g => string.Equals(g.GroupName, "local", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+
+            // Business rule: only allow these two distribution channels in BP forms.
+            // Keep DB IDs, but present as OnCall / DirectSales in the UI.
+            static string Norm(string? s) => (s ?? "").Replace(" ", "").Trim().ToLowerInvariant();
+            var distAll = await _db.DistributionChannels.AsNoTracking().ToListAsync(ct);
+            var dist = distAll
+                .Where(d =>
+                {
+                    var n = Norm(d.DistributionChannelName);
+                    return n == "oncall" || n == "directsales";
+                })
+                .OrderBy(d => Norm(d.DistributionChannelName) == "oncall" ? 0 : 1)
+                .ToList();
             ViewBag.DistributionChannels = dist;
             ViewBag.DistributionChannelsJson = JsonSerializer.Serialize(dist.Select(d => new { id = d.DistributionChannelID, name = d.DistributionChannelName }));
 
@@ -161,6 +182,73 @@ namespace AU_ERP.Main_Controller
                 .Where(r => r.BPTypeId == bpTypeId)
                 .OrderBy(r => r.RangeID)
                 .FirstOrDefaultAsync(ct);
+
+        private async Task ApplyRoleDerivedDefaultsAsync(BusinessPartnerMasterSample model, CancellationToken ct)
+        {
+            if (model.BPRoleId is not int roleId || roleId <= 0)
+                return;
+
+            var roleCode = await _db.BPRoles.AsNoTracking()
+                .Where(r => r.Id == roleId)
+                .Select(r => r.RoleCode)
+                .FirstOrDefaultAsync(ct);
+            if (string.IsNullOrWhiteSpace(roleCode))
+                return;
+
+            if (roleCode == "FLCU00")
+            {
+                model.BPTypeId = null;
+                model.BPGroupingId = null;
+                return;
+            }
+
+            if (roleCode == "FLCU01")
+            {
+                var customerTypeId = await _db.BPTypeSamples.AsNoTracking()
+                    .Where(t => (t.IsActive == null || t.IsActive == true) && t.TypeName.ToLower() == "customer")
+                    .Select(t => t.Id)
+                    .FirstOrDefaultAsync(ct);
+                if (customerTypeId <= 0)
+                {
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.BPTypeId), "Customer type is not configured.");
+                }
+                else
+                {
+                    model.BPTypeId = customerTypeId;
+                }
+
+                var localGroupId = await _db.BPGroupings.AsNoTracking()
+                    .Where(g => g.GroupName.ToLower() == "local")
+                    .Select(g => g.Id)
+                    .FirstOrDefaultAsync(ct);
+                if (localGroupId <= 0)
+                {
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.BPGroupingId), "Business partner group 'local' is not configured.");
+                }
+                else
+                {
+                    model.BPGroupingId = localGroupId;
+                }
+                return;
+            }
+
+            if (roleCode == "FLVN01")
+            {
+                var vendorTypeId = await _db.BPTypeSamples.AsNoTracking()
+                    .Where(t => (t.IsActive == null || t.IsActive == true) && t.TypeName.ToLower() == "vendor")
+                    .Select(t => t.Id)
+                    .FirstOrDefaultAsync(ct);
+                if (vendorTypeId <= 0)
+                {
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.BPTypeId), "Vendor type is not configured.");
+                }
+                else
+                {
+                    model.BPTypeId = vendorTypeId;
+                }
+                model.BPGroupingId = null;
+            }
+        }
 
         private static bool TryComputeNextFromRange(BPTypeNumberRanges range, out int nextNumber, out string? error)
         {
@@ -289,6 +377,7 @@ namespace AU_ERP.Main_Controller
         {
             await PrepareBpLookupListsAsync(ct);
             NormalizePartnerFkIds(model);
+            await ApplyRoleDerivedDefaultsAsync(model, ct);
             await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
 
             if (string.IsNullOrWhiteSpace(model.FullName))
@@ -411,6 +500,7 @@ namespace AU_ERP.Main_Controller
         public async Task<JsonResult> UpdatePartner(BusinessPartnerMasterSample model, CancellationToken ct = default)
         {
             NormalizePartnerFkIds(model);
+            await ApplyRoleDerivedDefaultsAsync(model, ct);
             await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
             if (!ModelState.IsValid)
             {
@@ -651,6 +741,48 @@ namespace AU_ERP.Main_Controller
 
             try
             {
+                var existingRows = await _db.BPTypeNumberRanges.AsNoTracking().ToListAsync(ct);
+                var effective = existingRows.ToDictionary(x => x.RangeID, x => (x.StartNumber, x.EndNumber));
+                var tempId = -1;
+                foreach (var item in ranges)
+                {
+                    var isBlankNew = item.RangeID <= 0
+                        && item.StartNumber == 0
+                        && item.EndNumber == 0
+                        && item.CurrentNumber == 0
+                        && (item.BPTypeId == null || item.BPTypeId == 0);
+                    if (isBlankNew)
+                        continue;
+
+                    if (!NumberRangeMaintenance.TryValidateBpRange(item.StartNumber, item.EndNumber, out var rangeError))
+                    {
+                        var msg = rangeError ?? "Invalid BP range.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        ModelState.AddModelError("", msg);
+                        return View("BPTypeNumberRanges", ranges);
+                    }
+
+                    var key = item.RangeID > 0 ? item.RangeID : tempId--;
+                    effective[key] = (item.StartNumber, item.EndNumber);
+                }
+
+                var pairs = effective.ToList();
+                for (var i = 0; i < pairs.Count; i++)
+                {
+                    for (var j = i + 1; j < pairs.Count; j++)
+                    {
+                        var a = pairs[i].Value;
+                        var b = pairs[j].Value;
+                        if (!NumberRangeMaintenance.RangesOverlap(a.StartNumber, a.EndNumber, b.StartNumber, b.EndNumber))
+                            continue;
+
+                        var msg = $"BP ranges conflict: {a.StartNumber}-{a.EndNumber} overlaps {b.StartNumber}-{b.EndNumber}.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        ModelState.AddModelError("", msg);
+                        return View("BPTypeNumberRanges", ranges);
+                    }
+                }
+
                 foreach (var item in ranges)
                 {
                     item.Prefix = string.IsNullOrWhiteSpace(item.Prefix) ? null : item.Prefix.Trim();

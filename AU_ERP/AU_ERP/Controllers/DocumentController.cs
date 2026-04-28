@@ -118,6 +118,46 @@ namespace AU_ERP.Controllers
 
             try
             {
+                var existingRows = await _context.DocumentRanges.AsNoTracking().ToListAsync();
+                var effective = existingRows.ToDictionary(x => x.RangeID, x => (x.FromNumber, x.ToNumber));
+                var tempId = -1;
+                foreach (var item in ranges)
+                {
+                    if (item.DocumentTypeID == null || item.DocumentTypeID == 0)
+                        continue;
+
+                    if (!NumberRangeMaintenance.TryValidateDocumentRange(item.FromNumber, item.ToNumber, out var rangeError))
+                    {
+                        var msg = rangeError ?? "Invalid document range.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        TempData["Error"] = msg;
+                        return RedirectToAction("DocumentRanges");
+                    }
+
+                    var key = item.RangeID > 0 ? item.RangeID : tempId--;
+                    effective[key] = (item.FromNumber, item.ToNumber);
+                }
+
+                var bounded = effective
+                    .Where(x => x.Value.FromNumber.HasValue && x.Value.ToNumber.HasValue)
+                    .Select(x => (x.Key, From: x.Value.FromNumber!.Value, To: x.Value.ToNumber!.Value))
+                    .ToList();
+                for (var i = 0; i < bounded.Count; i++)
+                {
+                    for (var j = i + 1; j < bounded.Count; j++)
+                    {
+                        var a = bounded[i];
+                        var b = bounded[j];
+                        if (!NumberRangeMaintenance.RangesOverlap(a.From, a.To, b.From, b.To))
+                            continue;
+
+                        var msg = $"Document ranges conflict: {a.From}-{a.To} overlaps {b.From}-{b.To}.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        TempData["Error"] = msg;
+                        return RedirectToAction("DocumentRanges");
+                    }
+                }
+
                 foreach (var item in ranges)
                 {
                     if (item.DocumentTypeID == null || item.DocumentTypeID == 0) continue;

@@ -11,16 +11,8 @@ public static class ConfigurationLookupSeeder
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        if (!await db.MaterialGroups.AnyAsync(cancellationToken).ConfigureAwait(false))
-        {
-            db.MaterialGroups.AddRange(
-                new MaterialGroup { MaterialGroupCode = "ROH", Description = "Raw materials" },
-                new MaterialGroup { MaterialGroupCode = "HALB", Description = "Semifinished products" },
-                new MaterialGroup { MaterialGroupCode = "FERT", Description = "Finished products" },
-                new MaterialGroup { MaterialGroupCode = "PACK", Description = "Packaging" }
-            );
-            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
+        // Material Groups are intentionally NOT seeded.
+        // Material Types are seeded via EF model seed/migrations.
 
         if (!await db.PlantsSamples.AnyAsync(cancellationToken).ConfigureAwait(false))
         {

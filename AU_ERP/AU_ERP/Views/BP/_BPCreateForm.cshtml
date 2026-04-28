@@ -8,15 +8,28 @@
     var distChannels = ViewBag.DistributionChannels as List<AU_ERP.Models.DistributionChannel> ?? new List<AU_ERP.Models.DistributionChannel>();
     var salesConfigSchemas = ViewBag.SalesConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
     var purchaseConfigSchemas = ViewBag.PurchaseConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
+    var roleBasicId = ViewBag.RoleBasicId is int rb ? rb : 0;
+    var roleCustomerId = ViewBag.RoleCustomerId is int rc ? rc : 0;
+    var roleVendorId = ViewBag.RoleVendorId is int rv ? rv : 0;
+    var typeCustomerId = ViewBag.TypeCustomerId is int tc ? tc : 0;
+    var groupLocalId = ViewBag.GroupLocalId is int gl ? gl : 0;
+    string NormCh(string? s) => (s ?? "").Replace(" ", "").Trim().ToLowerInvariant();
+    string DistLabel(AU_ERP.Models.DistributionChannel ch)
+    {
+        var n = NormCh(ch.DistributionChannelName);
+        if (n == "oncall") return "OnCall";
+        if (n == "directsales") return "DirectSales";
+        return ch.DistributionChannelName;
+    }
 }
-<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")" data-initial-sales-schema="@(Model.SalesSchema ?? "")">
+<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")" data-initial-sales-schema="@(Model.SalesSchema ?? "")" data-role-basic-id="@roleBasicId" data-role-customer-id="@roleCustomerId" data-role-vendor-id="@roleVendorId" data-type-customer-id="@typeCustomerId" data-group-local-id="@groupLocalId">
     @Html.AntiForgeryToken()
     <input type="hidden" name="returnTo" value="@(ViewBag.FormReturnTo ?? "Index")" />
     <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
 
     <div id="bpMasterLayout" class="bp-master-layout">
         <div class="p-3 border-bottom bg-white d-flex flex-wrap gap-4 align-items-center">
-            <div class="bp-field-row mb-0">
+            <div class="bp-field-row mb-0" id="bpCreateRoleRow">
                 <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">Role</label>
                 <select name="BPRoleId" class="form-select form-select-sm f-role" style="min-width:11rem;" onchange="bpHandleRoleUI(this)">
@@ -34,10 +47,10 @@
                     }
                 </select>
             </div>
-            <div class="bp-field-row mb-0">
+            <div class="bp-field-row mb-0" id="bpCreateTypeRow">
                 <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">Type</label>
-                <select name="BPTypeId" class="form-select form-select-sm f-type" style="min-width:11rem;">
+                <select class="form-select form-select-sm f-type bg-light" style="min-width:11rem;" disabled>
                     <option value="">-- Select type --</option>
                     @foreach (var t in typeOptions)
                     {
@@ -51,13 +64,14 @@
                         }
                     }
                 </select>
+                <input type="hidden" name="BPTypeId" class="f-type-hidden" value="@(Model.BPTypeId?.ToString() ?? "")" />
             </div>
-            <div class="bp-field-row mb-0">
+            <div class="bp-field-row mb-0" id="bpCreateBpidRow">
                 <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">BPID</label>
                 <input asp-for="BPID" class="form-control form-control-sm f-bpid bg-light" style="min-width:12rem;" readonly autocomplete="off" placeholder="Select type for number" />
             </div>
-            <div class="bp-field-row mb-0">
+            <div class="bp-field-row mb-0" id="bpCreateGroupRow">
                 <div class="bp-mandatory-bar"></div>
                 <label class="bp-label-compact">Grouping</label>
                 <select name="BPGroupingId" class="form-select form-select-sm f-group" style="min-width:12rem;">
@@ -172,16 +186,18 @@
                         <label>Dist. channel</label>
                         <select name="DistChannel" id="bpCreateDistChannel" class="form-select form-select-sm f-dist" style="min-width:14rem;">
                             <option value="">-- Select --</option>
-                            @foreach (var d in distChannels)
+                            @foreach (var ch in distChannels)
                             {
-                                var sel = string.Equals(Model.DistChannel, d.DistributionChannelID.ToString(), StringComparison.Ordinal);
-                                if (sel)
+                                var isSelected =
+                                    string.Equals(Model.DistChannel, ch.DistributionChannelID.ToString(), StringComparison.Ordinal)
+                                    || string.Equals(NormCh(Model.DistChannel), NormCh(ch.DistributionChannelName), StringComparison.Ordinal);
+                                if (isSelected)
                                 {
-                                    <option value="@d.DistributionChannelID" selected>@d.DistributionChannelName</option>
+                                    <option value="@ch.DistributionChannelID" selected>@DistLabel(ch)</option>
                                 }
                                 else
                                 {
-                                    <option value="@d.DistributionChannelID">@d.DistributionChannelName</option>
+                                    <option value="@ch.DistributionChannelID">@DistLabel(ch)</option>
                                 }
                             }
                         </select>
@@ -256,12 +272,59 @@
         if (!root) return;
         const opt = select.options[select.selectedIndex];
         const roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
+        const customerTypeId = parseInt(root.getAttribute('data-type-customer-id') || '0', 10) || 0;
+        const localGroupId = parseInt(root.getAttribute('data-group-local-id') || '0', 10) || 0;
         const sales = root.querySelector('.tab-sales-btn');
         const purch = root.querySelector('.tab-purch-btn');
+        const typeSel = root.querySelector('.f-type');
+        const typeHidden = root.querySelector('.f-type-hidden');
+        const groupSel = root.querySelector('.f-group');
+        const typeRow = root.querySelector('#bpCreateTypeRow');
+        const bpidRow = root.querySelector('#bpCreateBpidRow');
+        const groupRow = root.querySelector('#bpCreateGroupRow');
+        const isBasic = roleCode === 'FLCU00';
+        const isCustomer = roleCode === 'FLCU01';
+        const isVendor = roleCode === 'FLVN01';
         var showSales = roleCode === 'FLCU01' || roleCode === 'FLCU00';
         var showPurch = roleCode === 'FLVN01' || roleCode === 'FLCU00';
         if (sales) sales.classList.toggle('d-none', !showSales);
         if (purch) purch.classList.toggle('d-none', !showPurch);
+
+        if (typeRow) typeRow.classList.toggle('d-none', isBasic);
+        if (bpidRow) bpidRow.classList.toggle('d-none', isBasic);
+        if (groupRow) groupRow.classList.toggle('d-none', isBasic || isVendor);
+
+        if (isCustomer) {
+            if (typeSel && customerTypeId > 0 && String(typeSel.value || '') !== String(customerTypeId)) {
+                typeSel.value = String(customerTypeId);
+                if (typeHidden) typeHidden.value = String(customerTypeId);
+                bpFetchNextBPID(root);
+            }
+            if (groupSel && localGroupId > 0)
+                groupSel.value = String(localGroupId);
+        }
+
+        if (isVendor && typeSel) {
+            var vendorOption = Array.prototype.find.call(typeSel.options, function (o) {
+                return String(o.text || '').trim().toLowerCase() === 'vendor';
+            });
+            if (vendorOption) {
+                typeSel.value = String(vendorOption.value || '');
+                if (typeHidden) typeHidden.value = String(vendorOption.value || '');
+                bpFetchNextBPID(root);
+            }
+        }
+
+        if (isBasic) {
+            if (typeSel) typeSel.value = '';
+            if (typeHidden) typeHidden.value = '';
+            if (groupSel) groupSel.value = '';
+            var bpid = root.querySelector('.f-bpid');
+            if (bpid) bpid.value = '';
+        }
+
+        if (isVendor && groupSel)
+            groupSel.value = '';
     }
     function bpSwitchTab(btn, tab) {
         const root = btn.closest('#bpCreateRoot');
@@ -297,9 +360,16 @@
             if (!(String(el.value || '').trim())) bad.push(el);
         }
         req('.f-role');
-        req('.f-type');
-        req('.f-bpid');
-        req('.f-group');
+        var roleSel = root.querySelector('.f-role');
+        var roleId = parseInt((roleSel && roleSel.value) ? roleSel.value : '0', 10) || 0;
+        var basicId = parseInt(root.getAttribute('data-role-basic-id') || '0', 10) || 0;
+        var vendorId = parseInt(root.getAttribute('data-role-vendor-id') || '0', 10) || 0;
+        if (roleId !== basicId) {
+            req('.f-type');
+            req('.f-bpid');
+        }
+        if (roleId !== basicId && roleId !== vendorId)
+            req('.f-group');
         req('.f-name');
         req('.f-street');
         req('.f-no');
@@ -308,7 +378,6 @@
         req('.f-region');
         req('.f-country');
         req('.f-recon');
-        var roleSel = root.querySelector('.f-role');
         var opt = roleSel && roleSel.options[roleSel.selectedIndex];
         var roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
         if (roleCode === 'FLCU01' || roleCode === 'FLCU00') {
@@ -359,10 +428,10 @@
             });
     }
     document.querySelectorAll('#bpCreateRoot .f-type').forEach(function (el) {
-        el.addEventListener('change', function () {
-            bpFetchNextBPID(el.closest('#bpCreateRoot'));
-        });
+        var root = el.closest('#bpCreateRoot');
+        var hidden = root && root.querySelector('.f-type-hidden');
+        if (hidden) hidden.value = el.value || '';
         if (el.value)
-            bpFetchNextBPID(el.closest('#bpCreateRoot'));
+            bpFetchNextBPID(root);
     });
 </script>

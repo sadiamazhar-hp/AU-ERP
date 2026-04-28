@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AU_ERP.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260427234300_PlantScopedInventoryStockAndUserDept")]
-    partial class PlantScopedInventoryStockAndUserDept
+    [Migration("20260428074606_SeedDistributionChannelsInDbContext")]
+    partial class SeedDistributionChannelsInDbContext
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -107,9 +107,15 @@ namespace AU_ERP.Migrations
                     b.Property<int>("DepartmentId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PlantID")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.HasKey("UserId", "DepartmentId");
 
                     b.HasIndex("DepartmentId");
+
+                    b.HasIndex("PlantID");
 
                     b.ToTable("ApplicationUserDepartments");
                 });
@@ -158,6 +164,13 @@ namespace AU_ERP.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("BPGroupings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            GroupName = "local"
+                        });
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BPRole", b =>
@@ -256,6 +269,22 @@ namespace AU_ERP.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("BPTypeSamples");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            TypeName = "Customer"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            TypeName = "Vendor"
+                        });
                 });
 
             modelBuilder.Entity("AU_ERP.Models.BomHeadersSample", b =>
@@ -784,6 +813,18 @@ namespace AU_ERP.Migrations
                     b.HasKey("DistributionChannelID");
 
                     b.ToTable("Distribution_Channel");
+
+                    b.HasData(
+                        new
+                        {
+                            DistributionChannelID = 1,
+                            DistributionChannelName = "OnCall"
+                        },
+                        new
+                        {
+                            DistributionChannelID = 2,
+                            DistributionChannelName = "Direct Sales"
+                        });
                 });
 
             modelBuilder.Entity("AU_ERP.Models.DocumentRange", b =>
@@ -983,6 +1024,28 @@ namespace AU_ERP.Migrations
                     b.HasKey("MaterialTypeCode");
 
                     b.ToTable("MaterialTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            MaterialTypeCode = "FERT",
+                            Description = "Finished products"
+                        },
+                        new
+                        {
+                            MaterialTypeCode = "HALB",
+                            Description = "Semifinished products"
+                        },
+                        new
+                        {
+                            MaterialTypeCode = "PACK",
+                            Description = "Packaging"
+                        },
+                        new
+                        {
+                            MaterialTypeCode = "ROH",
+                            Description = "Raw materials"
+                        });
                 });
 
             modelBuilder.Entity("AU_ERP.Models.PlantsSample", b =>
@@ -1690,6 +1753,11 @@ namespace AU_ERP.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("PlantID")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -1721,7 +1789,8 @@ namespace AU_ERP.Migrations
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("MaterialNumber", "QuantityUomId", "Status", "Grade");
+                    b.HasIndex("PlantID", "MaterialNumber", "QuantityUomId", "Status", "Grade")
+                        .IsUnique();
 
                     b.ToTable("StockInventoryLines");
                 });
@@ -1973,6 +2042,11 @@ namespace AU_ERP.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("AU_ERP.Models.PlantsSample", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantID")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("AU_ERP.Models.ApplicationUser", "User")
                         .WithMany("UserDepartments")
                         .HasForeignKey("UserId")
@@ -1980,6 +2054,8 @@ namespace AU_ERP.Migrations
                         .IsRequired();
 
                     b.Navigation("Department");
+
+                    b.Navigation("Plant");
 
                     b.Navigation("User");
                 });
@@ -2444,6 +2520,12 @@ namespace AU_ERP.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("AU_ERP.Models.PlantsSample", "Plant")
+                        .WithMany()
+                        .HasForeignKey("PlantID")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("AU_ERP.Models.UnitOfMeasurement", "QuantityUom")
                         .WithMany()
                         .HasForeignKey("QuantityUomId")
@@ -2451,6 +2533,8 @@ namespace AU_ERP.Migrations
                         .IsRequired();
 
                     b.Navigation("Material");
+
+                    b.Navigation("Plant");
 
                     b.Navigation("QuantityUom");
                 });

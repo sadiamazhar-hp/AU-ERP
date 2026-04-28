@@ -287,37 +287,25 @@
                         </div>
                         <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="sqPlant">Plant <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="PlantId" id="sqPlant" required>
+                            <select class="form-select form-select-sm" id="sqPlant" required disabled>
                                 <option value="">— Select —</option>
                                 @foreach (var p in plants)
                                 {
-                                    if (p.PlantID == firstPlant)
-                                    {
-                                        <option value="@p.PlantID" selected="selected">@p.PlantName</option>
-                                    }
-                                    else
-                                {
                                     <option value="@p.PlantID">@p.PlantName</option>
-                                    }
                                 }
                             </select>
+                            <input type="hidden" name="PlantId" id="sqPlantHidden" />
                         </div>
                         <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="sqDc">Distribution channel <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="DistributionChannelId" id="sqDc" required>
+                            <select class="form-select form-select-sm" id="sqDc" required disabled>
                                 <option value="">— Select —</option>
                                 @foreach (var ch in chans)
                                 {
-                                    if (ch.DistributionChannelID == firstChan)
-                                    {
-                                        <option value="@ch.DistributionChannelID" selected="selected">@ch.DistributionChannelName</option>
-                                    }
-                                    else
-                                    {
-                                        <option value="@ch.DistributionChannelID">@ch.DistributionChannelName</option>
-                                    }
+                                    <option value="@ch.DistributionChannelID">@ch.DistributionChannelName</option>
                                 }
                             </select>
+                            <input type="hidden" name="DistributionChannelId" id="sqDcHidden" />
                         </div>
                     </div>
                     <div class="row g-2 mb-2">
@@ -348,13 +336,14 @@
                         </div>
                         <div class="col-12 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="sqSchema">Configuration schema <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="ConfigurationSchemaId" id="sqSchema" required>
+                            <select class="form-select form-select-sm" id="sqSchema" required disabled>
                                 <option value="">— Select —</option>
                                 @foreach (var s in schemas)
                                 {
                                     <option value="@s.Id">@s.Title</option>
                                 }
                             </select>
+                            <input type="hidden" name="ConfigurationSchemaId" id="sqSchemaHidden" />
                         </div>
                         <div class="col-12 col-lg-5" id="sqChargeSelectRow">
                             <div class="row g-2">
@@ -463,6 +452,7 @@
         const nextQuotationUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("NextQuotationNumber", "SalesQuotation") ?? ""));
         const schemaUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SchemaDetails", "SalesQuotation") ?? ""));
         const sqQuotationDataBase = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("QuotationData", "SalesQuotation", new { id = 0 }) ?? ""));
+        const sqCustomerProfileUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CustomerCommercialProfile", "SalesQuotation") ?? ""));
         const sqOpenEditId = @Html.Raw(openEditId is int oei ? oei.ToString() : "null");
         const sqUpdateUrlTpl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Update", "SalesQuotation", new { id = 0 }) ?? ""));
         const sqCreateFormAction = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Create", "SalesQuotation") ?? ""));
@@ -578,6 +568,15 @@
             });
             var hj = document.getElementById("sqQuotationChargeValuesJson");
             if (hj) hj.value = Object.keys(o).length ? JSON.stringify(o) : "";
+            var plantSel = document.getElementById("sqPlant");
+            var dcSel = document.getElementById("sqDc");
+            var schemaSel = document.getElementById("sqSchema");
+            var plantHidden = document.getElementById("sqPlantHidden");
+            var dcHidden = document.getElementById("sqDcHidden");
+            var schemaHidden = document.getElementById("sqSchemaHidden");
+            if (plantHidden) plantHidden.value = plantSel ? (plantSel.value || "") : "";
+            if (dcHidden) dcHidden.value = dcSel ? (dcSel.value || "") : "";
+            if (schemaHidden) schemaHidden.value = schemaSel ? (schemaSel.value || "") : "";
         }
         function readLineValObj(tr) {
             var o = {};
@@ -605,7 +604,7 @@
         function lineAmountsV2(qty, unit, o) {
             o = o || {};
             var hasSch = (schemaCharges || []).length > 0;
-            var net = Math.round(qty * unit * 10000) / 10000;
+            var net = Math.round(unit * 10000) / 10000;
             if (!hasSch) return { sub: net, tot: net };
             var running = net, order = selectedItemChgOrder();
             order.forEach(function (cid) {
@@ -674,7 +673,9 @@
                 if (!c) return;
                 var th = document.createElement("th");
                 th.className = "text-end small sq-dyn-chg-th";
-                th.textContent = (c.symbol || "") + (c.valueType === "Numeric" ? " (amt)" : " (%)");
+                var label = (c.symbol || "") + (c.description ? (" — " + c.description) : "");
+                th.textContent = label + (c.valueType === "Numeric" ? " (amt)" : " (%)");
+                th.title = label;
                 before.parentNode.insertBefore(th, before);
             });
         }
@@ -709,13 +710,13 @@
             (schemaCharges || []).forEach(function (c) {
                 var li = document.createElement("li");
                 li.className = "form-check";
-                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\"><input type=\"checkbox\" class=\"form-check-input sq-m-item-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + "</label>";
+                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\"><input type=\"checkbox\" class=\"form-check-input sq-m-item-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + (c.description ? (" <span class=\"text-muted\">" + esc(c.description) + "</span>") : "") + "</label>";
                 mItem.appendChild(li);
             });
             (schemaCharges || []).forEach(function (c) {
                 var li = document.createElement("li");
                 li.className = "form-check";
-                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\"><input type=\"checkbox\" class=\"form-check-input sq-m-doc-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + "</label>";
+                li.innerHTML = "<label class=\"d-flex align-items-center gap-1 small text-nowrap py-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\"><input type=\"checkbox\" class=\"form-check-input sq-m-doc-chk\" data-cid=\"" + c.id + "\" />" + esc(c.symbol || "") + (c.description ? (" <span class=\"text-muted\">" + esc(c.description) + "</span>") : "") + "</label>";
                 mDoc.appendChild(li);
             });
             mItem.querySelectorAll(".sq-m-item-chk").forEach(function (cb) {
@@ -736,7 +737,8 @@
                 if (!c) return;
                 var d = document.createElement("div");
                 d.className = "d-flex flex-wrap align-items-center gap-2";
-                d.innerHTML = "<label class=\"small mb-0 text-nowrap flex-shrink-0\">" + esc(c.symbol) + (c.valueType === "Numeric" ? " (PKR)" : " (%)") + "</label><input type=\"number\" class=\"form-control form-control-sm sq-doc-chg-val\" data-cid=\"" + cid + "\" style=\"max-width:8rem\" />";
+                var label = esc(c.symbol) + (c.description ? (" <span class=\"text-muted\">" + esc(c.description) + "</span>") : "");
+                d.innerHTML = "<label class=\"small mb-0 text-nowrap flex-shrink-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\">" + label + (c.valueType === "Numeric" ? " (PKR)" : " (%)") + "</label><input type=\"number\" class=\"form-control form-control-sm sq-doc-chg-val\" data-cid=\"" + cid + "\" style=\"max-width:8rem\" />";
                 v.appendChild(d);
             });
             v.querySelectorAll(".sq-doc-chg-val").forEach(function (inp) { inp.addEventListener("input", recalcFooter); inp.addEventListener("change", recalcFooter); });
@@ -921,12 +923,13 @@
             var f = document.getElementById("sqForm"); if (f) f.reset();
             document.getElementById("sqQd") && (document.getElementById("sqQd").value = defaults.today);
             document.getElementById("sqVd") && (document.getElementById("sqVd").value = defaults.twoW);
-            document.getElementById("sqPlant") && (document.getElementById("sqPlant").value = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(firstPlant)));
-            document.getElementById("sqDc") && (document.getElementById("sqDc").value = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(firstChan?.ToString() ?? "")));
+            document.getElementById("sqPlant") && (document.getElementById("sqPlant").value = "");
+            document.getElementById("sqDc") && (document.getElementById("sqDc").value = "");
             if (document.getElementById("sqItemChargeColumnIds")) document.getElementById("sqItemChargeColumnIds").value = "";
             if (document.getElementById("sqQuotationLevelChargeIds")) document.getElementById("sqQuotationLevelChargeIds").value = "";
             if (document.getElementById("sqQuotationChargeValuesJson")) document.getElementById("sqQuotationChargeValuesJson").value = "";
             if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = "";
+            syncHiddens();
             fetch(nextQuotationUrl).then(function (r) { return r.json(); }).then(function (d) {
                 var n = d.number || d.display;
                 if (document.getElementById("sqNum")) document.getElementById("sqNum").value = n || "";
@@ -951,9 +954,41 @@
             recalcFooter();
         });
         document.getElementById("sqCustomer") && document.getElementById("sqCustomer").addEventListener("change", function () {
-            var o = this.options[this.selectedIndex];
-            var a = o && o.getAttribute("data-ship");
-            if (a) document.getElementById("sqAddr").value = a;
+            var customerId = this.value || "";
+            if (!customerId) {
+                if (document.getElementById("sqPlant")) document.getElementById("sqPlant").value = "";
+                if (document.getElementById("sqDc")) document.getElementById("sqDc").value = "";
+                if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = "";
+                loadSchema("");
+                syncHiddens();
+                return;
+            }
+            if (!sqCustomerProfileUrl) return;
+            fetch(sqCustomerProfileUrl + (sqCustomerProfileUrl.indexOf("?") >= 0 ? "&" : "?") + "bpId=" + encodeURIComponent(customerId))
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success || !res.profile) return;
+                    var p = res.profile;
+                    if (document.getElementById("sqPlant") && p.plantId) document.getElementById("sqPlant").value = p.plantId;
+                    if (document.getElementById("sqDc") && p.distributionChannelId != null) document.getElementById("sqDc").value = String(p.distributionChannelId);
+                    // Fallback: if API can't resolve to an ID but returns a name, try matching by option text.
+                    if (document.getElementById("sqDc") && (!p.distributionChannelId) && p.distributionChannel) {
+                        var dcSel = document.getElementById("sqDc");
+                        var want = String(p.distributionChannel || "").trim().toLowerCase();
+                        if (want) {
+                            for (var i = 0; i < dcSel.options.length; i++) {
+                                var opt = dcSel.options[i];
+                                if ((opt.textContent || "").trim().toLowerCase() === want) { dcSel.value = opt.value; break; }
+                            }
+                        }
+                    }
+                    if (document.getElementById("sqSchema") && p.configurationSchemaId != null) {
+                        document.getElementById("sqSchema").value = String(p.configurationSchemaId);
+                        loadSchema(String(p.configurationSchemaId));
+                    }
+                    if (document.getElementById("sqAddr") && p.shipToAddress) document.getElementById("sqAddr").value = p.shipToAddress;
+                    syncHiddens();
+                });
         });
         function sqSyncReturnFields() {
             var q = document.getElementById("sqListQ"), st = document.getElementById("sqListStatus"), pl = document.getElementById("sqListPlant"), dc = document.getElementById("sqListDc");

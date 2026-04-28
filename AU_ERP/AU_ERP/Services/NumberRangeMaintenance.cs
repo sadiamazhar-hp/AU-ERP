@@ -8,6 +8,64 @@ namespace AU_ERP.Services
     /// </summary>
     public static class NumberRangeMaintenance
     {
+        public static bool RangesOverlap(long fromA, long toA, long fromB, long toB) =>
+            fromA <= toB && fromB <= toA;
+
+        public static bool RangesOverlap(int fromA, int toA, int fromB, int toB) =>
+            fromA <= toB && fromB <= toA;
+
+        public static bool TryParseMaterialRange(string? fromNumber, string? toNumber, out long from, out long to, out string? error)
+        {
+            from = 0;
+            to = 0;
+            error = null;
+
+            var fromRaw = (fromNumber ?? string.Empty).Trim();
+            var toRaw = (toNumber ?? string.Empty).Trim();
+
+            if (!long.TryParse(fromRaw, NumberStyles.None, CultureInfo.InvariantCulture, out from))
+            {
+                error = "Material range 'From number' must be a valid integer.";
+                return false;
+            }
+
+            if (!long.TryParse(toRaw, NumberStyles.None, CultureInfo.InvariantCulture, out to))
+            {
+                error = "Material range 'To number' must be a valid integer.";
+                return false;
+            }
+
+            if (to < from)
+            {
+                error = "Material range 'To number' cannot be smaller than 'From number'.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryValidateBpRange(int startNumber, int endNumber, out string? error)
+        {
+            error = null;
+            if (endNumber < startNumber)
+            {
+                error = "BP range end number cannot be smaller than start number.";
+                return false;
+            }
+            return true;
+        }
+
+        public static bool TryValidateDocumentRange(int? fromNumber, int? toNumber, out string? error)
+        {
+            error = null;
+            if (fromNumber.HasValue && toNumber.HasValue && toNumber.Value < fromNumber.Value)
+            {
+                error = "Document range 'To number' cannot be smaller than 'From number'.";
+                return false;
+            }
+            return true;
+        }
+
         /// <summary>
         /// True when the next issue would exceed <paramref name="toNumber"/> (finite cap required).
         /// Open-ended ranges (no parseable To) are never treated as exhausted here, so a second segment cannot be added for the same type until a cap exists and is exceeded.

@@ -68,6 +68,38 @@ public class SalesQuotationController : Controller
     }
 
     [HttpGet]
+    public async Task<JsonResult> CustomerCommercialProfile(string? bpId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(bpId))
+            return Json(new { success = false, message = "Customer is required." });
+
+        var bp = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.BPID == bpId.Trim(), ct)
+            .ConfigureAwait(false);
+        if (bp == null)
+            return Json(new { success = false, message = "Customer not found." });
+
+        var channelId = await ResolveDistributionChannelIdAsync(bp.DistChannel, ct).ConfigureAwait(false);
+        var salesSchemaId = await ResolveSalesSchemaIdAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+        var plantId = await ResolvePlantIdFromSalesSchemaAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+        var addr = BuildBpShipTo(bp);
+
+        return Json(new
+        {
+            success = true,
+            profile = new
+            {
+                salesSchema = bp.SalesSchema,
+                distributionChannel = bp.DistChannel,
+                distributionChannelId = channelId,
+                configurationSchemaId = salesSchemaId,
+                plantId,
+                shipToAddress = addr
+            }
+        });
+    }
+
+    [HttpGet]
     public async Task<JsonResult> NextQuotationNumber(CancellationToken ct = default)
     {
         var n = await NextQuotationNumberAsync(ct).ConfigureAwait(false);
@@ -228,22 +260,6 @@ public class SalesQuotationController : Controller
                 TempData["QuotationError"] = "This action requires quotation and validity dates.";
                 return RedirectToQuotationListFromModel(model);
             }
-            if (string.IsNullOrWhiteSpace(model.PlantId)
-                || !model.DistributionChannelId.HasValue
-                || !model.ConfigurationSchemaId.HasValue
-                || model.ConfigurationSchemaId is not > 0)
-            {
-                TempData["QuotationError"] = "This action requires plant, distribution channel, and configuration schema.";
-                return RedirectToQuotationListFromModel(model);
-            }
-            var schemaOk = await _db.ConfigurationSchemas.AsNoTracking()
-                .AnyAsync(s => s.Id == model.ConfigurationSchemaId.Value && s.SchemaType == ConfigurationSchemaType.Sales, ct)
-                .ConfigureAwait(false);
-            if (!schemaOk)
-            {
-                TempData["QuotationError"] = "Invalid configuration schema.";
-                return RedirectToQuotationListFromModel(model);
-            }
         }
 
         if (isEmailSubmit)
@@ -291,6 +307,9 @@ public class SalesQuotationController : Controller
         }
 
         string? customerName = null;
+        string? customerDistChannel = null;
+        string? customerSalesSchema = null;
+        string? customerShipTo = null;
         if (!string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId))
         {
             var bp = await _db.BusinessPartnerMasterSamples.AsNoTracking()
@@ -302,6 +321,10 @@ public class SalesQuotationController : Controller
                 return RedirectToQuotationListFromModel(model);
             }
             customerName = (bp.FullName ?? "").Trim();
+            customerDistChannel = bp.DistChannel;
+            customerSalesSchema = bp.SalesSchema;
+            customerShipTo = BuildBpShipTo(bp);
+            await ApplyCustomerDrivenDefaultsAsync(model, bp, ct).ConfigureAwait(false);
         }
         else if (strict)
         {
@@ -310,22 +333,31 @@ public class SalesQuotationController : Controller
         }
 
         var shipTo = (model.ShipToAddress ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(shipTo) && !string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId))
-        {
-            var bp2 = await _db.BusinessPartnerMasterSamples.AsNoTracking()
-                .FirstOrDefaultAsync(c => c.BPID == model.CustomerBusinessPartnerId, ct)
-                .ConfigureAwait(false);
-            if (bp2 != null)
-            {
-                var parts = new[] { bp2.HouseNo, bp2.Street, bp2.City, bp2.PostalCode, bp2.Country }
-                    .Where(s => !string.IsNullOrWhiteSpace(s));
-                shipTo = string.Join(", ", parts);
-            }
-        }
+        if (string.IsNullOrWhiteSpace(shipTo) && !string.IsNullOrWhiteSpace(customerShipTo))
+            shipTo = customerShipTo;
         if (strict && string.IsNullOrWhiteSpace(shipTo))
         {
             TempData["QuotationError"] = "Send to customer requires a ship-to address (enter or fill from customer).";
             return RedirectToQuotationListFromModel(model);
+        }
+        if (strict && (string.IsNullOrWhiteSpace(model.PlantId)
+            || !model.DistributionChannelId.HasValue
+            || !model.ConfigurationSchemaId.HasValue
+            || model.ConfigurationSchemaId is not > 0))
+        {
+            TempData["QuotationError"] = "This action requires plant, distribution channel, and configuration schema.";
+            return RedirectToQuotationListFromModel(model);
+        }
+        if (strict && model.ConfigurationSchemaId is int strictSchemaId)
+        {
+            var schemaOk = await _db.ConfigurationSchemas.AsNoTracking()
+                .AnyAsync(s => s.Id == strictSchemaId && s.SchemaType == ConfigurationSchemaType.Sales, ct)
+                .ConfigureAwait(false);
+            if (!schemaOk)
+            {
+                TempData["QuotationError"] = "Invalid configuration schema.";
+                return RedirectToQuotationListFromModel(model);
+            }
         }
 
         IReadOnlyList<int> schemaChargeIds = Array.Empty<int>();
@@ -436,8 +468,7 @@ public class SalesQuotationController : Controller
             decimal lineTot;
             if (itemColList.Count == 0)
             {
-                var baseAmt = Math.Round(qty * unitP, 4, MidpointRounding.AwayFromZero);
-                sub = baseAmt;
+                sub = Math.Round(unitP, 4, MidpointRounding.AwayFromZero);
                 lineTot = sub;
             }
             else
@@ -445,6 +476,7 @@ public class SalesQuotationController : Controller
                 (sub, lineTot) = SalesQuotationPricing.ComputeLineWithChargeValues(
                     itemColList, chargeById, lineVals, qty, unitP, discP);
             }
+            lineTot = Math.Round(unitP, 4, MidpointRounding.AwayFromZero);
             if (strict && lineTot < 0)
             {
                 TempData["QuotationError"] = "Invalid line calculation.";
@@ -879,5 +911,99 @@ public class SalesQuotationController : Controller
         if (s.Equals(StockInventoryGradeCodes.Scrap, StringComparison.OrdinalIgnoreCase))
             return StockInventoryGradeCodes.Scrap;
         return StockInventoryGradeCodes.FirstQuality;
+    }
+
+    private static string BuildBpShipTo(BusinessPartnerMasterSample bp)
+    {
+        var parts = new[] { bp.HouseNo, bp.Street, bp.City, bp.PostalCode, bp.Country }
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        return string.Join(", ", parts);
+    }
+
+    private async Task ApplyCustomerDrivenDefaultsAsync(SalesQuotationCreateFormModel model, BusinessPartnerMasterSample bp, CancellationToken ct)
+    {
+        model.DistributionChannelId = await ResolveDistributionChannelIdAsync(bp.DistChannel, ct).ConfigureAwait(false);
+        model.ConfigurationSchemaId = await ResolveSalesSchemaIdAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+        model.PlantId = await ResolvePlantIdFromSalesSchemaAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+    }
+
+    private async Task<int?> ResolveDistributionChannelIdAsync(string? customerDistChannel, CancellationToken ct)
+    {
+        var raw = (customerDistChannel ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        static string Norm(string? s) => (s ?? "").Replace(" ", "").Trim().ToLowerInvariant();
+
+        // Small lookup table; keep normalization logic out of EF queries.
+        var chans = await _db.DistributionChannels.AsNoTracking()
+            .Select(x => new { x.DistributionChannelID, x.DistributionChannelName })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (int.TryParse(raw, out var byId) && byId > 0)
+        {
+            if (chans.Any(x => x.DistributionChannelID == byId))
+                return byId;
+
+            // Backward compat: older BP forms stored "1"/"2" as fake IDs for these two options.
+            // If those IDs don't exist in the DB, map them to the real DB rows by name.
+            var legacyName = byId == 1 ? "On Call" : (byId == 2 ? "Direct Sales" : null);
+            if (legacyName != null)
+            {
+                var want = Norm(legacyName);
+                var match = chans.FirstOrDefault(x => Norm(x.DistributionChannelName) == want);
+                return match?.DistributionChannelID;
+            }
+            return null;
+        }
+
+        {
+            var want = Norm(raw);
+            var match = chans.FirstOrDefault(x => Norm(x.DistributionChannelName) == want);
+            return match?.DistributionChannelID;
+        }
+    }
+
+    private async Task<int?> ResolveSalesSchemaIdAsync(string? bpSalesSchema, CancellationToken ct)
+    {
+        var raw = (bpSalesSchema ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        if (int.TryParse(raw, out var byId) && byId > 0)
+            return await _db.ConfigurationSchemas.AsNoTracking()
+                .AnyAsync(x => x.Id == byId && x.SchemaType == ConfigurationSchemaType.Sales, ct).ConfigureAwait(false) ? byId : null;
+        return await _db.ConfigurationSchemas.AsNoTracking()
+            .Where(x => x.SchemaType == ConfigurationSchemaType.Sales && x.Title == raw)
+            .Select(x => (int?)x.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<string?> ResolvePlantIdFromSalesSchemaAsync(string? bpSalesSchema, CancellationToken ct)
+    {
+        var raw = (bpSalesSchema ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        // BP can store schema as ID (preferred) or as title; handle both.
+        var schemaTitle = raw;
+        if (int.TryParse(raw, out var schemaId) && schemaId > 0)
+        {
+            schemaTitle = await _db.ConfigurationSchemas.AsNoTracking()
+                .Where(s => s.Id == schemaId && s.SchemaType == ConfigurationSchemaType.Sales)
+                .Select(s => s.Title)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false) ?? raw;
+        }
+
+        var plantName = schemaTitle.Equals("WalkIn", StringComparison.OrdinalIgnoreCase)
+            ? "Emporium"
+            : (schemaTitle.Equals("Dealer", StringComparison.OrdinalIgnoreCase) ? "Manufacturing Plant" : null);
+        if (plantName == null)
+            return null;
+        return await _db.PlantsSamples.AsNoTracking()
+            .Where(p => p.PlantName == plantName)
+            .Select(p => p.PlantID)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
     }
 }

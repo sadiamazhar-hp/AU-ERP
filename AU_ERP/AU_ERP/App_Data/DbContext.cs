@@ -121,6 +121,13 @@ namespace AU_ERP.Models
                 .HasForeignKey(r => r.MaterialTypeCode)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<MaterialType>().HasData(
+                new MaterialType { MaterialTypeCode = "FERT", Description = "Finished products" },
+                new MaterialType { MaterialTypeCode = "HALB", Description = "Semifinished products" },
+                new MaterialType { MaterialTypeCode = "PACK", Description = "Packaging" },
+                new MaterialType { MaterialTypeCode = "ROH", Description = "Raw materials" }
+            );
+
             modelBuilder.Entity<MaterialNumberRange>()
                 .Property(r => r.RangeID)
                 .UseIdentityColumn();
@@ -227,13 +234,27 @@ namespace AU_ERP.Models
                 .Property(e => e.Id)
                 .ValueGeneratedOnAdd();
 
+            modelBuilder.Entity<BPTypeSample>().HasData(
+                new BPTypeSample { Id = 1, TypeName = "Customer", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new BPTypeSample { Id = 2, TypeName = "Vendor", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
+            );
+
             modelBuilder.Entity<BPGrouping>()
                 .Property(e => e.Id)
                 .ValueGeneratedOnAdd();
 
+            modelBuilder.Entity<BPGrouping>().HasData(
+                new BPGrouping { Id = 1, GroupName = "local" }
+            );
+
             modelBuilder.Entity<DistributionChannel>()
                 .Property(e => e.DistributionChannelID)
                 .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<DistributionChannel>().HasData(
+                new DistributionChannel { DistributionChannelID = 1, DistributionChannelName = "OnCall" },
+                new DistributionChannel { DistributionChannelID = 2, DistributionChannelName = "Direct Sales" }
+            );
 
             modelBuilder.Entity<SalesSchemaRow>()
                 .Property(e => e.ConditionTypeID)

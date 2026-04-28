@@ -130,6 +130,8 @@
     var editDistChannels = ViewBag.DistributionChannels as List<AU_ERP.Models.DistributionChannel> ?? new List<AU_ERP.Models.DistributionChannel>();
     var editSalesConfigSchemas = ViewBag.SalesConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
     var editPurchaseConfigSchemas = ViewBag.PurchaseConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
+    var editTypeCustomerId = ViewBag.TypeCustomerId is int etci ? etci : 0;
+    var editGroupLocalId = ViewBag.GroupLocalId is int egli ? egli : 0;
 }
 <div class="modal fade" id="bpEditModal" tabindex="-1" aria-labelledby="bpEditModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -183,7 +185,7 @@
                                         }
                                     </select>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-6" id="bpEditTypeWrap">
                                     <label class="form-label">Type</label>
                                     <select name="BPTypeId" id="bpEditType" class="form-control sap-readonly" disabled>
                                         <option value="">-- Select --</option>
@@ -193,7 +195,7 @@
                                         }
                                     </select>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-6" id="bpEditGroupWrap">
                                     <label class="form-label">Grouping</label>
                                     <select name="BPGroupingId" id="bpEditGroup" class="form-control">
                                         <option value="">-- Select --</option>
@@ -322,9 +324,11 @@
                                         <label class="form-label">Dist. Channel</label>
                                         <select name="DistChannel" id="bpEditDistChannel" class="form-select req">
                                             <option value="">-- Select --</option>
-                                            @foreach (var d in editDistChannels)
+                                            @foreach (var ch in editDistChannels)
                                             {
-                                                <option value="@d.DistributionChannelID">@d.DistributionChannelName</option>
+                                                var n = (ch.DistributionChannelName ?? "").Replace(" ", "").Trim().ToLowerInvariant();
+                                                var lbl = n == "oncall" ? "OnCall" : (n == "directsales" ? "DirectSales" : ch.DistributionChannelName);
+                                                <option value="@ch.DistributionChannelID">@lbl</option>
                                             }
                                         </select>
                                     </div>
@@ -437,7 +441,13 @@
                 if (!(String(el.value || "").trim())) bad.push(el);
             }
             req("bpEditRole");
-            req("bpEditGroup");
+            var roleSel = document.getElementById("bpEditRole");
+            var opt = roleSel && roleSel.options[roleSel.selectedIndex];
+            var code = opt ? (opt.getAttribute("data-code") || "") : "";
+            if (code !== "FLCU00")
+                req("bpEditType");
+            if (code !== "FLCU00" && code !== "FLVN01")
+                req("bpEditGroup");
             req("bpEditFullName");
             req("bpEditStreet");
             req("bpEditHouseNo");
@@ -445,9 +455,8 @@
             req("bpEditPostalCode");
             req("bpEditRegion");
             req("bpEditReconAccount");
-            var roleSel = document.getElementById("bpEditRole");
-            var opt = roleSel && roleSel.options[roleSel.selectedIndex];
-            var code = opt ? (opt.getAttribute("data-code") || "") : "";
+            opt = roleSel && roleSel.options[roleSel.selectedIndex];
+            code = opt ? (opt.getAttribute("data-code") || "") : "";
             if (code === "FLCU01" || code === "FLCU00") {
                 req("bpEditDistChannel");
                 req("bpEditSalesSchema");
@@ -530,14 +539,53 @@
             var code = opt ? (opt.getAttribute("data-code") || "") : "";
             var salesNav = document.getElementById("bpEditNavSales");
             var purchNav = document.getElementById("bpEditNavPurch");
+            var typeWrap = document.getElementById("bpEditTypeWrap");
+            var groupWrap = document.getElementById("bpEditGroupWrap");
+            var typeSel = document.getElementById("bpEditType");
+            var groupSel = document.getElementById("bpEditGroup");
             if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
             if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
+
+            if (typeWrap) typeWrap.style.display = (code === "FLCU00") ? "none" : "";
+            if (groupWrap) groupWrap.style.display = (code === "FLCU00" || code === "FLVN01") ? "none" : "";
+
+            if (code === "FLCU01") {
+                var customerTypeId = @editTypeCustomerId;
+                var localGroupId = @editGroupLocalId;
+                if (typeSel && customerTypeId > 0) typeSel.value = String(customerTypeId);
+                if (groupSel && localGroupId > 0) groupSel.value = String(localGroupId);
+            }
+            if (code === "FLCU00") {
+                if (typeSel) typeSel.value = "";
+                if (groupSel) groupSel.value = "";
+            }
+            if (code === "FLVN01" && groupSel) {
+                groupSel.value = "";
+            }
         }
 
         function setEditField(id, val) {
             var el = document.getElementById(id);
             if (!el) return;
             el.value = val || "";
+        }
+
+        function bpSetDistChannelValue(selectId, rawVal) {
+            var sel = document.getElementById(selectId);
+            if (!sel) return;
+            var v = String(rawVal || "").trim();
+            if (!v) { sel.value = ""; return; }
+            // Prefer direct value match (ID).
+            sel.value = v;
+            if (sel.value === v) return;
+            // Fallback: match by option label text (legacy saved as name).
+            var want = v.replace(/\s+/g, "").toLowerCase();
+            for (var i = 0; i < sel.options.length; i++) {
+                var opt = sel.options[i];
+                var txt = (opt.textContent || "").replace(/\s+/g, "").toLowerCase();
+                if (txt === want) { sel.value = opt.value; return; }
+            }
+            sel.value = "";
         }
 
         function openBPEdit(bpId) {
@@ -570,7 +618,7 @@
                     setEditField("bpEditPaymentMethods", p.paymentMethods || p.PaymentMethods);
                     setEditField("bpEditBankName", p.bankName || p.BankName);
                     setEditField("bpEditAccountNumber", p.accountNumber || p.AccountNumber);
-                    setEditField("bpEditDistChannel", p.distChannel || p.DistChannel);
+                    bpSetDistChannelValue("bpEditDistChannel", p.distChannel || p.DistChannel);
                     bpEditApplySalesSchema(String(p.salesSchema || p.SalesSchema || "").trim());
                     bpEditApplyPurchSchema(String(p.purchSchema || p.PurchSchema || "").trim());
                     bpEditHandleRoleUI();

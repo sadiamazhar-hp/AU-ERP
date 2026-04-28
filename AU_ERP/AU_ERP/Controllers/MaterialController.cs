@@ -682,6 +682,49 @@ namespace AU_ERP.Main_Controller
 
             try
             {
+                var existingRows = await _context.MaterialNumberRanges.AsNoTracking().ToListAsync();
+                var effective = new Dictionary<int, (long From, long To)>();
+                foreach (var row in existingRows)
+                {
+                    if (NumberRangeMaintenance.TryParseMaterialRange(row.FromNumber, row.ToNumber, out var ef, out var et, out _))
+                        effective[row.RangeID] = (ef, et);
+                }
+
+                var tempId = -1;
+                foreach (var item in ranges)
+                {
+                    if (string.IsNullOrEmpty(item.MaterialTypeCode))
+                        continue;
+
+                    if (!NumberRangeMaintenance.TryParseMaterialRange(item.FromNumber, item.ToNumber, out var fromN, out var toN, out var parseError))
+                    {
+                        var msg = parseError ?? "Invalid material number range.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        TempData["Error"] = msg;
+                        return RedirectToAction("NumberRanges");
+                    }
+
+                    var key = item.RangeID > 0 ? item.RangeID : tempId--;
+                    effective[key] = (fromN, toN);
+                }
+
+                var pairs = effective.ToList();
+                for (var i = 0; i < pairs.Count; i++)
+                {
+                    for (var j = i + 1; j < pairs.Count; j++)
+                    {
+                        var a = pairs[i].Value;
+                        var b = pairs[j].Value;
+                        if (!NumberRangeMaintenance.RangesOverlap(a.From, a.To, b.From, b.To))
+                            continue;
+
+                        var msg = $"Material ranges conflict: {a.From}-{a.To} overlaps {b.From}-{b.To}.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        TempData["Error"] = msg;
+                        return RedirectToAction("NumberRanges");
+                    }
+                }
+
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
@@ -706,22 +749,6 @@ namespace AU_ERP.Main_Controller
                         }
                         else
                         {
-                            var live = await _context.MaterialNumberRanges
-                                .Where(x => x.MaterialTypeCode == item.MaterialTypeCode)
-                                .ToListAsync();
-
-                            if (live.Any(x => !NumberRangeMaintenance.IsMaterialRangeExhausted(
-                                    x.FromNumber, x.ToNumber, x.CurrentNumber)))
-                            {
-                                await transaction.RollbackAsync();
-                                _context.ChangeTracker.Clear();
-                                const string msg =
-                                    "This material type already has an active number range that is not exhausted. Add another range only after the current range is exhausted.";
-                                if (isAjax) return Json(new { success = false, message = msg });
-                                TempData["Error"] = msg;
-                                return RedirectToAction("NumberRanges");
-                            }
-
                             item.RangeID = 0;
                             item.CurrentNumber = normalizedCurrent;
                             await _context.MaterialNumberRanges.AddAsync(item);

@@ -63,6 +63,100 @@ public class SalesOrderController : Controller
     }
 
     [HttpGet]
+    public async Task<JsonResult> CustomerCommercialProfile(string? bpId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(bpId))
+            return Json(new { success = false, message = "Customer is required." });
+
+        var bp = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.BPID == bpId.Trim(), ct)
+            .ConfigureAwait(false);
+        if (bp == null)
+            return Json(new { success = false, message = "Customer not found." });
+
+        var channelId = await ResolveDistributionChannelIdAsync(bp.DistChannel, ct).ConfigureAwait(false);
+        var salesSchemaId = await ResolveSalesSchemaIdAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+        var plantId = await ResolvePlantIdFromSalesSchemaAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+        var addr = BuildBpShipTo(bp);
+
+        return Json(new
+        {
+            success = true,
+            profile = new
+            {
+                salesSchema = bp.SalesSchema,
+                distributionChannel = bp.DistChannel,
+                distributionChannelId = channelId,
+                configurationSchemaId = salesSchemaId,
+                plantId,
+                shipToAddress = addr
+            }
+        });
+    }
+
+    [HttpGet]
+    public async Task<JsonResult> AvailableSalesQuotations(int? currentOrderId, CancellationToken ct = default)
+    {
+        var quotedOrderBySq = await _db.SalesOrders.AsNoTracking()
+            .Where(o => o.SalesQuotationId != null && (currentOrderId == null || o.Id != currentOrderId.Value))
+            .Select(o => o.SalesQuotationId!.Value)
+            .Distinct()
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var used = quotedOrderBySq.ToHashSet();
+        var list = await _db.SalesQuotations.AsNoTracking()
+            .Where(q => q.Status == SalesQuotation.StatusSent && !used.Contains(q.Id))
+            .OrderByDescending(q => q.QuotationDate)
+            .ThenBy(q => q.QuotationNumber)
+            .Select(q => new { q.Id, q.QuotationNumber, q.CustomerName })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return Json(new { success = true, items = list });
+    }
+
+    [HttpGet]
+    public async Task<JsonResult> SalesQuotationItems(int quotationId, CancellationToken ct = default)
+    {
+        if (quotationId <= 0)
+            return Json(new { success = false, message = "Sales quotation is required." });
+        var q = await _db.SalesQuotations.AsNoTracking()
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.Id == quotationId, ct)
+            .ConfigureAwait(false);
+        if (q == null)
+            return Json(new { success = false, message = "Quotation not found." });
+        if (q.Status != SalesQuotation.StatusSent)
+            return Json(new { success = false, message = "Only sent quotations can be selected." });
+
+        return Json(new
+        {
+            success = true,
+            header = new
+            {
+                q.Id,
+                q.QuotationNumber,
+                q.PlantId,
+                q.DistributionChannelId,
+                q.ConfigurationSchemaId,
+                q.CustomerBusinessPartnerId,
+                q.CustomerName,
+                q.ShipToAddress
+            },
+            items = q.Items.OrderBy(i => i.Id).Select(i => new
+            {
+                i.MaterialNumber,
+                i.MaterialDescription,
+                i.QuantityUomId,
+                i.SalesPriceGrade,
+                orderQuantity = i.OrderQuantity,
+                i.UnitPrice,
+                i.ItemChargeValuesJson,
+                deliveryDate = i.DeliveryDate != null ? i.DeliveryDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : ""
+            }).ToList()
+        });
+    }
+
+    [HttpGet]
     public async Task<JsonResult> NextSalesOrderNumber(CancellationToken ct = default)
     {
         var n = await NextSalesOrderNumberAsync(ct).ConfigureAwait(false);
@@ -261,22 +355,6 @@ public class SalesOrderController : Controller
                 TempData["OrderError"] = "This action requires order date and requested delivery date.";
                 return RedirectToOrderListFromModel(model);
             }
-            if (string.IsNullOrWhiteSpace(model.PlantId)
-                || !model.DistributionChannelId.HasValue
-                || !model.ConfigurationSchemaId.HasValue
-                || model.ConfigurationSchemaId is not > 0)
-            {
-                TempData["OrderError"] = "This action requires plant, distribution channel, and configuration schema.";
-                return RedirectToOrderListFromModel(model);
-            }
-            var schemaOk = await _db.ConfigurationSchemas.AsNoTracking()
-                .AnyAsync(s => s.Id == model.ConfigurationSchemaId.Value && s.SchemaType == ConfigurationSchemaType.Sales, ct)
-                .ConfigureAwait(false);
-            if (!schemaOk)
-            {
-                TempData["OrderError"] = "Invalid configuration schema.";
-                return RedirectToOrderListFromModel(model);
-            }
         }
 
         var now = DateTime.Today;
@@ -289,6 +367,7 @@ public class SalesOrderController : Controller
         }
 
         string? customerName = null;
+        string? customerShipTo = null;
         if (!string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId))
         {
             var bp = await _db.BusinessPartnerMasterSamples.AsNoTracking()
@@ -300,6 +379,8 @@ public class SalesOrderController : Controller
                 return RedirectToOrderListFromModel(model);
             }
             customerName = (bp.FullName ?? "").Trim();
+            customerShipTo = BuildBpShipTo(bp);
+            await ApplyCustomerDrivenDefaultsAsync(model, bp, ct).ConfigureAwait(false);
         }
         else if (strict)
         {
@@ -308,22 +389,45 @@ public class SalesOrderController : Controller
         }
 
         var shipTo = (model.ShipToAddress ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(shipTo) && !string.IsNullOrWhiteSpace(model.CustomerBusinessPartnerId))
+        if (string.IsNullOrWhiteSpace(shipTo) && !string.IsNullOrWhiteSpace(customerShipTo))
+            shipTo = customerShipTo;
+
+        if (model.SalesQuotationId is int quoteId && quoteId > 0)
         {
-            var bp2 = await _db.BusinessPartnerMasterSamples.AsNoTracking()
-                .FirstOrDefaultAsync(c => c.BPID == model.CustomerBusinessPartnerId, ct)
+            var quoteOrder = await _db.SalesOrders.AsNoTracking()
+                .Where(o => o.SalesQuotationId == quoteId && (updateOrderId == null || o.Id != updateOrderId.Value))
+                .Select(o => o.Id)
+                .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false);
-            if (bp2 != null)
+            if (quoteOrder > 0)
             {
-                var parts = new[] { bp2.HouseNo, bp2.Street, bp2.City, bp2.PostalCode, bp2.Country }
-                    .Where(s => !string.IsNullOrWhiteSpace(s));
-                shipTo = string.Join(", ", parts);
+                TempData["OrderError"] = "Selected sales quotation is already linked to another sales order.";
+                return RedirectToOrderListFromModel(model);
             }
         }
         if (strict && string.IsNullOrWhiteSpace(shipTo))
         {
             TempData["OrderError"] = "Confirm order requires a ship-to address (enter or fill from customer).";
             return RedirectToOrderListFromModel(model);
+        }
+        if (strict && (string.IsNullOrWhiteSpace(model.PlantId)
+            || !model.DistributionChannelId.HasValue
+            || !model.ConfigurationSchemaId.HasValue
+            || model.ConfigurationSchemaId is not > 0))
+        {
+            TempData["OrderError"] = "This action requires plant, distribution channel, and configuration schema.";
+            return RedirectToOrderListFromModel(model);
+        }
+        if (strict && model.ConfigurationSchemaId is int strictSchemaId)
+        {
+            var schemaOk = await _db.ConfigurationSchemas.AsNoTracking()
+                .AnyAsync(s => s.Id == strictSchemaId && s.SchemaType == ConfigurationSchemaType.Sales, ct)
+                .ConfigureAwait(false);
+            if (!schemaOk)
+            {
+                TempData["OrderError"] = "Invalid configuration schema.";
+                return RedirectToOrderListFromModel(model);
+            }
         }
 
         IReadOnlyList<int> schemaChargeIds = Array.Empty<int>();
@@ -434,8 +538,7 @@ public class SalesOrderController : Controller
             decimal lineTot;
             if (itemColList.Count == 0)
             {
-                var baseAmt = Math.Round(qty * unitP, 4, MidpointRounding.AwayFromZero);
-                sub = baseAmt;
+                sub = Math.Round(unitP, 4, MidpointRounding.AwayFromZero);
                 lineTot = sub;
             }
             else
@@ -443,6 +546,7 @@ public class SalesOrderController : Controller
                 (sub, lineTot) = SalesQuotationPricing.ComputeLineWithChargeValues(
                     itemColList, chargeById, lineVals, qty, unitP, discP);
             }
+            lineTot = Math.Round(unitP, 4, MidpointRounding.AwayFromZero);
             if (strict && lineTot < 0)
             {
                 TempData["OrderError"] = "Invalid line calculation.";
@@ -509,6 +613,7 @@ public class SalesOrderController : Controller
                 return RedirectToOrderListFromModel(model);
             }
             _db.SalesOrderItems.RemoveRange(toUpdate.Items);
+            toUpdate.SalesQuotationId = model.SalesQuotationId is > 0 ? model.SalesQuotationId : null;
             toUpdate.PlantId = string.IsNullOrWhiteSpace(model.PlantId) ? null : model.PlantId;
             toUpdate.DistributionChannelId = model.DistributionChannelId;
             toUpdate.ConfigurationSchemaId = model.ConfigurationSchemaId is int schemaId && schemaId > 0 ? schemaId : null;
@@ -539,6 +644,7 @@ public class SalesOrderController : Controller
 
         var header = new SalesOrder
         {
+            SalesQuotationId = model.SalesQuotationId is > 0 ? model.SalesQuotationId : null,
             SalesOrderNumber = number,
             PlantId = string.IsNullOrWhiteSpace(model.PlantId) ? null : model.PlantId,
             DistributionChannelId = model.DistributionChannelId,
@@ -610,6 +716,7 @@ public class SalesOrderController : Controller
             {
                 id = o.Id,
                 salesOrderNumber = o.SalesOrderNumber,
+                salesQuotationId = o.SalesQuotationId,
                 plantId = o.PlantId,
                 distributionChannelId = o.DistributionChannelId,
                 configurationSchemaId = o.ConfigurationSchemaId,
@@ -721,7 +828,7 @@ public class SalesOrderController : Controller
             decimal lineTot;
             if (itemColList.Count == 0)
             {
-                sub = Math.Round(qty * unitP, 4, MidpointRounding.AwayFromZero);
+                sub = Math.Round(unitP, 4, MidpointRounding.AwayFromZero);
                 lineTot = sub;
             }
             else
@@ -740,7 +847,7 @@ public class SalesOrderController : Controller
                 DiscountPercent = 0,
                 SubtotalAfterDiscount = sub,
                 TaxAmount = li.TaxAmount,
-                NetPrice = lineTot,
+                NetPrice = Math.Round(li.UnitPrice, 4, MidpointRounding.AwayFromZero),
                 LineTaxChargeId = li.LineTaxChargeId,
                 ItemAppliedChargeIds = li.ItemAppliedChargeIds,
                 ItemChargeValuesJson = li.ItemChargeValuesJson,
@@ -857,5 +964,99 @@ public class SalesOrderController : Controller
         if (s.Equals(StockInventoryGradeCodes.Scrap, StringComparison.OrdinalIgnoreCase))
             return StockInventoryGradeCodes.Scrap;
         return StockInventoryGradeCodes.FirstQuality;
+    }
+
+    private static string BuildBpShipTo(BusinessPartnerMasterSample bp)
+    {
+        var parts = new[] { bp.HouseNo, bp.Street, bp.City, bp.PostalCode, bp.Country }
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        return string.Join(", ", parts);
+    }
+
+    private async Task ApplyCustomerDrivenDefaultsAsync(SalesOrderCreateFormModel model, BusinessPartnerMasterSample bp, CancellationToken ct)
+    {
+        model.DistributionChannelId = await ResolveDistributionChannelIdAsync(bp.DistChannel, ct).ConfigureAwait(false);
+        model.ConfigurationSchemaId = await ResolveSalesSchemaIdAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+        model.PlantId = await ResolvePlantIdFromSalesSchemaAsync(bp.SalesSchema, ct).ConfigureAwait(false);
+    }
+
+    private async Task<int?> ResolveDistributionChannelIdAsync(string? customerDistChannel, CancellationToken ct)
+    {
+        var raw = (customerDistChannel ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        static string Norm(string? s) => (s ?? "").Replace(" ", "").Trim().ToLowerInvariant();
+
+        // Small lookup table; keep normalization logic out of EF queries.
+        var chans = await _db.DistributionChannels.AsNoTracking()
+            .Select(x => new { x.DistributionChannelID, x.DistributionChannelName })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (int.TryParse(raw, out var byId) && byId > 0)
+        {
+            if (chans.Any(x => x.DistributionChannelID == byId))
+                return byId;
+
+            // Backward compat: older BP forms stored "1"/"2" as fake IDs for these two options.
+            // If those IDs don't exist in the DB, map them to the real DB rows by name.
+            var legacyName = byId == 1 ? "On Call" : (byId == 2 ? "Direct Sales" : null);
+            if (legacyName != null)
+            {
+                var want = Norm(legacyName);
+                var match = chans.FirstOrDefault(x => Norm(x.DistributionChannelName) == want);
+                return match?.DistributionChannelID;
+            }
+            return null;
+        }
+
+        {
+            var want = Norm(raw);
+            var match = chans.FirstOrDefault(x => Norm(x.DistributionChannelName) == want);
+            return match?.DistributionChannelID;
+        }
+    }
+
+    private async Task<int?> ResolveSalesSchemaIdAsync(string? bpSalesSchema, CancellationToken ct)
+    {
+        var raw = (bpSalesSchema ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        if (int.TryParse(raw, out var byId) && byId > 0)
+            return await _db.ConfigurationSchemas.AsNoTracking()
+                .AnyAsync(x => x.Id == byId && x.SchemaType == ConfigurationSchemaType.Sales, ct).ConfigureAwait(false) ? byId : null;
+        return await _db.ConfigurationSchemas.AsNoTracking()
+            .Where(x => x.SchemaType == ConfigurationSchemaType.Sales && x.Title == raw)
+            .Select(x => (int?)x.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<string?> ResolvePlantIdFromSalesSchemaAsync(string? bpSalesSchema, CancellationToken ct)
+    {
+        var raw = (bpSalesSchema ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        // BP can store schema as ID (preferred) or as title; handle both.
+        var schemaTitle = raw;
+        if (int.TryParse(raw, out var schemaId) && schemaId > 0)
+        {
+            schemaTitle = await _db.ConfigurationSchemas.AsNoTracking()
+                .Where(s => s.Id == schemaId && s.SchemaType == ConfigurationSchemaType.Sales)
+                .Select(s => s.Title)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false) ?? raw;
+        }
+
+        var plantName = schemaTitle.Equals("WalkIn", StringComparison.OrdinalIgnoreCase)
+            ? "Emporium"
+            : (schemaTitle.Equals("Dealer", StringComparison.OrdinalIgnoreCase) ? "Manufacturing Plant" : null);
+        if (plantName == null)
+            return null;
+        return await _db.PlantsSamples.AsNoTracking()
+            .Where(p => p.PlantName == plantName)
+            .Select(p => p.PlantID)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
     }
 }

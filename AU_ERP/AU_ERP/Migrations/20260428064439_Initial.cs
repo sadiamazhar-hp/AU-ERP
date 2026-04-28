@@ -471,30 +471,6 @@ namespace AU_ERP.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ApplicationUserDepartments",
-                columns: table => new
-                {
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    DepartmentId = table.Column<int>(type: "int", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ApplicationUserDepartments", x => new { x.UserId, x.DepartmentId });
-                    table.ForeignKey(
-                        name: "FK_ApplicationUserDepartments_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ApplicationUserDepartments_Departments_DepartmentId",
-                        column: x => x.DepartmentId,
-                        principalTable: "Departments",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "DocumentRanges",
                 columns: table => new
                 {
@@ -582,6 +558,37 @@ namespace AU_ERP.Migrations
                         column: x => x.MaterialTypeCode,
                         principalTable: "MaterialTypes",
                         principalColumn: "MaterialTypeCode",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ApplicationUserDepartments",
+                columns: table => new
+                {
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    DepartmentId = table.Column<int>(type: "int", nullable: false),
+                    PlantID = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ApplicationUserDepartments", x => new { x.UserId, x.DepartmentId });
+                    table.ForeignKey(
+                        name: "FK_ApplicationUserDepartments_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_ApplicationUserDepartments_Departments_DepartmentId",
+                        column: x => x.DepartmentId,
+                        principalTable: "Departments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_ApplicationUserDepartments_PlantsSamples_PlantID",
+                        column: x => x.PlantID,
+                        principalTable: "PlantsSamples",
+                        principalColumn: "PlantID",
                         onDelete: ReferentialAction.Restrict);
                 });
 
@@ -770,6 +777,7 @@ namespace AU_ERP.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     MaterialNumber = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
+                    PlantID = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
                     Quantity = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
                     QuantityUomId = table.Column<int>(type: "int", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
@@ -788,6 +796,12 @@ namespace AU_ERP.Migrations
                         column: x => x.MaterialNumber,
                         principalTable: "CreateMaterialMaster",
                         principalColumn: "MaterialNumber",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_StockInventoryLines_PlantsSamples_PlantID",
+                        column: x => x.PlantID,
+                        principalTable: "PlantsSamples",
+                        principalColumn: "PlantID",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_StockInventoryLines_UnitOfMeasurements_QuantityUomId",
@@ -1291,6 +1305,11 @@ namespace AU_ERP.Migrations
                 });
 
             migrationBuilder.InsertData(
+                table: "BPGroupings",
+                columns: new[] { "Id", "GroupName" },
+                values: new object[] { 1, "local" });
+
+            migrationBuilder.InsertData(
                 table: "BPRoles",
                 columns: new[] { "Id", "RoleCode", "RoleName" },
                 values: new object[,]
@@ -1298,6 +1317,15 @@ namespace AU_ERP.Migrations
                     { 1, "FLCU00", "Basic" },
                     { 2, "FLCU01", "Customer (Sales)" },
                     { 3, "FLVN01", "Vendor" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "BPTypeSamples",
+                columns: new[] { "Id", "CreatedAt", "IsActive", "TypeName" },
+                values: new object[,]
+                {
+                    { 1, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), true, "Customer" },
+                    { 2, new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), true, "Vendor" }
                 });
 
             migrationBuilder.InsertData(
@@ -1313,6 +1341,17 @@ namespace AU_ERP.Migrations
                 });
 
             migrationBuilder.InsertData(
+                table: "MaterialTypes",
+                columns: new[] { "MaterialTypeCode", "Description", "FieldReference" },
+                values: new object[,]
+                {
+                    { "FERT", "Finished products", null },
+                    { "HALB", "Semifinished products", null },
+                    { "PACK", "Packaging", null },
+                    { "ROH", "Raw materials", null }
+                });
+
+            migrationBuilder.InsertData(
                 table: "PlantsSamples",
                 columns: new[] { "PlantID", "PlantName" },
                 values: new object[,]
@@ -1325,6 +1364,11 @@ namespace AU_ERP.Migrations
                 name: "IX_ApplicationUserDepartments_DepartmentId",
                 table: "ApplicationUserDepartments",
                 column: "DepartmentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ApplicationUserDepartments_PlantID",
+                table: "ApplicationUserDepartments",
+                column: "PlantID");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AspNetRoleClaims_RoleId",
@@ -1692,9 +1736,10 @@ namespace AU_ERP.Migrations
                 column: "MaterialNumber");
 
             migrationBuilder.CreateIndex(
-                name: "IX_StockInventoryLines_MaterialNumber_QuantityUomId_Status_Grade",
+                name: "IX_StockInventoryLines_PlantID_MaterialNumber_QuantityUomId_Status_Grade",
                 table: "StockInventoryLines",
-                columns: new[] { "MaterialNumber", "QuantityUomId", "Status", "Grade" });
+                columns: new[] { "PlantID", "MaterialNumber", "QuantityUomId", "Status", "Grade" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_StockInventoryLines_QuantityUomId",
