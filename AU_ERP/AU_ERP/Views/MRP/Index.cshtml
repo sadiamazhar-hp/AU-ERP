@@ -62,6 +62,14 @@
                 </div>
             </div>
             <div class="col-md-2">
+                <label class="form-label small">From date</label>
+                <input type="date" id="mrpFromDate" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">To date</label>
+                <input type="date" id="mrpToDate" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small">Quantity</label>
                 <input type="number" id="mrpQty" class="form-control form-control-sm" min="0.0001" step="any" value="1" />
             </div>
@@ -257,6 +265,48 @@
             .catch(function () {
                 mrpShowFormError("Could not load UOMs.");
                 mrpInitUomPlaceholder(sel);
+            });
+    }
+
+    function mrpTryAutoFillDemand() {
+        var mat = (document.getElementById("mrpMaterial") && document.getElementById("mrpMaterial").value || "").trim();
+        var fromEl = document.getElementById("mrpFromDate");
+        var toEl = document.getElementById("mrpToDate");
+        var from = fromEl ? String(fromEl.value || "").trim() : "";
+        var to = toEl ? String(toEl.value || "").trim() : "";
+        if (!mat || !from || !to) return;
+        if (!("@Url.Action("DemandForMaterial", "MRP")")) return;
+        mrpClearFormError();
+        var url = "@Url.Action("DemandForMaterial", "MRP")"
+            + "?materialNumber=" + encodeURIComponent(mat)
+            + "&from=" + encodeURIComponent(from)
+            + "&to=" + encodeURIComponent(to);
+        fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (!res || !res.success) {
+                    mrpShowFormError((res && res.message) ? res.message : "Could not compute demand.");
+                    return;
+                }
+                var qty = (res.qtyBase != null ? Number(res.qtyBase) : NaN);
+                var baseUomId = res.baseUomId != null ? Number(res.baseUomId) : 0;
+                if (!isNaN(qty) && document.getElementById("mrpQty"))
+                    document.getElementById("mrpQty").value = String(qty);
+
+                // Ensure UOM list exists, then select base UOM.
+                mrpLoadUomForMaterial(mat).then(function () {
+                    var uSel = document.getElementById("mrpUom");
+                    if (uSel && baseUomId && Array.from(uSel.options).some(function (o) { return o.value === String(baseUomId); }))
+                        uSel.value = String(baseUomId);
+                });
+
+                var warns = res.warnings || [];
+                if (warns && warns.length) {
+                    mrpShowFormError(warns.slice(0, 3).join(" "));
+                }
+            })
+            .catch(function () {
+                mrpShowFormError("Could not compute demand.");
             });
     }
 
@@ -540,6 +590,7 @@
         if (search) search.value = n ? (n + (d ? " — " + d : "")) : "";
         mrpMatPickerCloseDd();
         mrpLoadUomForMaterial(n);
+        mrpTryAutoFillDemand();
     });
 
     (function mrpBindMatPicker() {
@@ -558,6 +609,12 @@
     document.getElementById("mrpRunBtn").addEventListener("click", function () {
         mrpRunForMaterial(null, false);
     });
+
+    // Date range inputs trigger demand auto-fill.
+    var fromEl = document.getElementById("mrpFromDate");
+    var toEl = document.getElementById("mrpToDate");
+    if (fromEl) fromEl.addEventListener("change", mrpTryAutoFillDemand);
+    if (toEl) toEl.addEventListener("change", mrpTryAutoFillDemand);
 
     var mrpResultBody = document.getElementById("mrpResultBody");
     if (mrpResultBody) {
