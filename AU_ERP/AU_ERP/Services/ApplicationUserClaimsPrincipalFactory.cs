@@ -43,7 +43,15 @@ namespace AU_ERP.Services
                 identity.AddClaim(new Claim(AuClaimTypes.Department, row.Code));
                 if (string.Equals(row.Code, "Store", StringComparison.OrdinalIgnoreCase)
                     && !string.IsNullOrWhiteSpace(row.PlantID))
-                    identity.AddClaim(new Claim(AuClaimTypes.StorePlant, row.PlantID!.Trim()));
+                {
+                    var plantIds = row.PlantID!
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(x => x.Trim())
+                        .Where(x => x.Length > 0)
+                        .Distinct(StringComparer.OrdinalIgnoreCase);
+                    foreach (var p in plantIds)
+                        identity.AddClaim(new Claim(AuClaimTypes.StorePlant, p));
+                }
             }
 
             return identity;

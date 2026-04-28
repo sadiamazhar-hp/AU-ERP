@@ -53,14 +53,15 @@ public class UsersController : Controller
                     .Select(d => d.Id)
                     .FirstOrDefaultAsync()
                     .ConfigureAwait(false);
-                string? storePlant = null;
+                string[] storePlants = Array.Empty<string>();
                 if (storeDeptId > 0)
                 {
-                    storePlant = await _db.ApplicationUserDepartments.AsNoTracking()
+                    var storePlantCsv = await _db.ApplicationUserDepartments.AsNoTracking()
                         .Where(ud => ud.UserId == toEdit.Id && ud.DepartmentId == storeDeptId)
                         .Select(ud => ud.PlantID)
                         .FirstOrDefaultAsync()
                         .ConfigureAwait(false);
+                    storePlants = ParseStorePlantIds(storePlantCsv);
                 }
 
                 editForm = new EditUserViewModel
@@ -70,7 +71,7 @@ public class UsersController : Controller
                     LastName = toEdit.LastName?.Trim() ?? "",
                     Email = toEdit.Email ?? "",
                     DepartmentIds = toEdit.UserDepartments.Select(ud => ud.DepartmentId).ToArray(),
-                    StorePlantId = storePlant
+                    StorePlantIds = storePlants
                 };
                 openEdit = true;
             }
@@ -114,7 +115,7 @@ public class UsersController : Controller
         if (model.DepartmentIds != null && model.DepartmentIds.Any(id => !validDeptIds.Contains(id)))
             ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "One or more departments are invalid.");
 
-        await ValidateStorePlantAssignmentAsync(ModelState, pfx, model.DepartmentIds, model.StorePlantId).ConfigureAwait(false);
+        await ValidateStorePlantAssignmentAsync(ModelState, pfx, model.DepartmentIds, model.StorePlantIds).ConfigureAwait(false);
 
         var user = await _userManager.FindByIdAsync(model.UserId).ConfigureAwait(false);
         if (user == null)
@@ -182,8 +183,7 @@ public class UsersController : Controller
             string? plantIdLink = null;
             if (storeDeptId > 0 && deptId == storeDeptId)
             {
-                var p = (model.StorePlantId ?? "").Trim();
-                plantIdLink = p.Length > 0 ? p : null;
+                plantIdLink = JoinStorePlantIds(model.StorePlantIds);
             }
 
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
@@ -225,7 +225,7 @@ public class UsersController : Controller
         if (model.DepartmentIds != null && model.DepartmentIds.Any(id => !validDeptIds.Contains(id)))
             ModelState.AddModelError(pfx + nameof(model.DepartmentIds), "One or more departments are invalid.");
 
-        await ValidateStorePlantAssignmentAsync(ModelState, pfx, model.DepartmentIds, model.StorePlantId).ConfigureAwait(false);
+        await ValidateStorePlantAssignmentAsync(ModelState, pfx, model.DepartmentIds, model.StorePlantIds).ConfigureAwait(false);
 
         if (!ModelState.IsValid)
         {
@@ -285,8 +285,7 @@ public class UsersController : Controller
             string? plantIdLink = null;
             if (storeDeptIdCreate > 0 && deptId == storeDeptIdCreate)
             {
-                var p = (model.StorePlantId ?? "").Trim();
-                plantIdLink = p.Length > 0 ? p : null;
+                plantIdLink = JoinStorePlantIds(model.StorePlantIds);
             }
 
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
@@ -351,7 +350,7 @@ public class UsersController : Controller
         ModelStateDictionary modelState,
         string fieldPrefix,
         int[]? departmentIds,
-        string? storePlantId)
+        string[]? storePlantIds)
     {
         var storeDeptId = await _db.Departments.AsNoTracking()
             .Where(d => d.Code == "Store")
@@ -362,27 +361,52 @@ public class UsersController : Controller
             return;
 
         var hasStore = departmentIds?.Contains(storeDeptId) ?? false;
-        var trimmed = (storePlantId ?? "").Trim();
+        var ids = (storePlantIds ?? Array.Empty<string>())
+            .Select(p => (p ?? "").Trim())
+            .Where(p => p.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         if (hasStore)
         {
-            if (trimmed.Length == 0)
+            if (ids.Length == 0)
             {
-                modelState.AddModelError($"{fieldPrefix}StorePlantId",
-                    "Select a plant when the Store department is assigned.");
+                modelState.AddModelError($"{fieldPrefix}StorePlantIds",
+                    "Select at least one plant when the Store department is assigned.");
                 return;
             }
 
-            var okPlant = await _db.PlantsSamples.AsNoTracking()
-                .AnyAsync(p => p.PlantID == trimmed)
+            var validCount = await _db.PlantsSamples.AsNoTracking()
+                .Where(p => ids.Contains(p.PlantID))
+                .CountAsync()
                 .ConfigureAwait(false);
-            if (!okPlant)
-                modelState.AddModelError($"{fieldPrefix}StorePlantId", "Selected plant is invalid.");
+            if (validCount != ids.Length)
+                modelState.AddModelError($"{fieldPrefix}StorePlantIds", "One or more selected plants are invalid.");
         }
-        else if (trimmed.Length > 0)
+        else if (ids.Length > 0)
         {
-            modelState.AddModelError($"{fieldPrefix}StorePlantId",
-                "Plant is only applicable when Store department is selected.");
+            modelState.AddModelError($"{fieldPrefix}StorePlantIds",
+                "Store plants are only applicable when Store department is selected.");
         }
+    }
+
+    private static string[] ParseStorePlantIds(string? csv)
+    {
+        return (csv ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string? JoinStorePlantIds(string[]? ids)
+    {
+        var values = (ids ?? Array.Empty<string>())
+            .Select(x => (x ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return values.Length == 0 ? null : string.Join(",", values);
     }
 }

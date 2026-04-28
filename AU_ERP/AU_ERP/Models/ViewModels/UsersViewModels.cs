@@ -28,8 +28,8 @@ public class CreateUserViewModel
 
     public int[] DepartmentIds { get; set; } = Array.Empty<int>();
 
-    [Display(Name = "Store plant")]
-    public string? StorePlantId { get; set; }
+    [Display(Name = "Store plants")]
+    public string[] StorePlantIds { get; set; } = Array.Empty<string>();
 }
 
 public class EditUserViewModel
@@ -52,8 +52,8 @@ public class EditUserViewModel
 
     public int[] DepartmentIds { get; set; } = Array.Empty<int>();
 
-    [Display(Name = "Store plant")]
-    public string? StorePlantId { get; set; }
+    [Display(Name = "Store plants")]
+    public string[] StorePlantIds { get; set; } = Array.Empty<string>();
 }
 
 public class UsersIndexPageModel

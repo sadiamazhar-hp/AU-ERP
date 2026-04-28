@@ -38,6 +38,7 @@ namespace AU_ERP.Models
         public DbSet<ProductionOrder> ProductionOrders { get; set; }
         public DbSet<ProductionOrderStageProgress> ProductionOrderStageProgresses { get; set; }
         public DbSet<StockInventoryLine> StockInventoryLines { get; set; }
+        public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<GoodsProduceBatch> GoodsProduceBatches { get; set; }
         public DbSet<GoodReceiptDocument> GoodReceiptDocuments { get; set; }
         public DbSet<Charge> Charges { get; set; }
@@ -521,6 +522,47 @@ namespace AU_ERP.Models
                 .HasOne(g => g.ProductionOrder)
                 .WithMany()
                 .HasForeignKey(g => g.ProductionOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(m => m.MovementNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(m => m.MaterialNumber);
+
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(m => m.FromPlantId);
+
+            modelBuilder.Entity<StockMovement>()
+                .HasIndex(m => m.ToPlantId);
+
+            modelBuilder.Entity<StockMovement>()
+                .Property(m => m.QuantityMoved)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(m => m.Material)
+                .WithMany()
+                .HasForeignKey(m => m.MaterialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(m => m.FromPlant)
+                .WithMany()
+                .HasForeignKey(m => m.FromPlantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(m => m.ToPlant)
+                .WithMany()
+                .HasForeignKey(m => m.ToPlantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<StockMovement>()
+                .HasOne(m => m.QuantityUom)
+                .WithMany()
+                .HasForeignKey(m => m.QuantityUomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<StockInventoryLine>()

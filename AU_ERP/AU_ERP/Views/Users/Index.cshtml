@@ -112,17 +112,20 @@
                     </div>
                     @{
                         var hasStoreCreate = (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+                        var selectedStorePlantsCreate = Model.CreateForm.StorePlantIds ?? Array.Empty<string>();
                     }
                     <div class="mb-3" id="createStorePlantRow" style="display:@(hasStoreCreate ? "block" : "none");">
-                        <label asp-for="CreateForm.StorePlantId" class="form-label"></label>
-                        <select asp-for="CreateForm.StorePlantId" class="form-select">
-                            <option value="">— Select plant —</option>
+                        <div class="form-label">Store plants</div>
+                        <div class="border rounded p-2 bg-body-secondary" style="max-height: 10rem; overflow-y: auto;">
                             @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
                             {
-                                <option value="@p.PlantID">@p.PlantID — @p.PlantName</option>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="CreateForm.StorePlantIds" value="@p.PlantID" id="createUserPlant_@p.PlantID" checked="@(selectedStorePlantsCreate.Contains(p.PlantID))" />
+                                    <label class="form-check-label" for="createUserPlant_@p.PlantID">@p.PlantID — @p.PlantName</label>
+                                </div>
                             }
-                        </select>
-                        <span asp-validation-for="CreateForm.StorePlantId" class="text-danger small"></span>
+                        </div>
+                        <span asp-validation-for="CreateForm.StorePlantIds" class="text-danger small"></span>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -196,17 +199,20 @@
                     </div>
                     @{
                         var hasStoreEdit = (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+                        var selectedStorePlantsEdit = Model.EditForm.StorePlantIds ?? Array.Empty<string>();
                     }
                     <div class="mb-3" id="editStorePlantRow" style="display:@(hasStoreEdit ? "block" : "none");">
-                        <label asp-for="EditForm.StorePlantId" class="form-label"></label>
-                        <select asp-for="EditForm.StorePlantId" class="form-select">
-                            <option value="">— Select plant —</option>
+                        <div class="form-label">Store plants</div>
+                        <div class="border rounded p-2 bg-body-secondary" style="max-height: 10rem; overflow-y: auto;">
                             @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
                             {
-                                <option value="@p.PlantID">@p.PlantID — @p.PlantName</option>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="EditForm.StorePlantIds" value="@p.PlantID" id="editUserPlant_@p.PlantID" checked="@(selectedStorePlantsEdit.Contains(p.PlantID))" />
+                                    <label class="form-check-label" for="editUserPlant_@p.PlantID">@p.PlantID — @p.PlantName</label>
+                                </div>
                             }
-                        </select>
-                        <span asp-validation-for="EditForm.StorePlantId" class="text-danger small"></span>
+                        </div>
+                        <span asp-validation-for="EditForm.StorePlantIds" class="text-danger small"></span>
                     </div>
                 </div>
                 <div class="modal-footer">

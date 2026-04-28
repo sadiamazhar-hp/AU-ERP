@@ -7,7 +7,7 @@ using AU_ERP.Services;
 
 namespace AU_ERP.Controllers;
 
-[Authorize(Policy = "StoreDepartment")]
+[Authorize]
 public class StockOverviewController : Controller
     {
         private readonly AppDbContext _db;

@@ -1,7 +1,7 @@
 @model AU_ERP.Models.GoodReceiptIndexVm
 
 @{
-    ViewData["Title"] = "Good Issue / Good Receipt";
+    ViewData["Title"] = "Good Receipt";
     var draftCount = Model.Documents.Count(x => !x.IsPosted);
     var postedCount = Model.Documents.Count(x => x.IsPosted);
 }
@@ -38,7 +38,7 @@
 <div class="po-page">
     <div class="po-hero">
         <div>
-            <h1>Good Issue / Good Receipt</h1>
+            <h1>Good Receipt</h1>
             <p>Create draft receipts from Operation Tracking, then post to update inventory.</p>
         </div>
     </div>

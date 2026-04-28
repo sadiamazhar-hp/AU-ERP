@@ -20,6 +20,7 @@ namespace AU_ERP.Controllers
             ProductionOrder.PriorityMedium,
             ProductionOrder.PriorityHigh
         };
+        private const decimal InventoryEpsilon = 0.0001m;
 
         private async Task<int> AllocateNextProductionNumberAsync(CancellationToken ct)
         {
@@ -384,6 +385,13 @@ namespace AU_ERP.Controllers
                     });
                 }
 
+                var consumeErr = await ConsumeBomInventoryForReleaseAsync(routing.PlantID, mrp.Rows, ct);
+                if (consumeErr != null)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = consumeErr });
+                }
+
                 var (bomOk, bomErr, bomLines) = await MrpExplosionService.BuildScaledBomLinesFromLiveBomAsync(_db, entity, ct);
                 if (!bomOk)
                 {
@@ -427,13 +435,124 @@ namespace AU_ERP.Controllers
                 entity.Status = ProductionOrder.StatusInProgress;
                 await _db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
-                return Json(new { success = true, message = "Production order released. Operation stages created from routing." });
+                return Json(new { success = true, message = "Production order released. BOM components deducted from inventory and operation stages created from routing." });
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync(ct);
                 return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
             }
+        }
+
+        private async Task<string?> ConsumeBomInventoryForReleaseAsync(
+            string plantId,
+            IReadOnlyList<MrpRunResultRowDto>? mrpRows,
+            CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(plantId))
+                return "Routing plant is required for BOM inventory deduction.";
+
+            var reqRows = (mrpRows ?? new List<MrpRunResultRowDto>())
+                .Where(r => !string.IsNullOrWhiteSpace(r.MaterialNumber) && r.RequiredUomId > 0 && r.RequiredQty > 0)
+                .ToList();
+            if (reqRows.Count == 0)
+                return null;
+
+            var grouped = reqRows
+                .GroupBy(r => new { Mat = r.MaterialNumber.Trim(), r.RequiredUomId })
+                .Select(g => new
+                {
+                    MaterialNumber = g.Key.Mat,
+                    RequiredUomId = g.Key.RequiredUomId,
+                    RequiredQty = g.Sum(x => x.RequiredQty)
+                })
+                .ToList();
+
+            foreach (var req in grouped)
+            {
+                var rows = await _db.StockInventoryLines
+                    .Where(s => s.MaterialNumber == req.MaterialNumber
+                                && s.PlantID == plantId
+                                && s.Status == StockInventoryLine.StatusActive
+                                && s.Quantity > 0)
+                    .OrderBy(s => s.UpdatedAt)
+                    .ThenBy(s => s.Id)
+                    .ToListAsync(ct);
+
+                decimal available = 0m;
+                foreach (var row in rows)
+                {
+                    var conv = await UnitConversionMath.ConvertAsync(
+                        _db,
+                        req.MaterialNumber,
+                        row.Quantity,
+                        row.QuantityUomId,
+                        req.RequiredUomId,
+                        ct);
+                    if (conv.ok)
+                        available += conv.quantityOut;
+                }
+
+                if (available + InventoryEpsilon < req.RequiredQty)
+                {
+                    return $"Cannot release: insufficient BOM stock for '{req.MaterialNumber}' at plant '{plantId}'. " +
+                           $"Required {req.RequiredQty:0.####}, available {available:0.####}.";
+                }
+
+                decimal remaining = req.RequiredQty;
+                var now = DateTime.UtcNow;
+                foreach (var row in rows)
+                {
+                    if (remaining <= InventoryEpsilon)
+                        break;
+
+                    var convToReq = await UnitConversionMath.ConvertAsync(
+                        _db,
+                        req.MaterialNumber,
+                        row.Quantity,
+                        row.QuantityUomId,
+                        req.RequiredUomId,
+                        ct);
+                    if (!convToReq.ok || convToReq.quantityOut <= 0)
+                        continue;
+
+                    var takeReqQty = Math.Min(convToReq.quantityOut, remaining);
+                    var convBack = await UnitConversionMath.ConvertAsync(
+                        _db,
+                        req.MaterialNumber,
+                        takeReqQty,
+                        req.RequiredUomId,
+                        row.QuantityUomId,
+                        ct);
+                    if (!convBack.ok || convBack.quantityOut <= 0)
+                        continue;
+
+                    var takeInRowUom = Math.Min(row.Quantity, convBack.quantityOut);
+                    row.Quantity = Math.Round(row.Quantity - takeInRowUom, 4, MidpointRounding.AwayFromZero);
+                    if (row.Quantity < 0)
+                        row.Quantity = 0;
+                    row.StockValue = Math.Round(row.Quantity * row.StandardCostPerUom, 2, MidpointRounding.AwayFromZero);
+                    row.UpdatedAt = now;
+
+                    var consumedReqQty = await UnitConversionMath.ConvertAsync(
+                        _db,
+                        req.MaterialNumber,
+                        takeInRowUom,
+                        row.QuantityUomId,
+                        req.RequiredUomId,
+                        ct);
+                    if (consumedReqQty.ok)
+                        remaining = Math.Max(0m, remaining - consumedReqQty.quantityOut);
+                }
+
+                if (remaining > InventoryEpsilon)
+                {
+                    return $"Cannot release: insufficient BOM stock for '{req.MaterialNumber}' during deduction. " +
+                           $"Short by {remaining:0.####}.";
+                }
+            }
+
+            return null;
         }
 
         private string? ValidateDto(ProductionOrderCreateDto dto, out string priority, out DateTime start, out DateTime end)

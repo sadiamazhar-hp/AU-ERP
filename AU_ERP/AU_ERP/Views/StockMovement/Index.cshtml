@@ -1,0 +1,237 @@
+@model IReadOnlyList<AU_ERP.Models.StockMovement>
+@{
+    ViewData["Title"] = "Stock Movement";
+    var fromPlant = (ViewBag.FromPlantId as string) ?? "";
+    var total = Model.Count;
+    var today = Model.Count(x => x.MovementDate.Date == DateTime.Today);
+    var uniqueMaterials = Model.Select(x => x.MaterialNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+}
+
+@section Styles {
+    <style>
+        .po-page { color: var(--text, #32363a); }
+        .po-page .po-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+        .po-page .po-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .25rem 0; }
+        .po-page .po-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
+        .po-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+        @@media (max-width: 900px) { .po-stats { grid-template-columns: repeat(2, 1fr); } }
+        .po-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); border-top: 3px solid var(--blue, #0070f2); }
+        .po-stat-card .po-stat-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--subtle, #6a7c8e); text-transform: uppercase; }
+        .po-stat-card .po-stat-val { font-size: 1.65rem; font-weight: 600; color: var(--dark, #354a5e); line-height: 1.2; margin-top: .2rem; }
+        .po-table-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); }
+        .po-table-card .po-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+        .po-table-card .po-table-title { font-size: 1rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0; }
+        .po-table-wrap { overflow-x: auto; }
+        .po-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .po-table thead th { background: var(--dark, #354a5e); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+        .po-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+        .po-table tbody tr:nth-child(even) { background: #fafafa; }
+    </style>
+}
+
+<div class="po-page">
+    <div class="po-hero">
+        <div>
+            <h1>Stock Movement</h1>
+            <p>Transfer stock between plants with grade-level control.</p>
+        </div>
+    </div>
+
+    <div class="po-stats">
+        <div class="po-stat-card">
+            <div class="po-stat-label">Total Moves</div>
+            <div class="po-stat-val">@total</div>
+        </div>
+        <div class="po-stat-card">
+            <div class="po-stat-label">Today</div>
+            <div class="po-stat-val">@today</div>
+        </div>
+        <div class="po-stat-card">
+            <div class="po-stat-label">Materials</div>
+            <div class="po-stat-val">@uniqueMaterials</div>
+        </div>
+    </div>
+
+    <div class="po-table-card mb-3">
+        <div class="po-table-head">
+            <h2 class="po-table-title">New Transfer</h2>
+        </div>
+        <div class="row g-2" id="smFormRoot">
+            <div class="col-md-6">
+                <label class="form-label">Material</label>
+                <select class="form-select form-select-sm" id="smMaterialSelect">
+                    <option value="">-- Select --</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Material Number</label>
+                <input type="text" class="form-control form-control-sm" id="smMaterialNumber" readonly />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">From Plant</label>
+                <input type="text" class="form-control form-control-sm" id="smFromPlant" value="@fromPlant" readonly />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">To Plant</label>
+                <select class="form-select form-select-sm" id="smToPlant"></select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Grade</label>
+                <select class="form-select form-select-sm" id="smGrade">
+                    <option value="">-- Select --</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="Scrap">Scrap</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Quantity Present</label>
+                <input type="number" class="form-control form-control-sm" id="smQtyPresent" readonly />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Quantity Moved</label>
+                <input type="number" class="form-control form-control-sm" id="smQtyMoved" min="0.0001" step="0.0001" />
+            </div>
+            <div class="col-12 d-flex gap-2 align-items-center">
+                <button class="btn btn-success btn-sm" type="button" id="smSubmit">Submit Transfer</button>
+                <span class="text-danger small" id="smErr" style="display:none;"></span>
+                <span class="text-success small" id="smOk" style="display:none;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="po-table-card">
+        <div class="po-table-head">
+            <h2 class="po-table-title">Recent Movements (@Model.Count)</h2>
+        </div>
+        <div class="po-table-wrap">
+            <table class="po-table">
+                <thead>
+                <tr>
+                    <th>No.</th>
+                    <th>Date</th>
+                    <th>Material</th>
+                    <th>Grade</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Qty</th>
+                    <th>UOM</th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="8" class="text-secondary">No stock movements yet.</td></tr>
+                }
+                else
+                {
+                    foreach (var m in Model)
+                    {
+                        <tr>
+                            <td>@m.MovementNumber</td>
+                            <td>@m.MovementDate.ToString("dd-MMM-yyyy")</td>
+                            <td>@m.MaterialNumber @(m.Material?.Description is { Length: > 0 } d ? $"— {d}" : "")</td>
+                            <td>@m.Grade</td>
+                            <td>@m.FromPlantId</td>
+                            <td>@m.ToPlantId</td>
+                            <td>@m.QuantityMoved.ToString("0.####")</td>
+                            <td>@(m.QuantityUom?.Code ?? "—")</td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const materialSelect = document.getElementById('smMaterialSelect');
+            const matNo = document.getElementById('smMaterialNumber');
+            const toPlant = document.getElementById('smToPlant');
+            const grade = document.getElementById('smGrade');
+            const qtyPresent = document.getElementById('smQtyPresent');
+            const qtyMoved = document.getElementById('smQtyMoved');
+            const err = document.getElementById('smErr');
+            const ok = document.getElementById('smOk');
+
+            function showErr(msg) { err.textContent = msg || ''; err.style.display = msg ? '' : 'none'; ok.style.display = 'none'; }
+            function showOk(msg) { ok.textContent = msg || ''; ok.style.display = msg ? '' : 'none'; err.style.display = 'none'; }
+
+            async function loadToPlants() {
+                const res = await fetch('@Url.Action("ToPlants","StockMovement")');
+                const data = await res.json();
+                if (!data.success) { showErr(data.message || 'Failed to load plants.'); return; }
+                toPlant.innerHTML = '<option value="">-- Select --</option>';
+                (data.data || []).forEach(function (p) {
+                    const opt = document.createElement('option');
+                    opt.value = p.plantId;
+                    opt.textContent = p.plantName ? (p.plantId + ' — ' + p.plantName) : p.plantId;
+                    toPlant.appendChild(opt);
+                });
+            }
+
+            async function refreshQtyPresent() {
+                const mn = (matNo.value || '').trim();
+                const g = (grade.value || '').trim();
+                if (!mn) { qtyPresent.value = ''; return; }
+                const u = '@Url.Action("QuantityPresent","StockMovement")' + '?materialNumber=' + encodeURIComponent(mn) + '&grade=' + encodeURIComponent(g);
+                const res = await fetch(u);
+                const data = await res.json();
+                if (!data.success) { showErr(data.message || 'Failed to fetch quantity present.'); return; }
+                qtyPresent.value = (data.data && data.data.quantityPresent != null) ? data.data.quantityPresent : 0;
+            }
+
+            async function loadMaterials() {
+                const res = await fetch('@Url.Action("Materials","StockMovement")');
+                const data = await res.json();
+                const items = (data && data.success && data.data) ? data.data : [];
+                materialSelect.innerHTML = '<option value="">-- Select --</option>';
+                items.forEach(function (m) {
+                    const opt = document.createElement('option');
+                    opt.value = m.materialNumber || '';
+                    opt.textContent = (m.materialNumber || '') + (m.description ? (' — ' + m.description) : '');
+                    materialSelect.appendChild(opt);
+                });
+            }
+
+            materialSelect.addEventListener('change', function () {
+                matNo.value = (materialSelect.value || '').trim();
+                refreshQtyPresent();
+            });
+
+            grade.addEventListener('change', refreshQtyPresent);
+
+            document.getElementById('smSubmit').addEventListener('click', async function () {
+                showErr('');
+                const mn = (matNo.value || '').trim();
+                const tp = (toPlant.value || '').trim();
+                const g = (grade.value || '').trim();
+                const qPresent = parseFloat(qtyPresent.value || '0');
+                const qMoved = parseFloat(qtyMoved.value || '0');
+                if (!mn) return showErr('Material is required.');
+                if (!tp) return showErr('To Plant is required.');
+                if (!g) return showErr('Grade is required.');
+                if (!(qMoved > 0)) return showErr('Quantity moved must be greater than zero.');
+                if (qMoved > qPresent) return showErr('Quantity moved cannot exceed quantity present.');
+
+                const res = await fetch('@Url.Action("CreateTransfer","StockMovement")', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ materialNumber: mn, toPlantId: tp, grade: g, quantityMoved: qMoved })
+                });
+                const data = await res.json();
+                if (!data.success) return showErr(data.message || 'Transfer failed.');
+                showOk((data.message || 'Transferred.') + (data.movementNumber ? (' No: ' + data.movementNumber) : ''));
+                setTimeout(function () { window.location.reload(); }, 700);
+            });
+
+            loadToPlants();
+            loadMaterials();
+        })();
+    </script>
+}
+
