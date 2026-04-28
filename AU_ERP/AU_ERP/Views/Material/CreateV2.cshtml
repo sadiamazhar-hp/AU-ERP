@@ -216,7 +216,25 @@
                     <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label">Delivering Plant</label>
-                            @Html.DropDownListFor(m => m.DeliveringPlantCode, plantItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            @Html.HiddenFor(m => m.DeliveringPlantCode, new { id = "DeliveringPlantCodeV2" + V2IdAffix })
+                            <div class="dropdown" id="@("v2DeliveringPlantDd" + V2IdAffix)">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" id="@("v2DeliveringPlantBtn" + V2IdAffix)">
+                                    <span id="@("v2DeliveringPlantSummary" + V2IdAffix)">—</span> <span class="text-muted small" id="@("v2DeliveringPlantCount" + V2IdAffix)">(0)</span>
+                                </button>
+                                <ul class="dropdown-menu p-2 shadow" style="min-width: 20rem; max-width: 100vw; max-height: 320px; overflow-y: auto; z-index: 1055;" id="@("v2DeliveringPlantMenu" + V2IdAffix)">
+                                    @foreach (var p in plantItemsV2.Where(x => !string.IsNullOrWhiteSpace(x.Value)))
+                                    {
+                                        var pid = p.Value ?? "";
+                                        var ptxt = p.Text ?? pid;
+                                        <li class="px-2 py-1">
+                                            <label class="form-check small m-0">
+                                                <input class="form-check-input v2-deliver-plant-chk" type="checkbox" value="@pid" />
+                                                <span class="form-check-label">@ptxt</span>
+                                            </label>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
                             <label class="form-label mt-2">Grade A cost (per base UOM)</label>
                             <div class="input-group input-group-sm mb-1">
                                 @Html.EditorFor(m => m.SalesPriceGradeAPerBaseUom, new { htmlAttributes = new { @class = "form-control form-control-sm v2-mat-sale-pkr", type = "number", min = "0", step = "0.0001" } })
@@ -550,6 +568,39 @@
             });
         }
 
+        function parseMultiCsv(v) {
+            return String(v || "")
+                .split(",")
+                .map(function (x) { return String(x || "").trim(); })
+                .filter(function (x) { return x.length > 0; });
+        }
+
+        function syncDeliveringPlantSummaryV2() {
+            const form = document.getElementById(v2id("createMaterialV2Form"));
+            if (!form) return;
+            const hidden = document.getElementById(v2id("DeliveringPlantCodeV2"));
+            if (!hidden) return;
+            const selected = [];
+            form.querySelectorAll(".v2-deliver-plant-chk:checked").forEach(function (cb) {
+                selected.push(String(cb.value || "").trim());
+            });
+            hidden.value = selected.join(",");
+            const summary = document.getElementById(v2id("v2DeliveringPlantSummary"));
+            const count = document.getElementById(v2id("v2DeliveringPlantCount"));
+            if (summary) summary.textContent = selected.length ? selected.join(", ") : "—";
+            if (count) count.textContent = "(" + selected.length + ")";
+        }
+
+        function applyDeliveringPlantFromValueV2(value) {
+            const form = document.getElementById(v2id("createMaterialV2Form"));
+            if (!form) return;
+            const selected = new Set(parseMultiCsv(value));
+            form.querySelectorAll(".v2-deliver-plant-chk").forEach(function (cb) {
+                cb.checked = selected.has(String(cb.value || "").trim());
+            });
+            syncDeliveringPlantSummaryV2();
+        }
+
         function v2CollectValidationInvalid() {
             var bad = [];
             var form = document.getElementById(v2id("createMaterialV2Form"));
@@ -575,6 +626,7 @@
                 const el = form.querySelector('[name="' + name + '"]');
                 if (!el) return;
                 el.value = value != null && value !== undefined ? value : "";
+                if (name === "DeliveringPlantCode") applyDeliveringPlantFromValueV2(el.value);
             }
             setVal("MaterialNumber", pick(m, "materialNumber", "MaterialNumber"));
             setVal("IndustrySectorCode", pick(m, "industrySectorCode", "IndustrySectorCode"));
@@ -644,6 +696,7 @@
             handleTabVisibilityV2();
             syncMrpQtyFieldsV2();
             updateV2MatSalesState();
+            applyDeliveringPlantFromValueV2("");
         }
 
         if (createV2Embedded)
@@ -660,8 +713,12 @@
             if (baseUomSel) {
                 baseUomSel.addEventListener("change", function () { refreshAlternateUomMenuV2(); updateV2MatSalesState(); });
             }
+            document.querySelectorAll(".v2-deliver-plant-chk").forEach(function (cb) {
+                cb.addEventListener("change", syncDeliveringPlantSummaryV2);
+            });
             refreshAlternateUomMenuV2();
             updateV2MatSalesState();
+            applyDeliveringPlantFromValueV2((document.getElementById(v2id("DeliveringPlantCodeV2")) || {}).value || "");
             const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
             if (saveBtn) {
                 saveBtn.addEventListener("click", function () {
