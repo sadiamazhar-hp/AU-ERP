@@ -52,6 +52,8 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<DashboardDataService>();
+builder.Services.AddScoped<GoodsReceiptPostingService>();
+builder.Services.AddScoped<GoodReceiptPdfService>();
 
 builder.Services.AddControllersWithViews(options =>
 {

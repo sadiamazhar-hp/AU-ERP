@@ -39,6 +39,7 @@ namespace AU_ERP.Models
         public DbSet<ProductionOrderStageProgress> ProductionOrderStageProgresses { get; set; }
         public DbSet<StockInventoryLine> StockInventoryLines { get; set; }
         public DbSet<GoodsProduceBatch> GoodsProduceBatches { get; set; }
+        public DbSet<GoodReceiptDocument> GoodReceiptDocuments { get; set; }
         public DbSet<Charge> Charges { get; set; }
         public DbSet<SalesQuotation> SalesQuotations { get; set; }
         public DbSet<SalesQuotationItem> SalesQuotationItems { get; set; }
@@ -497,6 +498,28 @@ namespace AU_ERP.Models
             modelBuilder.Entity<GoodsProduceBatch>()
                 .HasOne(g => g.ProductionOrder)
                 .WithMany(p => p.GoodsProduceBatches)
+                .HasForeignKey(g => g.ProductionOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GoodReceiptDocument>()
+                .HasIndex(g => g.ProductionOrderId)
+                .IsUnique();
+
+            modelBuilder.Entity<GoodReceiptDocument>()
+                .HasIndex(g => g.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<GoodReceiptDocument>()
+                .Property(g => g.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<GoodReceiptDocument>()
+                .Property(g => g.BatchNo)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<GoodReceiptDocument>()
+                .HasOne(g => g.ProductionOrder)
+                .WithMany()
                 .HasForeignKey(g => g.ProductionOrderId)
                 .OnDelete(DeleteBehavior.Restrict);
 

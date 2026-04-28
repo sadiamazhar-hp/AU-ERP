@@ -97,7 +97,9 @@ namespace AU_ERP.Controllers
             var seq = 10;
             foreach (var op in ops)
             {
-                var timeUom = await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
+                var timeUom = WorkCenterTimeUom.FromMeasurementCode(op.TimeUom)
+                              ?? await ResolveOpTimeUomFromWorkCentreAsync(op.WorkCenterID, ct);
+
                 if (string.IsNullOrWhiteSpace(timeUom) || !WorkCenterTimeUom.IsAllowed(timeUom))
                 {
                     var wcName = op.WorkCenterID.HasValue
@@ -109,7 +111,7 @@ namespace AU_ERP.Controllers
                     return Json(new
                     {
                         success = false,
-                        message = $"Work centre '{wcName ?? "—"}' has no time UOM (Min, Hr, Day). Set UOM on the work centre before using it in routing."
+                        message = $"Select a valid time UOM (Min, Hr, Day) for work centre '{wcName ?? "—"}'."
                     });
                 }
 
@@ -457,5 +459,6 @@ namespace AU_ERP.Controllers
         public string? Description { get; set; }
         public decimal? MachineTime { get; set; }
         public decimal? LaborTime { get; set; }
+        public string? TimeUom { get; set; }
     }
 }

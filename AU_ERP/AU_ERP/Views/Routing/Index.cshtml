@@ -441,6 +441,15 @@
         return html;
     }
 
+    function rtBuildTimeUomSelectHtml(selectedValue) {
+        var s = (selectedValue || "").trim();
+        function opt(v, label) {
+            var sel = (v === s) ? ' selected' : '';
+            return '<option value="' + v + '"' + sel + '>' + label + '</option>';
+        }
+        return '<option value="">-- Select --</option>' + opt('Hr', 'Hr') + opt('Day', 'Day') + opt('Min', 'Min');
+    }
+
     function rtFindWcMeta(idStr) {
         var n = parseInt(idStr, 10);
         if (isNaN(n)) return null;
@@ -453,13 +462,11 @@
     function rtSyncOpRowUomFromWc(tr) {
         if (!tr) return;
         var sel = tr.querySelector(".rt-op-wc");
-        var disp = tr.querySelector(".rt-op-uom-display");
-        if (!disp) return;
+        var uomSel = tr.querySelector(".rt-op-uom");
+        if (!uomSel) return;
         var meta = sel ? rtFindWcMeta(sel.value) : null;
         if (meta && meta.timeUom != null && String(meta.timeUom).trim() !== "") {
-            disp.value = String(meta.timeUom).trim();
-        } else {
-            disp.value = "";
+            uomSel.value = String(meta.timeUom).trim();
         }
     }
 
@@ -471,6 +478,7 @@
         var desc = data ? (data.description || data.Description || "") : "";
         var mt = data ? (data.machineTime != null ? data.machineTime : (data.MachineTime || "")) : "";
         var lt = data ? (data.laborTime != null ? data.laborTime : (data.LaborTime || "")) : "";
+        var tu = data ? (data.timeUom || data.TimeUom || "") : "";
         if (data && (data.operationSequence || data.OperationSequence)) {
             opSeq = data.operationSequence || data.OperationSequence;
         }
@@ -480,7 +488,7 @@
             '<td><input type="text" class="form-control form-control-sm rt-op-desc" value="' + escRtAttr(desc) + '" /></td>' +
             '<td><input type="number" class="form-control form-control-sm rt-op-machine" step="0.01" value="' + escRtAttr(mt) + '" /></td>' +
             '<td><input type="number" class="form-control form-control-sm rt-op-labor" step="0.01" value="' + escRtAttr(lt) + '" /></td>' +
-            '<td><input type="text" class="form-control form-control-sm rt-op-uom-display" readonly tabindex="-1" style="background:#f4f4f4;" value="" /></td>' +
+            '<td><select class="form-select form-select-sm rt-op-uom">' + rtBuildTimeUomSelectHtml(tu) + '</select></td>' +
             '<td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove()">X</button></td>';
         tbody.appendChild(tr);
         rtSyncOpRowUomFromWc(tr);
@@ -579,11 +587,13 @@
             if (tbody) {
                 tbody.querySelectorAll("tr").forEach(function (tr) {
                     var wcVal = tr.querySelector(".rt-op-wc")?.value;
+                    var uomVal = tr.querySelector(".rt-op-uom")?.value;
                     ops.push({
                         WorkCenterID: wcVal ? parseInt(wcVal, 10) : null,
                         Description: (tr.querySelector(".rt-op-desc")?.value || "").trim() || null,
                         MachineTime: parseFloat(tr.querySelector(".rt-op-machine")?.value) || null,
-                        LaborTime: parseFloat(tr.querySelector(".rt-op-labor")?.value) || null
+                        LaborTime: parseFloat(tr.querySelector(".rt-op-labor")?.value) || null,
+                        TimeUom: (uomVal || "").trim() || null
                     });
                 });
             }
@@ -618,12 +628,12 @@
                 var desc = tr.querySelector(".rt-op-desc");
                 var mach = tr.querySelector(".rt-op-machine");
                 var lab = tr.querySelector(".rt-op-labor");
+                var uom = tr.querySelector(".rt-op-uom");
                 if (!wc || !(wc.value || "").trim()) bad.push(wc);
                 if (!desc || !(desc.value || "").trim()) bad.push(desc);
                 if (!rtNumFieldOk(mach)) bad.push(mach);
                 if (!rtNumFieldOk(lab)) bad.push(lab);
-                var meta = wc ? rtFindWcMeta(wc.value) : null;
-                if (!meta || meta.timeUom == null || String(meta.timeUom).trim() === "") bad.push(wc);
+                if (!uom || !(uom.value || "").trim()) bad.push(uom);
             });
             }
         });

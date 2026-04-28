@@ -1,0 +1,512 @@
+@model AU_ERP.Models.GoodReceiptIndexVm
+
+@{
+    ViewData["Title"] = "Good Issue / Good Receipt";
+    var draftCount = Model.Documents.Count(x => !x.IsPosted);
+    var postedCount = Model.Documents.Count(x => x.IsPosted);
+}
+
+@section Styles {
+    <style>
+        /* Match Production Order page look */
+        .po-page { color: var(--text, #32363a); }
+        .po-page .po-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+        .po-page .po-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .25rem 0; }
+        .po-page .po-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
+        .po-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+        @@media (max-width: 900px) { .po-stats { grid-template-columns: repeat(2, 1fr); } }
+        .po-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); border-top: 3px solid var(--blue, #0070f2); }
+        .po-stat-card .po-stat-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--subtle, #6a7c8e); text-transform: uppercase; }
+        .po-stat-card .po-stat-val { font-size: 1.65rem; font-weight: 600; color: var(--dark, #354a5e); line-height: 1.2; margin-top: .2rem; }
+        .po-table-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); }
+        .po-table-card .po-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+        .po-table-card .po-table-title { font-size: 1rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0; }
+        .po-table-card .po-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+        .po-table-wrap { overflow-x: auto; }
+        .po-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .po-table thead th { background: var(--dark, #354a5e); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+        .po-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+        .po-table tbody tr:nth-child(even) { background: #fafafa; }
+        .po-actions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+        .po-actions .btn { font-size: .75rem; padding: .2rem .5rem; }
+        .po-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
+        .po-badge-draft { background: #e2e3e5; color: #41464b; }
+        .po-badge-posted { background: #d1e7dd; color: #0f5132; }
+    </style>
+}
+
+<div class="po-page">
+    <div class="po-hero">
+        <div>
+            <h1>Good Issue / Good Receipt</h1>
+            <p>Create draft receipts from Operation Tracking, then post to update inventory.</p>
+        </div>
+    </div>
+
+    <div class="po-stats">
+        <div class="po-stat-card">
+            <div class="po-stat-label">Draft</div>
+            <div class="po-stat-val">@draftCount</div>
+        </div>
+        <div class="po-stat-card">
+            <div class="po-stat-label">Posted</div>
+            <div class="po-stat-val">@postedCount</div>
+        </div>
+        <div class="po-stat-card">
+            <div class="po-stat-label">Total</div>
+            <div class="po-stat-val">@Model.Documents.Count</div>
+        </div>
+    </div>
+
+    <div class="po-table-card">
+        <div class="po-table-head">
+            <h2 class="po-table-title">Good Receipts (@Model.Documents.Count)</h2>
+            <div class="po-toolbar">
+                <a class="btn btn-sm btn-outline-secondary" asp-controller="OperationTracking" asp-action="Index">Go to Operation Tracking</a>
+            </div>
+        </div>
+
+        <div class="po-table-wrap">
+            <table class="po-table" id="grTable">
+                <thead>
+                <tr>
+                    <th>Doc Date</th>
+                    <th>Doc No</th>
+                    <th>PO</th>
+                    <th>Material</th>
+                    <th>Description</th>
+                    <th class="text-end">Produced</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (Model.Documents.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-secondary">No good receipts found.</td></tr>
+                }
+                else
+                {
+                    foreach (var d in Model.Documents)
+                    {
+                        <tr data-gr-id="@d.Id" data-po-id="@d.ProductionOrderId">
+                            <td>@d.DocumentDate.ToString("dd-MMM-yyyy")</td>
+                            <td>@(string.IsNullOrWhiteSpace(d.DocumentNumber) ? "—" : d.DocumentNumber)</td>
+                            <td><strong>PO-@(d.ProductionNumber?.ToString() ?? d.ProductionOrderId.ToString())</strong></td>
+                            <td>@(d.FinishedMaterialNumber ?? "—")</td>
+                            <td>@(string.IsNullOrWhiteSpace(d.FinishedMaterialName) ? "—" : d.FinishedMaterialName)</td>
+                            <td class="text-end">@d.ProducedQty.ToString("0.####")</td>
+                            <td>
+                                @if (d.IsPosted)
+                                {
+                                    <span class="po-badge po-badge-posted">Posted</span>
+                                }
+                                else
+                                {
+                                    <span class="po-badge po-badge-draft">Draft</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="po-actions">
+                                    @if (!d.IsPosted)
+                                    {
+                                        <button type="button" class="btn btn-success btn-sm gr-post-btn" title="Post receipt">
+                                            <i class="bi bi-box-seam"></i> Post Receipt
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm gr-edit-draft-btn" title="Edit draft">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary btn-sm gr-view-btn" title="View">
+                                            <i class="bi bi-eye"></i> View
+                                        </button>
+                                        <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "GoodReceipt", new { id = d.Id })" title="Download PDF">
+                                            <i class="bi bi-file-earmark-pdf"></i> PDF
+                                        </a>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm gr-edit-posted-btn" title="Edit (posted)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Edit / Post Modal -->
+<div class="modal fade" id="grEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content au-create-v2-modal">
+            <div class="modal-header bg-dark text-white border-secondary py-2">
+                <div>
+                    <h5 class="modal-title fs-6 mb-0" id="grEditModalTitle">Good Receipt</h5>
+                    <div class="small text-white-50" id="grEditMaterialLine" style="line-height:1.2;"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="grEditId" />
+                <input type="hidden" id="grEditIsPosted" value="0" />
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Document Date</label>
+                        <input type="date" class="form-control" id="grDocDate" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Document Number</label>
+                        <input type="text" class="form-control" id="grDocNo" maxlength="40" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Batch No</label>
+                        <input type="text" class="form-control" id="grBatchNo" maxlength="64" />
+                    </div>
+                </div>
+
+                <hr />
+
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Produced Qty</label>
+                        <input type="number" class="form-control" id="grProducedQty" step="0.0001" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Grade A</label>
+                        <input type="number" class="form-control" id="grAQty" step="0.0001" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Grade B</label>
+                        <input type="number" class="form-control" id="grBQty" step="0.0001" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Grade C</label>
+                        <input type="number" class="form-control" id="grCQty" step="0.0001" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Scrap</label>
+                        <input type="number" class="form-control" id="grScrapQty" step="0.0001" />
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3 mb-0" id="grSumInfo">
+                    Sum check: Produced = A + B + C + Scrap
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="grSaveBtn">Save</button>
+                <button type="button" class="btn btn-success" id="grSaveAndPostBtn">Save &amp; Post</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Modal -->
+<div class="modal fade" id="grViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Good Receipt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="grViewBody">
+                Loading...
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const editModalEl = document.getElementById('grEditModal');
+            const viewModalEl = document.getElementById('grViewModal');
+            const editModal = editModalEl ? bootstrap.Modal.getOrCreateInstance(editModalEl) : null;
+            const viewModal = viewModalEl ? bootstrap.Modal.getOrCreateInstance(viewModalEl) : null;
+
+            function ensureOnBody(el) {
+                if (!el) return;
+                if (el.parentElement !== document.body) document.body.appendChild(el);
+            }
+
+            function cleanupBackdrops() {
+                document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('padding-right');
+            }
+
+            [editModalEl, viewModalEl].forEach(function (el) {
+                if (!el) return;
+                ensureOnBody(el);
+                el.addEventListener('hidden.bs.modal', cleanupBackdrops);
+                el.addEventListener('show.bs.modal', function () {
+                    ensureOnBody(el);
+                    // sometimes a stale backdrop remains if a modal was force-closed
+                    if (!document.querySelector('.modal.show')) cleanupBackdrops();
+                });
+            });
+
+            function rowToVm(tr) {
+                const tds = tr.querySelectorAll('td');
+                return {
+                    id: parseInt(tr.getAttribute('data-gr-id') || '0', 10),
+                    documentDateText: (tds[0]?.innerText || '').trim(),
+                    documentNumber: (tds[1]?.innerText || '').trim(),
+                    producedQtyText: (tds[5]?.innerText || '').trim()
+                };
+            }
+
+            function parseDateFromCell(text) {
+                // our table is dd-MMM-yyyy; fall back to today if parse fails
+                const d = new Date(text);
+                if (!isNaN(d.getTime())) return d;
+                return new Date();
+            }
+
+            function toInputDate(d) {
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            }
+
+            function numVal(id) {
+                const el = document.getElementById(id);
+                const v = parseFloat((el?.value || '').toString());
+                return isNaN(v) ? 0 : v;
+            }
+
+            function updateSumInfo() {
+                const produced = numVal('grProducedQty');
+                const sum = numVal('grAQty') + numVal('grBQty') + numVal('grCQty') + numVal('grScrapQty');
+                const ok = Math.abs(produced - sum) <= 0.0001;
+                const el = document.getElementById('grSumInfo');
+                if (!el) return;
+                el.className = 'alert mt-3 mb-0 ' + (ok ? 'alert-success' : 'alert-warning');
+                el.innerText = `Sum check: Produced (${produced}) vs A+B+C+Scrap (${sum})`;
+            }
+
+            function setQtyInputsDisabled(disabled) {
+                ['grProducedQty', 'grAQty', 'grBQty', 'grCQty', 'grScrapQty'].forEach(function (id) {
+                    const el = document.getElementById(id);
+                    if (el) el.disabled = !!disabled;
+                });
+            }
+
+            function openEditModalFromDraft(d) {
+                document.getElementById('grEditModalTitle').innerText = 'Post Goods Receipt';
+                document.getElementById('grEditIsPosted').value = '0';
+                setQtyInputsDisabled(false);
+                const sap = document.getElementById('grSaveAndPostBtn');
+                if (sap) sap.style.display = '';
+                updateSumInfo();
+                editModal?.show();
+            }
+
+            function openEditModalForPostedMeta(d) {
+                document.getElementById('grEditModalTitle').innerText = 'Edit Posted Goods Receipt';
+                document.getElementById('grEditIsPosted').value = '1';
+                // Posted receipts: allow correcting header metadata only (no inventory impact).
+                setQtyInputsDisabled(true);
+                const sap = document.getElementById('grSaveAndPostBtn');
+                if (sap) sap.style.display = 'none';
+                updateSumInfo();
+                editModal?.show();
+            }
+
+            document.addEventListener('input', function (e) {
+                if (!e.target) return;
+                const id = e.target.id || '';
+                if (id.startsWith('gr') && (id.endsWith('Qty') || id === 'grProducedQty')) updateSumInfo();
+            });
+
+            document.addEventListener('click', async function (e) {
+                const btn = e.target && e.target.closest ? e.target.closest('button, a') : e.target;
+                if (!btn) return;
+
+                const tr = btn.closest('tr');
+                if (!tr) return;
+                const id = parseInt(tr.getAttribute('data-gr-id') || '0', 10);
+                if (!id) return;
+
+                if (btn.classList.contains('gr-edit-draft-btn')) {
+                    const res = await fetch('@Url.Action("GetDraft", "GoodReceipt")?id=' + encodeURIComponent(id));
+                    const payload = await res.json();
+                    if (!payload.success) {
+                        alert(payload.message || 'Unable to load draft.');
+                        return;
+                    }
+                    const d = payload.data || {};
+                    const ml = document.getElementById('grEditMaterialLine');
+                    if (ml) {
+                        const code = (d.materialNumber || '').toString().trim();
+                        const desc = (d.materialDescription || '').toString().trim();
+                        ml.textContent = (code || desc) ? (code + (desc ? ' — ' + desc : '')) : '';
+                    }
+                    document.getElementById('grEditId').value = String(d.id || id);
+                    document.getElementById('grDocDate').value = (d.documentDate || toInputDate(new Date()));
+                    document.getElementById('grDocNo').value = (d.documentNumber || '');
+                    document.getElementById('grBatchNo').value = (d.batchNo || '');
+                    document.getElementById('grProducedQty').value = String(d.producedQty ?? 0);
+                    document.getElementById('grAQty').value = String(d.qtyFirstQuality ?? 0);
+                    document.getElementById('grBQty').value = String(d.qtySecondQuality ?? 0);
+                    document.getElementById('grCQty').value = String(d.qtyThirdQuality ?? 0);
+                    document.getElementById('grScrapQty').value = String(d.rejectedScrapQty ?? 0);
+                    openEditModalFromDraft(d);
+                    return;
+                }
+
+                if (btn.classList.contains('gr-edit-posted-btn')) {
+                    const res = await fetch('@Url.Action("GetDraft", "GoodReceipt")?id=' + encodeURIComponent(id));
+                    const payload = await res.json();
+                    if (!payload.success) {
+                        alert(payload.message || 'Unable to load draft.');
+                        return;
+                    }
+                    const d = payload.data || {};
+                    const ml = document.getElementById('grEditMaterialLine');
+                    if (ml) {
+                        const code = (d.materialNumber || '').toString().trim();
+                        const desc = (d.materialDescription || '').toString().trim();
+                        ml.textContent = (code || desc) ? (code + (desc ? ' — ' + desc : '')) : '';
+                    }
+                    document.getElementById('grEditId').value = String(d.id || id);
+                    document.getElementById('grDocDate').value = (d.documentDate || toInputDate(new Date()));
+                    document.getElementById('grDocNo').value = (d.documentNumber || '');
+                    document.getElementById('grBatchNo').value = (d.batchNo || '');
+                    document.getElementById('grProducedQty').value = String(d.producedQty ?? 0);
+                    document.getElementById('grAQty').value = String(d.qtyFirstQuality ?? 0);
+                    document.getElementById('grBQty').value = String(d.qtySecondQuality ?? 0);
+                    document.getElementById('grCQty').value = String(d.qtyThirdQuality ?? 0);
+                    document.getElementById('grScrapQty').value = String(d.rejectedScrapQty ?? 0);
+                    openEditModalForPostedMeta(d);
+                    return;
+                }
+
+                if (btn.id === 'grSaveBtn' || btn.id === 'grSaveAndPostBtn') return;
+
+                if (btn.classList.contains('gr-post-btn')) {
+                    const res = await fetch('@Url.Action("GetDraft", "GoodReceipt")?id=' + encodeURIComponent(id));
+                    const payload = await res.json();
+                    if (!payload.success) {
+                        alert(payload.message || 'Unable to load draft.');
+                        return;
+                    }
+                    const d = payload.data || {};
+                    const ml = document.getElementById('grEditMaterialLine');
+                    if (ml) {
+                        const code = (d.materialNumber || '').toString().trim();
+                        const desc = (d.materialDescription || '').toString().trim();
+                        ml.textContent = (code || desc) ? (code + (desc ? ' — ' + desc : '')) : '';
+                    }
+                    document.getElementById('grEditId').value = String(d.id || id);
+                    document.getElementById('grDocDate').value = (d.documentDate || toInputDate(new Date()));
+                    document.getElementById('grDocNo').value = (d.documentNumber || '');
+                    document.getElementById('grBatchNo').value = (d.batchNo || '');
+                    document.getElementById('grProducedQty').value = String(d.producedQty ?? 0);
+                    document.getElementById('grAQty').value = String(d.qtyFirstQuality ?? 0);
+                    document.getElementById('grBQty').value = String(d.qtySecondQuality ?? 0);
+                    document.getElementById('grCQty').value = String(d.qtyThirdQuality ?? 0);
+                    document.getElementById('grScrapQty').value = String(d.rejectedScrapQty ?? 0);
+                    openEditModalFromDraft(d);
+                    return;
+                }
+
+                if (btn.classList.contains('gr-view-btn')) {
+                    const html = await fetch('@Url.Action("View", "GoodReceipt")?id=' + encodeURIComponent(id)).then(r => r.text());
+                    const body = document.getElementById('grViewBody');
+                    if (body) body.innerHTML = html;
+                    viewModal?.show();
+                    return;
+                }
+            });
+
+            const saveBtn = document.getElementById('grSaveBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async function () {
+                    const dto = {
+                        id: parseInt(document.getElementById('grEditId').value || '0', 10),
+                        documentDate: document.getElementById('grDocDate').value,
+                        documentNumber: document.getElementById('grDocNo').value,
+                        batchNo: document.getElementById('grBatchNo').value,
+                        producedQty: numVal('grProducedQty'),
+                        qtyFirstQuality: numVal('grAQty'),
+                        qtySecondQuality: numVal('grBQty'),
+                        qtyThirdQuality: numVal('grCQty'),
+                        rejectedScrapQty: numVal('grScrapQty')
+                    };
+
+                    const isPosted = (document.getElementById('grEditIsPosted').value || '0') === '1';
+                    const url = isPosted
+                        ? '@Url.Action("UpdatePostedMeta", "GoodReceipt")'
+                        : '@Url.Action("SaveDraft", "GoodReceipt")';
+
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(dto)
+                    });
+                    const data = await resp.json();
+                    if (!data.success) {
+                        alert(data.message || 'Save failed.');
+                        return;
+                    }
+                    window.location.reload();
+                });
+            }
+
+            const saveAndPostBtn = document.getElementById('grSaveAndPostBtn');
+            if (saveAndPostBtn) {
+                saveAndPostBtn.addEventListener('click', async function () {
+                    const id = parseInt(document.getElementById('grEditId').value || '0', 10);
+                    if (!id) return;
+
+                    const produced = numVal('grProducedQty');
+                    const sum = numVal('grAQty') + numVal('grBQty') + numVal('grCQty') + numVal('grScrapQty');
+                    if (Math.abs(produced - sum) > 0.0001) {
+                        alert('Produced must equal A + B + C + Scrap before posting.');
+                        return;
+                    }
+
+                    if (!confirm('Post this Good Receipt? This will update inventory and cannot be posted again.')) return;
+
+                    const dto = {
+                        id: id,
+                        documentDate: document.getElementById('grDocDate').value,
+                        documentNumber: document.getElementById('grDocNo').value,
+                        batchNo: document.getElementById('grBatchNo').value,
+                        producedQty: numVal('grProducedQty'),
+                        qtyFirstQuality: numVal('grAQty'),
+                        qtySecondQuality: numVal('grBQty'),
+                        qtyThirdQuality: numVal('grCQty'),
+                        rejectedScrapQty: numVal('grScrapQty')
+                    };
+
+                    const saveResp = await fetch('@Url.Action("SaveDraft", "GoodReceipt")', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(dto)
+                    });
+                    const saveData = await saveResp.json();
+                    if (!saveData.success) {
+                        alert(saveData.message || 'Save failed.');
+                        return;
+                    }
+
+                    const postResp = await fetch('@Url.Action("PostReceipt", "GoodReceipt")?id=' + encodeURIComponent(id), { method: 'POST' });
+                    const postData = await postResp.json();
+                    alert(postData.message || (postData.success ? 'Posted.' : 'Failed.'));
+                    if (postData.success) window.location.reload();
+                });
+            }
+        })();
+    </script>
+}
+

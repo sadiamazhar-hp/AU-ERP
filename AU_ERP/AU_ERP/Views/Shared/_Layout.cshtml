@@ -47,6 +47,9 @@
     var operationTrackingActive = string.Equals(ctrl, "OperationTracking", StringComparison.OrdinalIgnoreCase)
         && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
             || string.Equals(act, "Details", StringComparison.OrdinalIgnoreCase));
+    var goodReceiptActive = string.Equals(ctrl, "GoodReceipt", StringComparison.OrdinalIgnoreCase)
+        && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(act, "CreateOrOpen", StringComparison.OrdinalIgnoreCase));
     var stockOverviewActive = string.Equals(ctrl, "StockOverview", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var usersActive = string.Equals(ctrl, "Users", StringComparison.OrdinalIgnoreCase)
@@ -135,6 +138,7 @@
                     <a class="au-sidebar-link @(mrpActive ? "active" : null)" asp-controller="MRP" asp-action="Index">MRP</a>
                     <a class="au-sidebar-link @(productionOrderActive ? "active" : null)" asp-controller="ProductionOrder" asp-action="Index">Production Order</a>
                     <a class="au-sidebar-link @(operationTrackingActive ? "active" : null)" asp-controller="OperationTracking" asp-action="Index">Operation Tracking</a>
+                    <a class="au-sidebar-link @(goodReceiptActive ? "active" : null)" asp-controller="GoodReceipt" asp-action="Index">Good Issue / Good Receipt</a>
                 }
 
                 @if (isAdminDept)
