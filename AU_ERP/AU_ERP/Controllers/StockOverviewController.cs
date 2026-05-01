@@ -11,18 +11,22 @@ namespace AU_ERP.Controllers;
 public class StockOverviewController : Controller
     {
         private readonly AppDbContext _db;
+        private const string EmporiumPlantId = "Emp101";
 
         public StockOverviewController(AppDbContext db) => _db = db;
 
         private static decimal ComputeStockValue(decimal quantity, decimal standardCostPerUom)
             => Math.Round(quantity * standardCostPerUom, 2, MidpointRounding.AwayFromZero);
 
+        private static bool IsEmporiumPlant(string? plantId)
+            => string.Equals((plantId ?? "").Trim(), EmporiumPlantId, StringComparison.OrdinalIgnoreCase);
+
         public async Task<IActionResult> Index(string? q, string? materialTypeCode, int? uomId, CancellationToken ct = default)
         {
             ViewData["Title"] = "Stock Overview";
 
-            var plantId = UserPlantResolution.TryGetStorePlantId(User);
-            var missingPlant = plantId == null && User.HasClaim(AuClaimTypes.Department, "Store");
+            var plantIds = UserPlantResolution.GetStorePlantIds(User);
+            var missingPlant = plantIds.Count == 0 && User.HasClaim(AuClaimTypes.Department, "Store");
 
             var query = _db.StockInventoryLines.AsNoTracking()
                 .Include(s => s.Material!)
@@ -30,8 +34,8 @@ public class StockOverviewController : Controller
                 .Include(s => s.QuantityUom)
                 .AsQueryable();
 
-            if (!missingPlant && !string.IsNullOrEmpty(plantId))
-                query = query.Where(s => s.PlantID == plantId);
+            if (!missingPlant && plantIds.Count > 0)
+                query = query.Where(s => plantIds.Contains(s.PlantID));
 
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -56,8 +60,10 @@ public class StockOverviewController : Controller
             var vm = new StockOverviewPageVm
             {
                 Items = items,
+                AssignedPlantIds = plantIds.ToList(),
                 MissingStorePlantAssignment = missingPlant,
-                PlantDisplay = plantId,
+                PlantDisplay = plantIds.Count == 1 ? plantIds[0] : string.Join(", ", plantIds),
+                CanAddStockEntry = plantIds.Any(p => !IsEmporiumPlant(p)),
                 Q = q,
                 MaterialTypeCode = string.IsNullOrWhiteSpace(materialTypeCode) ? "All" : materialTypeCode,
                 UomId = uomId
@@ -66,10 +72,10 @@ public class StockOverviewController : Controller
             return View(vm);
         }
 
-        bool EnsureStorePlantForApi(ClaimsPrincipal user, out string plantId)
+        bool EnsureStorePlantForApi(ClaimsPrincipal user, out List<string> plantIds)
         {
-            plantId = UserPlantResolution.TryGetStorePlantId(user) ?? "";
-            return plantId.Length > 0;
+            plantIds = UserPlantResolution.GetStorePlantIds(user).ToList();
+            return plantIds.Count > 0;
         }
 
         [HttpGet]
@@ -123,11 +129,11 @@ public class StockOverviewController : Controller
         [HttpGet]
         public async Task<JsonResult> GetForEdit(int id, CancellationToken ct = default)
         {
-            if (!EnsureStorePlantForApi(User, out var plantId))
+            if (!EnsureStorePlantForApi(User, out var plantIds))
                 return Json(new { success = false, message = "Your user has no store plant assigned." });
 
             var row = await _db.StockInventoryLines.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Id == id && s.PlantID == plantId, ct);
+                .FirstOrDefaultAsync(s => s.Id == id && plantIds.Contains(s.PlantID), ct);
             if (row == null)
                 return Json(new { success = false, message = "Stock entry not found." });
 
@@ -158,8 +164,17 @@ public class StockOverviewController : Controller
         {
             try
             {
-                if (!EnsureStorePlantForApi(User, out var plantId))
+                if (!EnsureStorePlantForApi(User, out var plantIds))
                     return Json(new { success = false, message = "Your user has no store plant assigned; an administrator must set the plant for your Store department." });
+
+                var requestedPlantId = (dto.PlantID ?? "").Trim();
+                if (requestedPlantId.Length == 0)
+                    requestedPlantId = plantIds.FirstOrDefault(p => !IsEmporiumPlant(p)) ?? plantIds.First();
+
+                if (!plantIds.Contains(requestedPlantId, StringComparer.OrdinalIgnoreCase))
+                    return Json(new { success = false, message = "You are not allowed to add stock in the selected plant." });
+                if (IsEmporiumPlant(requestedPlantId))
+                    return Json(new { success = false, message = "New stock addition is not allowed for Emporium Plant users." });
 
                 var err = await ValidateDtoAsync(dto, ct);
                 if (err != null)
@@ -172,7 +187,7 @@ public class StockOverviewController : Controller
                 var existing = await _db.StockInventoryLines
                     .FirstOrDefaultAsync(
                         s => s.MaterialNumber == key
-                             && s.PlantID == plantId
+                             && s.PlantID == requestedPlantId
                              && s.QuantityUomId == dto.QuantityUomId
                              && s.Status == st
                              && s.Grade == g,
@@ -192,7 +207,7 @@ public class StockOverviewController : Controller
                 var entity = new StockInventoryLine
                 {
                     MaterialNumber = key,
-                    PlantID = plantId,
+                    PlantID = requestedPlantId,
                     Quantity = dto.Quantity,
                     QuantityUomId = dto.QuantityUomId,
                     Status = st,
@@ -218,10 +233,10 @@ public class StockOverviewController : Controller
         {
             try
             {
-                if (!EnsureStorePlantForApi(User, out var plantId))
+                if (!EnsureStorePlantForApi(User, out var plantIds))
                     return Json(new { success = false, message = "Your user has no store plant assigned." });
 
-                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == dto.Id && s.PlantID == plantId, ct);
+                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == dto.Id && plantIds.Contains(s.PlantID), ct);
                 if (entity == null)
                     return Json(new { success = false, message = "Stock entry not found." });
 
@@ -252,10 +267,10 @@ public class StockOverviewController : Controller
         {
             try
             {
-                if (!EnsureStorePlantForApi(User, out var plantId))
+                if (!EnsureStorePlantForApi(User, out var plantIds))
                     return Json(new { success = false, message = "Your user has no store plant assigned." });
 
-                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == id && s.PlantID == plantId, ct);
+                var entity = await _db.StockInventoryLines.FirstOrDefaultAsync(s => s.Id == id && plantIds.Contains(s.PlantID), ct);
                 if (entity == null)
                     return Json(new { success = false, message = "Stock entry not found." });
 
@@ -319,6 +334,7 @@ public class StockOverviewController : Controller
     public class StockInventoryLineDto
     {
         public string? MaterialNumber { get; set; }
+        public string? PlantID { get; set; }
         public decimal Quantity { get; set; }
         public int QuantityUomId { get; set; }
         public string? Status { get; set; }

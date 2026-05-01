@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Stock Movement";
     var fromPlant = (ViewBag.FromPlantId as string) ?? "";
+    var fromPlantOptions = ViewBag.FromPlantOptions as IEnumerable<dynamic> ?? Array.Empty<dynamic>();
     var total = Model.Count;
     var today = Model.Count(x => x.MovementDate.Date == DateTime.Today);
     var uniqueMaterials = Model.Select(x => x.MaterialNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count();
@@ -69,7 +70,17 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">From Plant</label>
-                <input type="text" class="form-control form-control-sm" id="smFromPlant" value="@fromPlant" readonly />
+                <select class="form-select form-select-sm" id="smFromPlant">
+                    <option value="">-- Select --</option>
+                    @foreach (var p in fromPlantOptions)
+                    {
+                        var pid = (string)(p.plantId ?? "");
+                        var pname = (string)(p.plantName ?? "");
+                        <option value="@pid" selected="@(string.Equals(pid, fromPlant, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">
+                            @(string.IsNullOrWhiteSpace(pname) ? pid : $"{pid} — {pname}")
+                        </option>
+                    }
+                </select>
             </div>
             <div class="col-md-4">
                 <label class="form-label">To Plant</label>
@@ -151,6 +162,7 @@
         (function () {
             const materialSelect = document.getElementById('smMaterialSelect');
             const matNo = document.getElementById('smMaterialNumber');
+            const fromPlant = document.getElementById('smFromPlant');
             const toPlant = document.getElementById('smToPlant');
             const grade = document.getElementById('smGrade');
             const qtyPresent = document.getElementById('smQtyPresent');
@@ -162,7 +174,12 @@
             function showOk(msg) { ok.textContent = msg || ''; ok.style.display = msg ? '' : 'none'; err.style.display = 'none'; }
 
             async function loadToPlants() {
-                const res = await fetch('@Url.Action("ToPlants","StockMovement")');
+                const fp = (fromPlant.value || '').trim();
+                if (!fp) {
+                    toPlant.innerHTML = '<option value="">-- Select --</option>';
+                    return;
+                }
+                const res = await fetch('@Url.Action("ToPlants","StockMovement")?fromPlantId=' + encodeURIComponent(fp));
                 const data = await res.json();
                 if (!data.success) { showErr(data.message || 'Failed to load plants.'); return; }
                 toPlant.innerHTML = '<option value="">-- Select --</option>';
@@ -177,8 +194,13 @@
             async function refreshQtyPresent() {
                 const mn = (matNo.value || '').trim();
                 const g = (grade.value || '').trim();
+                const fp = (fromPlant.value || '').trim();
                 if (!mn) { qtyPresent.value = ''; return; }
-                const u = '@Url.Action("QuantityPresent","StockMovement")' + '?materialNumber=' + encodeURIComponent(mn) + '&grade=' + encodeURIComponent(g);
+                if (!fp) { qtyPresent.value = ''; return; }
+                const u = '@Url.Action("QuantityPresent","StockMovement")'
+                    + '?materialNumber=' + encodeURIComponent(mn)
+                    + '&grade=' + encodeURIComponent(g)
+                    + '&fromPlantId=' + encodeURIComponent(fp);
                 const res = await fetch(u);
                 const data = await res.json();
                 if (!data.success) { showErr(data.message || 'Failed to fetch quantity present.'); return; }
@@ -203,16 +225,23 @@
                 refreshQtyPresent();
             });
 
+            fromPlant.addEventListener('change', function () {
+                qtyPresent.value = '';
+                loadToPlants();
+                refreshQtyPresent();
+            });
             grade.addEventListener('change', refreshQtyPresent);
 
             document.getElementById('smSubmit').addEventListener('click', async function () {
                 showErr('');
                 const mn = (matNo.value || '').trim();
+                const fp = (fromPlant.value || '').trim();
                 const tp = (toPlant.value || '').trim();
                 const g = (grade.value || '').trim();
                 const qPresent = parseFloat(qtyPresent.value || '0');
                 const qMoved = parseFloat(qtyMoved.value || '0');
                 if (!mn) return showErr('Material is required.');
+                if (!fp) return showErr('From Plant is required.');
                 if (!tp) return showErr('To Plant is required.');
                 if (!g) return showErr('Grade is required.');
                 if (!(qMoved > 0)) return showErr('Quantity moved must be greater than zero.');
@@ -221,7 +250,7 @@
                 const res = await fetch('@Url.Action("CreateTransfer","StockMovement")', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ materialNumber: mn, toPlantId: tp, grade: g, quantityMoved: qMoved })
+                    body: JSON.stringify({ materialNumber: mn, fromPlantId: fp, toPlantId: tp, grade: g, quantityMoved: qMoved })
                 });
                 const data = await res.json();
                 if (!data.success) return showErr(data.message || 'Transfer failed.');

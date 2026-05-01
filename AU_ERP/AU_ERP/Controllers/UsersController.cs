@@ -61,7 +61,22 @@ public class UsersController : Controller
                         .Select(ud => ud.PlantID)
                         .FirstOrDefaultAsync()
                         .ConfigureAwait(false);
-                    storePlants = ParseStorePlantIds(storePlantCsv);
+                    var storeFromDept = ParseStorePlantIds(storePlantCsv);
+                    var userForClaims = await _userManager.FindByIdAsync(toEdit.Id).ConfigureAwait(false);
+                    var storeFromClaims = Array.Empty<string>();
+                    if (userForClaims != null)
+                    {
+                        var claims = await _userManager.GetClaimsAsync(userForClaims).ConfigureAwait(false);
+                        storeFromClaims = claims
+                            .Where(c => string.Equals(c.Type, AuClaimTypes.StorePlant, StringComparison.Ordinal))
+                            .Select(c => (c.Value ?? "").Trim())
+                            .Where(v => v.Length > 0)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToArray();
+                    }
+                    storePlants = storeFromClaims.Length > 0
+                        ? storeFromClaims
+                        : storeFromDept;
                 }
 
                 editForm = new EditUserViewModel
@@ -180,21 +195,20 @@ public class UsersController : Controller
             .Where(d => d.Code == "Store").Select(d => d.Id).FirstOrDefaultAsync().ConfigureAwait(false);
         foreach (var deptId in model.DepartmentIds!.Distinct())
         {
-            string? plantIdLink = null;
-            if (storeDeptId > 0 && deptId == storeDeptId)
-            {
-                plantIdLink = JoinStorePlantIds(model.StorePlantIds);
-            }
-
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
                 UserId = user.Id,
                 DepartmentId = deptId,
-                PlantID = plantIdLink
+                PlantID = null
             });
         }
 
         await _db.SaveChangesAsync().ConfigureAwait(false);
+        var hasStore = storeDeptId > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+        await SyncStorePlantClaimsAsync(
+            user,
+            hasStore ? model.StorePlantIds : Array.Empty<string>())
+            .ConfigureAwait(false);
 
         if (string.Equals(_userManager.GetUserId(User), user.Id, StringComparison.Ordinal))
         {
@@ -282,21 +296,20 @@ public class UsersController : Controller
             .Where(d => d.Code == "Store").Select(d => d.Id).FirstOrDefaultAsync().ConfigureAwait(false);
         foreach (var deptId in (model.DepartmentIds ?? Array.Empty<int>()).Distinct())
         {
-            string? plantIdLink = null;
-            if (storeDeptIdCreate > 0 && deptId == storeDeptIdCreate)
-            {
-                plantIdLink = JoinStorePlantIds(model.StorePlantIds);
-            }
-
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
                 UserId = user.Id,
                 DepartmentId = deptId,
-                PlantID = plantIdLink
+                PlantID = null
             });
         }
 
         await _db.SaveChangesAsync().ConfigureAwait(false);
+        var hasStoreCreate = storeDeptIdCreate > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptIdCreate);
+        await SyncStorePlantClaimsAsync(
+            user,
+            hasStoreCreate ? model.StorePlantIds : Array.Empty<string>())
+            .ConfigureAwait(false);
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user).ConfigureAwait(false);
         await PasswordEmail.SendInvitationAsync(_emailService, _configuration, user, token).ConfigureAwait(false);
@@ -408,5 +421,34 @@ public class UsersController : Controller
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         return values.Length == 0 ? null : string.Join(",", values);
+    }
+
+    private async Task SyncStorePlantClaimsAsync(ApplicationUser user, string[]? storePlantIds)
+    {
+        var claims = await _userManager.GetClaimsAsync(user).ConfigureAwait(false);
+        var existing = claims
+            .Where(c => string.Equals(c.Type, AuClaimTypes.StorePlant, StringComparison.Ordinal))
+            .ToList();
+        if (existing.Count > 0)
+        {
+            var rm = await _userManager.RemoveClaimsAsync(user, existing).ConfigureAwait(false);
+            if (!rm.Succeeded)
+                throw new InvalidOperationException("Failed to clear existing store plant claims.");
+        }
+
+        var distinct = (storePlantIds ?? Array.Empty<string>())
+            .Select(x => (x ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (distinct.Length == 0)
+            return;
+
+        var toAdd = distinct
+            .Select(p => new System.Security.Claims.Claim(AuClaimTypes.StorePlant, p))
+            .ToList();
+        var add = await _userManager.AddClaimsAsync(user, toAdd).ConfigureAwait(false);
+        if (!add.Succeeded)
+            throw new InvalidOperationException("Failed to save store plant claims.");
     }
 }

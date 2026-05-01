@@ -166,10 +166,25 @@ public class SalesQuotationController : Controller
             return Json(new { success = false, message = "Material and UOM are required." });
         var g = (priceGrade ?? "").Trim();
         if (string.IsNullOrEmpty(g)) g = StockInventoryGradeCodes.FirstQuality;
-        var std = await InventoryStandardCostService.ResolveStandardCostPerUomAsync(
-                _db, materialNumber.Trim(), uomId.Value, ct, g)
+        var key = materialNumber.Trim();
+
+        var mat = await _db.CreateMaterialMaster.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.MaterialNumber == key, ct)
             .ConfigureAwait(false);
-        return Json(new { success = true, stdCostPerUom = std });
+        if (mat == null)
+            return Json(new { success = false, message = "Material not found." });
+
+        var basePrice = InventoryStandardCostService.GetMaterialPricePerBaseUom(mat, g);
+        if (basePrice is not decimal p || p <= 0)
+            return Json(new { success = true, stdCostPerUom = 0m });
+
+        var toBase = await UnitConversionMath.ToBaseAsync(_db, key, 1m, uomId.Value, ct)
+            .ConfigureAwait(false);
+        if (!toBase.ok)
+            return Json(new { success = false, message = toBase.error ?? "UOM conversion not configured for this material." });
+
+        var unitPrice = Math.Round(toBase.quantityBase * p, 4, MidpointRounding.AwayFromZero);
+        return Json(new { success = true, stdCostPerUom = unitPrice });
     }
 
     [HttpGet]
@@ -476,7 +491,6 @@ public class SalesQuotationController : Controller
                 (sub, lineTot) = SalesQuotationPricing.ComputeLineWithChargeValues(
                     itemColList, chargeById, lineVals, qty, unitP, discP);
             }
-            lineTot = Math.Round(unitP, 4, MidpointRounding.AwayFromZero);
             if (strict && lineTot < 0)
             {
                 TempData["QuotationError"] = "Invalid line calculation.";

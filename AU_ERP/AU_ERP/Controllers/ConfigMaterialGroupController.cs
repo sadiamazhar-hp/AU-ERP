@@ -89,9 +89,7 @@ public class ConfigMaterialGroupController : Controller
     [IgnoreAntiforgeryToken]
     public async Task<JsonResult> Delete(string id, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(id))
-            return Json(new { success = false, message = "Code is required." });
-        id = id.Trim();
+        id = (id ?? string.Empty).Trim();
         try
         {
             var item = await _db.MaterialGroups.FindAsync(id, cancellationToken).ConfigureAwait(false);

@@ -9,6 +9,10 @@
     string StatusBadge(string s) => s == StockInventoryLine.StatusNotActive ? "so-badge so-badge-off" : "so-badge so-badge-on";
     var mtSel = string.IsNullOrWhiteSpace(Model.MaterialTypeCode) ? "All" : Model.MaterialTypeCode!;
     var uomHidden = Model.UomId.HasValue ? Model.UomId.Value.ToString(CultureInfo.InvariantCulture) : "";
+    var groupedItems = Model.Items
+        .GroupBy(x => string.IsNullOrWhiteSpace(x.PlantID) ? "—" : x.PlantID)
+        .OrderBy(g => g.Key)
+        .ToList();
 }
 
 @section Styles {
@@ -45,21 +49,24 @@
     }
     else if (!string.IsNullOrEmpty(Model.PlantDisplay))
     {
-        <p class="small text-muted mb-2">Showing inventory for plant <strong>@Model.PlantDisplay</strong>.</p>
+        <p class="small text-muted mb-2">Showing inventory for assigned plant(s): <strong>@Model.PlantDisplay</strong>.</p>
     }
     <div class="so-hero">
         <div>
             <h1>Stock overview</h1>
             <p>Inventory lines with quantity, UOM, optional <strong>grade</strong> (A/B/C/Scrap for finished goods from production), standard cost, and stock value. Same material+UOM+status+grade merges when adding quantity.</p>
         </div>
-        <button type="button" class="so-btn-new" data-bs-toggle="modal" data-bs-target="#soCreateModal">
-            <i class="bi bi-plus-lg"></i> New stock entry
-        </button>
+        @if (Model.CanAddStockEntry)
+        {
+            <button type="button" class="so-btn-new" data-bs-toggle="modal" data-bs-target="#soCreateModal">
+                <i class="bi bi-plus-lg"></i> New stock entry
+            </button>
+        }
     </div>
 
-    <div class="so-table-card">
+    <div class="so-table-card mb-3">
         <div class="so-table-head">
-            <h2 class="so-table-title">Stock lines (@Model.Items.Count)</h2>
+            <h2 class="so-table-title">Stock lines (@Model.Items.Count total)</h2>
             <form id="soListFilterForm" method="get" asp-controller="StockOverview" asp-action="Index" class="so-toolbar">
                 <input type="search" name="q" class="form-control form-control-sm" placeholder="Search material number or name…" value="@Model.Q" />
                 <input type="hidden" name="materialTypeCode" id="soListMaterialType" value="@mtSel" />
@@ -71,60 +78,76 @@
         </div>
 
         <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
-
-        <div class="so-table-wrap">
-            <table class="so-table">
-                <thead>
-                    <tr>
-                        <th>Material number</th>
-                        <th>Material name</th>
-                        <th>Type</th>
-                        <th>Grade</th>
-                        <th>Quantity</th>
-                        <th>Status</th>
-                        <th>Std cost (PKR)</th>
-                        <th>Stock value</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (Model.Items.Count == 0)
-                    {
-                        <tr><td colspan="9" class="text-secondary">No stock lines match the current filters.</td></tr>
-                    }
-                    else
-                    {
-                        foreach (var row in Model.Items)
-                        {
-                            var mat = row.Material;
-                            var typeLabel = mat?.MaterialType != null
-                                ? (!string.IsNullOrWhiteSpace(mat.MaterialType.Description) ? mat.MaterialType.Description : mat.MaterialType.MaterialTypeCode)
-                                : (mat?.MaterialTypeCode ?? "—");
-                            var name = mat?.Description ?? "—";
-                            var uom = row.QuantityUom?.Code ?? "—";
-                            var gradeLabel = string.IsNullOrEmpty(row.Grade) ? "—" : row.Grade;
-                            <tr>
-                                <td><strong>@row.MaterialNumber</strong></td>
-                                <td>@name</td>
-                                <td>@typeLabel</td>
-                                <td>@gradeLabel</td>
-                                <td>@FmtQty(row.Quantity) @uom</td>
-                                <td><span class="@StatusBadge(row.Status)">@StatusUi(row.Status)</span></td>
-                                <td>@FmtMoney(row.StandardCostPerUom)</td>
-                                <td>@FmtMoney(row.StockValue)</td>
-                                <td>
-                                    <div class="so-actions">
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="soOpenEdit(@row.Id)"><i class="bi bi-pencil"></i></button>
-                                        <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="soDelete(@row.Id)"><i class="bi bi-trash"></i></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-        </div>
     </div>
+
+    @if (groupedItems.Count == 0)
+    {
+        <div class="so-table-card">
+            <div class="so-table-wrap">
+                <table class="so-table">
+                    <tbody>
+                        <tr><td class="text-secondary">No stock lines match the current filters.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else
+    {
+        foreach (var grp in groupedItems)
+        {
+            <div class="so-table-card mb-3">
+                <div class="so-table-head">
+                    <h2 class="so-table-title">Plant: @grp.Key (@grp.Count() lines)</h2>
+                </div>
+                <div class="so-table-wrap">
+                    <table class="so-table">
+                        <thead>
+                            <tr>
+                                <th>Material number</th>
+                                <th>Material name</th>
+                                <th>Type</th>
+                                <th>Grade</th>
+                                <th>Quantity</th>
+                                <th>Status</th>
+                                <th>Std cost (PKR)</th>
+                                <th>Stock value</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in grp)
+                            {
+                                var mat = row.Material;
+                                var typeLabel = mat?.MaterialType != null
+                                    ? (!string.IsNullOrWhiteSpace(mat.MaterialType.Description) ? mat.MaterialType.Description : mat.MaterialType.MaterialTypeCode)
+                                    : (mat?.MaterialTypeCode ?? "—");
+                                var name = mat?.Description ?? "—";
+                                var uom = row.QuantityUom?.Code ?? "—";
+                                var gradeLabel = string.IsNullOrEmpty(row.Grade) ? "—" : row.Grade;
+                                <tr>
+                                    <td><strong>@row.MaterialNumber</strong></td>
+                                    <td>@name</td>
+                                    <td>@typeLabel</td>
+                                    <td>@gradeLabel</td>
+                                    <td>@FmtQty(row.Quantity) @uom</td>
+                                    <td><span class="@StatusBadge(row.Status)">@StatusUi(row.Status)</span></td>
+                                    <td>@FmtMoney(row.StandardCostPerUom)</td>
+                                    <td>@FmtMoney(row.StockValue)</td>
+                                    <td>
+                                        <div class="so-actions">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="soOpenEdit(@row.Id)"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="soDelete(@row.Id)"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
 </div>
 
 <!-- Create -->
@@ -137,6 +160,10 @@
             </div>
             <div class="modal-body">
                 <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
+                <div class="mb-2">
+                    <label class="form-label small">Plant</label>
+                    <select id="soCreatePlant" class="form-select form-select-sm"></select>
+                </div>
                 <div class="mb-2">
                     <label class="form-label small">Material type</label>
                     <select id="soCreateMatType" class="form-select form-select-sm"></select>
@@ -265,6 +292,7 @@
 
 @section Scripts {
 <script>
+    var soAssignedPlants = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AssignedPlantIds));
     (function soInitModals() {
         function ensureOnBody(id) {
             var el = document.getElementById(id);
@@ -493,6 +521,16 @@
             soFillUomSelect(document.getElementById("soModUom"), true)
         ]).then(function () {
             soLookupsLoaded = true;
+            var plantSel = document.getElementById("soCreatePlant");
+            if (plantSel) {
+                plantSel.innerHTML = "";
+                (soAssignedPlants || []).forEach(function (pid) {
+                    var opt = document.createElement("option");
+                    opt.value = pid;
+                    opt.textContent = pid;
+                    plantSel.appendChild(opt);
+                });
+            }
             soInitStockUomPlaceholder(document.getElementById("soCreateUom"));
             soInitStockUomPlaceholder(document.getElementById("soEditUom"));
             document.getElementById("soCreateMatType").addEventListener("change", function () {
@@ -549,6 +587,11 @@
     document.getElementById("soCreateModal").addEventListener("show.bs.modal", function () {
         soEnsureLookups().then(function () {
             soClearInline(soFormRoot("soCreateModal"));
+            var plantSel = document.getElementById("soCreatePlant");
+            if (plantSel && plantSel.options.length > 0) {
+                var preferred = (soAssignedPlants || []).find(function (p) { return String(p || "").toUpperCase() !== "EMP101"; });
+                plantSel.value = preferred || plantSel.options[0].value;
+            }
             document.getElementById("soCreateMatType").value = "";
             return soFillMaterialsForType(document.getElementById("soCreateMaterial"), document.getElementById("soCreateMatType").value, null);
         }).then(function () {
@@ -587,6 +630,7 @@
         if (matNum && !soValidateStockUomClient(root, "soCreate")) return;
         var payload = {
             MaterialNumber: (document.getElementById("soCreateMaterial").value || "").trim(),
+            PlantID: (document.getElementById("soCreatePlant").value || "").trim(),
             Quantity: parseFloat(document.getElementById("soCreateQty").value) || 0,
             QuantityUomId: parseInt(document.getElementById("soCreateUom").value, 10) || 0,
             Status: document.getElementById("soCreateStatus").value,

@@ -224,7 +224,7 @@
         if (!selectedRow) return;
         const rangeId = selectedRow.querySelector('.row-id')?.value;
         function doDelete() {
-            if (rangeId) {
+            if (rangeId && rangeId !== '0') {
                 $.post('/Material/DeleteNumberRange', { id: rangeId }, function (response) {
                     if (response.success) {
                         selectedRow.remove(); selectedRow = null;

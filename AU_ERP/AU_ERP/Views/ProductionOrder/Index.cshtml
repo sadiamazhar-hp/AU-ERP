@@ -153,6 +153,8 @@
                                 ? $"{p.FinishedMaterialNumber} — {p.FinishedMaterial.Description}"
                                 : p.FinishedMaterialNumber;
                             var uomCode = p.Uom?.Code ?? "—";
+                            var isOperationTrackingCompleted = p.StageProgresses.Any()
+                                && p.StageProgresses.All(s => s.StageStatus == ProductionOrderStageProgress.StageCompleted);
                             <tr>
                                 <td><strong>PO-@p.ProductionNumber</strong></td>
                                 <td>@FmtDate(p.CreatedAt)</td>
@@ -173,7 +175,14 @@
                                         }
                                         else if (p.ReleasedRoutingId != null && (p.Status == ProductionOrder.StatusReleased || p.Status == ProductionOrder.StatusInProgress || p.Status == ProductionOrder.StatusCompleted))
                                         {
-                                            <button type="button" class="btn btn-sm text-white" style="background:var(--au-secondary-dark,#35b85a);" title="Update operation" onclick="poOpenOperationModal(@p.Id)"><i class="bi bi-gear"></i> Operation</button>
+                                            <button type="button"
+                                                    class="btn btn-sm text-white"
+                                                    style="background:var(--au-secondary-dark,#35b85a);"
+                                                    title="@(isOperationTrackingCompleted ? "All operations completed" : "Update operation")"
+                                                    @(isOperationTrackingCompleted ? "disabled" : "")
+                                                    onclick="poOpenOperationModal(@p.Id)">
+                                                <i class="bi bi-gear"></i> Operation
+                                            </button>
                                         }
                                     </div>
                                 </td>
@@ -584,7 +593,7 @@
         });
     }
 
-    var poBomMatSearchUrl = "@Url.Action("SearchBomMaterials", "BOM")";
+    var poBomMatSearchUrl = "@Url.Action("SearchBomMaterials", "MasterDataLookup")";
     var poCreatePickerTimers = {};
 
     function poEscAttr(s) {

@@ -485,7 +485,7 @@
     var bomItemCounter = 0;
     var bomAllUoms = @Html.Raw(bomUomsJson);
     var bomNextCodeUrl = '@Url.Action("GetNextBomCode", "BOM")';
-    var bomSearchMaterialsUrl = '@Url.Action("SearchBomMaterials", "BOM")';
+    var bomSearchMaterialsUrl = '@Url.Action("SearchBomMaterials", "MasterDataLookup")';
     var bomPickerTimers = {};
 
     function escBomAttr(s) {

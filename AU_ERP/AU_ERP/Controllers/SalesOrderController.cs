@@ -140,7 +140,10 @@ public class SalesOrderController : Controller
                 q.ConfigurationSchemaId,
                 q.CustomerBusinessPartnerId,
                 q.CustomerName,
-                q.ShipToAddress
+                q.ShipToAddress,
+                q.ItemChargeColumnIds,
+                q.QuotationLevelChargeIds,
+                q.QuotationChargeValuesJson
             },
             items = q.Items.OrderBy(i => i.Id).Select(i => new
             {
@@ -546,7 +549,6 @@ public class SalesOrderController : Controller
                 (sub, lineTot) = SalesQuotationPricing.ComputeLineWithChargeValues(
                     itemColList, chargeById, lineVals, qty, unitP, discP);
             }
-            lineTot = Math.Round(unitP, 4, MidpointRounding.AwayFromZero);
             if (strict && lineTot < 0)
             {
                 TempData["OrderError"] = "Invalid line calculation.";

@@ -604,9 +604,9 @@
         function lineAmountsV2(qty, unit, o) {
             o = o || {};
             var hasSch = (schemaCharges || []).length > 0;
-            var net = Math.round(unit * 10000) / 10000;
-            if (!hasSch) return { sub: net, tot: net };
-            var running = net, order = selectedItemChgOrder();
+            var baseLine = Math.round((qty * unit) * 10000) / 10000;
+            if (!hasSch) return { sub: baseLine, tot: baseLine };
+            var running = baseLine, order = selectedItemChgOrder();
             order.forEach(function (cid) {
                 var c = chMap()[cid];
                 if (!c) return;
@@ -621,7 +621,7 @@
                     running = applyUserCharge(c, running, n);
                 }
             });
-            return { sub: net, tot: Math.round(running * 10000) / 10000 };
+            return { sub: baseLine, tot: Math.round(running * 10000) / 10000 };
         }
         function recalcLine(tr) {
             var qty = parseFloat(tr.querySelector(".sq-qty") && tr.querySelector(".sq-qty").value) || 0;

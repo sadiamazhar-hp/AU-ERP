@@ -167,9 +167,10 @@
     function handleDelete() {
         if (!selectedRow) return;
         const codeInp = selectedRow.querySelector('input[name*="PlantID"]');
-        const code = codeInp ? codeInp.value.trim() : '';
+        const code = codeInp ? codeInp.value : '';
+        const isExistingRow = selectedRow.classList.contains('tr-existing');
         function doDelete() {
-            if (code) {
+            if (isExistingRow) {
                 $.post(deleteUrl, { id: code }, function (response) {
                     if (response.success) {
                         selectedRow.remove(); selectedRow = null;

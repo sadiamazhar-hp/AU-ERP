@@ -608,9 +608,9 @@
         function lineAmountsV2(qty, unit, o) {
             o = o || {};
             var hasSch = (schemaCharges || []).length > 0;
-            var net = Math.round(unit * 10000) / 10000;
-            if (!hasSch) return { sub: net, tot: net };
-            var running = net, order = selectedItemChgOrder();
+            var baseLine = Math.round((qty * unit) * 10000) / 10000;
+            if (!hasSch) return { sub: baseLine, tot: baseLine };
+            var running = baseLine, order = selectedItemChgOrder();
             order.forEach(function (cid) {
                 var c = chMap()[cid];
                 if (!c) return;
@@ -625,7 +625,7 @@
                     running = applyUserCharge(c, running, n);
                 }
             });
-            return { sub: net, tot: Math.round(running * 10000) / 10000 };
+            return { sub: baseLine, tot: Math.round(running * 10000) / 10000 };
         }
         function recalcLine(tr) {
             var qty = parseFloat(tr.querySelector(".so-qty") && tr.querySelector(".so-qty").value) || 0;
@@ -879,7 +879,8 @@
             wireRow(tr);
             recalcFooter();
         });
-        function loadSchema(id) {
+        function loadSchema(id, onDone) {
+            onDone = typeof onDone === "function" ? onDone : function () { };
             if (!id) {
                 schemaCharges = [];
                 buildChargeDropdowns();
@@ -897,6 +898,7 @@
                 }
                 buildQuotationChargeInputs();
                 recalcFooter();
+                onDone();
                 return;
             }
             if (!schemaUrl) return;
@@ -917,6 +919,7 @@
                 }
                 buildQuotationChargeInputs();
                 recalcFooter();
+                onDone();
             });
         }
         document.getElementById("soSchema") && document.getElementById("soSchema").addEventListener("change", function () { loadSchema(this.value); });
@@ -1016,6 +1019,72 @@
                 if (selectedQuoteId) sel.value = String(selectedQuoteId);
             });
         }
+        function soPopulateItemsFromQuotationRows(items) {
+            var body = document.getElementById("soItemsBody");
+            if (!body) return;
+            body.innerHTML = "";
+            (items || []).forEach(function (it) {
+                var tr = parseTrFromRowHtml();
+                body.appendChild(tr);
+                appendItemChargeTds(tr);
+                if (tr.querySelector(".so-matno")) tr.querySelector(".so-matno").value = it.materialNumber || "";
+                if (tr.querySelector(".bom-mat-picker-search")) tr.querySelector(".bom-mat-picker-search").value = (it.materialNumber || "") + (it.materialDescription ? (" — " + it.materialDescription) : "");
+                if (tr.querySelector(".so-desc")) tr.querySelector(".so-desc").value = it.materialDescription || "";
+                if (tr.querySelector(".so-grade") && it.salesPriceGrade) tr.querySelector(".so-grade").value = String(it.salesPriceGrade);
+                if (tr.querySelector(".so-qty") && it.orderQuantity != null) tr.querySelector(".so-qty").value = String(it.orderQuantity);
+                if (tr.querySelector(".so-unit") && it.unitPrice != null) tr.querySelector(".so-unit").value = String(it.unitPrice);
+                if (tr.querySelector(".so-del") && it.deliveryDate) tr.querySelector(".so-del").value = it.deliveryDate;
+                if (tr.querySelector(".so-line-chg-json")) tr.querySelector(".so-line-chg-json").value = it.itemChargeValuesJson || "{}";
+
+                var lineChargeObj = {};
+                try { if (it.itemChargeValuesJson) lineChargeObj = JSON.parse(it.itemChargeValuesJson); } catch (e) { lineChargeObj = {}; }
+                tr.querySelectorAll(".so-ln-chg").forEach(function (inp) {
+                    var key = String(inp.getAttribute("data-cid"));
+                    if (lineChargeObj.hasOwnProperty(key) && lineChargeObj[key] != null) {
+                        inp.value = String(lineChargeObj[key]);
+                    }
+                });
+
+                wireRow(tr);
+                if (it.materialNumber) {
+                    uomFill(tr, it.materialNumber, it.materialDescription || "", { preserveUnitPrice: it.unitPrice, savedUomId: it.quantityUomId });
+                }
+            });
+            if (!(items || []).length) {
+                body.innerHTML = rowHtml().trim();
+                appendItemChargeTds(body.querySelector("tr.so-item-row"));
+                body.querySelectorAll("tr.so-item-row").forEach(wireRow);
+            }
+            reindex();
+            recalcFooter();
+            syncHiddens();
+        }
+        function soApplyChargesFromQuotationHeader(h) {
+            if (!h) return;
+            if (document.getElementById("soItemChargeColumnIds")) document.getElementById("soItemChargeColumnIds").value = h.itemChargeColumnIds || "";
+            if (document.getElementById("soQuotationLevelChargeIds")) document.getElementById("soQuotationLevelChargeIds").value = h.quotationLevelChargeIds || "";
+            if (document.getElementById("soQuotationChargeValuesJson")) document.getElementById("soQuotationChargeValuesJson").value = h.quotationChargeValuesJson || "";
+
+            var itemIds = parseIds(h.itemChargeColumnIds || "");
+            var docIds = parseIds(h.quotationLevelChargeIds || "");
+            document.querySelectorAll("#soItemChargeMenu .so-m-item-chk").forEach(function (cb) {
+                var cid = parseInt(cb.getAttribute("data-cid"), 10);
+                cb.checked = itemIds.indexOf(cid) >= 0;
+            });
+            document.querySelectorAll("#soQuotationChargeMenu .so-m-doc-chk").forEach(function (cb) {
+                var cid = parseInt(cb.getAttribute("data-cid"), 10);
+                cb.checked = docIds.indexOf(cid) >= 0;
+            });
+            renderItemChargeThead();
+            buildQuotationChargeInputs();
+
+            var docObj = {};
+            try { if (h.quotationChargeValuesJson) docObj = JSON.parse(h.quotationChargeValuesJson); } catch (e) { docObj = {}; }
+            document.querySelectorAll(".so-doc-chg-val").forEach(function (inp) {
+                var k = String(inp.getAttribute("data-cid"));
+                if (docObj.hasOwnProperty(k) && docObj[k] != null) inp.value = String(docObj[k]);
+            });
+        }
         function soApplyQuotationData(d) {
             if (!d || !d.success) return;
             var h = d.header || {};
@@ -1024,36 +1093,17 @@
             if (document.getElementById("soAddr")) document.getElementById("soAddr").value = h.shipToAddress || "";
             if (document.getElementById("soPlant") && h.plantId) document.getElementById("soPlant").value = h.plantId;
             if (document.getElementById("soDc") && h.distributionChannelId != null) document.getElementById("soDc").value = String(h.distributionChannelId);
+            var rows = d.items || [];
             if (document.getElementById("soSchema") && h.configurationSchemaId != null) {
                 document.getElementById("soSchema").value = String(h.configurationSchemaId);
-                loadSchema(String(h.configurationSchemaId));
+                loadSchema(String(h.configurationSchemaId), function () {
+                    soApplyChargesFromQuotationHeader(h);
+                    soPopulateItemsFromQuotationRows(rows);
+                });
+            } else {
+                soApplyChargesFromQuotationHeader(h);
+                soPopulateItemsFromQuotationRows(rows);
             }
-            var body = document.getElementById("soItemsBody");
-            if (!body) return;
-            body.innerHTML = "";
-            (d.items || []).forEach(function (it) {
-                var tr = parseTrFromRowHtml();
-                body.appendChild(tr);
-                appendItemChargeTds(tr);
-                if (tr.querySelector(".so-matno")) tr.querySelector(".so-matno").value = it.materialNumber || "";
-                if (tr.querySelector(".bom-mat-picker-search")) tr.querySelector(".bom-mat-picker-search").value = (it.materialNumber || "") + (it.materialDescription ? (" — " + it.materialDescription) : "");
-                if (tr.querySelector(".so-desc")) tr.querySelector(".so-desc").value = it.materialDescription || "";
-                if (tr.querySelector(".so-uom") && it.quantityUomId != null) tr.querySelector(".so-uom").value = String(it.quantityUomId);
-                if (tr.querySelector(".so-grade") && it.salesPriceGrade) tr.querySelector(".so-grade").value = String(it.salesPriceGrade);
-                if (tr.querySelector(".so-qty") && it.orderQuantity != null) tr.querySelector(".so-qty").value = String(it.orderQuantity);
-                if (tr.querySelector(".so-unit") && it.unitPrice != null) tr.querySelector(".so-unit").value = String(it.unitPrice);
-                if (tr.querySelector(".so-del") && it.deliveryDate) tr.querySelector(".so-del").value = it.deliveryDate;
-                if (tr.querySelector(".so-line-chg-json")) tr.querySelector(".so-line-chg-json").value = it.itemChargeValuesJson || "{}";
-                wireRow(tr);
-            });
-            if (!(d.items || []).length) {
-                body.innerHTML = rowHtml().trim();
-                appendItemChargeTds(body.querySelector("tr.so-item-row"));
-                body.querySelectorAll("tr.so-item-row").forEach(wireRow);
-            }
-            reindex();
-            recalcFooter();
-            syncHiddens();
         }
         document.getElementById("soSalesQuotationId") && document.getElementById("soSalesQuotationId").addEventListener("change", function () {
             var qid = this.value || "";

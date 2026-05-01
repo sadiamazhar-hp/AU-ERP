@@ -22,7 +22,14 @@ public class StockMovementController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken ct = default)
     {
-        var fromPlantId = UserPlantResolution.TryGetStorePlantId(User) ?? "";
+        var assignedPlantIds = UserPlantResolution.GetStorePlantIds(User);
+        var fromPlantOptions = await _db.PlantsSamples.AsNoTracking()
+            .Where(p => assignedPlantIds.Contains(p.PlantID))
+            .OrderBy(p => p.PlantID)
+            .Select(p => new { plantId = p.PlantID, plantName = p.PlantName })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var fromPlantId = fromPlantOptions.FirstOrDefault()?.plantId ?? "";
         var rows = await _db.StockMovements.AsNoTracking()
             .Include(x => x.Material)
             .Include(x => x.QuantityUom)
@@ -34,6 +41,7 @@ public class StockMovementController : Controller
             .ConfigureAwait(false);
 
         ViewBag.FromPlantId = fromPlantId;
+        ViewBag.FromPlantOptions = fromPlantOptions;
         return View(rows);
     }
 
@@ -58,14 +66,17 @@ public class StockMovementController : Controller
     }
 
     [HttpGet]
-    public async Task<JsonResult> ToPlants(CancellationToken ct = default)
+    public async Task<JsonResult> ToPlants(string? fromPlantId, CancellationToken ct = default)
     {
-        var fromPlantId = UserPlantResolution.TryGetStorePlantId(User) ?? "";
-        if (fromPlantId.Length == 0)
+        var fromId = (fromPlantId ?? "").Trim();
+        var assignedPlantIds = UserPlantResolution.GetStorePlantIds(User);
+        if (assignedPlantIds.Count == 0)
             return Json(new { success = false, message = "Your user has no Store plant assignment." });
+        if (fromId.Length > 0 && !assignedPlantIds.Contains(fromId, StringComparer.OrdinalIgnoreCase))
+            return Json(new { success = false, message = "You are not allowed to move stock from this plant." });
 
         var data = await _db.PlantsSamples.AsNoTracking()
-            .Where(p => p.PlantID != fromPlantId)
+            .Where(p => p.PlantID != fromId)
             .OrderBy(p => p.PlantID)
             .Select(p => new { plantId = p.PlantID, plantName = p.PlantName })
             .ToListAsync(ct)
@@ -75,18 +86,23 @@ public class StockMovementController : Controller
     }
 
     [HttpGet]
-    public async Task<JsonResult> QuantityPresent(string? materialNumber, string? grade, CancellationToken ct = default)
+    public async Task<JsonResult> QuantityPresent(string? materialNumber, string? grade, string? fromPlantId, CancellationToken ct = default)
     {
-        var fromPlantId = UserPlantResolution.TryGetStorePlantId(User) ?? "";
-        if (fromPlantId.Length == 0)
+        var fromId = (fromPlantId ?? "").Trim();
+        var assignedPlantIds = UserPlantResolution.GetStorePlantIds(User);
+        if (assignedPlantIds.Count == 0)
             return Json(new { success = false, message = "Your user has no Store plant assignment." });
+        if (fromId.Length == 0)
+            return Json(new { success = false, message = "From plant is required." });
+        if (!assignedPlantIds.Contains(fromId, StringComparer.OrdinalIgnoreCase))
+            return Json(new { success = false, message = "You are not allowed to move stock from this plant." });
 
         var mat = (materialNumber ?? "").Trim();
         var g = (grade ?? "").Trim(); // optional; when blank, return total Active stock across grades
         if (mat.Length == 0)
             return Json(new { success = true, data = new { quantityPresent = 0m, materialNumber = mat } });
 
-        var qty = await _movement.GetQuantityPresentAsync(mat, g, fromPlantId, ct).ConfigureAwait(false);
+        var qty = await _movement.GetQuantityPresentAsync(mat, g, fromId, ct).ConfigureAwait(false);
         return Json(new { success = true, data = new { quantityPresent = qty, materialNumber = mat } });
     }
 
@@ -96,9 +112,14 @@ public class StockMovementController : Controller
         if (dto == null)
             return Json(new { success = false, message = "Invalid request." });
 
-        var fromPlantId = UserPlantResolution.TryGetStorePlantId(User) ?? "";
-        if (fromPlantId.Length == 0)
+        var fromPlantId = (dto.FromPlantId ?? "").Trim();
+        var assignedPlantIds = UserPlantResolution.GetStorePlantIds(User);
+        if (assignedPlantIds.Count == 0)
             return Json(new { success = false, message = "Your user has no Store plant assignment." });
+        if (fromPlantId.Length == 0)
+            return Json(new { success = false, message = "From plant is required." });
+        if (!assignedPlantIds.Contains(fromPlantId, StringComparer.OrdinalIgnoreCase))
+            return Json(new { success = false, message = "You are not allowed to move stock from this plant." });
 
         var result = await _movement.MoveAsync(
             new StockMovementService.MoveRequest(
@@ -118,6 +139,7 @@ public sealed class CreateStockMovementDto
 {
     public string? MaterialNumber { get; set; }
     public string? Grade { get; set; }
+    public string? FromPlantId { get; set; }
     public string? ToPlantId { get; set; }
     public decimal QuantityMoved { get; set; }
 }

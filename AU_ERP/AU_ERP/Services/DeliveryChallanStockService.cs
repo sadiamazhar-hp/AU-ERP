@@ -6,6 +6,8 @@ namespace AU_ERP.Services;
 /// <summary>Consume stock for delivery challan lines (FIFO by UpdatedAt) and return batch lot text from source rows.</summary>
 public static class DeliveryChallanStockService
 {
+    private const decimal InventoryEpsilon = 0.0001m;
+
     public sealed class LineDeduct
     {
         public required string MaterialNumber { get; init; }
@@ -97,6 +99,10 @@ public static class DeliveryChallanStockService
                     return (false, backErr ?? "Unit conversion back to delivery UOM failed.", batches);
                 remaining = Math.Round(remaining - backDocQty, 4, MidpointRounding.AwayFromZero);
             }
+
+            var depletedRows = stockRows.Where(s => s.Quantity <= InventoryEpsilon).ToList();
+            if (depletedRows.Count > 0)
+                db.StockInventoryLines.RemoveRange(depletedRows);
 
             if (remaining > 0.0001m)
             {

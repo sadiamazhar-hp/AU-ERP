@@ -81,6 +81,7 @@
     .sap-input:focus { background: var(--sap-focus); outline: 1px solid orange; }
     .col-sel { width: 35px; background: #f0f0f0; cursor: pointer; }
     .row-selected { background-color: var(--sap-selected) !important; }
+    .row-selected td { background-color: var(--sap-selected) !important; }
     .row-selected .sap-input { background-color: transparent !important; }
     .edit-mode .row-selected .sap-input:not(.mg-code-locked) { background: #fff !important; }
     .edit-mode .row-selected .sap-input.mg-code-locked { background: #eceff1 !important; }
@@ -167,9 +168,10 @@
     function handleDelete() {
         if (!selectedRow) return;
         const codeInp = selectedRow.querySelector('input[name*="MaterialGroupCode"]');
-        const code = codeInp ? codeInp.value.trim() : '';
+        const code = codeInp ? codeInp.value : '';
+        const isExistingRow = selectedRow.classList.contains('tr-existing');
         function doDelete() {
-            if (code) {
+            if (isExistingRow) {
                 $.post(deleteUrl, { id: code }, function (response) {
                     if (response.success) {
                         selectedRow.remove(); selectedRow = null;

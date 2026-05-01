@@ -61,6 +61,7 @@ namespace AU_ERP.Controllers
             var filtered = _db.ProductionOrders.AsNoTracking()
                 .Include(p => p.FinishedMaterial)
                 .Include(p => p.Uom)
+                .Include(p => p.StageProgresses)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(q))

@@ -6,6 +6,7 @@ namespace AU_ERP.Services;
 public sealed class StockMovementService
 {
     private readonly AppDbContext _db;
+    private const decimal InventoryEpsilon = 0.0001m;
 
     public StockMovementService(AppDbContext db)
     {
@@ -106,6 +107,10 @@ public sealed class StockMovementService
                 row.UpdatedAt = now;
                 remaining = Math.Round(remaining - take, 4, MidpointRounding.AwayFromZero);
             }
+
+            var depletedRows = sourceRows.Where(r => r.Quantity <= InventoryEpsilon).ToList();
+            if (depletedRows.Count > 0)
+                _db.StockInventoryLines.RemoveRange(depletedRows);
 
             var moveCost = available > 0 ? Math.Round(availableCost / available, 4, MidpointRounding.AwayFromZero) : 0m;
 
