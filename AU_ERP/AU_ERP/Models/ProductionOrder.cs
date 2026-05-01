@@ -10,6 +10,7 @@ namespace AU_ERP.Models
         {
             StageProgresses = new HashSet<ProductionOrderStageProgress>();
             GoodsProduceBatches = new HashSet<GoodsProduceBatch>();
+            Lines = new HashSet<ProductionOrderLine>();
         }
 
         public const string StatusPlanned = "Planned";
@@ -71,6 +72,8 @@ namespace AU_ERP.Models
         public virtual ICollection<ProductionOrderStageProgress> StageProgresses { get; set; }
 
         public virtual ICollection<GoodsProduceBatch> GoodsProduceBatches { get; set; }
+
+        public virtual ICollection<ProductionOrderLine> Lines { get; set; }
     }
 }
 

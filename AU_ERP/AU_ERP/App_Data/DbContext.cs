@@ -36,6 +36,7 @@ namespace AU_ERP.Models
         public DbSet<ProductionVersion> ProductionVersions { get; set; }
         public DbSet<UnitOfMeasurement> UnitOfMeasurements { get; set; }
         public DbSet<ProductionOrder> ProductionOrders { get; set; }
+        public DbSet<ProductionOrderLine> ProductionOrderLines { get; set; }
         public DbSet<ProductionOrderStageProgress> ProductionOrderStageProgresses { get; set; }
         public DbSet<StockInventoryLine> StockInventoryLines { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
@@ -434,6 +435,42 @@ namespace AU_ERP.Models
                 .HasForeignKey(p => p.ReleasedRoutingId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<ProductionOrderLine>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<ProductionOrderLine>()
+                .Property(x => x.PlannedQuantity)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<ProductionOrderLine>()
+                .HasIndex(x => new { x.ProductionOrderId, x.LineNo })
+                .IsUnique();
+
+            modelBuilder.Entity<ProductionOrderLine>()
+                .HasOne(x => x.ProductionOrder)
+                .WithMany(p => p.Lines)
+                .HasForeignKey(x => x.ProductionOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProductionOrderLine>()
+                .HasOne(x => x.Material)
+                .WithMany()
+                .HasForeignKey(x => x.MaterialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionOrderLine>()
+                .HasOne(x => x.Uom)
+                .WithMany()
+                .HasForeignKey(x => x.UomId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<ProductionOrderLine>()
+                .HasOne(x => x.Plant)
+                .WithMany()
+                .HasForeignKey(x => x.PlantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<ProductionOrderStageProgress>()
                 .Property(e => e.Id)
                 .ValueGeneratedOnAdd();
@@ -463,6 +500,12 @@ namespace AU_ERP.Models
                 .WithMany(p => p.StageProgresses)
                 .HasForeignKey(s => s.ProductionOrderId)
                 .OnDelete(DeleteBehavior.Cascade);
+            
+            modelBuilder.Entity<ProductionOrderStageProgress>()
+                .HasOne(s => s.ProductionOrderLine)
+                .WithMany()
+                .HasForeignKey(s => s.ProductionOrderLineId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<ProductionOrderStageProgress>()
                 .HasOne(s => s.RoutingOperationHeader)
@@ -495,13 +538,30 @@ namespace AU_ERP.Models
                 .HasPrecision(18, 4);
 
             modelBuilder.Entity<GoodsProduceBatch>()
-                .HasIndex(g => g.ProductionOrderId)
-                .IsUnique();
+                .HasIndex(g => g.ProductionOrderId);
 
             modelBuilder.Entity<GoodsProduceBatch>()
                 .HasOne(g => g.ProductionOrder)
                 .WithMany(p => p.GoodsProduceBatches)
                 .HasForeignKey(g => g.ProductionOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .HasOne(g => g.ProductionOrderLine)
+                .WithMany()
+                .HasForeignKey(g => g.ProductionOrderLineId)
+                .OnDelete(DeleteBehavior.SetNull);
+            
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .HasOne(g => g.Material)
+                .WithMany()
+                .HasForeignKey(g => g.MaterialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<GoodsProduceBatch>()
+                .HasOne(g => g.Uom)
+                .WithMany()
+                .HasForeignKey(g => g.UomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<GoodReceiptDocument>()
@@ -551,6 +611,14 @@ namespace AU_ERP.Models
             modelBuilder.Entity<GoodsIssueDocumentLine>()
                 .Property(l => l.RequiredQty)
                 .HasPrecision(18, 4);
+            
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .Property(l => l.IssuedQty)
+                .HasPrecision(18, 4);
+            
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .Property(l => l.RemainingQty)
+                .HasPrecision(18, 4);
 
             modelBuilder.Entity<GoodsIssueDocumentLine>()
                 .HasIndex(l => l.GoodsIssueDocumentId);
@@ -566,6 +634,18 @@ namespace AU_ERP.Models
                 .WithMany()
                 .HasForeignKey(l => l.MaterialNumber)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .HasOne(l => l.FertMaterial)
+                .WithMany()
+                .HasForeignKey(l => l.FertMaterialNumber)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .HasOne(l => l.ProductionOrderLine)
+                .WithMany()
+                .HasForeignKey(l => l.ProductionOrderLineId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<GoodsIssueDocumentLine>()
                 .HasOne(l => l.RequiredUom)

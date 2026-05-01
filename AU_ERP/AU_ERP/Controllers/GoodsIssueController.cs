@@ -82,9 +82,15 @@ public class GoodsIssueController : Controller
                 materialDescription = doc.ProductionOrder?.FinishedMaterial?.Description,
                 lines = doc.Lines.OrderBy(l => l.Id).Select(l => new
                 {
+                    id = l.Id,
+                    productionOrderLineId = l.ProductionOrderLineId,
+                    fertMaterialNumber = l.FertMaterialNumber,
+                    fertMaterialDescription = l.FertMaterialDescription,
                     materialNumber = l.MaterialNumber,
                     materialDescription = l.MaterialDescription,
                     requiredQty = l.RequiredQty,
+                    issuedQty = l.IssuedQty,
+                    remainingQty = l.RemainingQty,
                     uomCode = l.RequiredUom != null ? l.RequiredUom.Code : "—"
                 })
             }
@@ -92,11 +98,18 @@ public class GoodsIssueController : Controller
     }
 
     [HttpPost]
-    public async Task<JsonResult> ReceiveGoods(int id, CancellationToken ct = default)
+    public async Task<JsonResult> ReceiveGoods(int id, [FromBody] GoodsIssueReceiveDto? dto, CancellationToken ct = default)
     {
+        IReadOnlyDictionary<int, decimal>? reqByLine = null;
+        if (dto?.Lines != null && dto.Lines.Count > 0)
+            reqByLine = dto.Lines
+                .Where(x => x.LineId > 0 && x.IssueQty >= 0)
+                .GroupBy(x => x.LineId)
+                .ToDictionary(g => g.Key, g => g.Last().IssueQty);
         var result = await _service.ReceiveGoodsAsync(
             id,
             User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier),
+            reqByLine,
             ct);
         return Json(new { success = result.success, message = result.message });
     }
@@ -138,4 +151,15 @@ public class GoodsIssueController : Controller
         var fileName = $"GI_{(doc.DocumentNumber?.Trim().Length > 0 ? doc.DocumentNumber.Trim() : doc.Id.ToString())}.pdf";
         return File(bytes, "application/pdf", fileName);
     }
+}
+
+public class GoodsIssueReceiveDto
+{
+    public List<GoodsIssueReceiveLineDto> Lines { get; set; } = new();
+}
+
+public class GoodsIssueReceiveLineDto
+{
+    public int LineId { get; set; }
+    public decimal IssueQty { get; set; }
 }

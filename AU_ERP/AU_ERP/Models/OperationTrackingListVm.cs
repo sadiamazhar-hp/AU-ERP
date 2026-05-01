@@ -5,6 +5,7 @@ namespace AU_ERP.Models
         public int ProductionOrderId { get; set; }
         public int ProductionNumber { get; set; }
         public string? FinishedItemLabel { get; set; }
+        public List<string> FinishedItemLines { get; set; } = new();
         public int TargetQuantity { get; set; }
         public string? UomCode { get; set; }
         public string Status { get; set; } = "";

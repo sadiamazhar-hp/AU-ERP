@@ -5,6 +5,16 @@
     var mat = string.IsNullOrWhiteSpace(po?.FinishedMaterial?.Description)
         ? (po?.FinishedMaterialNumber ?? "—")
         : $"{po?.FinishedMaterialNumber} — {po?.FinishedMaterial?.Description}";
+    var groupedLines = (Model.Lines ?? new List<AU_ERP.Models.GoodsIssueDocumentLine>())
+        .OrderBy(x => x.ProductionOrderLineId ?? int.MaxValue)
+        .ThenBy(x => x.Id)
+        .GroupBy(x => new
+        {
+            ProductionOrderLineId = x.ProductionOrderLineId,
+            FertMaterialNumber = x.FertMaterialNumber ?? "",
+            FertMaterialDescription = x.FertMaterialDescription ?? ""
+        })
+        .ToList();
 }
 
 <div class="mb-2">
@@ -15,33 +25,48 @@
     <div><strong>Finished Material:</strong> @mat</div>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-sm table-bordered mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>Material Number</th>
-                <th>Description</th>
-                <th class="text-end">Quantity</th>
-                <th>UOM</th>
-            </tr>
-        </thead>
-        <tbody>
-        @if (Model.Lines == null || !Model.Lines.Any())
-        {
-            <tr><td colspan="4" class="text-secondary">No BOM lines found.</td></tr>
-        }
-        else
-        {
-            foreach (var l in Model.Lines.OrderBy(x => x.Id))
-            {
-                <tr>
-                    <td>@l.MaterialNumber</td>
-                    <td>@l.MaterialDescription</td>
-                    <td class="text-end">@l.RequiredQty.ToString("0.####")</td>
-                    <td>@(l.RequiredUom?.Code ?? "—")</td>
-                </tr>
-            }
-        }
-        </tbody>
-    </table>
-</div>
+@if (!groupedLines.Any())
+{
+    <div class="text-secondary">No BOM lines found.</div>
+}
+else
+{
+    foreach (var grp in groupedLines)
+    {
+        var fertLabel = string.IsNullOrWhiteSpace(grp.Key.FertMaterialDescription)
+            ? (string.IsNullOrWhiteSpace(grp.Key.FertMaterialNumber) ? "Unmapped FERT item" : grp.Key.FertMaterialNumber)
+            : $"{grp.Key.FertMaterialNumber} — {grp.Key.FertMaterialDescription}";
+        <div class="border rounded p-2 mb-3">
+            <div class="fw-semibold mb-2">
+                FERT Line @(grp.Key.ProductionOrderLineId?.ToString() ?? "—"): @fertLabel
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Material Number</th>
+                            <th>Description</th>
+                            <th class="text-end">Required</th>
+                            <th class="text-end">Issued</th>
+                            <th class="text-end">Remaining</th>
+                            <th>UOM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var l in grp)
+                    {
+                        <tr>
+                            <td>@l.MaterialNumber</td>
+                            <td>@l.MaterialDescription</td>
+                            <td class="text-end">@l.RequiredQty.ToString("0.####")</td>
+                            <td class="text-end">@l.IssuedQty.ToString("0.####")</td>
+                            <td class="text-end">@l.RemainingQty.ToString("0.####")</td>
+                            <td>@(l.RequiredUom?.Code ?? "—")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}

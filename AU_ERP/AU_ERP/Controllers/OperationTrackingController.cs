@@ -30,6 +30,7 @@ namespace AU_ERP.Controllers
                 .Include(p => p.FinishedMaterial)
                 .Include(p => p.Uom)
                 .Include(p => p.StageProgresses)
+                .Include(p => p.Lines)
                 .Where(p => p.ReleasedRoutingId != null
                     && (p.Status == ProductionOrder.StatusReleased
                         || p.Status == ProductionOrder.StatusInProgress
@@ -67,6 +68,12 @@ namespace AU_ERP.Controllers
                 var itemLabel = mat != null
                     ? $"{po.FinishedMaterialNumber} — {mat.Description}"
                     : po.FinishedMaterialNumber;
+                var lineLabels = po.Lines
+                    .OrderBy(l => l.LineNo)
+                    .Select(l => $"{l.MaterialNumber} ({l.PlannedQuantity:0.####})")
+                    .ToList();
+                if (lineLabels.Count == 0)
+                    lineLabels.Add($"{po.FinishedMaterialNumber} ({po.TargetQuantity:0.####})");
                 var active = FirstTrackableStage(stages);
                 var effectiveStatus = AllStagesCompleted(stages)
                     ? ProductionOrder.StatusCompleted
@@ -77,6 +84,7 @@ namespace AU_ERP.Controllers
                     ProductionOrderId = po.Id,
                     ProductionNumber = po.ProductionNumber,
                     FinishedItemLabel = itemLabel,
+                    FinishedItemLines = lineLabels,
                     TargetQuantity = po.TargetQuantity,
                     UomCode = po.Uom?.Code,
                     Status = effectiveStatus,
@@ -103,6 +111,7 @@ namespace AU_ERP.Controllers
             var po = await _db.ProductionOrders.AsNoTracking()
                 .Include(p => p.FinishedMaterial)
                 .Include(p => p.Uom)
+                .Include(p => p.Lines)
                 .FirstOrDefaultAsync(p => p.Id == productionOrderId, ct);
 
             if (po == null)
@@ -128,6 +137,12 @@ namespace AU_ERP.Controllers
             var itemLabel = mat != null
                 ? $"{mat.MaterialNumber} — {mat.Description}"
                 : po.FinishedMaterialNumber;
+            var lineLabels = po.Lines
+                .OrderBy(l => l.LineNo)
+                .Select(l => $"{l.MaterialNumber} ({l.PlannedQuantity:0.####})")
+                .ToList();
+            if (lineLabels.Count == 0)
+                lineLabels.Add($"{po.FinishedMaterialNumber} ({po.TargetQuantity:0.####})");
 
             var active = FirstTrackableStage(stages);
 
@@ -173,6 +188,7 @@ namespace AU_ERP.Controllers
                 ProductionOrderId = po.Id,
                 ProductionNumber = po.ProductionNumber,
                 FinishedItemLabel = itemLabel,
+                FinishedItemLines = lineLabels,
                 TargetQuantity = po.TargetQuantity,
                 UomCode = po.Uom?.Code,
                 OverallStatusLabel = DeriveOverallLabel(effectiveOrderStatus, stages),
@@ -274,7 +290,18 @@ namespace AU_ERP.Controllers
 
             decimal? defaultInput = null;
             if (stageIndex <= 1)
-                defaultInput = stage.ProductionOrder!.TargetQuantity;
+            {
+                if (stage.ProductionOrderLineId is int lineId && lineId > 0)
+                {
+                    var lineQty = await _db.ProductionOrderLines.AsNoTracking()
+                        .Where(l => l.Id == lineId)
+                        .Select(l => (decimal?)l.PlannedQuantity)
+                        .FirstOrDefaultAsync(ct);
+                    defaultInput = lineQty ?? stage.ProductionOrder!.TargetQuantity;
+                }
+                else
+                    defaultInput = stage.ProductionOrder!.TargetQuantity;
+            }
             else
             {
                 var prev = await _db.ProductionOrderStageProgresses.AsNoTracking()

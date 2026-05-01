@@ -11,14 +11,13 @@ namespace AU_ERP.Controllers
     public class MRPController : Controller
     {
         private readonly AppDbContext _db;
+        private const string EmporiumPlantId = "Emp101";
 
         public MRPController(AppDbContext db) => _db = db;
 
         public async Task<IActionResult> Index(CancellationToken ct = default)
         {
             ViewData["Title"] = "MRP";
-            ViewBag.MrpPlants = await _db.PlantsSamples.AsNoTracking()
-                .OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
             return View();
         }
 
@@ -26,7 +25,7 @@ namespace AU_ERP.Controllers
         public async Task<JsonResult> FertMaterials(CancellationToken ct = default)
         {
             var items = await _db.CreateMaterialMaster.AsNoTracking()
-                .Where(m => m.MaterialTypeCode == "FERT" || m.MaterialTypeCode == "HALB")
+                .Where(m => m.MaterialTypeCode == "FERT")
                 .OrderBy(m => m.MaterialNumber)
                 .Select(m => new { m.MaterialNumber, m.Description, m.MaterialTypeCode })
                 .ToListAsync(ct);
@@ -155,7 +154,11 @@ namespace AU_ERP.Controllers
         {
             var plant = (dto.PlantId ?? "").Trim();
             if (plant.Length == 0)
-                return Json(new MrpRunResponseDto { Success = false, Message = "Plant is required to scope inventory for MRP." });
+                plant = await ResolveDefaultMrpPlantIdAsync(ct).ConfigureAwait(false);
+            if (plant.Length == 0)
+                return Json(new MrpRunResponseDto { Success = false, Message = "No eligible plant found for MRP." });
+            if (string.Equals(plant, EmporiumPlantId, StringComparison.OrdinalIgnoreCase))
+                return Json(new MrpRunResponseDto { Success = false, Message = "Emporium plant is not allowed for this MRP flow." });
             var plantOk = await _db.PlantsSamples.AsNoTracking().AnyAsync(p => p.PlantID == plant, ct).ConfigureAwait(false);
             if (!plantOk)
                 return Json(new MrpRunResponseDto { Success = false, Message = "Invalid plant." });
@@ -169,6 +172,192 @@ namespace AU_ERP.Controllers
                 plantIdForStockOverride: plant,
                 ct);
             return Json(result);
+        }
+
+        [HttpPost]
+        public async Task<JsonResult> RunMulti([FromBody] MrpMultiRunRequestDto dto, CancellationToken ct = default)
+        {
+            var lines = dto?.Lines ?? new List<MrpMultiRunRequestLineDto>();
+            if (lines.Count == 0)
+                return Json(new MrpMultiRunResponseDto { Success = false, Message = "At least one material line is required." });
+
+            var outLines = new List<MrpMultiRunResultLineDto>();
+            var allSatisfied = true;
+            var availableBaseByPlantAndMaterial = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+            static string BuildAvailKey(string plantId, string materialNumber) =>
+                $"{plantId.Trim().ToUpperInvariant()}|{materialNumber.Trim().ToUpperInvariant()}";
+
+            async Task<decimal> ResolveOnHandBaseAsync(string plantId, string materialNumber)
+            {
+                var key = BuildAvailKey(plantId, materialNumber);
+                if (availableBaseByPlantAndMaterial.TryGetValue(key, out var cached))
+                    return cached;
+
+                decimal totalBase = 0m;
+                var stockLines = await _db.StockInventoryLines.AsNoTracking()
+                    .Where(s => s.MaterialNumber == materialNumber
+                                && s.Status == StockInventoryLine.StatusActive
+                                && s.PlantID == plantId)
+                    .Select(s => new { s.Quantity, s.QuantityUomId })
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
+
+                foreach (var sl in stockLines)
+                {
+                    var (ok, qtyBase, _) = await UnitConversionMath.ToBaseAsync(
+                            _db, materialNumber, sl.Quantity, sl.QuantityUomId, ct)
+                        .ConfigureAwait(false);
+                    if (ok)
+                        totalBase += qtyBase;
+                }
+
+                availableBaseByPlantAndMaterial[key] = totalBase;
+                return totalBase;
+            }
+
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var ln = lines[i];
+                var mat = (ln.MaterialNumber ?? "").Trim();
+                var plant = (ln.PlantId ?? "").Trim();
+                if (plant.Length == 0)
+                    plant = await ResolveDefaultMrpPlantIdAsync(ct).ConfigureAwait(false);
+                if (mat.Length == 0 || plant.Length == 0 || ln.Quantity <= 0 || ln.UomId <= 0)
+                {
+                    outLines.Add(new MrpMultiRunResultLineDto
+                    {
+                        LineNo = i + 1,
+                        MaterialNumber = mat,
+                        Description = ln.Description,
+                        Quantity = ln.Quantity,
+                        UomId = ln.UomId,
+                        PlantId = plant,
+                        Result = new MrpRunResponseDto { Success = false, Message = "Invalid line input." }
+                    });
+                    allSatisfied = false;
+                    continue;
+                }
+                if (string.Equals(plant, EmporiumPlantId, StringComparison.OrdinalIgnoreCase))
+                {
+                    outLines.Add(new MrpMultiRunResultLineDto
+                    {
+                        LineNo = i + 1,
+                        MaterialNumber = mat,
+                        Description = ln.Description,
+                        Quantity = ln.Quantity,
+                        UomId = ln.UomId,
+                        PlantId = plant,
+                        Result = new MrpRunResponseDto { Success = false, Message = $"Emporium plant is not allowed for line {i + 1}." }
+                    });
+                    allSatisfied = false;
+                    continue;
+                }
+                var plantOk = await _db.PlantsSamples.AsNoTracking().AnyAsync(p => p.PlantID == plant, ct).ConfigureAwait(false);
+                if (!plantOk)
+                {
+                    outLines.Add(new MrpMultiRunResultLineDto
+                    {
+                        LineNo = i + 1,
+                        MaterialNumber = mat,
+                        Description = ln.Description,
+                        Quantity = ln.Quantity,
+                        UomId = ln.UomId,
+                        PlantId = plant,
+                        Result = new MrpRunResponseDto { Success = false, Message = $"Invalid plant for line {i + 1}." }
+                    });
+                    allSatisfied = false;
+                    continue;
+                }
+
+                var result = await MrpExplosionService.RunAsync(
+                    _db,
+                    mat,
+                    ln.Quantity,
+                    ln.UomId,
+                    requireFertMaterialOnly: false,
+                    plantIdForStockOverride: plant,
+                    ct);
+
+                // Cumulative stock check across all Multi-MRP lines in the same run.
+                // This prevents false "success" when each line individually passes
+                // but combined component demand exceeds available inventory.
+                if (result.Success && result.Rows.Count > 0)
+                {
+                    var adjustedRows = new List<MrpRunResultRowDto>(result.Rows.Count);
+                    foreach (var row in result.Rows)
+                    {
+                        var comp = (row.MaterialNumber ?? "").Trim();
+                        if (string.IsNullOrWhiteSpace(comp) || row.RequiredUomId <= 0 || row.RequiredQty <= 0)
+                        {
+                            adjustedRows.Add(row);
+                            continue;
+                        }
+
+                        var availableBase = await ResolveOnHandBaseAsync(plant, comp).ConfigureAwait(false);
+                        var availableBeforeBase = availableBase;
+                        var (reqOk, requiredBase, _) = await UnitConversionMath.ToBaseAsync(
+                                _db, comp, row.RequiredQty, row.RequiredUomId, ct)
+                            .ConfigureAwait(false);
+                        if (!reqOk)
+                        {
+                            row.Shortage = true;
+                            adjustedRows.Add(row);
+                            continue;
+                        }
+
+                        row.Shortage = availableBeforeBase + 0.0001m < requiredBase;
+                        if (row.Shortage)
+                            allSatisfied = false;
+                        else
+                            availableBaseByPlantAndMaterial[BuildAvailKey(plant, comp)] = availableBeforeBase - requiredBase;
+
+                        var (onHandOk, onHandReqUom, _) = await UnitConversionMath.FromBaseAsync(
+                                _db, comp, availableBeforeBase, row.RequiredUomId, ct)
+                            .ConfigureAwait(false);
+                        if (onHandOk)
+                            row.OnHandQty = decimal.Round(onHandReqUom, 4, MidpointRounding.AwayFromZero);
+
+                        adjustedRows.Add(row);
+                    }
+
+                    result.Rows = adjustedRows;
+                    result.AllSatisfied = adjustedRows.Count > 0 && adjustedRows.TrueForAll(r => !r.Shortage);
+                    if (!result.AllSatisfied)
+                        result.Message = MrpExplosionService.FormatShortageMessage(result);
+                }
+
+                allSatisfied = allSatisfied && result.Success && result.AllSatisfied;
+                outLines.Add(new MrpMultiRunResultLineDto
+                {
+                    LineNo = i + 1,
+                    MaterialNumber = mat,
+                    Description = ln.Description,
+                    Quantity = ln.Quantity,
+                    UomId = ln.UomId,
+                    PlantId = plant,
+                    Result = result
+                });
+            }
+
+            return Json(new MrpMultiRunResponseDto
+            {
+                Success = outLines.Any(x => x.Result.Success),
+                Message = allSatisfied ? "MRP completed for all lines." : "MRP completed with shortages/errors in one or more lines.",
+                AllSatisfied = allSatisfied,
+                Lines = outLines
+            });
+        }
+
+        private async Task<string> ResolveDefaultMrpPlantIdAsync(CancellationToken ct)
+        {
+            var plant = await _db.PlantsSamples.AsNoTracking()
+                .Where(p => p.PlantID != EmporiumPlantId)
+                .OrderBy(p => p.PlantID)
+                .Select(p => p.PlantID)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+            return (plant ?? string.Empty).Trim();
         }
     }
 }

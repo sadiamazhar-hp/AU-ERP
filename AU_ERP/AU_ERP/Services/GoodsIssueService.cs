@@ -27,6 +27,7 @@ public sealed class GoodsIssueService
             return (true, "Goods issue already exists.", existing.Id);
 
         var po = await _db.ProductionOrders.AsNoTracking()
+            .Include(p => p.Lines)
             .FirstOrDefaultAsync(p => p.Id == productionOrderId, ct);
         if (po == null)
             return (false, "Production order not found.", null);
@@ -35,24 +36,18 @@ public sealed class GoodsIssueService
         if (po.ReleasedRoutingId != null)
             return (false, "This production order is already released to operations.", null);
 
-        var routing = await ResolveRoutingAsync(po.FinishedMaterialNumber, ct);
-        if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
-            return (false, "No routing with operations is defined for this material.", null);
-        if (string.IsNullOrWhiteSpace(routing.PlantID))
-            return (false, "Routing must have a plant for goods issue.", null);
-
-        var mrp = await MrpExplosionService.RunAsync(
-            _db,
-            po.FinishedMaterialNumber.Trim(),
-            po.TargetQuantity,
-            po.UomId,
-            requireFertMaterialOnly: false,
-            plantIdForStockOverride: routing.PlantID,
-            ct);
-        if (!mrp.Success)
-            return (false, mrp.Message ?? "MRP check failed for goods issue creation.", null);
-        if (mrp.Rows == null || mrp.Rows.Count == 0)
-            return (false, "No BOM components found for this production order.", null);
+        var poLines = po.Lines.OrderBy(l => l.LineNo).ToList();
+        if (poLines.Count == 0)
+        {
+            poLines.Add(new ProductionOrderLine
+            {
+                ProductionOrderId = po.Id,
+                LineNo = 1,
+                MaterialNumber = po.FinishedMaterialNumber,
+                PlannedQuantity = po.TargetQuantity,
+                UomId = po.UomId
+            });
+        }
 
         var docNumber = await GenerateNextGoodsIssueNumberAsync(ct);
         var now = DateTime.UtcNow;
@@ -66,30 +61,55 @@ public sealed class GoodsIssueService
             CreatedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim()
         };
 
-        var grouped = mrp.Rows
-            .Where(r => !string.IsNullOrWhiteSpace(r.MaterialNumber) && r.RequiredQty > 0 && r.RequiredUomId > 0)
-            .GroupBy(r => new { Mat = r.MaterialNumber.Trim(), r.RequiredUomId })
-            .Select(g => new
-            {
-                MaterialNumber = g.Key.Mat,
-                RequiredUomId = g.Key.RequiredUomId,
-                RequiredQty = g.Sum(x => x.RequiredQty),
-                Description = g.Select(x => x.Description).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-            })
-            .ToList();
-
-        if (grouped.Count == 0)
-            return (false, "No BOM components found for this production order.", null);
-
-        foreach (var row in grouped)
+        foreach (var line in poLines)
         {
-            doc.Lines.Add(new GoodsIssueDocumentLine
+            var routing = await ResolveRoutingAsync(line.MaterialNumber, ct);
+            if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
+                return (false, $"No routing with operations is defined for line {line.LineNo} material '{line.MaterialNumber}'.", null);
+            if (string.IsNullOrWhiteSpace(routing.PlantID))
+                return (false, $"Routing plant is missing for line {line.LineNo} material '{line.MaterialNumber}'.", null);
+            
+            var mrp = await MrpExplosionService.RunAsync(
+                _db,
+                line.MaterialNumber.Trim(),
+                line.PlannedQuantity,
+                line.UomId,
+                requireFertMaterialOnly: false,
+                plantIdForStockOverride: line.PlantId ?? routing.PlantID,
+                ct);
+            if (!mrp.Success)
+                return (false, $"Line {line.LineNo}: {mrp.Message ?? "MRP check failed for goods issue creation."}", null);
+            if (mrp.Rows == null || mrp.Rows.Count == 0)
+                return (false, $"No BOM components found for line {line.LineNo} material '{line.MaterialNumber}'.", null);
+            
+            var grouped = mrp.Rows
+                .Where(r => !string.IsNullOrWhiteSpace(r.MaterialNumber) && r.RequiredQty > 0 && r.RequiredUomId > 0)
+                .GroupBy(r => new { Mat = r.MaterialNumber.Trim(), r.RequiredUomId })
+                .Select(g => new
+                {
+                    MaterialNumber = g.Key.Mat,
+                    RequiredUomId = g.Key.RequiredUomId,
+                    RequiredQty = g.Sum(x => x.RequiredQty),
+                    Description = g.Select(x => x.Description).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                })
+                .ToList();
+            
+            foreach (var row in grouped)
             {
-                MaterialNumber = row.MaterialNumber,
-                MaterialDescription = row.Description,
-                RequiredQty = decimal.Round(row.RequiredQty, 4, MidpointRounding.AwayFromZero),
-                RequiredUomId = row.RequiredUomId
-            });
+                var required = decimal.Round(row.RequiredQty, 4, MidpointRounding.AwayFromZero);
+                doc.Lines.Add(new GoodsIssueDocumentLine
+                {
+                    ProductionOrderLineId = line.Id > 0 ? line.Id : null,
+                    FertMaterialNumber = line.MaterialNumber,
+                    FertMaterialDescription = line.MaterialDescription,
+                    MaterialNumber = row.MaterialNumber,
+                    MaterialDescription = row.Description,
+                    RequiredQty = required,
+                    IssuedQty = 0m,
+                    RemainingQty = required,
+                    RequiredUomId = row.RequiredUomId
+                });
+            }
         }
 
         _db.GoodsIssueDocuments.Add(doc);
@@ -97,7 +117,11 @@ public sealed class GoodsIssueService
         return (true, "Goods issue created.", doc.Id);
     }
 
-    public async Task<(bool success, string message)> ReceiveGoodsAsync(int goodsIssueId, string? userId, CancellationToken ct = default)
+    public async Task<(bool success, string message)> ReceiveGoodsAsync(
+        int goodsIssueId,
+        string? userId,
+        IReadOnlyDictionary<int, decimal>? requestedIssueQtyByLine = null,
+        CancellationToken ct = default)
     {
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
         try
@@ -134,18 +158,6 @@ public sealed class GoodsIssueService
                 return (false, "Production order is not in a state that can be released via goods issue.");
             }
 
-            var routing = await ResolveRoutingAsync(po.FinishedMaterialNumber, ct);
-            if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
-            {
-                await tx.RollbackAsync(ct);
-                return (false, "No routing with operations is defined for this material.");
-            }
-            if (string.IsNullOrWhiteSpace(routing.PlantID))
-            {
-                await tx.RollbackAsync(ct);
-                return (false, "Routing must have a plant for goods issue.");
-            }
-
             if (doc.Lines == null || doc.Lines.Count == 0)
             {
                 await tx.RollbackAsync(ct);
@@ -161,62 +173,111 @@ public sealed class GoodsIssueService
                 }
             }
 
-            var consumeErr = await ConsumeInventoryAsync(routing.PlantID, doc.Lines.ToList(), ct);
+            var consumeErr = await ConsumeInventoryAsync(po, doc.Lines.ToList(), requestedIssueQtyByLine, ct);
             if (consumeErr != null)
             {
                 await tx.RollbackAsync(ct);
                 return (false, consumeErr);
             }
-
-            var (bomOk, bomErr, bomLines) = await MrpExplosionService.BuildScaledBomLinesFromLiveBomAsync(_db, po, ct);
-            if (!bomOk)
-            {
-                await tx.RollbackAsync(ct);
-                return (false, bomErr ?? "Could not build BOM snapshot.");
-            }
-
-            var orderedHeaders = routing.OperationHeaders.OrderBy(h => h.DisplayOrder).ToList();
+            
+            var allIssued = doc.Lines.All(l => l.RemainingQty <= InventoryEpsilon);
             var now = DateTime.UtcNow;
-            var isFirst = true;
-            foreach (var h in orderedHeaders)
+            if (allIssued)
             {
-                decimal planned;
-                try
+                var poLines = await _db.ProductionOrderLines
+                    .Where(l => l.ProductionOrderId == po.Id)
+                    .OrderBy(l => l.LineNo)
+                    .ToListAsync(ct);
+                if (poLines.Count == 0)
                 {
-                    planned = RoutingPlannedHours.SumHeaderPlannedHours(h);
+                    poLines.Add(new ProductionOrderLine
+                    {
+                        ProductionOrderId = po.Id,
+                        LineNo = 1,
+                        MaterialNumber = po.FinishedMaterialNumber,
+                        PlannedQuantity = po.TargetQuantity,
+                        UomId = po.UomId
+                    });
                 }
-                catch (InvalidOperationException ex)
+                
+                var allBomLines = new List<MrpBomLineDisplayDto>();
+                var firstRoutingId = po.ReleasedRoutingId;
+                foreach (var line in poLines)
                 {
-                    await tx.RollbackAsync(ct);
-                    return (false, ex.Message);
+                    var routing = await ResolveRoutingAsync(line.MaterialNumber, ct);
+                    if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
+                    {
+                        await tx.RollbackAsync(ct);
+                        return (false, $"No routing with operations is defined for line {line.LineNo} material '{line.MaterialNumber}'.");
+                    }
+                    if (firstRoutingId == null)
+                        firstRoutingId = routing.RoutingID;
+                    var orderedHeaders = routing.OperationHeaders.OrderBy(h => h.DisplayOrder).ToList();
+                    var isFirst = true;
+                    foreach (var h in orderedHeaders)
+                    {
+                        decimal planned;
+                        try
+                        {
+                            planned = RoutingPlannedHours.SumHeaderPlannedHours(h);
+                        }
+                        catch (InvalidOperationException ex)
+                        {
+                            await tx.RollbackAsync(ct);
+                            return (false, ex.Message);
+                        }
+                        
+                        await _db.ProductionOrderStageProgresses.AddAsync(new ProductionOrderStageProgress
+                        {
+                            ProductionOrderId = po.Id,
+                            ProductionOrderLineId = line.Id > 0 ? line.Id : null,
+                            RoutingOperationHeaderId = h.OperationHeaderId,
+                            SequenceOrder = h.DisplayOrder,
+                            StageTitle = h.Title,
+                            PlannedHours = planned,
+                            StageStatus = isFirst
+                                ? ProductionOrderStageProgress.StageInProgress
+                                : ProductionOrderStageProgress.StagePending,
+                            UpdatedAt = now
+                        }, ct);
+                        isFirst = false;
+                    }
+                    
+                    var poLike = new ProductionOrder
+                    {
+                        FinishedMaterialNumber = line.MaterialNumber,
+                        TargetQuantity = (int)Math.Round(line.PlannedQuantity, MidpointRounding.AwayFromZero),
+                        UomId = line.UomId,
+                        ReleasedBomSnapshotJson = po.ReleasedBomSnapshotJson
+                    };
+                    var (bomOk, bomErr, bomLines) = await MrpExplosionService.GetBomLinesScaledForProductionOrderAsync(_db, poLike, ct);
+                    if (!bomOk)
+                    {
+                        await tx.RollbackAsync(ct);
+                        return (false, bomErr ?? "Could not build BOM snapshot.");
+                    }
+                    allBomLines.AddRange(bomLines);
                 }
+                
+                po.ReleasedRoutingId = firstRoutingId;
+                po.ReleasedBomSnapshotJson = MrpExplosionService.SerializeBomSnapshotLines(allBomLines);
+                po.Status = ProductionOrder.StatusInProgress;
 
-                await _db.ProductionOrderStageProgresses.AddAsync(new ProductionOrderStageProgress
-                {
-                    ProductionOrderId = po.Id,
-                    RoutingOperationHeaderId = h.OperationHeaderId,
-                    SequenceOrder = h.DisplayOrder,
-                    StageTitle = h.Title,
-                    PlannedHours = planned,
-                    StageStatus = isFirst
-                        ? ProductionOrderStageProgress.StageInProgress
-                        : ProductionOrderStageProgress.StagePending,
-                    UpdatedAt = now
-                }, ct);
-                isFirst = false;
+                doc.Status = GoodsIssueDocument.StatusCompleted;
+                doc.CompletedAt = now;
+                doc.CompletedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
             }
-
-            po.ReleasedRoutingId = routing.RoutingID;
-            po.ReleasedBomSnapshotJson = MrpExplosionService.SerializeBomSnapshotLines(bomLines);
-            po.Status = ProductionOrder.StatusInProgress;
-
-            doc.Status = GoodsIssueDocument.StatusCompleted;
-            doc.CompletedAt = now;
-            doc.CompletedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
+            else
+            {
+                doc.Status = GoodsIssueDocument.StatusPending;
+                po.Status = ProductionOrder.StatusPlanned;
+            }
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
-            return (true, "Goods issue completed. Inventory deducted and production order released to operations.");
+            return allIssued
+                ? (true, "Goods issue completed. Inventory deducted and production order released to operations.")
+                : (true, "Partial goods issue posted. Remaining quantities are still pending.");
         }
         catch (Exception ex)
         {
@@ -225,14 +286,28 @@ public sealed class GoodsIssueService
         }
     }
 
-    private async Task<string?> ConsumeInventoryAsync(string plantId, IReadOnlyList<GoodsIssueDocumentLine> lines, CancellationToken ct)
+    private async Task<string?> ConsumeInventoryAsync(
+        ProductionOrder po,
+        IReadOnlyList<GoodsIssueDocumentLine> lines,
+        IReadOnlyDictionary<int, decimal>? requestedIssueQtyByLine,
+        CancellationToken ct)
     {
         var reqLines = lines
-            .Where(l => !string.IsNullOrWhiteSpace(l.MaterialNumber) && l.RequiredQty > 0 && l.RequiredUomId > 0)
+            .Where(l => !string.IsNullOrWhiteSpace(l.MaterialNumber) && l.RequiredUomId > 0 && l.RemainingQty > 0)
             .ToList();
 
         foreach (var req in reqLines)
         {
+            var issueQtyRequested = req.RemainingQty;
+            if (requestedIssueQtyByLine != null && requestedIssueQtyByLine.TryGetValue(req.Id, out var reqQty) && reqQty >= 0)
+                issueQtyRequested = Math.Min(req.RemainingQty, reqQty);
+            if (issueQtyRequested <= 0)
+                continue;
+            
+            var plantId = await ResolveIssuePlantForLineAsync(po, req, ct);
+            if (string.IsNullOrWhiteSpace(plantId))
+                return $"Cannot receive goods: routing plant is missing for line material '{req.FertMaterialNumber ?? po.FinishedMaterialNumber}'.";
+            
             var rows = await _db.StockInventoryLines
                 .Where(s => s.MaterialNumber == req.MaterialNumber
                             && s.PlantID == plantId
@@ -256,12 +331,12 @@ public sealed class GoodsIssueService
                     available += conv.quantityOut;
             }
 
-            if (available + InventoryEpsilon < req.RequiredQty)
+            if (available + InventoryEpsilon < issueQtyRequested)
             {
-                return $"Cannot receive goods: insufficient stock for '{req.MaterialNumber}' at plant '{plantId}'. Required {req.RequiredQty:0.####}, available {available:0.####}.";
+                return $"Cannot receive goods: insufficient stock for '{req.MaterialNumber}' at plant '{plantId}'. Required {issueQtyRequested:0.####}, available {available:0.####}.";
             }
 
-            decimal remaining = req.RequiredQty;
+            decimal remaining = issueQtyRequested;
             var now = DateTime.UtcNow;
             foreach (var row in rows)
             {
@@ -309,6 +384,10 @@ public sealed class GoodsIssueService
 
             if (remaining > InventoryEpsilon)
                 return $"Cannot receive goods: insufficient stock for '{req.MaterialNumber}' during deduction. Short by {remaining:0.####}.";
+            
+            var issuedNow = issueQtyRequested - remaining;
+            req.IssuedQty = decimal.Round(req.IssuedQty + issuedNow, 4, MidpointRounding.AwayFromZero);
+            req.RemainingQty = decimal.Round(Math.Max(0m, req.RequiredQty - req.IssuedQty), 4, MidpointRounding.AwayFromZero);
         }
 
         return null;
@@ -324,6 +403,18 @@ public sealed class GoodsIssueService
             .OrderByDescending(r => r.ValidFrom)
             .ThenByDescending(r => r.RoutingID)
             .FirstOrDefaultAsync(ct);
+    }
+
+    private async Task<string?> ResolveIssuePlantForLineAsync(
+        ProductionOrder po,
+        GoodsIssueDocumentLine line,
+        CancellationToken ct)
+    {
+        var mat = (line.FertMaterialNumber ?? po.FinishedMaterialNumber ?? "").Trim();
+        if (mat.Length == 0)
+            return null;
+        var routing = await ResolveRoutingAsync(mat, ct);
+        return routing?.PlantID;
     }
 
     private async Task<string> GenerateNextGoodsIssueNumberAsync(CancellationToken ct)

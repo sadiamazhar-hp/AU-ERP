@@ -11,6 +11,39 @@ namespace AU_ERP.Models
         public bool SubMrp { get; set; }
     }
 
+    public class MrpMultiRunRequestLineDto
+    {
+        public string? MaterialNumber { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; }
+        public int UomId { get; set; }
+        public string? PlantId { get; set; }
+    }
+
+    public class MrpMultiRunRequestDto
+    {
+        public List<MrpMultiRunRequestLineDto> Lines { get; set; } = new();
+    }
+
+    public class MrpMultiRunResultLineDto
+    {
+        public int LineNo { get; set; }
+        public string MaterialNumber { get; set; } = "";
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; }
+        public int UomId { get; set; }
+        public string? PlantId { get; set; }
+        public MrpRunResponseDto Result { get; set; } = new();
+    }
+
+    public class MrpMultiRunResponseDto
+    {
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public bool AllSatisfied { get; set; }
+        public List<MrpMultiRunResultLineDto> Lines { get; set; } = new();
+    }
+
     public class MrpRunResultRowDto
     {
         public string MaterialNumber { get; set; } = "";

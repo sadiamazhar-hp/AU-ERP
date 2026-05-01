@@ -416,20 +416,7 @@
             <div class="modal-body">
                 <p class="small text-secondary mb-2" id="poBomHeaderText"></p>
                 <div class="au-validation-summary mb-2" id="poBomError" style="display:none;" role="alert"></div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Material number</th>
-                                <th>Material</th>
-                                <th>Material type</th>
-                                <th>Qty</th>
-                                <th>UOM</th>
-                            </tr>
-                        </thead>
-                        <tbody id="poBomBody"></tbody>
-                    </table>
-                </div>
+                <div id="poBomBody"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -842,27 +829,60 @@
                 if (head) {
                     head.textContent = fm
                         ? ("Finished item: " + fm + ". Quantities are scaled from this order’s target quantity and the BOM base quantity.")
-                        : "";
+                        : "BOM is shown separately for each FERT line.";
                 }
-                var lines = res.data || res.Data || [];
+                var lineGroups = res.data || res.Data || [];
                 if (body) {
-                    if (!lines.length) {
-                        body.innerHTML = '<tr><td colspan="5" class="text-secondary">No BOM lines found for this item.</td></tr>';
+                    if (!lineGroups.length) {
+                        body.innerHTML = '<div class="text-secondary">No BOM lines found for this production order.</div>';
                     } else {
-                        lines.forEach(function (row) {
-                            var tr = document.createElement("tr");
-                            var mn = row.materialNumber || row.MaterialNumber || "";
-                            var desc = row.description || row.Description || "";
-                            var mt = row.materialTypeCode || row.MaterialTypeCode || "";
-                            var q = row.quantity != null ? row.quantity : row.Quantity;
-                            var u = row.uomCode || row.UomCode || "—";
-                            tr.innerHTML =
-                                "<td><strong>" + poBomEsc(mn) + "</strong></td>" +
-                                "<td>" + poBomEsc(desc) + "</td>" +
-                                "<td>" + poBomEsc(mt) + "</td>" +
-                                "<td>" + poBomEsc(String(q)) + "</td>" +
-                                "<td>" + poBomEsc(u) + "</td>";
-                            body.appendChild(tr);
+                        lineGroups.forEach(function (grp, idx) {
+                            var lineNo = grp.lineNo != null ? grp.lineNo : grp.LineNo;
+                            var matNo = grp.materialNumber || grp.MaterialNumber || "";
+                            var plannedQty = grp.quantity != null ? grp.quantity : grp.Quantity;
+                            var rows = grp.bomLines || grp.BomLines || [];
+
+                            var card = document.createElement("div");
+                            card.className = "mb-3 border rounded p-2";
+                            var title = document.createElement("div");
+                            title.className = "fw-semibold mb-2";
+                            title.textContent = "FERT Line " + String(lineNo || (idx + 1)) + ": " + matNo + " (Qty: " + String(plannedQty ?? "0") + ")";
+                            card.appendChild(title);
+
+                            if (!rows.length) {
+                                var empty = document.createElement("div");
+                                empty.className = "text-secondary small";
+                                empty.textContent = "No BOM lines found for this item.";
+                                card.appendChild(empty);
+                                body.appendChild(card);
+                                return;
+                            }
+
+                            var wrap = document.createElement("div");
+                            wrap.className = "table-responsive";
+                            var tbl = document.createElement("table");
+                            tbl.className = "table table-sm table-bordered mb-0";
+                            tbl.innerHTML = '<thead class="table-light"><tr><th>Material number</th><th>Material</th><th>Material type</th><th>Qty</th><th>UOM</th></tr></thead>';
+                            var tbody = document.createElement("tbody");
+                            rows.forEach(function (row) {
+                                var tr = document.createElement("tr");
+                                var mn = row.materialNumber || row.MaterialNumber || "";
+                                var desc = row.description || row.Description || "";
+                                var mt = row.materialTypeCode || row.MaterialTypeCode || "";
+                                var q = row.quantity != null ? row.quantity : row.Quantity;
+                                var u = row.uomCode || row.UomCode || "—";
+                                tr.innerHTML =
+                                    "<td><strong>" + poBomEsc(mn) + "</strong></td>" +
+                                    "<td>" + poBomEsc(desc) + "</td>" +
+                                    "<td>" + poBomEsc(mt) + "</td>" +
+                                    "<td>" + poBomEsc(String(q)) + "</td>" +
+                                    "<td>" + poBomEsc(u) + "</td>";
+                                tbody.appendChild(tr);
+                            });
+                            tbl.appendChild(tbody);
+                            wrap.appendChild(tbl);
+                            card.appendChild(wrap);
+                            body.appendChild(card);
                         });
                     }
                 }

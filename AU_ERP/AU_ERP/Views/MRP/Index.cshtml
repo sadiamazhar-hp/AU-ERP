@@ -1,675 +1,304 @@
-@using AU_ERP.Models
 @{
     ViewData["Title"] = "MRP";
-    var mrpPlants = ViewBag.MrpPlants as IEnumerable<PlantsSample>;
 }
 
 @section Styles {
     <style>
         .mrp-page { color: var(--text, #32363a); }
-        .mrp-page .mrp-hero { margin-bottom: 1.25rem; }
-        .mrp-page .mrp-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .25rem 0; }
-        .mrp-page .mrp-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
-        .mrp-btn-run { background: var(--blue, #0070f2); color: #fff; border: 1px solid var(--blue, #0070f2); border-radius: 4px; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
-        .mrp-btn-run:hover { filter: brightness(1.05); color: #fff; }
+        .mrp-hero { margin-bottom: 1rem; }
+        .mrp-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .25rem 0; }
+        .mrp-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
         .mrp-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.1rem; margin-bottom: 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); }
-        .mrp-card h2 { font-size: 1rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .75rem 0; }
-        .mrp-table-wrap { overflow-x: auto; }
-        .mrp-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-        .mrp-table thead th { background: var(--dark, #354a5e); color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
-        .mrp-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
-        .mrp-table tbody tr:nth-child(even) { background: #fafafa; }
-        .mrp-table tbody tr.mrp-row-short { background: #f8d7da !important; color: #842029; }
-        .mrp-success-banner { display: none; border: 1px solid #badbcc; background: #d1e7dd; color: #0f5132; border-radius: .5rem; padding: .75rem 1rem; margin-bottom: 1rem; font-weight: 500; }
-        .mrp-sub-detail td { background: #f4fbfb; border-top: none !important; }
-        .mrp-sub-inner { font-size: .82rem; }
-        .mrp-sub-inner table { width: 100%; margin: 0; }
-        .mrp-sub-inner th { background: #e8f4f5; color: #2c5f63; font-weight: 600; }
-        /* Same pattern as BOM material picker — server search + dropdown */
-        .au-mat-picker { position: relative; }
-        .au-mat-picker-dropdown { display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; max-height: 220px; overflow-y: auto; z-index: 1060; background: #fff; border: 1px solid #ccc; border-radius: .25rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-        .au-mat-picker-dropdown.show { display: block; }
-        .au-mat-picker-item { padding: 6px 10px; font-size: .82rem; cursor: pointer; border: 0; border-bottom: 1px solid #eee; width: 100%; text-align: left; background: #fff; }
-        .au-mat-picker-item:hover, .au-mat-picker-item.active { background: #b3d7ff; }
-        .au-mat-picker-item .au-mat-code { font-weight: 600; }
-        .au-mat-picker-empty { padding: 8px 10px; font-size: .78rem; color: #666; }
     </style>
 }
 
 <div class="mrp-page">
     <div class="mrp-hero">
-        <h1>Material requirements planning</h1>
-        <p>Select a finished good or semi-finished assembly (FERT or HALB), quantity, and UOM, then run MRP to compare BOM requirements with active stock.</p>
-    </div>
-
-    <div id="mrpSuccessBanner" class="mrp-success-banner" role="status">
-        <div class="d-flex flex-wrap align-items-center gap-2 justify-content-between">
-            <span>MRP complete — Ready for Production</span>
-            <button type="button" class="btn btn-sm btn-success" id="mrpBtnCreatePoMain" style="display:none;">Create Production Order</button>
-        </div>
+        <h1>Material Requirements Planning</h1>
+        <p>Select date range, add multiple FERT lines, auto-fill demand quantity/UOM from Sales Orders, then run MRP.</p>
     </div>
 
     <div class="mrp-card">
-        <h2>Run parameters</h2>
-        <div class="au-validation-summary mb-2" id="mrpFormError" style="display:none;" role="alert"></div>
-        <div class="row g-2 align-items-end flex-wrap">
-            <div class="col-md-4">
-                <label class="form-label small">Material (FERT / HALB)</label>
-                <div class="au-mat-picker" id="mrpMatPickerWrap">
-                    <input type="text" class="form-control form-control-sm au-mat-picker-search" id="mrpMaterialSearch" placeholder="Search material number or description…" autocomplete="off" />
-                    <input type="hidden" id="mrpMaterial" value="" />
-                    <div class="au-mat-picker-dropdown" id="mrpMaterialDd"></div>
-                </div>
-            </div>
-            <div class="col-md-2">
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-3">
                 <label class="form-label small">From date</label>
                 <input type="date" id="mrpFromDate" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <label class="form-label small">To date</label>
                 <input type="date" id="mrpToDate" class="form-control form-control-sm" />
             </div>
-            <div class="col-md-2">
-                <label class="form-label small">Quantity</label>
-                <input type="number" id="mrpQty" class="form-control form-control-sm" min="0.0001" step="any" value="1" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Plant</label>
-                <select id="mrpPlant" class="form-select form-select-sm" required>
-                    <option value="">— Select plant —</option>
-                    @foreach (var p in (mrpPlants ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
-                    {
-                        <option value="@p.PlantID">@p.PlantID</option>
-                    }
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Quantity UOM</label>
-                <select id="mrpUom" class="form-select form-select-sm"></select>
-            </div>
-            <div class="col-md-2">
-                <button type="button" class="btn mrp-btn-run mt-4" id="mrpRunBtn">Run MRP</button>
+            <div class="col-md-6 d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-4" id="mrpAddLine">Add line</button>
+                <button type="button" class="btn btn-sm btn-primary mt-4" id="mrpRunMultiBtn">Run Multi MRP</button>
+                <button type="button" class="btn btn-sm btn-success mt-4" id="mrpCreatePoBtn" style="display:none;">Create Production Order</button>
             </div>
         </div>
-    </div>
 
-    <div class="mrp-card" id="mrpResultCard" style="display:none;">
-        <h2 id="mrpResultTitle">Results</h2>
-        <div id="mrpWarnings" class="small text-warning mb-2" style="display:none;"></div>
-        <div class="mrp-table-wrap">
-            <table class="mrp-table" id="mrpResultTable">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle">
                 <thead>
                     <tr>
-                        <th>Material</th>
-                        <th>Material type</th>
-                        <th>Total required</th>
-                        <th>Total stock</th>
-                        <th>Actions</th>
+                        <th style="width:34%;">Material</th>
+                        <th style="width:18%;">Quantity (auto)</th>
+                        <th style="width:18%;">UOM (auto)</th>
+                        <th style="width:20%;">Status</th>
+                        <th style="width:10%;"></th>
                     </tr>
                 </thead>
-                <tbody id="mrpResultBody"></tbody>
+                <tbody id="mrpLinesBody"></tbody>
             </table>
         </div>
+        <div class="small mt-2" id="mrpMsg"></div>
+    </div>
+
+    <div class="mrp-card" id="mrpResultsCard" style="display:none;">
+        <h2 class="h6 mb-3">MRP BOM Results (per material)</h2>
+        <div id="mrpResultsBody"></div>
     </div>
 </div>
 
 @section Scripts {
 <script>
 (function () {
-    function mrpInitUomPlaceholder(sel) {
-        if (!sel) return;
-        sel.innerHTML = "";
-        var o = document.createElement("option");
-        o.value = "";
-        o.textContent = "Select a material first";
-        sel.appendChild(o);
+    const demandUrl = "@Url.Action("DemandForMaterial", "MRP")";
+    const fertUrl = "@Url.Action("FertMaterials", "MRP")";
+    const runMultiUrl = "@Url.Action("RunMulti", "MRP")";
+    const createPoUrl = "@Url.Action("CreateFromMrpMulti", "ProductionOrder")";
+    const poIndexUrl = "@Url.Action("Index", "ProductionOrder")";
+
+    const linesBody = document.getElementById("mrpLinesBody");
+    const fromEl = document.getElementById("mrpFromDate");
+    const toEl = document.getElementById("mrpToDate");
+    const msgEl = document.getElementById("mrpMsg");
+    const createPoBtn = document.getElementById("mrpCreatePoBtn");
+    const resultsCard = document.getElementById("mrpResultsCard");
+    const resultsBody = document.getElementById("mrpResultsBody");
+
+    let fertItems = [];
+    let lastMulti = null;
+
+    function setMsg(msg, ok) {
+        msgEl.className = "small mt-2 " + (ok ? "text-success" : "text-danger");
+        msgEl.textContent = msg || "";
     }
 
-    function mrpPopulateUom(sel, data, preferredUomId) {
-        sel.innerHTML = "";
-        var uoms = data.uoms || data.Uoms || [];
-        if (!uoms.length) {
-            var ox = document.createElement("option");
-            ox.value = "";
-            ox.textContent = "—";
-            sel.appendChild(ox);
+    function fmtQty(v) {
+        const n = Number(v);
+        return isNaN(n) ? "" : n.toFixed(4).replace(/\.?0+$/, "");
+    }
+
+    function buildLineRow() {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+            '<td><select class="form-select form-select-sm mrp-line-mat"><option value="">-- Select material --</option></select></td>' +
+            '<td><input type="number" class="form-control form-control-sm mrp-line-qty" step="0.0001" readonly></td>' +
+            '<td><input type="text" class="form-control form-control-sm mrp-line-uom" readonly><input type="hidden" class="mrp-line-uom-id"></td>' +
+            '<td><span class="small text-muted mrp-line-status">Waiting</span></td>' +
+            '<td><button type="button" class="btn btn-sm btn-outline-danger mrp-del-line">×</button></td>';
+        const sel = tr.querySelector(".mrp-line-mat");
+        fertItems.forEach(function (m) {
+            const opt = document.createElement("option");
+            opt.value = m.materialNumber || m.MaterialNumber || "";
+            const desc = m.description || m.Description || "";
+            opt.textContent = opt.value + (desc ? (" — " + desc) : "");
+            sel.appendChild(opt);
+        });
+        return tr;
+    }
+
+    function readLinePayload(tr) {
+        const materialNumber = (tr.querySelector(".mrp-line-mat").value || "").trim();
+        const quantity = parseFloat(tr.querySelector(".mrp-line-qty").value || "0") || 0;
+        const uomId = parseInt(tr.querySelector(".mrp-line-uom-id").value || "0", 10) || 0;
+        return { materialNumber, quantity, uomId };
+    }
+
+    function setLineStatus(tr, text, ok) {
+        const el = tr.querySelector(".mrp-line-status");
+        el.textContent = text;
+        el.className = "small mrp-line-status " + (ok ? "text-success" : "text-danger");
+    }
+
+    function renderMultiResults(res) {
+        const lines = (res && (res.lines || res.Lines)) ? (res.lines || res.Lines) : [];
+        resultsBody.innerHTML = "";
+        if (!lines.length) {
+            resultsCard.style.display = "none";
             return;
         }
-        var baseId = data.baseUomId != null ? data.baseUomId : data.BaseUomId;
-        uoms.forEach(function (u) {
-            var id = u.id != null ? u.id : u.Id;
-            var code = u.code || u.Code || "";
-            var isBase = !!(u.isBase || u.IsBase);
-            var o = document.createElement("option");
-            o.value = id;
-            o.textContent = (code || String(id)) + (isBase ? " (base)" : "");
-            sel.appendChild(o);
-        });
-        var pref = preferredUomId != null ? Number(preferredUomId) : (baseId != null ? Number(baseId) : null);
-        if (pref != null && !isNaN(pref) && Array.from(sel.options).some(function (x) { return x.value === String(pref); }))
-            sel.value = String(pref);
-        else if (baseId != null)
-            sel.value = String(baseId);
-    }
+        lines.forEach(function (ln, idx) {
+            const result = ln.result || ln.Result || {};
+            const rows = result.rows || result.Rows || [];
+            const mat = ln.materialNumber || ln.MaterialNumber || "";
+            const qty = ln.quantity != null ? ln.quantity : ln.Quantity;
+            const ok = !!result.success;
+            const allSat = !!(result.allSatisfied || result.AllSatisfied);
 
-    function mrpShowFormError(msg) {
-        var el = document.getElementById("mrpFormError");
-        if (!el) return;
-        el.textContent = msg || "";
-        el.style.display = msg ? "block" : "none";
-    }
-
-    function mrpClearFormError() { mrpShowFormError(""); }
-
-    function mrpFmtQty(v) {
-        var n = Number(v);
-        if (isNaN(n)) return "—";
-        return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    var mrpBomMatSearchUrl = "@Url.Action("SearchBomMaterials", "MasterDataLookup")";
-    var mrpPickerTimers = {};
-
-    function mrpEscAttr(s) {
-        if (s == null || s === undefined) return "";
-        return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-    }
-
-    function mrpMatPickerCloseDd() {
-        var dd = document.getElementById("mrpMaterialDd");
-        if (dd) {
-            dd.classList.remove("show");
-            dd.innerHTML = "";
-        }
-    }
-
-    function mrpMatPickerFetch(searchInput) {
-        var dd = document.getElementById("mrpMaterialDd");
-        if (!dd || !searchInput) return;
-        var q = searchInput.value || "";
-        var url = mrpBomMatSearchUrl + "?purpose=" + encodeURIComponent("header") + "&q=" + encodeURIComponent(q);
-        fetch(url)
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!data || !data.success) {
-                    dd.innerHTML = '<div class="au-mat-picker-empty">Could not load materials.</div>';
-                    dd.classList.add("show");
-                    return;
-                }
-                var items = data.items || [];
-                if (!items.length)
-                    dd.innerHTML = '<div class="au-mat-picker-empty">No matches</div>';
-                else
-                    dd.innerHTML = items.map(function (it) {
-                        var t = (it.t || "").toUpperCase();
-                        var tag = t === "FERT" ? "FG" : (t === "HALB" ? "SFG" : t);
-                        var tagHtml = tag ? ' <span class="badge bg-light text-dark border">' + mrpEscAttr(tag) + "</span>" : "";
-                        return '<button type="button" class="au-mat-picker-item list-group-item list-group-item-action py-1 px-2 text-start border-0 rounded-0" data-n="' + mrpEscAttr(it.n) + '" data-d="' + mrpEscAttr(it.d) + '">'
-                            + '<span class="au-mat-code">' + mrpEscAttr(it.n) + "</span>"
-                            + ' <span class="text-muted small">— ' + mrpEscAttr(it.d) + "</span>" + tagHtml + "</button>";
-                    }).join("");
-                dd.classList.add("show");
-            })
-            .catch(function () {
-                dd.innerHTML = '<div class="au-mat-picker-empty">Request failed.</div>';
-                dd.classList.add("show");
-            });
-    }
-
-    function mrpMatPickerSchedule(searchInput) {
-        var key = searchInput.id || "mrpMat";
-        clearTimeout(mrpPickerTimers[key]);
-        mrpPickerTimers[key] = setTimeout(function () { mrpMatPickerFetch(searchInput); }, 250);
-    }
-
-    function mrpRefreshMaterialPickerLabel(matNum) {
-        if (!matNum) return Promise.resolve();
-        return fetch(mrpBomMatSearchUrl + "?purpose=header&q=" + encodeURIComponent(matNum))
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                var items = (data && data.items) || [];
-                var it = items.find(function (x) { return (x.n || "") === matNum; }) || items[0];
-                var sin = document.getElementById("mrpMaterialSearch");
-                if (sin && it) sin.value = (it.n || "") + (it.d ? " — " + it.d : "");
-                else if (sin) sin.value = matNum;
-            })
-            .catch(function () {
-                var sin = document.getElementById("mrpMaterialSearch");
-                if (sin) sin.value = matNum;
-            });
-    }
-
-    function mrpLoadUomForMaterial(materialNumber) {
-        var sel = document.getElementById("mrpUom");
-        mrpClearFormError();
-        if (!materialNumber) {
-            mrpInitUomPlaceholder(sel);
-            return Promise.resolve();
-        }
-        return fetch("@Url.Action("MaterialUomContext", "MRP")?materialNumber=" + encodeURIComponent(materialNumber))
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (!res.success) {
-                    mrpShowFormError(res.message || "Could not load UOMs.");
-                    mrpInitUomPlaceholder(sel);
-                    return;
-                }
-                var d = res.data || res.Data || {};
-                if (d.setupError || d.SetupError) {
-                    mrpShowFormError(d.setupError || d.SetupError);
-                    mrpInitUomPlaceholder(sel);
-                    return;
-                }
-                mrpPopulateUom(sel, d, null);
-            })
-            .catch(function () {
-                mrpShowFormError("Could not load UOMs.");
-                mrpInitUomPlaceholder(sel);
-            });
-    }
-
-    function mrpTryAutoFillDemand() {
-        var mat = (document.getElementById("mrpMaterial") && document.getElementById("mrpMaterial").value || "").trim();
-        var fromEl = document.getElementById("mrpFromDate");
-        var toEl = document.getElementById("mrpToDate");
-        var from = fromEl ? String(fromEl.value || "").trim() : "";
-        var to = toEl ? String(toEl.value || "").trim() : "";
-        if (!mat || !from || !to) return;
-        if (!("@Url.Action("DemandForMaterial", "MRP")")) return;
-        mrpClearFormError();
-        var url = "@Url.Action("DemandForMaterial", "MRP")"
-            + "?materialNumber=" + encodeURIComponent(mat)
-            + "&from=" + encodeURIComponent(from)
-            + "&to=" + encodeURIComponent(to);
-        fetch(url)
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (!res || !res.success) {
-                    mrpShowFormError((res && res.message) ? res.message : "Could not compute demand.");
-                    return;
-                }
-                var qty = (res.qtyBase != null ? Number(res.qtyBase) : NaN);
-                var baseUomId = res.baseUomId != null ? Number(res.baseUomId) : 0;
-                if (!isNaN(qty) && document.getElementById("mrpQty"))
-                    document.getElementById("mrpQty").value = String(qty);
-
-                // Ensure UOM list exists, then select base UOM.
-                mrpLoadUomForMaterial(mat).then(function () {
-                    var uSel = document.getElementById("mrpUom");
-                    if (uSel && baseUomId && Array.from(uSel.options).some(function (o) { return o.value === String(baseUomId); }))
-                        uSel.value = String(baseUomId);
+            let html = '<div class="mb-3 p-2 border rounded">';
+            html += '<div class="fw-semibold mb-1">' + (idx + 1) + '. ' + mat + ' (Qty: ' + fmtQty(qty) + ')</div>';
+            html += '<div class="small ' + (ok ? (allSat ? 'text-success' : 'text-warning') : 'text-danger') + ' mb-2">'
+                + ((result.message || result.Message || (ok ? 'MRP completed.' : 'MRP failed.')))
+                + '</div>';
+            if (!rows.length) {
+                html += '<div class="small text-muted">No BOM rows returned.</div>';
+            } else {
+                html += '<div class="table-responsive"><table class="table table-sm table-bordered mb-0">';
+                html += '<thead><tr><th>Component</th><th>Type</th><th>Required</th><th>Stock</th><th>Status</th></tr></thead><tbody>';
+                rows.forEach(function (r) {
+                    const cMat = r.materialNumber || r.MaterialNumber || "";
+                    const cType = r.materialTypeCode || r.MaterialTypeCode || "";
+                    const req = r.requiredQty != null ? r.requiredQty : r.RequiredQty;
+                    const stock = r.onHandQty != null ? r.onHandQty : r.OnHandQty;
+                    const uom = r.requiredUomCode || r.RequiredUomCode || "";
+                    const short = !!(r.shortage || r.Shortage);
+                    html += '<tr' + (short ? ' class="table-danger"' : '') + '>';
+                    html += '<td>' + cMat + '</td>';
+                    html += '<td>' + cType + '</td>';
+                    html += '<td>' + fmtQty(req) + ' ' + uom + '</td>';
+                    html += '<td>' + fmtQty(stock) + ' ' + uom + '</td>';
+                    html += '<td>' + (short ? 'Short' : 'OK') + '</td>';
+                    html += '</tr>';
                 });
-
-                var warns = res.warnings || [];
-                if (warns && warns.length) {
-                    mrpShowFormError(warns.slice(0, 3).join(" "));
-                }
-            })
-            .catch(function () {
-                mrpShowFormError("Could not compute demand.");
-            });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>';
+            resultsBody.insertAdjacentHTML("beforeend", html);
+        });
+        resultsCard.style.display = "";
     }
 
-    window._mrpLineMeta = window._mrpLineMeta || [];
-    window._mrpSubCache = window._mrpSubCache || {};
-    window._mrpSubLoading = window._mrpSubLoading || {};
+    function fetchDemandForLine(tr) {
+        const materialNumber = (tr.querySelector(".mrp-line-mat").value || "").trim();
+        const from = (fromEl.value || "").trim();
+        const to = (toEl.value || "").trim();
+        const qtyEl = tr.querySelector(".mrp-line-qty");
+        const uomEl = tr.querySelector(".mrp-line-uom");
+        const uomIdEl = tr.querySelector(".mrp-line-uom-id");
 
-    function mrpFetchRun(mat, qty, uomId, subMrp) {
-        var plantSel = document.getElementById("mrpPlant");
-        var pid = plantSel ? String(plantSel.value || "").trim() : "";
-        return fetch("@Url.Action("Run", "MRP")", {
+        qtyEl.value = "";
+        uomEl.value = "";
+        uomIdEl.value = "";
+        if (!materialNumber) { setLineStatus(tr, "Select material", false); return; }
+        if (!from || !to) { setLineStatus(tr, "Select from/to date", false); return; }
+
+        setLineStatus(tr, "Loading demand...", true);
+        fetch(demandUrl + "?materialNumber=" + encodeURIComponent(materialNumber) + "&from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to))
+            .then(r => r.json())
+            .then(res => {
+                if (!res || !res.success) {
+                    setLineStatus(tr, (res && res.message) || "Demand failed", false);
+                    return;
+                }
+                const qty = Number(res.qtyBase || 0);
+                qtyEl.value = fmtQty(qty);
+                uomEl.value = (res.baseUomCode || "");
+                uomIdEl.value = String(res.baseUomId || 0);
+                setLineStatus(tr, qty > 0 ? "Demand loaded" : "No demand in range", qty > 0);
+            })
+            .catch(() => setLineStatus(tr, "Demand failed", false));
+    }
+
+    function collectRunLines() {
+        const out = [];
+        linesBody.querySelectorAll("tr").forEach(function (tr) {
+            const p = readLinePayload(tr);
+            if (!p.materialNumber) return;
+            if (!(p.quantity > 0) || !(p.uomId > 0)) return;
+            out.push({
+                materialNumber: p.materialNumber,
+                quantity: p.quantity,
+                uomId: p.uomId
+            });
+        });
+        return out;
+    }
+
+    function addLine() {
+        linesBody.appendChild(buildLineRow());
+    }
+
+    document.getElementById("mrpAddLine").addEventListener("click", addLine);
+    linesBody.addEventListener("change", function (e) {
+        const tr = e.target.closest("tr");
+        if (!tr) return;
+        if (e.target.classList.contains("mrp-line-mat")) fetchDemandForLine(tr);
+    });
+    linesBody.addEventListener("click", function (e) {
+        const btn = e.target.closest(".mrp-del-line");
+        if (!btn) return;
+        btn.closest("tr")?.remove();
+    });
+    fromEl.addEventListener("change", function () { linesBody.querySelectorAll("tr").forEach(fetchDemandForLine); });
+    toEl.addEventListener("change", function () { linesBody.querySelectorAll("tr").forEach(fetchDemandForLine); });
+
+    document.getElementById("mrpRunMultiBtn").addEventListener("click", function () {
+        const lines = collectRunLines();
+        if (!fromEl.value || !toEl.value) { setMsg("From date and To date are required.", false); return; }
+        if (!lines.length) { setMsg("Add at least one valid line (material with demand).", false); return; }
+        fetch(runMultiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                MaterialNumber: mat,
-                Quantity: qty,
-                UomId: uomId,
-                PlantId: pid,
-                SubMrp: !!subMrp
+            body: JSON.stringify({ lines: lines })
+        }).then(r => r.json()).then(res => {
+            renderMultiResults(res);
+            if (!res || !res.success) {
+                setMsg((res && res.message) || "Multi MRP failed.", false);
+                createPoBtn.style.display = "none";
+                return;
+            }
+            lastMulti = res;
+            const allOk = !!(res.allSatisfied || res.AllSatisfied);
+            setMsg((res.message || "MRP completed.") + (allOk ? " All lines satisfied." : " Some lines have shortages/errors."), allOk);
+            createPoBtn.style.display = allOk ? "" : "none";
+        }).catch(() => {
+            resultsCard.style.display = "none";
+            setMsg("Request failed.", false);
+            createPoBtn.style.display = "none";
+        });
+    });
+
+    createPoBtn.addEventListener("click", function () {
+        if (!lastMulti) return;
+        const src = (lastMulti.lines || lastMulti.Lines || []).filter(function (x) {
+            const r = x.result || x.Result || {};
+            return !!r.success && !!r.allSatisfied;
+        });
+        if (!src.length) { setMsg("No eligible lines to create Production Order.", false); return; }
+        const payload = {
+            plannedStartDate: fromEl.value,
+            plannedEndDate: toEl.value,
+            priority: "Medium",
+            remarks: "Created from MRP multi demand range",
+            lines: src.map(function (x, i) {
+                return {
+                    lineNo: i + 1,
+                    materialNumber: x.materialNumber || x.MaterialNumber || "",
+                    materialDescription: x.description || x.Description || "",
+                    plannedQuantity: x.quantity || x.Quantity || 0,
+                    uomId: x.uomId || x.UomId || 0
+                };
             })
-        }).then(function (r) { return r.json(); });
-    }
-
-    function mrpNavToCreatePo(mat, qty, uomId) {
-        var matTrim = (mat || "").trim();
-        if (!matTrim) return;
-        var base = "@Url.Action("Index", "ProductionOrder")";
-        var u = new URL(base, window.location.origin);
-        u.searchParams.set("autoPo", "1");
-        u.searchParams.set("material", matTrim);
-        u.searchParams.set("qty", String(qty != null ? qty : "1"));
-        u.searchParams.set("uomId", String(uomId != null ? uomId : 0));
-        window.location.href = u.pathname + u.search;
-    }
-
-    function mrpHalbActionsHtml(idx, includeCreatePo) {
-        var html = '<button type="button" class="btn btn-sm btn-outline-secondary mrp-check-mrp" data-mrp-idx="' + idx + '">Check MRP</button>';
-        if (includeCreatePo)
-            html += ' <button type="button" class="btn btn-sm btn-success mrp-create-po-line" data-mrp-idx="' + idx + '">Create Production Order</button>';
-        return html;
-    }
-
-    function mrpRefreshHalbActionCell(idx) {
-        var td = document.getElementById("mrp-actions-td-" + idx);
-        if (!td) return;
-        var meta = window._mrpLineMeta[idx];
-        if (!meta || !meta.showCheck) return;
-        var c = window._mrpSubCache[idx];
-        var allSat = c && !!(c.allSatisfied || c.AllSatisfied);
-        var stub = meta.poStub ? ' <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Purchase order creation is not implemented yet">Create purchase order</button>' : "";
-        td.innerHTML = mrpHalbActionsHtml(idx, allSat) + stub;
-    }
-
-    function mrpBuildSubTableHtml(payload) {
-        var rows = payload.rows || payload.Rows || [];
-        var allSat = !!(payload.allSatisfied || payload.AllSatisfied);
-        var head = '<div class="mb-1 fw-semibold text-success">' + (allSat ? "Sub MRP satisfied — components available for this quantity." : "Sub MRP — shortages remain.") + '</div>';
-        if (!rows.length) return head + "<p class=\"text-muted mb-0\">No BOM lines.</p>";
-        var sb = head + '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Material</th><th>Type</th><th>Required</th><th>Stock</th></tr></thead><tbody>';
-        rows.forEach(function (row) {
-            var mat = row.materialNumber || row.MaterialNumber || "";
-            var type = row.materialTypeCode || row.MaterialTypeCode || "";
-            var req = row.requiredQty != null ? row.requiredQty : row.RequiredQty;
-            var uom = row.requiredUomCode || row.RequiredUomCode || "";
-            var stock = row.onHandQty != null ? row.onHandQty : row.OnHandQty;
-            var shortage = !!(row.shortage || row.Shortage);
-            var cls = shortage ? " class=\"table-danger\"" : "";
-            sb += "<tr" + cls + "><td><strong>" + mrpEscapeHtml(mat) + "</strong></td><td>" + mrpEscapeHtml(type) + "</td><td>" + mrpEscapeHtml(mrpFmtQty(req) + " " + (uom || "")) + "</td><td>" + mrpEscapeHtml(mrpFmtQty(stock) + " " + (uom || "")) + "</td></tr>";
-        });
-        sb += "</tbody></table>";
-        return sb;
-    }
-
-    function mrpApplySubMrpResult(idx, payload) {
-        var inner = document.getElementById("mrp-sub-inner-" + idx);
-        if (inner) inner.innerHTML = mrpBuildSubTableHtml(payload);
-    }
-
-    function mrpToggleSubMrp(idx) {
-        var subTr = document.querySelector('tr[data-mrp-sub-idx="' + idx + '"]');
-        if (!subTr) return;
-        var inner = document.getElementById("mrp-sub-inner-" + idx);
-        if (!inner) return;
-        var hidden = subTr.classList.contains("d-none");
-        if (!hidden) {
-            subTr.classList.add("d-none");
-            return;
-        }
-        subTr.classList.remove("d-none");
-        if (window._mrpSubCache[idx]) {
-            mrpApplySubMrpResult(idx, window._mrpSubCache[idx]);
-            mrpRefreshHalbActionCell(idx);
-            return;
-        }
-        if (window._mrpSubLoading[idx]) return;
-        var meta = window._mrpLineMeta[idx];
-        if (!meta || !meta.mat || !meta.reqUomId) {
-            inner.innerHTML = '<div class="alert alert-warning py-1 mb-0">Missing line UOM for sub MRP.</div>';
-            return;
-        }
-        window._mrpSubLoading[idx] = true;
-        inner.innerHTML = '<span class="text-muted">Running sub MRP…</span>';
-        mrpFetchRun(meta.mat, meta.req, meta.reqUomId, true).then(function (payload) {
-            window._mrpSubLoading[idx] = false;
-            if (!payload || payload.success === false) {
-                inner.innerHTML = '<div class="alert alert-danger py-1 mb-0">' + mrpEscapeHtml((payload && (payload.message || payload.Message)) || "MRP run failed.") + "</div>";
+        };
+        fetch(createPoUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(r => r.json()).then(res => {
+            if (res && res.success) {
+                window.location.href = poIndexUrl;
                 return;
             }
-            window._mrpSubCache[idx] = payload;
-            mrpApplySubMrpResult(idx, payload);
-            mrpRefreshHalbActionCell(idx);
-        }).catch(function () {
-            window._mrpSubLoading[idx] = false;
-            inner.innerHTML = '<div class="alert alert-danger py-1 mb-0">Request failed.</div>';
-        });
-    }
-
-    function mrpRenderResult(payload) {
-        var card = document.getElementById("mrpResultCard");
-        var body = document.getElementById("mrpResultBody");
-        var banner = document.getElementById("mrpSuccessBanner");
-        var warnEl = document.getElementById("mrpWarnings");
-        var btnMain = document.getElementById("mrpBtnCreatePoMain");
-        if (!card || !body) return;
-
-        window._mrpLineMeta = [];
-        window._mrpSubCache = {};
-        window._mrpSubLoading = {};
-
-        body.innerHTML = "";
-        var rows = payload.rows || payload.Rows || [];
-        var warnings = payload.warnings || payload.Warnings || [];
-
-        if (warnings.length) {
-            warnEl.textContent = warnings.join(" ");
-            warnEl.style.display = "block";
-        } else {
-            warnEl.style.display = "none";
-            warnEl.textContent = "";
-        }
-
-        var allOk = !!(payload.allSatisfied || payload.AllSatisfied);
-        if (allOk && rows.length > 0) {
-            banner.style.display = "block";
-        } else {
-            banner.style.display = "none";
-        }
-        if (btnMain) {
-            btnMain.style.display = (allOk && rows.length > 0) ? "inline-block" : "none";
-        }
-
-        var fertMat = (document.getElementById("mrpMaterial").value || "").trim();
-        var fertQty = document.getElementById("mrpQty").value;
-        var fertUom = parseInt(document.getElementById("mrpUom").value, 10) || 0;
-        window._mrpLastMain = { material: fertMat, qty: fertQty, uomId: fertUom };
-
-        rows.forEach(function (row, idx) {
-            var mat = row.materialNumber || row.MaterialNumber || "";
-            var type = row.materialTypeCode || row.MaterialTypeCode || "";
-            var req = row.requiredQty != null ? row.requiredQty : row.RequiredQty;
-            var reqUomId = row.requiredUomId != null ? row.requiredUomId : row.RequiredUomId;
-            var uom = row.requiredUomCode || row.RequiredUomCode || "";
-            var stock = row.onHandQty != null ? row.onHandQty : row.OnHandQty;
-            var shortage = !!(row.shortage || row.Shortage);
-            var sub = !!(row.canRunSubMrp || row.CanRunSubMrp);
-            var poStub = !!(row.showPurchaseStub || row.ShowPurchaseStub);
-            var typeUp = (type || "").toUpperCase();
-            var isHalb = typeUp === "HALB";
-            var showCheck = !!(sub && shortage && isHalb);
-
-            window._mrpLineMeta.push({
-                mat: mat,
-                req: Number(req),
-                reqUomId: Number(reqUomId) || 0,
-                showCheck: showCheck,
-                poStub: poStub
-            });
-
-            var tr = document.createElement("tr");
-            tr.setAttribute("data-mrp-main-idx", String(idx));
-            if (shortage) tr.className = "mrp-row-short";
-
-            var reqCell = mrpFmtQty(req) + " " + (uom || "");
-            var stockCell = mrpFmtQty(stock) + " " + (uom || "");
-
-            var actions = "—";
-            if (showCheck) {
-                var c = window._mrpSubCache[idx];
-                var allSat = c && !!(c.allSatisfied || c.AllSatisfied);
-                actions = mrpHalbActionsHtml(idx, allSat);
-                if (poStub) {
-                    actions += ' <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Purchase order creation is not implemented yet">Create purchase order</button>';
-                }
-            } else if (poStub) {
-                actions = '<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Purchase order creation is not implemented yet">Create purchase order</button>';
-            }
-
-            tr.innerHTML =
-                "<td><strong>" + mrpEscapeHtml(mat) + "</strong></td>" +
-                "<td>" + mrpEscapeHtml(type) + "</td>" +
-                "<td>" + mrpEscapeHtml(reqCell) + "</td>" +
-                "<td>" + mrpEscapeHtml(stockCell) + "</td>" +
-                '<td id="mrp-actions-td-' + idx + '">' + actions + "</td>";
-            body.appendChild(tr);
-
-            if (showCheck) {
-                var subTr = document.createElement("tr");
-                subTr.className = "mrp-sub-detail d-none";
-                subTr.setAttribute("data-mrp-sub-idx", String(idx));
-                subTr.innerHTML =
-                    '<td colspan="5" class="p-0"><div class="mrp-sub-inner p-2 border-top" id="mrp-sub-inner-' + idx + '"></div></td>';
-                body.appendChild(subTr);
-            }
-        });
-
-        card.style.display = rows.length ? "block" : "none";
-    }
-
-    function mrpEscapeHtml(s) {
-        if (!s) return "";
-        var d = document.createElement("div");
-        d.textContent = s;
-        return d.innerHTML;
-    }
-
-    function mrpEscapeAttr(s) {
-        if (!s) return "";
-        return String(s).replace(/"/g, "&quot;");
-    }
-
-    function mrpRunForMaterial(materialNumber, subMrp) {
-        mrpClearFormError();
-        if (subMrp) return Promise.resolve();
-        var qty = parseFloat(document.getElementById("mrpQty").value) || 0;
-        var uomId = parseInt(document.getElementById("mrpUom").value, 10) || 0;
-        var mat = (materialNumber || (document.getElementById("mrpMaterial").value || "")).trim();
-
-        if (!mat) {
-            mrpShowFormError("Select a material.");
-            return Promise.resolve();
-        }
-        if (qty <= 0) {
-            mrpShowFormError("Enter a quantity greater than zero.");
-            return Promise.resolve();
-        }
-        if (!uomId) {
-            mrpShowFormError("Select a UOM.");
-            return Promise.resolve();
-        }
-        var plantSel = document.getElementById("mrpPlant");
-        if (!plantSel || !(String(plantSel.value || "").trim())) {
-            mrpShowFormError("Select a plant for inventory scope.");
-            return Promise.resolve();
-        }
-        return mrpFetchRun(mat, qty, uomId, false).then(function (payload) {
-            if (payload.success === false) {
-                mrpShowFormError(payload.message || payload.Message || "MRP run failed.");
-                document.getElementById("mrpResultCard").style.display = "none";
-                return;
-            }
-            mrpRenderResult(payload);
-        }).catch(function () { mrpShowFormError("Request failed."); });
-    }
-
-    document.addEventListener("mousedown", function (e) {
-        if (e.target.closest("#mrpMaterialDd"))
-            e.preventDefault();
-        else if (!e.target.closest("#mrpMatPickerWrap"))
-            mrpMatPickerCloseDd();
+            setMsg((res && res.message) || "Could not create Production Order.", false);
+        }).catch(() => setMsg("Request failed.", false));
     });
 
-    document.addEventListener("click", function (e) {
-        var btn = e.target.closest("#mrpMatPickerWrap .au-mat-picker-item");
-        if (!btn) return;
-        e.preventDefault();
-        var n = btn.getAttribute("data-n") || "";
-        var d = btn.getAttribute("data-d") || "";
-        var hid = document.getElementById("mrpMaterial");
-        var search = document.getElementById("mrpMaterialSearch");
-        if (hid) hid.value = n;
-        if (search) search.value = n ? (n + (d ? " — " + d : "")) : "";
-        mrpMatPickerCloseDd();
-        mrpLoadUomForMaterial(n);
-        mrpTryAutoFillDemand();
+    fetch(fertUrl).then(r => r.json()).then(res => {
+        fertItems = (res && res.success && (res.data || res.Data)) ? (res.data || res.Data) : [];
+        addLine();
+    }).catch(() => {
+        setMsg("Could not load FERT materials.", false);
     });
-
-    (function mrpBindMatPicker() {
-        var wrap = document.getElementById("mrpMatPickerWrap");
-        if (!wrap) return;
-        wrap.addEventListener("focusin", function (e) {
-            if (e.target.classList && e.target.classList.contains("au-mat-picker-search"))
-                mrpMatPickerFetch(e.target);
-        });
-        wrap.addEventListener("input", function (e) {
-            if (e.target.classList && e.target.classList.contains("au-mat-picker-search"))
-                mrpMatPickerSchedule(e.target);
-        });
-    })();
-
-    document.getElementById("mrpRunBtn").addEventListener("click", function () {
-        mrpRunForMaterial(null, false);
-    });
-
-    // Date range inputs trigger demand auto-fill.
-    var fromEl = document.getElementById("mrpFromDate");
-    var toEl = document.getElementById("mrpToDate");
-    if (fromEl) fromEl.addEventListener("change", mrpTryAutoFillDemand);
-    if (toEl) toEl.addEventListener("change", mrpTryAutoFillDemand);
-
-    var mrpResultBody = document.getElementById("mrpResultBody");
-    if (mrpResultBody) {
-        mrpResultBody.addEventListener("click", function (e) {
-            var check = e.target.closest(".mrp-check-mrp");
-            if (check) {
-                var ix = parseInt(check.getAttribute("data-mrp-idx"), 10);
-                if (!isNaN(ix)) mrpToggleSubMrp(ix);
-                return;
-            }
-            var poLine = e.target.closest(".mrp-create-po-line");
-            if (poLine) {
-                var ix2 = parseInt(poLine.getAttribute("data-mrp-idx"), 10);
-                var meta = window._mrpLineMeta[ix2];
-                if (meta && meta.mat) mrpNavToCreatePo(meta.mat, meta.req, meta.reqUomId);
-            }
-        });
-    }
-
-    var mrpBtnCreatePoMain = document.getElementById("mrpBtnCreatePoMain");
-    if (mrpBtnCreatePoMain) {
-        mrpBtnCreatePoMain.addEventListener("click", function () {
-            var m = window._mrpLastMain;
-            if (m && m.material) mrpNavToCreatePo(m.material, m.qty, m.uomId);
-        });
-    }
-
-    function mrpUrlAutoRunIfPresent() {
-        try {
-            var sp = new URLSearchParams(window.location.search);
-            if (sp.get("autoRun") !== "1") return Promise.resolve();
-            var mat = (sp.get("material") || "").trim();
-            var qty = sp.get("qty") || "1";
-            var uomId = parseInt(sp.get("uomId") || "0", 10) || 0;
-            var note = sp.get("note") || "";
-            if (history.replaceState) history.replaceState(null, document.title, window.location.pathname);
-            var hid = document.getElementById("mrpMaterial");
-            if (hid) hid.value = mat;
-            var qEl = document.getElementById("mrpQty");
-            if (qEl) qEl.value = qty;
-            if (note) mrpShowFormError(note);
-            if (!mat) return Promise.resolve();
-            return mrpRefreshMaterialPickerLabel(mat).then(function () {
-                return mrpLoadUomForMaterial(mat);
-            }).then(function () {
-                var uSel = document.getElementById("mrpUom");
-                if (uomId && uSel && Array.from(uSel.options).some(function (o) { return o.value === String(uomId); }))
-                    uSel.value = String(uomId);
-                return mrpRunForMaterial(null, false);
-            });
-        } catch (e) { return Promise.resolve(); }
-    }
-
-    mrpInitUomPlaceholder(document.getElementById("mrpUom"));
-    mrpUrlAutoRunIfPresent();
 })();
 </script>
 }

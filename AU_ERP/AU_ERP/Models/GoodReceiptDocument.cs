@@ -39,6 +39,8 @@ public class GoodReceiptDocument
 
     [Column(TypeName = "decimal(18,4)")]
     public decimal RejectedScrapQty { get; set; }
+    
+    public string? DraftLinesJson { get; set; }
 
     public bool IsPosted { get; set; }
 

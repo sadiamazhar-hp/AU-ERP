@@ -3,6 +3,7 @@ using AU_ERP.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace AU_ERP.Controllers;
 
@@ -74,6 +75,7 @@ public class GoodReceiptController : Controller
         doc.QtySecondQuality = dto.QtySecondQuality;
         doc.QtyThirdQuality = dto.QtyThirdQuality;
         doc.RejectedScrapQty = dto.RejectedScrapQty;
+        doc.DraftLinesJson = string.IsNullOrWhiteSpace(dto.DraftLinesJson) ? null : dto.DraftLinesJson;
 
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
         return Json(new { success = true });
@@ -131,6 +133,7 @@ public class GoodReceiptController : Controller
                 qtySecondQuality = d.QtySecondQuality,
                 qtyThirdQuality = d.QtyThirdQuality,
                 rejectedScrapQty = d.RejectedScrapQty,
+                draftLinesJson = d.DraftLinesJson,
                 isPosted = d.IsPosted,
                 productionNumber = d.ProductionOrder?.ProductionNumber,
                 materialNumber = d.ProductionOrder?.FinishedMaterialNumber,
@@ -158,7 +161,8 @@ public class GoodReceiptController : Controller
             QtySecondQuality = doc.QtySecondQuality,
             QtyThirdQuality = doc.QtyThirdQuality,
             RejectedScrapQty = doc.RejectedScrapQty,
-            BatchNo = doc.BatchNo
+            BatchNo = doc.BatchNo,
+            Lines = ParseDraftLines(doc.DraftLinesJson)
         };
 
         var result = await _posting.PostAsync(post, ct).ConfigureAwait(false);
@@ -217,6 +221,7 @@ public class GoodReceiptController : Controller
             return;
 
         var po = await _db.ProductionOrders.AsNoTracking()
+            .Include(p => p.Lines)
             .FirstOrDefaultAsync(p => p.Id == productionOrderId, ct)
             .ConfigureAwait(false);
         if (po == null)
@@ -229,9 +234,33 @@ public class GoodReceiptController : Controller
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
 
-        var defaultProduced = lastOut ?? po.TargetQuantity;
+        var poLines = po.Lines.OrderBy(l => l.LineNo).ToList();
+        if (poLines.Count == 0)
+        {
+            poLines.Add(new ProductionOrderLine
+            {
+                Id = 0,
+                ProductionOrderId = po.Id,
+                LineNo = 1,
+                MaterialNumber = po.FinishedMaterialNumber,
+                PlannedQuantity = po.TargetQuantity,
+                UomId = po.UomId
+            });
+        }
+        var defaultProduced = lastOut ?? poLines.Sum(l => l.PlannedQuantity);
         var docNo = await GenerateNextGoodReceiptNumberAsync(ct).ConfigureAwait(false);
         var batchNo = await GenerateNextBatchNumberAsync(ct).ConfigureAwait(false);
+        var lines = poLines.Select(l => new GoodsReceiptPostLineDto
+        {
+            ProductionOrderLineId = l.Id,
+            MaterialNumber = l.MaterialNumber,
+            UomId = l.UomId,
+            ProducedQty = l.PlannedQuantity,
+            QtyFirstQuality = l.PlannedQuantity,
+            QtySecondQuality = 0m,
+            QtyThirdQuality = 0m,
+            RejectedScrapQty = 0m
+        }).ToList();
 
         _db.GoodReceiptDocuments.Add(new GoodReceiptDocument
         {
@@ -244,11 +273,27 @@ public class GoodReceiptController : Controller
             QtySecondQuality = 0,
             QtyThirdQuality = 0,
             RejectedScrapQty = 0,
+            DraftLinesJson = JsonSerializer.Serialize(lines),
             IsPosted = false,
             PostedAt = null,
             CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    private static List<GoodsReceiptPostLineDto> ParseDraftLines(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return new List<GoodsReceiptPostLineDto>();
+        try
+        {
+            var rows = JsonSerializer.Deserialize<List<GoodsReceiptPostLineDto>>(json);
+            return rows ?? new List<GoodsReceiptPostLineDto>();
+        }
+        catch
+        {
+            return new List<GoodsReceiptPostLineDto>();
+        }
     }
 
     private async Task<string> GenerateNextGoodReceiptNumberAsync(CancellationToken ct)

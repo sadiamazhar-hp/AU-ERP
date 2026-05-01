@@ -47,6 +47,37 @@
         .otd-badge-wait { background: #e2e3e5; color: #41464b; }
         .otd-stepper-wrap { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; margin-bottom: 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.12)); }
         .otd-stepper-wrap .lbl { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #7a8f91; margin-bottom: .55rem; }
+        .otd-h-main { position: relative; padding: .5rem .25rem .25rem; }
+        .otd-h-rail { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 8rem; }
+        .otd-h-rail::before { content: ""; position: absolute; left: 0; right: 0; top: 2.1rem; height: 2px; background: #7e8790; opacity: .85; z-index: 0; }
+        .otd-h-col { position: relative; z-index: 1; flex: 1 1 0; min-width: 9rem; padding: 0 .25rem; display: flex; flex-direction: column; align-items: center; }
+        .otd-h-label { font-size: 1.75rem; color: transparent; height: 0; overflow: hidden; } /* keep old markup neutral */
+        .otd-h-join { width: 100%; display: flex; align-items: center; justify-content: center; }
+        .otd-h-line, .otd-h-subline { display: none; }
+        .otd-h-disc { width: 2.95rem; height: 2.95rem; border-radius: 50%; border: 2px solid #8b949e; background: #fff; color: #111; display: inline-flex; align-items: center; justify-content: center; font-size: 1.15rem; font-weight: 600; }
+        .otd-h-disc-done { background: #1f4b73; border-color: #1f4b73; color: #fff; }
+        .otd-h-disc-active { background: #1f4b73; border-color: #1f4b73; color: #fff; box-shadow: 0 0 0 3px rgba(31,75,115,.18); }
+        .otd-h-disc-hold { background: #f8d7da; border-color: #dc3545; color: #842029; }
+        .otd-h-stage-title { margin-top: .45rem; font-size: 1.85rem; color: transparent; height: 0; overflow: hidden; } /* avoid duplicate; actual title below for active */
+        .otd-h-machines-wrap { width: 100%; display: flex; justify-content: center; min-height: 1rem; margin-top: .4rem; }
+        .otd-h-sub { width: 100%; max-width: 16rem; }
+        .otd-h-subcol { position: relative; display: flex; align-items: center; gap: .75rem; margin-bottom: 1.15rem; }
+        .otd-h-subcol:last-child { margin-bottom: 0; }
+        .otd-h-subcol::before { content: ""; position: absolute; left: 1rem; top: -1.15rem; bottom: -1.15rem; width: 2px; background: #7e8790; opacity: .85; }
+        .otd-h-subcol:first-child::before { top: -1.2rem; }
+        .otd-h-subcol:last-child::before { bottom: .85rem; }
+        .otd-h-subdisc { position: relative; z-index: 1; width: 1.65rem; height: 1.65rem; border-radius: 50%; background: #1f4b73; border: 2px solid #1f4b73; box-shadow: inset 0 0 0 3px #1f4b73; color: transparent; flex: 0 0 auto; }
+        .otd-h-subcopy { min-width: 0; }
+        .otd-h-sublabel { font-size: 1.95rem; color: transparent; height: 0; overflow: hidden; } /* old element hidden */
+        .otd-h-submeta { font-size: 1.02rem; color: #1f2328; line-height: 1.15; }
+        .otd-h-active-title { margin-top: .35rem; font-size: 2rem; font-weight: 500; color: #222; text-align: center; }
+        .otd-h-stage-passive { margin-top: .35rem; font-size: .85rem; color: #555; text-align: center; max-width: 11rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .otd-h-subjoin { display: none; }
+        @@media (max-width: 992px) {
+            .otd-h-rail { overflow-x: auto; justify-content: flex-start; gap: 1rem; padding-bottom: .5rem; }
+            .otd-h-rail::before { left: .25rem; right: .25rem; }
+            .otd-h-col { flex: 0 0 10rem; }
+        }
         .otd-stepper { display: flex; flex-wrap: wrap; gap: .5rem; align-items: stretch; }
         .otd-step { flex: 1 1 6rem; min-width: 5rem; border: 1px solid #e0e6e6; border-radius: .5rem; padding: .55rem .6rem; text-align: center; font-size: .76rem; background: #fafcfc; color: #666; transition: border-color .15s, box-shadow .15s; }
         .otd-step.otd-step-done { border-color: #28a745; background: linear-gradient(180deg, #f4fff7, #e8f8ec); color: #0f5132; }
@@ -113,9 +144,13 @@
         <div class="otd-stepper-wrap">
             <div class="lbl">Stages</div>
             <div class="otd-h-main" aria-label="Stages">
+                <div class="otd-h-rail">
                 @{
                     var nSt = Model.Stages.Count;
                     var si = 0;
+                    var fallbackActiveId = activeStageId ?? Model.Stages
+                        .FirstOrDefault(x => string.Equals(x.StageStatus, ProductionOrderStageProgress.StageInProgress, StringComparison.OrdinalIgnoreCase))?.Id
+                        ?? Model.Stages.First().Id;
                     foreach (var s in Model.Stages)
                     {
                         si++;
@@ -128,6 +163,7 @@
                             discCls += " otd-h-disc-hold";
                         else if (string.Equals(s.StageStatus, ProductionOrderStageProgress.StageInProgress, StringComparison.OrdinalIgnoreCase))
                             discCls += " otd-h-disc-active";
+                        var isActiveStage = s.Id == fallbackActiveId;
                         Model.MachinesByStageProgressId.TryGetValue(s.Id, out var machines);
                         machines ??= new List<OperationStageMachineLineVm>();
                         var mList = machines.OrderBy(m => m.Sequence).ToList();
@@ -138,6 +174,14 @@
                                 <span class="@discCls" title="@s.StageStatus">@si</span>
                                 <hr class="otd-h-line @(si >= nSt ? "otd-h-line-hide" : "")" />
                             </div>
+                            @if (isActiveStage)
+                            {
+                                <div class="otd-h-active-title">@title</div>
+                            }
+                            else
+                            {
+                                <div class="otd-h-stage-passive" title="@title">@label</div>
+                            }
                             <div class="otd-h-machines-wrap">
                                 @if (mList.Count == 0)
                                 {
@@ -153,11 +197,14 @@
                                             mi++;
                                             var u = string.IsNullOrWhiteSpace(m.TimeUom) ? "" : m.TimeUom;
                                             var lab = m.DisplayName.Length > 22 ? m.DisplayName[..22] + "…" : m.DisplayName;
-                                            var lt = m.LaborTime.HasValue ? UiNumberFormat.D2(m.LaborTime.Value) : "—";
-                                            var mt = m.MachineTime.HasValue ? UiNumberFormat.D2(m.MachineTime.Value) : "—";
+                                            var tm = m.MachineTime ?? m.LaborTime;
+                                            var tmText = tm.HasValue ? (UiNumberFormat.D2(tm.Value) + " " + (string.IsNullOrWhiteSpace(u) ? "" : u)) : "—";
                                             <div class="otd-h-subcol">
-                                                <div class="otd-h-sublabel" title="@m.DisplayName">@lab</div>
-                                                <div class="otd-h-submeta">Labor @lt @u · Mach @mt @u</div>
+                                                <span class="otd-h-subdisc" aria-hidden="true">@mi</span>
+                                                <div class="otd-h-subcopy">
+                                                    <div class="otd-h-submeta"><strong>@lab</strong></div>
+                                                    <div class="small text-muted">@tmText</div>
+                                                </div>
                                                 <div class="otd-h-subjoin">
                                                     <hr class="otd-h-subline @(mi <= 1 ? "otd-h-line-hide" : "")" />
                                                     <span class="otd-h-subdisc">@mi</span>
@@ -171,6 +218,7 @@
                         </div>
                     }
                 }
+                </div>
             </div>
         </div>
 

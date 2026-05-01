@@ -63,5 +63,6 @@ public class GoodReceiptDraftSaveDto
     public decimal QtySecondQuality { get; set; }
     public decimal QtyThirdQuality { get; set; }
     public decimal RejectedScrapQty { get; set; }
+    public string? DraftLinesJson { get; set; }
 }
 

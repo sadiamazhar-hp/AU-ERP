@@ -10,6 +10,14 @@ namespace AU_ERP.Models
         public int Id { get; set; }
 
         public int ProductionOrderId { get; set; }
+        
+        public int? ProductionOrderLineId { get; set; }
+
+        [Required]
+        [MaxLength(450)]
+        public string MaterialNumber { get; set; } = null!;
+        
+        public int UomId { get; set; }
 
         [Column(TypeName = "date")]
         public DateTime GrDate { get; set; }
@@ -37,5 +45,14 @@ namespace AU_ERP.Models
 
         [ForeignKey(nameof(ProductionOrderId))]
         public virtual ProductionOrder? ProductionOrder { get; set; }
+
+        [ForeignKey(nameof(ProductionOrderLineId))]
+        public virtual ProductionOrderLine? ProductionOrderLine { get; set; }
+        
+        [ForeignKey(nameof(MaterialNumber))]
+        public virtual CreateMaterialMaster? Material { get; set; }
+        
+        [ForeignKey(nameof(UomId))]
+        public virtual UnitOfMeasurement? Uom { get; set; }
     }
 }

@@ -15,6 +15,8 @@ namespace AU_ERP.Models
         public int Id { get; set; }
 
         public int ProductionOrderId { get; set; }
+        
+        public int? ProductionOrderLineId { get; set; }
 
         public int RoutingOperationHeaderId { get; set; }
 
@@ -54,6 +56,9 @@ namespace AU_ERP.Models
 
         [ForeignKey(nameof(ProductionOrderId))]
         public virtual ProductionOrder? ProductionOrder { get; set; }
+
+        [ForeignKey(nameof(ProductionOrderLineId))]
+        public virtual ProductionOrderLine? ProductionOrderLine { get; set; }
 
         [ForeignKey(nameof(RoutingOperationHeaderId))]
         public virtual RoutingOperationHeaderSample? RoutingOperationHeader { get; set; }
