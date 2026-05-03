@@ -6,6 +6,13 @@
     string FmtDate(DateTime t) => t.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
     string FmtQty(decimal q) => UiNumberFormat.D2(q);
     var pdfUrl = d != null ? (Url.Action("DownloadPdf", "DeliveryChallan", new { id = d.Id }) ?? "") : "";
+    string DcDriverLabel(Driver? dr)
+    {
+        if (dr == null) return "—";
+        var n = string.Join(" ", new[] { dr.FirstName, dr.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+        return string.IsNullOrEmpty(n) ? ("Driver #" + dr.Id) : n;
+    }
+    string DcVehicleLabel(Vehicle? v) => v == null ? "—" : $"{v.NumberPlate} ({v.CarType})";
 }
 @if (d == null)
 {
@@ -31,6 +38,14 @@ else
         <div class="col-6">
             <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Ship-to</div>
             <div class="fw-semibold">@(d.ShipToDisplayName ?? d.ShipToBusinessPartner?.FullName ?? "—")</div>
+        </div>
+        <div class="col-6">
+            <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Driver</div>
+            <div class="fw-semibold">@DcDriverLabel(d.Driver)</div>
+        </div>
+        <div class="col-6">
+            <div class="text-uppercase text-muted" style="font-size: .65rem; letter-spacing: .04em;">Vehicle</div>
+            <div class="fw-semibold">@DcVehicleLabel(d.Vehicle)</div>
         </div>
     </div>
     <div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">

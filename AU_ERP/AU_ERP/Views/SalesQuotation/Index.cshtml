@@ -22,6 +22,8 @@
     int? listDcId = Model?.DistributionChannelId;
     var stSel = listStatus;
     var sqDetailsModalUrlPlaceholder = Url.Action("DetailsModal", "SalesQuotation", new { id = 900000001 }) ?? "";
+    var walkInSchemaId = ViewBag.WalkInSchemaId as int? ?? 0;
+    var isEmporiumWalkIn = ViewBag.IsEmporiumWalkInUser as bool? == true;
 }
 
 @section Styles {
@@ -66,6 +68,9 @@
     .bom-mat-picker-item { padding: 6px 10px; font-size: .78rem; cursor: pointer; border-bottom: 1px solid #eee; }
     .bom-mat-picker-item:hover { background: var(--sap-selected, #b3d7ff); }
     .bom-mat-picker-empty { padding: 8px 10px; font-size: .75rem; color: #666; }
+    .sq-customer-combo .sq-customer-dropdown { font-size: .82rem; }
+    .sq-customer-item { cursor: pointer; }
+    .sq-customer-item:hover, .sq-customer-item:focus { background: var(--sap-selected, #b3d7ff); outline: none; }
     .sq-line-charges { display: flex; flex-wrap: wrap; gap: 0.35rem; max-width: 14rem; font-size: .68rem; line-height: 1.2; }
     .sq-line-charges label { margin: 0; white-space: nowrap; }
     .sq-doc-charges { display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: .75rem; }
@@ -153,6 +158,11 @@
         else foreach (var q in list)
         {
                     var isDraft = q.Status == SalesQuotation.StatusDraft;
+                    string? linkedSoStatus = null;
+                    if (Model?.LinkedSalesOrderStatusByQuotationId is { } soMap && soMap.TryGetValue(q.Id, out var lst))
+                        linkedSoStatus = lst;
+                    var showSoButton = linkedSoStatus == null
+                        || string.Equals(linkedSoStatus, SalesOrder.StatusOpen, StringComparison.OrdinalIgnoreCase);
                     var deleteConfirm = isDraft ? "Delete this draft quotation?" : "Delete this sent quotation? This cannot be undone.";
             <tr>
                 <td class="text-nowrap"><strong>@q.QuotationNumber</strong></td>
@@ -175,7 +185,10 @@
                     else
                     {
                                     <button type="button" class="btn btn-outline-secondary btn-sm sq-btn-view" data-sq-id="@q.Id" title="View"><i class="bi bi-eye"></i> View</button>
-                                    <a class="btn btn-sq-so btn-sm" title="Create sales order from this quotation" href="@Url.Action("CreateFromQuotation", "SalesOrder", new { quotationId = q.Id, returnQ = listQ, returnStatus = listStatus, returnPlantId = string.IsNullOrEmpty(listPlantId) ? null : listPlantId, returnDistributionChannelId = listDcId })"><i class="bi bi-cart"></i> SO</a>
+                                    @if (showSoButton)
+                                    {
+                                        <a class="btn btn-sq-so btn-sm" title="Create or open sales order from this quotation" href="@Url.Action("CreateFromQuotation", "SalesOrder", new { quotationId = q.Id, returnQ = listQ, returnStatus = listStatus, returnPlantId = string.IsNullOrEmpty(listPlantId) ? null : listPlantId, returnDistributionChannelId = listDcId })"><i class="bi bi-cart"></i> SO</a>
+                                    }
                                 }
                                 <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "SalesQuotation", new { id = q.Id })" title="Download PDF"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
                                 <form asp-action="EmailToCustomer" asp-controller="SalesQuotation" asp-route-id="@q.Id" method="post" class="d-inline sq-quotation-email-form">
@@ -310,8 +323,16 @@
                     </div>
                     <div class="row g-2 mb-2">
                         <div class="col-md-6">
-                            <label class="form-label small mb-0" for="sqCustomer">Customer name (Sold to party) <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="CustomerBusinessPartnerId" id="sqCustomer" required>
+                            <label class="form-label small mb-0" for="sqCustomerSearch">Customer (Sold to party) <span class="text-danger">*</span></label>
+                            <input type="hidden" name="CustomerBusinessPartnerId" id="sqCustomer" value="" required autocomplete="off" />
+                            @if (isEmporiumWalkIn)
+                            {
+                                <div class="d-flex flex-wrap align-items-center gap-2 border rounded px-2 py-2 bg-light mt-1">
+                                    <span class="text-secondary small flex-grow-1" id="sqWalkInCustomerSummary" style="min-height:1.35rem;">No customer selected.</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary text-nowrap" id="sqOpenWalkInCustomerBtn">Add customer</button>
+                                </div>
+                            }
+                            <select id="sqCustomerCatalog" class="d-none" aria-hidden="true" tabindex="-1">
                                 <option value="">— Select —</option>
                                 @foreach (var c in customers)
                                 {
@@ -319,6 +340,10 @@
                                     <option value="@c.BPID" data-ship="@ship">@(c.FullName ?? c.BPID)</option>
                                 }
                             </select>
+                            <div class="sq-customer-combo position-relative@(isEmporiumWalkIn ? " mt-2" : " mt-1")">
+                                <input type="text" class="form-control form-control-sm" id="sqCustomerSearch" placeholder="Search customer (name, ID, address)…" autocomplete="off" />
+                                <div id="sqCustomerDropdown" class="sq-customer-dropdown border rounded bg-white shadow-sm" style="display: none;" role="listbox"></div>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small mb-0" for="sqAddr">Address (Ship to party) <span class="text-danger">*</span></label>
@@ -336,14 +361,32 @@
                         </div>
                         <div class="col-12 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="sqSchema">Configuration schema <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" id="sqSchema" required disabled>
-                                <option value="">— Select —</option>
-                                @foreach (var s in schemas)
-                                {
-                                    <option value="@s.Id">@s.Title</option>
-                                }
-                            </select>
-                            <input type="hidden" name="ConfigurationSchemaId" id="sqSchemaHidden" />
+                            @if (isEmporiumWalkIn && walkInSchemaId > 0)
+                            {
+                                <input type="text" class="form-control form-control-sm" id="sqSchemaReadonlyLabel" readonly tabindex="-1" value="WalkIn" />
+                                <select class="form-select form-select-sm d-none" id="sqSchema" required disabled aria-hidden="true">
+                                    <option value="">— Select —</option>
+                                    @foreach (var s in schemas)
+                                    {
+                                        if (s.Id == walkInSchemaId)
+                                        { <option value="@s.Id" selected>@s.Title</option> }
+                                        else
+                                        { <option value="@s.Id">@s.Title</option> }
+                                    }
+                                </select>
+                                <input type="hidden" name="ConfigurationSchemaId" id="sqSchemaHidden" value="@walkInSchemaId" />
+                            }
+                            else
+                            {
+                                <select class="form-select form-select-sm" id="sqSchema" required disabled>
+                                    <option value="">— Select —</option>
+                                    @foreach (var s in schemas)
+                                    {
+                                        <option value="@s.Id">@s.Title</option>
+                                    }
+                                </select>
+                                <input type="hidden" name="ConfigurationSchemaId" id="sqSchemaHidden" />
+                            }
                         </div>
                         <div class="col-12 col-lg-5" id="sqChargeSelectRow">
                             <div class="row g-2">
@@ -410,6 +453,45 @@
         </div>
     </div>
 </div>
+
+@if (isEmporiumWalkIn)
+{
+    <div class="modal fade walk-in-add-customer-modal" id="sqWalkInAddCustomerModal" tabindex="-1" aria-labelledby="sqWalkInAddCustomerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title" id="sqWalkInAddCustomerModalLabel">Add walk-in customer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0 text-secondary" for="sqWkFirst">First name</label>
+                            <input class="form-control form-control-sm" id="sqWkFirst" maxlength="120" autocomplete="given-name" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0 text-secondary" for="sqWkLast">Last name</label>
+                            <input class="form-control form-control-sm" id="sqWkLast" maxlength="120" autocomplete="family-name" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0 text-secondary" for="sqWkAddr">Address</label>
+                            <input class="form-control form-control-sm" id="sqWkAddr" maxlength="2000" autocomplete="street-address" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0 text-secondary" for="sqWkMobile">Mobile number</label>
+                            <input class="form-control form-control-sm" id="sqWkMobile" maxlength="80" inputmode="tel" autocomplete="tel" />
+                        </div>
+                    </div>
+                    <span class="text-danger small d-block mt-2" id="sqWkErr" style="display:none;"></span>
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="sqWkCreateBtn">Create customer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 <div class="modal fade" id="sqEmailConfirmModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sqEmailConfirmModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered au-material-delete-confirm-dialog">
@@ -529,6 +611,46 @@
         const schemaUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SchemaDetails", "SalesQuotation") ?? ""));
         const sqQuotationDataBase = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("QuotationData", "SalesQuotation", new { id = 0 }) ?? ""));
         const sqCustomerProfileUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CustomerCommercialProfile", "SalesQuotation") ?? ""));
+        const sqEmporiumWalkIn = @(isEmporiumWalkIn ? "true" : "false");
+        const sqWalkInSchemaId = @walkInSchemaId;
+        const sqCreateWalkInUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CreateWalkInCustomer", "SalesQuotation") ?? ""));
+        (function ensureSqWalkInAddCustomerModalOnBody() {
+            var el = document.getElementById("sqWalkInAddCustomerModal");
+            if (!el) return;
+            function moveToBodyEnd() {
+                document.body.appendChild(el);
+            }
+            function bumpZ() {
+                el.style.setProperty("z-index", "100070", "important");
+            }
+            el.addEventListener("show.bs.modal", function () {
+                moveToBodyEnd();
+                requestAnimationFrame(bumpZ);
+            });
+            el.addEventListener("shown.bs.modal", bumpZ);
+            if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", moveToBodyEnd);
+            else moveToBodyEnd();
+        })();
+        function sqWalkInCustomerModalGet() {
+            var el = document.getElementById("sqWalkInAddCustomerModal");
+            if (!el || !window.bootstrap) return null;
+            return bootstrap.Modal.getOrCreateInstance(el, { backdrop: false, keyboard: true });
+        }
+        function sqUpdateWalkInCustomerSummary() {
+            var sum = document.getElementById("sqWalkInCustomerSummary");
+            if (!sum) return;
+            var valEl = document.getElementById("sqCustomer");
+            var cat = document.getElementById("sqCustomerCatalog");
+            var id = (valEl && valEl.value) || "";
+            if (!id) { sum.textContent = "No customer selected."; return; }
+            var label = id;
+            if (cat) {
+                for (var i = 0; i < cat.options.length; i++) {
+                    if (cat.options[i].value === id) { label = (cat.options[i].textContent || "").trim() || id; break; }
+                }
+            }
+            sum.textContent = label;
+        }
         const sqOpenEditId = @Html.Raw(openEditId is int oei ? oei.ToString() : "null");
         const sqUpdateUrlTpl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Update", "SalesQuotation", new { id = 0 }) ?? ""));
         const sqCreateFormAction = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Create", "SalesQuotation") ?? ""));
@@ -560,6 +682,8 @@
             if (document.getElementById("sqNum")) document.getElementById("sqNum").value = h.quotationNumber || "";
             if (document.getElementById("sqModalTitle")) document.getElementById("sqModalTitle").textContent = "Edit — " + (h.quotationNumber || "");
             if (document.getElementById("sqCustomer")) document.getElementById("sqCustomer").value = h.customerBusinessPartnerId || "";
+            sqSyncCustomerSearchFromValue();
+            sqUpdateWalkInCustomerSummary();
             if (document.getElementById("sqAddr")) document.getElementById("sqAddr").value = h.shipToAddress || "";
             if (document.getElementById("sqItemChargeColumnIds")) document.getElementById("sqItemChargeColumnIds").value = h.itemChargeColumnIds || "";
             if (document.getElementById("sqQuotationLevelChargeIds")) document.getElementById("sqQuotationLevelChargeIds").value = h.quotationLevelChargeIds || "";
@@ -653,6 +777,39 @@
             if (plantHidden) plantHidden.value = plantSel ? (plantSel.value || "") : "";
             if (dcHidden) dcHidden.value = dcSel ? (dcSel.value || "") : "";
             if (schemaHidden) schemaHidden.value = schemaSel ? (schemaSel.value || "") : "";
+        }
+        function applySqCustomerCommercialProfile(customerId) {
+            if (!customerId || !sqCustomerProfileUrl) return;
+            fetch(sqCustomerProfileUrl + (sqCustomerProfileUrl.indexOf("?") >= 0 ? "&" : "?") + "bpId=" + encodeURIComponent(customerId))
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success || !res.profile) return;
+                    var p = res.profile;
+                    if (document.getElementById("sqPlant") && p.plantId) document.getElementById("sqPlant").value = p.plantId;
+                    if (document.getElementById("sqDc") && p.distributionChannelId != null) document.getElementById("sqDc").value = String(p.distributionChannelId);
+                    if (document.getElementById("sqDc") && (!p.distributionChannelId) && p.distributionChannel) {
+                        var dcSel = document.getElementById("sqDc");
+                        var want = String(p.distributionChannel || "").trim().toLowerCase();
+                        if (want && dcSel) {
+                            for (var i = 0; i < dcSel.options.length; i++) {
+                                var opt = dcSel.options[i];
+                                if ((opt.textContent || "").trim().toLowerCase() === want) { dcSel.value = opt.value; break; }
+                            }
+                        }
+                    }
+                    if (sqEmporiumWalkIn && sqWalkInSchemaId > 0) {
+                        if (document.getElementById("sqSchema")) {
+                            document.getElementById("sqSchema").value = String(sqWalkInSchemaId);
+                            loadSchema(String(sqWalkInSchemaId));
+                        }
+                    } else if (document.getElementById("sqSchema") && p.configurationSchemaId != null) {
+                        document.getElementById("sqSchema").value = String(p.configurationSchemaId);
+                        loadSchema(String(p.configurationSchemaId));
+                    }
+                    if (document.getElementById("sqAddr") && p.shipToAddress) document.getElementById("sqAddr").value = p.shipToAddress;
+                    syncHiddens();
+                    sqUpdateWalkInCustomerSummary();
+                });
         }
         function readLineValObj(tr) {
             var o = {};
@@ -886,19 +1043,61 @@
         document.addEventListener("focusin", function (e) { if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search") || !e.target.closest(".sq-fert-picker")) return; sqFertFetch(e.target); });
         var _fertT = 0;
         document.addEventListener("input", function (e) { if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search") || !e.target.closest(".sq-fert-picker")) return; clearTimeout(_fertT); var inp = e.target; _fertT = setTimeout(function () { sqFertFetch(inp); }, 250); });
-        function sqClose() { document.querySelectorAll(".sq-fert-picker .bom-mat-picker-dropdown.show").forEach(function (d) { d.classList.remove("show"); d.innerHTML = ""; }); }
+        function sqClearFertDropdownLayout(dd) {
+            if (!dd) return;
+            ["top", "left", "width", "maxHeight"].forEach(function (k) { dd.style.removeProperty(k); });
+        }
+        function sqPositionFertDropdown(searchInput, dd) {
+            if (!searchInput || !dd || !dd.classList.contains("show")) return;
+            var r = searchInput.getBoundingClientRect();
+            var gap = 2;
+            var maxH = Math.max(80, Math.min(220, window.innerHeight - r.bottom - gap - 12));
+            dd.style.top = (r.bottom + gap) + "px";
+            dd.style.left = r.left + "px";
+            dd.style.width = r.width + "px";
+            dd.style.maxHeight = maxH + "px";
+        }
+        function sqClose() {
+            document.querySelectorAll(".sq-fert-picker .bom-mat-picker-dropdown.show").forEach(function (d) {
+                sqClearFertDropdownLayout(d);
+                d.classList.remove("show");
+                d.innerHTML = "";
+            });
+        }
         function sqFertFetch(searchInput) {
             var w = searchInput && searchInput.closest(".sq-fert-picker");
             if (!w) return;
             var dd = w.querySelector(".bom-mat-picker-dropdown"); if (!dd) return;
             fetch(sqFertBuildUrl(searchInput.value)).then(function (r) { return r.json(); }).then(function (d) {
-                if (!d || !d.success) { dd.innerHTML = "<div class=\"bom-mat-picker-empty\">Error</div>"; dd.classList.add("show"); return; }
+                if (!d || !d.success) {
+                    dd.innerHTML = "<div class=\"bom-mat-picker-empty\">Error</div>";
+                    dd.classList.add("show");
+                    sqPositionFertDropdown(searchInput, dd);
+                    return;
+                }
                 var its = d.items || [];
                 if (!its.length) dd.innerHTML = "<div class=\"bom-mat-picker-empty\">No matches</div>";
                 else dd.innerHTML = its.map(function (it) { return "<div class=\"bom-mat-picker-item\" data-n=\"" + esc(it.n) + "\" data-d=\"" + esc(it.d) + "\"><strong>" + esc(it.n) + "</strong> <span class=\"text-muted\">" + esc(it.d) + "</span></div>"; }).join("");
                 dd.classList.add("show");
+                sqPositionFertDropdown(searchInput, dd);
             });
         }
+        (function wireSqFertDropdownReposition() {
+            var modal = document.getElementById("addQuotationModal");
+            if (!modal) return;
+            function refit() {
+                document.querySelectorAll("#addQuotationModal .sq-fert-picker .bom-mat-picker-dropdown.show").forEach(function (dd) {
+                    var wrap = dd.closest(".sq-fert-picker");
+                    var inp = wrap && wrap.querySelector(".bom-mat-picker-search");
+                    sqPositionFertDropdown(inp, dd);
+                });
+            }
+            var mb = modal.querySelector(".modal-body");
+            if (mb) mb.addEventListener("scroll", refit, true);
+            var tw = modal.querySelector(".sq-items-table-wrap");
+            if (tw) tw.addEventListener("scroll", refit, true);
+            window.addEventListener("resize", refit);
+        })();
         document.addEventListener("click", function (e) {
             var it = e.target.closest(".sq-fert-picker .bom-mat-picker-item");
             if (!it) { if (!e.target.closest(".sq-fert-picker")) sqClose(); return; }
@@ -907,7 +1106,7 @@
             var hid = w.querySelector(".sq-matno"), s = w.querySelector(".bom-mat-picker-search");
             var n = it.getAttribute("data-n") || "", d0 = it.getAttribute("data-d") || "";
             if (hid) hid.value = n; if (s) s.value = n + (d0 ? " — " + d0 : "");
-            if (dd) { dd.classList.remove("show"); dd.innerHTML = ""; }
+            if (dd) { sqClearFertDropdownLayout(dd); dd.classList.remove("show"); dd.innerHTML = ""; }
             var tr = w.closest("tr.sq-item-row");
             uomFill(tr, n, d0);
         });
@@ -997,6 +1196,7 @@
             if (_sqSkipFormReset) { _sqSkipFormReset = false; return; }
             setSqFormToCreate();
             var f = document.getElementById("sqForm"); if (f) f.reset();
+            if (typeof sqHideCustomerDropdown === "function") sqHideCustomerDropdown();
             document.getElementById("sqQd") && (document.getElementById("sqQd").value = defaults.today);
             document.getElementById("sqVd") && (document.getElementById("sqVd").value = defaults.twoW);
             document.getElementById("sqPlant") && (document.getElementById("sqPlant").value = "");
@@ -1020,8 +1220,20 @@
                 if (document.getElementById("sqNum")) document.getElementById("sqNum").value = n || "";
                 if (document.getElementById("sqModalTitle")) document.getElementById("sqModalTitle").textContent = "New Sales Quotation — " + (n || "");
             }).catch(function () { alert("Could not load next quotation number."); });
-            var sch = document.getElementById("sqSchema") && document.getElementById("sqSchema").value;
-            if (sch) loadSchema(sch); else loadSchema("");
+            if (sqEmporiumWalkIn && sqWalkInSchemaId > 0) {
+                if (document.getElementById("sqPlant")) document.getElementById("sqPlant").value = "Emp101";
+                if (document.getElementById("sqDc")) document.getElementById("sqDc").value = "2";
+                if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = String(sqWalkInSchemaId);
+                if (document.getElementById("sqCustomer")) document.getElementById("sqCustomer").value = "";
+                if (document.getElementById("sqCustomerSearch")) document.getElementById("sqCustomerSearch").value = "";
+                sqHideCustomerDropdown();
+                sqUpdateWalkInCustomerSummary();
+                syncHiddens();
+                loadSchema(String(sqWalkInSchemaId));
+            } else {
+                var sch = document.getElementById("sqSchema") && document.getElementById("sqSchema").value;
+                if (sch) loadSchema(sch); else loadSchema("");
+            }
         });
         (function init() {
             var sqForm = document.getElementById("sqForm");
@@ -1038,9 +1250,72 @@
             reindex();
             recalcFooter();
         });
-        document.getElementById("sqCustomer") && document.getElementById("sqCustomer").addEventListener("change", function () {
-            var customerId = this.value || "";
+        function sqHideCustomerDropdown() {
+            var dd = document.getElementById("sqCustomerDropdown");
+            if (!dd) return;
+            dd.style.display = "none";
+            dd.classList.remove("show");
+            dd.innerHTML = "";
+            ["top", "left", "width", "maxHeight"].forEach(function (k) { dd.style.removeProperty(k); });
+        }
+        function sqPositionCustomerDropdown() {
+            var search = document.getElementById("sqCustomerSearch");
+            var dd = document.getElementById("sqCustomerDropdown");
+            if (!search || !dd || dd.style.display === "none") return;
+            var r = search.getBoundingClientRect();
+            var gap = 4;
+            var maxH = Math.max(120, Math.min(280, window.innerHeight - r.bottom - gap - 12));
+            dd.style.top = (r.bottom + gap) + "px";
+            dd.style.left = r.left + "px";
+            dd.style.width = r.width + "px";
+            dd.style.maxHeight = maxH + "px";
+            dd.classList.add("show");
+        }
+        function sqRenderCustomerDropdown(filterText) {
+            var cat = document.getElementById("sqCustomerCatalog");
+            var dd = document.getElementById("sqCustomerDropdown");
+            if (!cat || !dd) return;
+            var q = (filterText || "").trim().toLowerCase();
+            var parts = ["<div class=\"sq-customer-item px-2 py-1 border-bottom text-muted small\" role=\"option\" tabindex=\"0\" data-id=\"\">— Clear selection —</div>"];
+            var nShown = 0;
+            for (var i = 0; i < cat.options.length; i++) {
+                var opt = cat.options[i];
+                var v = (opt.value || "").trim();
+                if (!v) continue;
+                var t = (opt.textContent || "").trim().toLowerCase();
+                var ship = ((opt.getAttribute("data-ship") || "") + "").toLowerCase();
+                if (q && t.indexOf(q) < 0 && v.toLowerCase().indexOf(q) < 0 && ship.indexOf(q) < 0) continue;
+                parts.push("<div class=\"sq-customer-item px-2 py-1 border-bottom small\" role=\"option\" tabindex=\"0\" data-id=\"" + esc(v) + "\">" + esc((opt.textContent || "").trim()) + "</div>");
+                nShown++;
+                if (nShown >= 80) break;
+            }
+            if (!nShown && q) dd.innerHTML = "<div class=\"px-2 py-2 text-muted small\">No matches</div>";
+            else dd.innerHTML = parts.join("");
+            dd.style.display = "block";
+            sqPositionCustomerDropdown();
+        }
+        function sqSyncCustomerSearchFromValue() {
+            var valEl = document.getElementById("sqCustomer");
+            var search = document.getElementById("sqCustomerSearch");
+            var cat = document.getElementById("sqCustomerCatalog");
+            if (!valEl || !search || !cat) return;
+            var v = valEl.value || "";
+            if (!v) { search.value = ""; return; }
+            for (var i = 0; i < cat.options.length; i++) {
+                if (cat.options[i].value === v) {
+                    search.value = (cat.options[i].textContent || "").trim();
+                    return;
+                }
+            }
+            search.value = v;
+        }
+        function sqCommitCustomerSelection(customerId) {
+            var valEl = document.getElementById("sqCustomer");
+            if (valEl) valEl.value = customerId || "";
+            sqSyncCustomerSearchFromValue();
+            sqHideCustomerDropdown();
             if (!customerId) {
+                sqUpdateWalkInCustomerSummary();
                 if (document.getElementById("sqPlant")) document.getElementById("sqPlant").value = "";
                 if (document.getElementById("sqDc")) document.getElementById("sqDc").value = "";
                 if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = "";
@@ -1048,32 +1323,89 @@
                 syncHiddens();
                 return;
             }
-            if (!sqCustomerProfileUrl) return;
-            fetch(sqCustomerProfileUrl + (sqCustomerProfileUrl.indexOf("?") >= 0 ? "&" : "?") + "bpId=" + encodeURIComponent(customerId))
+            applySqCustomerCommercialProfile(customerId);
+        }
+        (function initSqCustomerCombo() {
+            var search = document.getElementById("sqCustomerSearch");
+            var dd = document.getElementById("sqCustomerDropdown");
+            if (!search || !dd) return;
+            var tOpen = 0;
+            search.addEventListener("focus", function () { sqRenderCustomerDropdown(search.value); });
+            search.addEventListener("input", function () {
+                clearTimeout(tOpen);
+                tOpen = setTimeout(function () { sqRenderCustomerDropdown(search.value); }, 120);
+            });
+            search.addEventListener("keydown", function (e) { if (e.key === "Escape") sqHideCustomerDropdown(); });
+            dd.addEventListener("mousedown", function (e) { e.preventDefault(); });
+            dd.addEventListener("click", function (e) {
+                var item = e.target.closest(".sq-customer-item");
+                if (!item) return;
+                sqCommitCustomerSelection(item.getAttribute("data-id") || "");
+            });
+            document.addEventListener("mousedown", function (e) {
+                if (!e.target.closest(".sq-customer-combo")) sqHideCustomerDropdown();
+            });
+            var qModal = document.getElementById("addQuotationModal");
+            if (qModal) {
+                function refitDd() { if (dd.style.display !== "none") sqPositionCustomerDropdown(); }
+                var mb = qModal.querySelector(".modal-body");
+                if (mb) mb.addEventListener("scroll", refitDd, true);
+                window.addEventListener("resize", refitDd);
+            }
+        })();
+        document.getElementById("sqOpenWalkInCustomerBtn") && document.getElementById("sqOpenWalkInCustomerBtn").addEventListener("click", function () {
+            ["sqWkFirst", "sqWkLast", "sqWkAddr", "sqWkMobile"].forEach(function (wid) { var e = document.getElementById(wid); if (e) e.value = ""; });
+            var wkErr = document.getElementById("sqWkErr"); if (wkErr) { wkErr.style.display = "none"; wkErr.textContent = ""; }
+            var m = sqWalkInCustomerModalGet(); if (m) m.show();
+        });
+        document.getElementById("sqWkCreateBtn") && document.getElementById("sqWkCreateBtn").addEventListener("click", function () {
+            if (!sqCreateWalkInUrl) return;
+            var fn = (document.getElementById("sqWkFirst") && document.getElementById("sqWkFirst").value) || "";
+            var ln = (document.getElementById("sqWkLast") && document.getElementById("sqWkLast").value) || "";
+            var ad = (document.getElementById("sqWkAddr") && document.getElementById("sqWkAddr").value) || "";
+            var mb = (document.getElementById("sqWkMobile") && document.getElementById("sqWkMobile").value) || "";
+            var err = document.getElementById("sqWkErr");
+            var tok = document.querySelector("#sqForm input[name=\"__RequestVerificationToken\"]");
+            if (!tok || !tok.value) { if (err) { err.textContent = "Missing form token."; err.style.display = "inline"; } return; }
+            var body = new URLSearchParams();
+            body.append("__RequestVerificationToken", tok.value);
+            body.append("firstName", fn);
+            body.append("lastName", ln);
+            body.append("address", ad);
+            body.append("mobile", mb);
+            fetch(sqCreateWalkInUrl, { method: "POST", body: body, headers: { "X-Requested-With": "XMLHttpRequest" } })
                 .then(function (r) { return r.json(); })
-                .then(function (res) {
-                    if (!res || !res.success || !res.profile) return;
-                    var p = res.profile;
-                    if (document.getElementById("sqPlant") && p.plantId) document.getElementById("sqPlant").value = p.plantId;
-                    if (document.getElementById("sqDc") && p.distributionChannelId != null) document.getElementById("sqDc").value = String(p.distributionChannelId);
-                    // Fallback: if API can't resolve to an ID but returns a name, try matching by option text.
-                    if (document.getElementById("sqDc") && (!p.distributionChannelId) && p.distributionChannel) {
-                        var dcSel = document.getElementById("sqDc");
-                        var want = String(p.distributionChannel || "").trim().toLowerCase();
-                        if (want) {
-                            for (var i = 0; i < dcSel.options.length; i++) {
-                                var opt = dcSel.options[i];
-                                if ((opt.textContent || "").trim().toLowerCase() === want) { dcSel.value = opt.value; break; }
-                            }
+                .then(function (d) {
+                    if (!d || !d.success) {
+                        if (err) { err.textContent = (d && d.message) ? d.message : "Could not create customer."; err.style.display = "inline"; }
+                        return;
+                    }
+                    if (err) { err.style.display = "none"; err.textContent = ""; }
+                    var valEl = document.getElementById("sqCustomer");
+                    var cat = document.getElementById("sqCustomerCatalog");
+                    if (valEl) valEl.value = d.bpId || "";
+                    if (cat && d.bpId) {
+                        var exists = false;
+                        for (var i = 0; i < cat.options.length; i++) { if (cat.options[i].value === d.bpId) { exists = true; break; } }
+                        if (!exists) {
+                            var o = document.createElement("option");
+                            o.value = d.bpId;
+                            o.textContent = d.displayName || d.bpId;
+                            o.setAttribute("data-ship", ad);
+                            cat.appendChild(o);
                         }
                     }
-                    if (document.getElementById("sqSchema") && p.configurationSchemaId != null) {
-                        document.getElementById("sqSchema").value = String(p.configurationSchemaId);
-                        loadSchema(String(p.configurationSchemaId));
+                    sqSyncCustomerSearchFromValue();
+                    if (document.getElementById("sqAddr")) document.getElementById("sqAddr").value = ad;
+                    sqUpdateWalkInCustomerSummary();
+                    var wkEl = document.getElementById("sqWalkInAddCustomerModal");
+                    if (wkEl && window.bootstrap) {
+                        var wkInst = bootstrap.Modal.getInstance(wkEl);
+                        if (wkInst) wkInst.hide();
                     }
-                    if (document.getElementById("sqAddr") && p.shipToAddress) document.getElementById("sqAddr").value = p.shipToAddress;
-                    syncHiddens();
-                });
+                    applySqCustomerCommercialProfile(d.bpId);
+                })
+                .catch(function () { if (err) { err.textContent = "Request failed."; err.style.display = "inline"; } });
         });
         function sqSyncReturnFields() {
             var q = document.getElementById("sqListQ"), st = document.getElementById("sqListStatus"), pl = document.getElementById("sqListPlant"), dc = document.getElementById("sqListDc");

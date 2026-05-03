@@ -70,6 +70,7 @@ builder.Services.AddScoped<SalesReturnQiBomService>();
 builder.Services.AddScoped<SalesReturnQiPostingService>();
 builder.Services.AddScoped<SalesReturnCreditMemoPdfService>();
 builder.Services.AddScoped<CompanyInfoService>();
+builder.Services.AddScoped<EmporiumWalkInCustomerService>();
 
 builder.Services.AddControllersWithViews(options =>
 {

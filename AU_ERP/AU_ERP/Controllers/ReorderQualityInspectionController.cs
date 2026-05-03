@@ -28,7 +28,7 @@ public class ReorderQualityInspectionController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken ct = default)
     {
-        ViewData["Title"] = "Reorder quality inspection";
+        ViewData["Title"] = "ROD Inspection";
         List<ReorderQiIndexRowVm> rows;
         try
         {
@@ -60,16 +60,36 @@ public class ReorderQualityInspectionController : Controller
     [HttpGet]
     public async Task<IActionResult> Details(int id, CancellationToken ct = default)
     {
+        var vm = await BuildDetailsVmAsync(id, ct).ConfigureAwait(false);
+        if (vm == null)
+            return NotFound();
+
+        ViewData["Title"] = $"QI {vm.DocumentNumber}";
+        return View(vm);
+    }
+
+    /// <summary>HTML fragment for the read-only view modal (completed inspections only).</summary>
+    [HttpGet]
+    public async Task<IActionResult> ReadOnlyPartial(int id, CancellationToken ct = default)
+    {
+        var vm = await BuildDetailsVmAsync(id, ct).ConfigureAwait(false);
+        if (vm == null)
+            return NotFound();
+        if (string.Equals(vm.Status, SalesReturnQualityInspection.StatusPending, StringComparison.OrdinalIgnoreCase))
+            return BadRequest("Inspection is still pending; use Open to complete it.");
+
+        return PartialView("_ReorderQiReadOnlyModalBody", vm);
+    }
+
+    private async Task<ReorderQiDetailsVm?> BuildDetailsVmAsync(int id, CancellationToken ct)
+    {
         var qi = await _db.SalesReturnQualityInspections.AsNoTracking()
             .Include(q => q.Lines).ThenInclude(l => l.QuantityUom)
             .Include(q => q.SalesReturnOrder)
-            .FirstOrDefaultAsync(q => q.Id == id, ct);
-        if (qi == null)
-            return NotFound();
-
-        var ro = qi.SalesReturnOrder;
-        if (ro == null)
-            return NotFound();
+            .FirstOrDefaultAsync(q => q.Id == id, ct)
+            .ConfigureAwait(false);
+        if (qi?.SalesReturnOrder is not { } ro)
+            return null;
 
         var lines = new List<ReorderQiDetailsLineVm>();
         foreach (var ln in qi.Lines.OrderBy(l => l.Id))
@@ -92,7 +112,7 @@ public class ReorderQualityInspectionController : Controller
             });
         }
 
-        var vm = new ReorderQiDetailsVm
+        return new ReorderQiDetailsVm
         {
             QiId = qi.Id,
             DocumentNumber = qi.DocumentNumber,
@@ -103,9 +123,6 @@ public class ReorderQualityInspectionController : Controller
             ReturnOrderDocumentNumber = ro.DocumentNumber,
             Lines = lines
         };
-
-        ViewData["Title"] = $"QI {qi.DocumentNumber}";
-        return View(vm);
     }
 
     public sealed class QiLineDispositionFormRow

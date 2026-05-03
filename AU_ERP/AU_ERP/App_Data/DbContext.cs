@@ -1252,6 +1252,24 @@ namespace AU_ERP.Models
                 .HasForeignKey(d => d.SalesOrderId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(d => d.Driver)
+                .WithMany()
+                .HasForeignKey(d => d.DriverId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasOne(d => d.Vehicle)
+                .WithMany()
+                .HasForeignKey(d => d.VehicleId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(d => d.DriverId);
+
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(d => d.VehicleId);
+
             modelBuilder.Entity<DeliveryChallanItem>()
                 .Property(e => e.Id)
                 .ValueGeneratedOnAdd();

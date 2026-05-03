@@ -31,16 +31,19 @@ public class ReturnOrderController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken ct = default)
+    public async Task<IActionResult> Index(string? q, CancellationToken ct = default)
     {
         ViewData["Title"] = "Return order";
+        var qq = (q ?? "").Trim();
         List<SalesReturnOrder> orders;
         try
         {
-            orders = await _db.SalesReturnOrders.AsNoTracking()
+            var query = ApplyReturnOrderSearchFilter(_db.SalesReturnOrders.AsNoTracking(), qq);
+            orders = await query
                 .OrderByDescending(r => r.DocumentDate)
                 .ThenByDescending(r => r.Id)
-                .ToListAsync(ct);
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
         }
         catch (SqlException ex) when (
             ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) &&
@@ -50,8 +53,31 @@ public class ReturnOrderController : Controller
             orders = new List<SalesReturnOrder>();
         }
 
+        var cmDocByReturnOrderId = new Dictionary<int, string>();
+        if (orders.Count > 0)
+        {
+            var ids = orders.Select(o => o.Id).ToList();
+            try
+            {
+                var cmRows = await _db.SalesReturnCreditMemos.AsNoTracking()
+                    .Where(c => ids.Contains(c.SalesReturnOrderId))
+                    .Select(c => new { c.SalesReturnOrderId, c.DocumentNumber })
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
+                foreach (var row in cmRows)
+                    cmDocByReturnOrderId[row.SalesReturnOrderId] = row.DocumentNumber;
+            }
+            catch (SqlException ex) when (
+                ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) &&
+                ex.Message.Contains("SalesReturnCreditMemos", StringComparison.OrdinalIgnoreCase))
+            {
+                // Credit memo table missing; list still works without CM flags.
+            }
+        }
+
         var vm = new ReturnOrderIndexVm
         {
+            FilterQuery = string.IsNullOrEmpty(qq) ? null : qq,
             Orders = orders.Select(r => new ReturnOrderIndexRowVm
             {
                 Id = r.Id,
@@ -59,38 +85,95 @@ public class ReturnOrderController : Controller
                 DocumentDate = r.DocumentDate,
                 InvoiceDocumentNumber = r.InvoiceDocumentNumber,
                 DealerDisplayName = r.DealerDisplayName,
-                ReturnReasonSnippet = Snippet(r.ReturnReason, 80)
+                ReturnReasonSnippet = Snippet(r.ReturnReason, 80),
+                HasCreditMemo = cmDocByReturnOrderId.ContainsKey(r.Id),
+                CreditMemoDocumentNumber = cmDocByReturnOrderId.TryGetValue(r.Id, out var dn) ? dn : null
             }).ToList()
         };
         return View(vm);
     }
 
     [HttpGet]
-    public async Task<IActionResult> Details(int id, CancellationToken ct = default)
+    public async Task<IActionResult> ReadOnlyPartial(int id, CancellationToken ct = default)
     {
-        SalesReturnOrder? r;
+        var r = await LoadReturnOrderForDetailAsync(id, ct).ConfigureAwait(false);
+        if (r == null)
+            return NotFound();
+        return PartialView("_ReturnOrderReadOnlyModalBody", MapToDetailsVm(r));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> CreditMemoPartial(int id, CancellationToken ct = default)
+    {
+        SalesReturnCreditMemo? cm;
         try
         {
-            r = await _db.SalesReturnOrders.AsNoTracking()
-                .Include(x => x.Lines).ThenInclude(l => l.QuantityUom)
-                .Include(x => x.SalesReturnCreditMemo)
-                .FirstOrDefaultAsync(x => x.Id == id, ct);
+            cm = await _db.SalesReturnCreditMemos.AsNoTracking()
+                .Include(c => c.Lines).ThenInclude(l => l.QuantityUom)
+                .FirstOrDefaultAsync(c => c.SalesReturnOrderId == id, ct)
+                .ConfigureAwait(false);
         }
         catch (SqlException ex) when (
             ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) &&
             ex.Message.Contains("SalesReturnCreditMemos", StringComparison.OrdinalIgnoreCase))
         {
-            r = await _db.SalesReturnOrders.AsNoTracking()
-                .Include(x => x.Lines).ThenInclude(l => l.QuantityUom)
-                .FirstOrDefaultAsync(x => x.Id == id, ct);
+            return NotFound();
         }
 
+        if (cm == null)
+            return NotFound();
+
+        var vm = new ReturnOrderCreditMemoModalVm
+        {
+            ReturnOrderId = id,
+            CreditMemo = cm
+        };
+        return PartialView("_ReturnOrderCreditMemoModalBody", vm);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Details(int id, CancellationToken ct = default)
+    {
+        var r = await LoadReturnOrderForDetailAsync(id, ct).ConfigureAwait(false);
         if (r == null)
             return NotFound();
 
         ViewData["Title"] = $"Return order {r.DocumentNumber}";
         var vm = MapToDetailsVm(r);
         return View(vm);
+    }
+
+    private static IQueryable<SalesReturnOrder> ApplyReturnOrderSearchFilter(IQueryable<SalesReturnOrder> query, string qq)
+    {
+        if (string.IsNullOrEmpty(qq))
+            return query;
+        return query.Where(r =>
+            r.DocumentNumber.Contains(qq)
+            || r.InvoiceDocumentNumber.Contains(qq)
+            || (r.DealerDisplayName != null && r.DealerDisplayName.Contains(qq))
+            || (r.DealerBusinessPartnerId != null && r.DealerBusinessPartnerId.Contains(qq))
+            || r.ReturnReason.Contains(qq));
+    }
+
+    private async Task<SalesReturnOrder?> LoadReturnOrderForDetailAsync(int id, CancellationToken ct)
+    {
+        try
+        {
+            return await _db.SalesReturnOrders.AsNoTracking()
+                .Include(x => x.Lines).ThenInclude(l => l.QuantityUom)
+                .Include(x => x.SalesReturnCreditMemo)
+                .FirstOrDefaultAsync(x => x.Id == id, ct)
+                .ConfigureAwait(false);
+        }
+        catch (SqlException ex) when (
+            ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) &&
+            ex.Message.Contains("SalesReturnCreditMemos", StringComparison.OrdinalIgnoreCase))
+        {
+            return await _db.SalesReturnOrders.AsNoTracking()
+                .Include(x => x.Lines).ThenInclude(l => l.QuantityUom)
+                .FirstOrDefaultAsync(x => x.Id == id, ct)
+                .ConfigureAwait(false);
+        }
     }
 
     [HttpGet]

@@ -1,0 +1,58 @@
+@model AU_ERP.Models.ViewModels.ReturnOrderDetailsVm
+@using System.Globalization
+@{
+    Layout = null;
+    string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
+    string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.CurrentCulture);
+    var dealer = Model.DealerDisplayName ?? "—";
+    var bp = Model.DealerBusinessPartnerId ?? "—";
+}
+
+<div class="ro-readonly-partial small">
+    <div class="row g-2 text-secondary mb-3">
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Document date</span><div class="text-dark">@Model.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Dealer</span><div class="text-dark">@dealer</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Dealer #</span><div class="text-dark">@bp</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Sales order</span><div class="text-dark">@(Model.SalesOrderNumber ?? "—")</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">DC delivery date</span><div class="text-dark">@Model.DeliveryChallanDocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Invoice</span><div class="text-dark">@Model.InvoiceDocumentNumber <span class="text-muted">(@FmtMoney(Model.InvoiceGrandTotal))</span></div></div>
+    </div>
+    @if (Model.CreditMemoId.HasValue && !string.IsNullOrWhiteSpace(Model.CreditMemoDocumentNumber))
+    {
+        var cmTot = Model.CreditMemoGrandTotal ?? 0m;
+        <p class="small text-secondary border rounded bg-light px-2 py-2 mb-3 mb-md-2">Credit memo <strong>@Model.CreditMemoDocumentNumber</strong> · total credit <strong>@FmtMoney(cmTot)</strong></p>
+    }
+    <div class="mb-2 fw-semibold text-uppercase" style="font-size:.72rem;letter-spacing:.04em;color:#6c757d;">Return reason</div>
+    <p class="small mb-3">@Model.ReturnReason</p>
+    <div class="table-responsive border rounded">
+        <table class="table table-sm table-striped mb-0 align-middle small">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Material</th>
+                    <th>Description</th>
+                    <th>UOM</th>
+                    <th class="text-end">Unit price</th>
+                    <th class="text-end">Line total</th>
+                    <th class="text-end">Invoiced</th>
+                    <th class="text-end">Returned</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ln in Model.Lines.OrderBy(l => l.LineNo))
+                {
+                    <tr>
+                        <td>@ln.LineNo</td>
+                        <td><strong>@ln.MaterialNumber</strong></td>
+                        <td>@(ln.MaterialDescription ?? "—")</td>
+                        <td>@(ln.UomCode ?? "—")</td>
+                        <td class="text-end">@FmtMoney(ln.UnitPrice)</td>
+                        <td class="text-end">@FmtMoney(ln.LineTotal)</td>
+                        <td class="text-end">@FmtQty(ln.QuantityInvoiced)</td>
+                        <td class="text-end">@FmtQty(ln.QuantityReturned)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -21,7 +21,7 @@ public class SalesPaymentController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken ct = default)
     {
-        ViewData["Title"] = "Update payment";
+        ViewData["Title"] = "Payments";
         List<SalesPayment> payments;
         try
         {
@@ -61,7 +61,7 @@ public class SalesPaymentController : Controller
         if (p == null)
             return NotFound();
 
-        ViewData["Title"] = $"Update payment — {p.DocumentNumber}";
+        ViewData["Title"] = $"Payments — {p.DocumentNumber}";
         var vm = new SalesPaymentEditVm
         {
             Id = p.Id,

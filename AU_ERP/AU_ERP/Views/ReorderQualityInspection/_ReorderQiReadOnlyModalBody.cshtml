@@ -1,0 +1,46 @@
+@model AU_ERP.Models.ViewModels.ReorderQiDetailsVm
+@using System.Globalization
+@{
+    Layout = null;
+}
+
+<div class="rqi-readonly-partial">
+    <div class="row g-2 small text-secondary mb-3">
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Date</span><div class="text-dark">@Model.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Status</span><div class="text-dark">@Model.Status</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Plant</span><div class="text-dark">@(string.IsNullOrWhiteSpace(Model.PlantId) ? "—" : Model.PlantId)</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Invoice</span><div class="text-dark">@Model.InvoiceDocumentNumber</div></div>
+        <div class="col-sm-6 col-md-4"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Return order</span><div class="text-dark">@Model.ReturnOrderDocumentNumber</div></div>
+    </div>
+    <div class="table-responsive border rounded">
+        <table class="table table-sm table-striped mb-0 align-middle small">
+            <thead class="table-light">
+                <tr>
+                    <th>Material</th>
+                    <th>Description</th>
+                    <th>Batch</th>
+                    <th class="text-end">Returned</th>
+                    <th>UOM</th>
+                    <th class="text-end">Back</th>
+                    <th class="text-end">Convert</th>
+                    <th class="text-end">Scrap</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ln in Model.Lines)
+                {
+                    <tr>
+                        <td class="text-nowrap"><strong>@ln.MaterialNumber</strong></td>
+                        <td>@(ln.MaterialDescription ?? "—")</td>
+                        <td>@(string.IsNullOrWhiteSpace(ln.BatchNumber) ? "—" : ln.BatchNumber)</td>
+                        <td class="text-end">@ln.QuantityReturned.ToString("N4", CultureInfo.InvariantCulture)</td>
+                        <td>@(ln.UomCode ?? "—")</td>
+                        <td class="text-end">@ln.QtyBackToStock.ToString("N4", CultureInfo.InvariantCulture)</td>
+                        <td class="text-end">@ln.QtyConvertToRaw.ToString("N4", CultureInfo.InvariantCulture)</td>
+                        <td class="text-end">@ln.QtyScrap.ToString("N4", CultureInfo.InvariantCulture)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

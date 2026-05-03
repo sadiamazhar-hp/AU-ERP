@@ -41,5 +41,15 @@ public class DeliveryChallan
     [MaxLength(40)]
     public string? ReferenceSalesOrderNumber { get; set; }
 
+    public int? DriverId { get; set; }
+
+    [ForeignKey(nameof(DriverId))]
+    public Driver? Driver { get; set; }
+
+    public int? VehicleId { get; set; }
+
+    [ForeignKey(nameof(VehicleId))]
+    public Vehicle? Vehicle { get; set; }
+
     public ICollection<DeliveryChallanItem> Items { get; set; } = new List<DeliveryChallanItem>();
 }

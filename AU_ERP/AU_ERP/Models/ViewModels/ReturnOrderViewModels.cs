@@ -1,7 +1,10 @@
+using AU_ERP.Models;
+
 namespace AU_ERP.Models.ViewModels;
 
 public sealed class ReturnOrderIndexVm
 {
+    public string? FilterQuery { get; set; }
     public List<ReturnOrderIndexRowVm> Orders { get; set; } = new();
 }
 
@@ -13,6 +16,15 @@ public sealed class ReturnOrderIndexRowVm
     public string InvoiceDocumentNumber { get; set; } = "";
     public string? DealerDisplayName { get; set; }
     public string ReturnReasonSnippet { get; set; } = "";
+    public bool HasCreditMemo { get; set; }
+    public string? CreditMemoDocumentNumber { get; set; }
+}
+
+/// <summary>Payload for credit memo read-only modal on return order list.</summary>
+public sealed class ReturnOrderCreditMemoModalVm
+{
+    public int ReturnOrderId { get; set; }
+    public SalesReturnCreditMemo CreditMemo { get; set; } = null!;
 }
 
 public sealed class ReturnOrderCreateVm

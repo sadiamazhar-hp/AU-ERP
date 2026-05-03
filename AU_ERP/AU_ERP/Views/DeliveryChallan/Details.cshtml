@@ -10,6 +10,13 @@
     ViewBag.Title = ViewData["Title"];
     var listUrl = Url.Action("Index", "DeliveryChallan") ?? "";
     var pdfUrl = d != null ? (Url.Action("DownloadPdf", "DeliveryChallan", new { id = d.Id }) ?? "") : "";
+    string DcDriverLabel(Driver? dr)
+    {
+        if (dr == null) return "—";
+        var n = string.Join(" ", new[] { dr.FirstName, dr.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+        return string.IsNullOrEmpty(n) ? ("Driver #" + dr.Id) : n;
+    }
+    string DcVehicleLabel(Vehicle? v) => v == null ? "—" : $"{v.NumberPlate} ({v.CarType})";
 }
 
 <div class="container-fluid" style="max-width: 1100px; color: var(--text, #32363a);">
@@ -55,6 +62,14 @@
                     <div class="col-12 col-md-6">
                         <div class="text-uppercase text-muted" style="font-size: .68rem; letter-spacing: .04em;">Ship-to</div>
                         <div class="fw-semibold">@(d.ShipToDisplayName ?? d.ShipToBusinessPartner?.FullName ?? "—")</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-uppercase text-muted" style="font-size: .68rem; letter-spacing: .04em;">Driver</div>
+                        <div class="fw-semibold">@DcDriverLabel(d.Driver)</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-uppercase text-muted" style="font-size: .68rem; letter-spacing: .04em;">Vehicle</div>
+                        <div class="fw-semibold">@DcVehicleLabel(d.Vehicle)</div>
                     </div>
                 </div>
             </div>

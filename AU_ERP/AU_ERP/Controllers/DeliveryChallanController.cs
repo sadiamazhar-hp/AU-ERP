@@ -97,7 +97,29 @@ public class DeliveryChallanController : Controller
             .OrderBy(c => c.FullName)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+        var allPlantIds = plants.Select(p => p.PlantID).ToList();
+        var allowedPlantIds = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIds)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var dcModalPlants = plants.Where(p => allowedPlantIds.Contains(p.PlantID)).ToList();
+        var storePlantIds = UserPlantResolution.GetStorePlantIds(User);
+        var dcPlantSingleLocked = storePlantIds.Count == 1;
+        var dcLockedPlantId = dcPlantSingleLocked ? storePlantIds[0] : null;
+        var drivers = await _db.Drivers.AsNoTracking()
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.LastName).ThenBy(d => d.FirstName).ThenBy(d => d.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var vehicles = await _db.Vehicles.AsNoTracking()
+            .Where(v => v.IsActive)
+            .OrderBy(v => v.NumberPlate)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
         ViewBag.Plants = plants;
+        ViewBag.DcModalPlants = dcModalPlants;
+        ViewBag.DcPlantSingleLocked = dcPlantSingleLocked;
+        ViewBag.DcLockedPlantId = dcLockedPlantId;
+        ViewBag.DcDrivers = drivers;
+        ViewBag.DcVehicles = vehicles;
         ViewBag.Customers = customers;
         return View(vm);
     }
@@ -109,6 +131,8 @@ public class DeliveryChallanController : Controller
             .Include(x => x.Plant)
             .Include(x => x.ShipToBusinessPartner)
             .Include(x => x.SalesOrder)
+            .Include(x => x.Driver)
+            .Include(x => x.Vehicle)
             .Include(x => x.Items)!.ThenInclude(i => i.QuantityUom)
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             .ConfigureAwait(false);
@@ -125,6 +149,8 @@ public class DeliveryChallanController : Controller
             .Include(x => x.Plant)
             .Include(x => x.ShipToBusinessPartner)
             .Include(x => x.SalesOrder)
+            .Include(x => x.Driver)
+            .Include(x => x.Vehicle)
             .Include(x => x.Items)!.ThenInclude(i => i.QuantityUom)
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             .ConfigureAwait(false);
@@ -146,14 +172,15 @@ public class DeliveryChallanController : Controller
         var withDcSet = withDc.ToHashSet();
         IQueryable<SalesOrder> query = _db.SalesOrders.AsNoTracking()
             .Where(x => x.Status == SalesOrder.StatusConfirmed);
-        var receivedGiSoIds = await _db.SalesGoodsIssueDocuments.AsNoTracking()
-            .Where(g => g.Status == SalesGoodsIssueDocument.StatusReceived)
+        var eligibleGiSoIds = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+            .Where(g => g.DispatchStatus == SalesGoodsIssueDocument.DispatchSent
+                || g.Status == SalesGoodsIssueDocument.StatusReceived)
             .Select(g => g.SalesOrderId)
             .Distinct()
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var receivedGiSet = receivedGiSoIds.ToHashSet();
-        query = query.Where(x => receivedGiSet.Contains(x.Id));
+        var eligibleGiSet = eligibleGiSoIds.ToHashSet();
+        query = query.Where(x => eligibleGiSet.Contains(x.Id));
         if (withDcSet.Count > 0)
             query = query.Where(x => !withDcSet.Contains(x.Id));
         var t = (q ?? "").Trim();
@@ -163,6 +190,13 @@ public class DeliveryChallanController : Controller
                 x.SalesOrderNumber.Contains(t)
                 || (x.CustomerName != null && x.CustomerName.Contains(t)));
         }
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var allowedPlants = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIds)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        query = query.Where(x => x.PlantId != null && allowedPlants.Contains(x.PlantId));
         var items = await query
             .OrderByDescending(x => x.OrderDate)
             .ThenBy(x => x.SalesOrderNumber)
@@ -197,13 +231,24 @@ public class DeliveryChallanController : Controller
             .ConfigureAwait(false);
         if (o == null)
             return Json(new { success = false, message = "Sales order not found." });
+        var allPlantIdsLines = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var allowedLines = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsLines)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(o.PlantId) || !allowedLines.Contains(o.PlantId.Trim()))
+            return Json(new { success = false, message = "This sales order’s plant is not available for your user." });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders are listed." });
-        var giReceived = await _db.SalesGoodsIssueDocuments.AsNoTracking()
-            .AnyAsync(g => g.SalesOrderId == o.Id && g.Status == SalesGoodsIssueDocument.StatusReceived, ct)
+        var giDispatchedLines = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+            .AnyAsync(g => g.SalesOrderId == o.Id
+                && (g.DispatchStatus == SalesGoodsIssueDocument.DispatchSent
+                    || g.Status == SalesGoodsIssueDocument.StatusReceived), ct)
             .ConfigureAwait(false);
-        if (!giReceived)
-            return Json(new { success = false, message = "Sales goods issue must be received before delivery challan." });
+        if (!giDispatchedLines)
+            return Json(new { success = false, message = "Sales goods issue must be dispatched (sent) or received before delivery challan." });
+        var batchMapLines = await LoadLatestGiBatchBySalesOrderItemAsync(o.Id, ct).ConfigureAwait(false);
         var lines = o.Items
             .OrderBy(i => i.Id)
             .Select(i => new
@@ -213,7 +258,8 @@ public class DeliveryChallanController : Controller
                 materialDescription = i.MaterialDescription ?? "",
                 orderQuantity = i.OrderQuantity,
                 quantityUomId = i.QuantityUomId,
-                uomCode = i.QuantityUom != null ? i.QuantityUom.Code : ""
+                uomCode = i.QuantityUom != null ? i.QuantityUom.Code : "",
+                batch = batchMapLines.TryGetValue(i.Id, out var bLine) ? bLine : ""
             })
             .ToList();
         return Json(new
@@ -264,19 +310,30 @@ public class DeliveryChallanController : Controller
             .ConfigureAwait(false);
         if (o == null)
             return Json(new { success = false, message = "Sales order not found." });
+        var allPlantIdsPrep = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var allowedPrep = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsPrep)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(o.PlantId) || !allowedPrep.Contains(o.PlantId.Trim()))
+            return Json(new { success = false, message = "This sales order’s plant is not available for your user." });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders can create a delivery challan." });
-        var giReceived = await _db.SalesGoodsIssueDocuments.AsNoTracking()
-            .AnyAsync(g => g.SalesOrderId == o.Id && g.Status == SalesGoodsIssueDocument.StatusReceived, ct)
+        var giDispatchedPrep = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+            .AnyAsync(g => g.SalesOrderId == o.Id
+                && (g.DispatchStatus == SalesGoodsIssueDocument.DispatchSent
+                    || g.Status == SalesGoodsIssueDocument.StatusReceived), ct)
             .ConfigureAwait(false);
-        if (!giReceived)
-            return Json(new { success = false, message = "Sales goods issue must be received before delivery challan." });
+        if (!giDispatchedPrep)
+            return Json(new { success = false, message = "Sales goods issue must be dispatched (sent) or received before delivery challan." });
         var hasDc0 = await _db.DeliveryChallans.AsNoTracking()
             .AnyAsync(d => d.SalesOrderId == o.Id, ct)
             .ConfigureAwait(false);
         if (hasDc0)
             return Json(new { success = false, message = "This order already has a delivery challan." });
         var doc = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var batchMapPrep = await LoadLatestGiBatchBySalesOrderItemAsync(o.Id, ct).ConfigureAwait(false);
         var itemList = o.Items
             .OrderBy(i => i.Id)
             .Select(i => new
@@ -288,7 +345,7 @@ public class DeliveryChallanController : Controller
                 deliveryQuantity = i.OrderQuantity,
                 quantityUomId = i.QuantityUomId,
                 uomCode = i.QuantityUom != null ? i.QuantityUom.Code : "",
-                batch = ""
+                batch = batchMapPrep.TryGetValue(i.Id, out var bIt) ? bIt : ""
             })
             .ToList();
         return Json(new
@@ -317,9 +374,25 @@ public class DeliveryChallanController : Controller
             TempData["DcError"] = "Add at least one line with a material and delivery quantity.";
             return RedirectToAction(nameof(Index));
         }
+        if (model.SalesOrderId is not > 0)
+        {
+            TempData["DcError"] = "Select a sales order for this delivery challan.";
+            return RedirectToAction(nameof(Index));
+        }
         if (string.IsNullOrWhiteSpace(model.PlantId))
         {
             TempData["DcError"] = "Select a plant.";
+            return RedirectToAction(nameof(Index));
+        }
+        var allPlantIdsForUser = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var allowedPlants = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsForUser)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!allowedPlants.Contains(model.PlantId.Trim()))
+        {
+            TempData["DcError"] = "Selected plant is not allowed for your user.";
             return RedirectToAction(nameof(Index));
         }
         if (string.IsNullOrWhiteSpace(model.ShipToBusinessPartnerId))
@@ -346,24 +419,34 @@ public class DeliveryChallanController : Controller
         int? soId = model.SalesOrderId is int sid && sid > 0 ? sid : null;
         if (soId is int s)
         {
-            var st = await _db.SalesOrders.AsNoTracking()
+            var soRow = await _db.SalesOrders.AsNoTracking()
                 .Where(x => x.Id == s)
-                .Select(x => x.Status)
+                .Select(x => new { x.Status, x.PlantId })
                 .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false);
-            if (string.IsNullOrEmpty(st))
-                soId = null;
-            else if (st != SalesOrder.StatusConfirmed)
+            if (soRow == null)
+            {
+                TempData["DcError"] = "Linked sales order was not found.";
+                return RedirectToAction(nameof(Index));
+            }
+            if (soRow.Status != SalesOrder.StatusConfirmed)
             {
                 TempData["DcError"] = "The linked sales order is not confirmed.";
                 return RedirectToAction(nameof(Index));
             }
-            var giReceived = await _db.SalesGoodsIssueDocuments.AsNoTracking()
-                .AnyAsync(g => g.SalesOrderId == s && g.Status == SalesGoodsIssueDocument.StatusReceived, ct)
-                .ConfigureAwait(false);
-            if (!giReceived)
+            if (!string.Equals((soRow.PlantId ?? "").Trim(), (model.PlantId ?? "").Trim(), StringComparison.OrdinalIgnoreCase))
             {
-                TempData["DcError"] = "Sales goods issue must be received before delivery challan.";
+                TempData["DcError"] = "Sales order plant must match the challan plant.";
+                return RedirectToAction(nameof(Index));
+            }
+            var giDispatchedCreate = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+                .AnyAsync(g => g.SalesOrderId == s
+                    && (g.DispatchStatus == SalesGoodsIssueDocument.DispatchSent
+                        || g.Status == SalesGoodsIssueDocument.StatusReceived), ct)
+                .ConfigureAwait(false);
+            if (!giDispatchedCreate)
+            {
+                TempData["DcError"] = "Sales goods issue must be dispatched (sent) or received before delivery challan.";
                 return RedirectToAction(nameof(Index));
             }
         }
@@ -430,6 +513,10 @@ public class DeliveryChallanController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        var batchBySoItemId = soId is int soIntForBatch
+            ? await LoadLatestGiBatchBySalesOrderItemAsync(soIntForBatch, ct).ConfigureAwait(false)
+            : new Dictionary<int, string>();
+
         var strategy = _db.Database.CreateExecutionStrategy();
         try
         {
@@ -441,6 +528,23 @@ public class DeliveryChallanController : Controller
                 {
                     var dcNum = await _documentNumbers.AllocateAsync(ModuleKeys.DeliveryChallan, ct).ConfigureAwait(false);
 
+                    int? driverId = model.DriverId is > 0 ? model.DriverId : null;
+                    int? vehicleId = model.VehicleId is > 0 ? model.VehicleId : null;
+                    if (driverId is int did)
+                    {
+                        var okD = await _db.Drivers.AsNoTracking()
+                            .AnyAsync(x => x.Id == did && x.IsActive, ct)
+                            .ConfigureAwait(false);
+                        if (!okD) driverId = null;
+                    }
+                    if (vehicleId is int vid)
+                    {
+                        var okV = await _db.Vehicles.AsNoTracking()
+                            .AnyAsync(x => x.Id == vid && x.IsActive, ct)
+                            .ConfigureAwait(false);
+                        if (!okV) vehicleId = null;
+                    }
+
                     var header = new DeliveryChallan
                     {
                         DeliveryChallanNumber = dcNum,
@@ -450,11 +554,20 @@ public class DeliveryChallanController : Controller
                         ShipToDisplayName = string.IsNullOrWhiteSpace(shipName) ? null : shipName![..Math.Min(500, shipName.Length)],
                         DocumentDate = docDate,
                         SalesOrderId = soId,
-                        ReferenceSalesOrderNumber = string.IsNullOrEmpty(refSoNum) ? null : refSoNum[..Math.Min(40, refSoNum.Length)]
+                        ReferenceSalesOrderNumber = string.IsNullOrEmpty(refSoNum) ? null : refSoNum[..Math.Min(40, refSoNum.Length)],
+                        DriverId = driverId,
+                        VehicleId = vehicleId
                     };
 
                     foreach (var lb in lineBuild)
                     {
+                        string? batchCell = null;
+                        if (lb.SItem is int sItemKey && batchBySoItemId.TryGetValue(sItemKey, out var bsSum))
+                        {
+                            var t = bsSum.Trim();
+                            if (t.Length > 0)
+                                batchCell = t.Length <= 64 ? t : t[..64];
+                        }
                         header.Items.Add(new DeliveryChallanItem
                         {
                             ReferenceSalesOrderNumber = lb.LineRef is { } lr ? lr[..Math.Min(40, lr.Length)] : null,
@@ -462,7 +575,7 @@ public class DeliveryChallanController : Controller
                             MaterialDescription = lb.MDesc,
                             DeliveryQuantity = lb.Qty,
                             QuantityUomId = lb.Uom,
-                            Batch = null,
+                            Batch = batchCell,
                             SalesOrderItemId = lb.SItem
                         });
                     }
@@ -510,6 +623,29 @@ public class DeliveryChallanController : Controller
             .Include(x => x.Items)!.ThenInclude(i => i.QuantityUom)
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             .ConfigureAwait(false);
+
+    /// <summary>Latest sales goods issue line batch text keyed by sales order item id (from dispatch / send).</summary>
+    private async Task<Dictionary<int, string>> LoadLatestGiBatchBySalesOrderItemAsync(int salesOrderId, CancellationToken ct)
+    {
+        var map = new Dictionary<int, string>();
+        var gi = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+            .Include(g => g.Lines)
+            .Where(g => g.SalesOrderId == salesOrderId)
+            .OrderByDescending(g => g.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (gi?.Lines == null)
+            return map;
+        foreach (var gl in gi.Lines)
+        {
+            if (gl.SalesOrderItemId is not > 0 || string.IsNullOrWhiteSpace(gl.BatchSummary))
+                continue;
+            var key = gl.SalesOrderItemId.Value;
+            if (!map.ContainsKey(key))
+                map[key] = gl.BatchSummary.Trim();
+        }
+        return map;
+    }
 
     private static string SafePdfName(string number, string kind)
     {

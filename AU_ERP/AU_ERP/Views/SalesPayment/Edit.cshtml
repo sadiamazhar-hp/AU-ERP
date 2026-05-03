@@ -2,7 +2,7 @@
 @using AU_ERP.Models
 @using System.Globalization
 @{
-    ViewData["Title"] = "Update payment";
+    ViewData["Title"] = "Payments";
     string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.CurrentCulture);
     var dealer = Model.DealerDisplayName ?? "—";
 }
@@ -16,7 +16,7 @@
 }
 
 <div class="sp-edit-page">
-    <h1 class="h4 mb-3">Update payment</h1>
+    <h1 class="h4 mb-3">Payments</h1>
     <p class="text-secondary small mb-4">
         <a asp-action="Index">← Back to list</a>
     </p>

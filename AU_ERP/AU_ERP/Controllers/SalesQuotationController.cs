@@ -19,19 +19,22 @@ public class SalesQuotationController : Controller
     private readonly IConfiguration _configuration;
     private readonly DocumentNumberAllocator _documentNumbers;
     private readonly CompanyInfoService _companyInfo;
+    private readonly EmporiumWalkInCustomerService _emporiumWalkIn;
 
     public SalesQuotationController(
         AppDbContext db,
         IEmailService emailService,
         IConfiguration configuration,
         DocumentNumberAllocator documentNumbers,
-        CompanyInfoService companyInfo)
+        CompanyInfoService companyInfo,
+        EmporiumWalkInCustomerService emporiumWalkIn)
     {
         _db = db;
         _emailService = emailService;
         _configuration = configuration;
         _documentNumbers = documentNumbers;
         _companyInfo = companyInfo;
+        _emporiumWalkIn = emporiumWalkIn;
     }
 
     /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
@@ -107,6 +110,23 @@ public class SalesQuotationController : Controller
                 shipToAddress = addr
             }
         });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<JsonResult> CreateWalkInCustomer(
+        [FromForm] string? firstName,
+        [FromForm] string? lastName,
+        [FromForm] string? address,
+        [FromForm] string? mobile,
+        CancellationToken ct = default)
+    {
+        var (ok, err, bpId, displayName) = await _emporiumWalkIn
+            .CreateWalkInCustomerAsync(User, firstName, lastName, address, mobile, ct)
+            .ConfigureAwait(false);
+        if (!ok)
+            return Json(new { success = false, message = err ?? "Could not create customer." });
+        return Json(new { success = true, bpId, displayName });
     }
 
     [HttpGet]
@@ -255,6 +275,23 @@ public class SalesQuotationController : Controller
             .ThenBy(sq => sq.QuotationNumber)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+
+        var linkedStatusByQid = new Dictionary<int, string>();
+        if (list.Count > 0)
+        {
+            var qIds = list.Select(sq => sq.Id).ToList();
+            var orderRows = await _db.SalesOrders.AsNoTracking()
+                .Where(o => o.SalesQuotationId != null && qIds.Contains(o.SalesQuotationId.Value))
+                .Select(o => new { o.SalesQuotationId, o.Id, o.Status })
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            foreach (var g in orderRows.GroupBy(r => r.SalesQuotationId!.Value))
+            {
+                var pick = g.OrderBy(r => r.Id).First();
+                linkedStatusByQid[g.Key] = pick.Status;
+            }
+        }
+
         var customers = await _db.BusinessPartnerMasterSamples.AsNoTracking()
             .OrderBy(c => c.FullName)
             .ToListAsync(ct)
@@ -269,9 +306,13 @@ public class SalesQuotationController : Controller
         ViewBag.DistributionChannels = channels;
         ViewBag.Customers = customers;
         ViewBag.ConfigurationSchemas = schemas;
+        var walkInSchemaId = await _emporiumWalkIn.GetWalkInSalesSchemaIdAsync(ct).ConfigureAwait(false);
+        ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
+        ViewBag.IsEmporiumWalkInUser = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
         var vm = new SalesQuotationListVm
         {
             Items = list,
+            LinkedSalesOrderStatusByQuotationId = linkedStatusByQid,
             Q = string.IsNullOrEmpty(qq) ? null : qq,
             Status = string.IsNullOrEmpty(st) ? "All" : st,
             PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,

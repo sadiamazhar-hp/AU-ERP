@@ -22,6 +22,8 @@
     int? listDcId = Model?.DistributionChannelId;
     var stSel = listStatus;
     var soDetailsModalUrlPlaceholder = Url.Action("DetailsModal", "SalesOrder", new { id = 900000001 }) ?? "";
+    var walkInSchemaId = ViewBag.WalkInSchemaId as int? ?? 0;
+    var isEmporiumWalkIn = ViewBag.IsEmporiumWalkInUser as bool? == true;
 }
 
 @section Styles {
@@ -66,6 +68,9 @@
     .bom-mat-picker-item { padding: 6px 10px; font-size: .78rem; cursor: pointer; border-bottom: 1px solid #eee; }
     .bom-mat-picker-item:hover { background: var(--sap-selected, #b3d7ff); }
     .bom-mat-picker-empty { padding: 8px 10px; font-size: .75rem; color: #666; }
+    .so-customer-combo .so-customer-dropdown { font-size: .82rem; }
+    .so-customer-item { cursor: pointer; }
+    .so-customer-item:hover, .so-customer-item:focus { background: var(--sap-selected, #b3d7ff); outline: none; }
     .so-line-charges { display: flex; flex-wrap: wrap; gap: 0.35rem; max-width: 14rem; font-size: .68rem; line-height: 1.2; }
     .so-line-charges label { margin: 0; white-space: nowrap; }
     .so-doc-charges { display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: .75rem; }
@@ -158,7 +163,7 @@
                 else foreach (var o in list)
                 {
                     var isOpen = o.Status == SalesOrder.StatusOpen;
-                    var deleteConfirm = isOpen ? "Delete this open order?" : "Delete this confirmed order? This cannot be undone.";
+                    var deleteConfirm = "Delete this open order?";
                     var hasDc = Model?.SalesOrderIdsWithChallan?.Contains(o.Id) ?? false;
                     var giStatus = Model?.SalesOrderGiStatusById != null && Model.SalesOrderGiStatusById.TryGetValue(o.Id, out var stGi)
                         ? (stGi ?? "")
@@ -240,14 +245,21 @@
                                     }
                                 }
                                 <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "SalesOrder", new { id = o.Id })" title="Download order as PDF"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
-                                <form asp-action="Delete" asp-controller="SalesOrder" asp-route-id="@o.Id" method="post" class="d-inline" onsubmit="return confirm('@deleteConfirm');">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="returnQ" value="@listQ" />
-                                    <input type="hidden" name="returnStatus" value="@listStatus" />
-                                    <input type="hidden" name="returnPlantId" value="@listPlantId" />
-                                    <input type="hidden" name="returnDistributionChannelId" value="@(listDcId?.ToString() ?? "")" />
-                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i> Delete</button>
-                                </form>
+                                @if (isOpen)
+                                {
+                                    <form asp-action="Delete" asp-controller="SalesOrder" asp-route-id="@o.Id" method="post" class="d-inline" onsubmit="return confirm('@deleteConfirm');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="returnQ" value="@listQ" />
+                                        <input type="hidden" name="returnStatus" value="@listStatus" />
+                                        <input type="hidden" name="returnPlantId" value="@listPlantId" />
+                                        <input type="hidden" name="returnDistributionChannelId" value="@(listDcId?.ToString() ?? "")" />
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i> Delete</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Only open orders can be deleted"><i class="bi bi-trash"></i> Delete</button>
+                                }
                             </div>
                         </td>
                     </tr>
@@ -356,8 +368,16 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small mb-0" for="soCustomer">Customer name (Sold to party) <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" name="CustomerBusinessPartnerId" id="soCustomer" required>
+                            <label class="form-label small mb-0" for="soCustomerSearch">Customer (Sold to party) <span class="text-danger">*</span></label>
+                            <input type="hidden" name="CustomerBusinessPartnerId" id="soCustomer" value="" required autocomplete="off" />
+                            @if (isEmporiumWalkIn)
+                            {
+                                <div class="d-flex flex-wrap align-items-center gap-2 border rounded px-2 py-2 bg-light mt-1">
+                                    <span class="text-secondary small flex-grow-1" id="soWalkInCustomerSummary" style="min-height:1.35rem;">No customer selected.</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary text-nowrap" id="soOpenWalkInCustomerBtn">Add customer</button>
+                                </div>
+                            }
+                            <select id="soCustomerCatalog" class="d-none" aria-hidden="true" tabindex="-1">
                                 <option value="">— Select —</option>
                                 @foreach (var c in customers)
                                 {
@@ -365,6 +385,10 @@
                                     <option value="@c.BPID" data-ship="@ship">@(c.FullName ?? c.BPID)</option>
                                 }
                             </select>
+                            <div class="so-customer-combo position-relative@(isEmporiumWalkIn ? " mt-2" : " mt-1")">
+                                <input type="text" class="form-control form-control-sm" id="soCustomerSearch" placeholder="Search customer (name, ID, address)…" autocomplete="off" />
+                                <div id="soCustomerDropdown" class="so-customer-dropdown border rounded bg-white shadow-sm" style="display: none;" role="listbox"></div>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small mb-0" for="soAddr">Address (Ship to party) <span class="text-danger">*</span></label>
@@ -382,14 +406,32 @@
                         </div>
                         <div class="col-12 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="soSchema">Configuration schema <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" id="soSchema" required disabled>
-                                <option value="">— Select —</option>
-                                @foreach (var s in schemas)
-                                {
-                                    <option value="@s.Id">@s.Title</option>
-                                }
-                            </select>
-                            <input type="hidden" name="ConfigurationSchemaId" id="soSchemaHidden" />
+                            @if (isEmporiumWalkIn && walkInSchemaId > 0)
+                            {
+                                <input type="text" class="form-control form-control-sm" id="soSchemaReadonlyLabel" readonly tabindex="-1" value="WalkIn" />
+                                <select class="form-select form-select-sm d-none" id="soSchema" required disabled aria-hidden="true">
+                                    <option value="">— Select —</option>
+                                    @foreach (var s in schemas)
+                                    {
+                                        if (s.Id == walkInSchemaId)
+                                        { <option value="@s.Id" selected>@s.Title</option> }
+                                        else
+                                        { <option value="@s.Id">@s.Title</option> }
+                                    }
+                                </select>
+                                <input type="hidden" name="ConfigurationSchemaId" id="soSchemaHidden" value="@walkInSchemaId" />
+                            }
+                            else
+                            {
+                                <select class="form-select form-select-sm" id="soSchema" required disabled>
+                                    <option value="">— Select —</option>
+                                    @foreach (var s in schemas)
+                                    {
+                                        <option value="@s.Id">@s.Title</option>
+                                    }
+                                </select>
+                                <input type="hidden" name="ConfigurationSchemaId" id="soSchemaHidden" />
+                            }
                         </div>
                         <div class="col-12 col-lg-5" id="soChargeSelectRow">
                             <div class="row g-2">
@@ -456,6 +498,45 @@
     </div>
 </div>
 
+@if (isEmporiumWalkIn)
+{
+    <div class="modal fade walk-in-add-customer-modal" id="soWalkInAddCustomerModal" tabindex="-1" aria-labelledby="soWalkInAddCustomerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title" id="soWalkInAddCustomerModalLabel">Add walk-in customer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0 text-secondary" for="soWkFirst">First name</label>
+                            <input class="form-control form-control-sm" id="soWkFirst" maxlength="120" autocomplete="given-name" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0 text-secondary" for="soWkLast">Last name</label>
+                            <input class="form-control form-control-sm" id="soWkLast" maxlength="120" autocomplete="family-name" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0 text-secondary" for="soWkAddr">Address</label>
+                            <input class="form-control form-control-sm" id="soWkAddr" maxlength="2000" autocomplete="street-address" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-0 text-secondary" for="soWkMobile">Mobile number</label>
+                            <input class="form-control form-control-sm" id="soWkMobile" maxlength="80" inputmode="tel" autocomplete="tel" />
+                        </div>
+                    </div>
+                    <span class="text-danger small d-block mt-2" id="soWkErr" style="display:none;"></span>
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="soWkCreateBtn">Create customer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <div class="modal fade" id="soViewModal" tabindex="-1" aria-labelledby="soViewModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -512,6 +593,46 @@
         const schemaUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SchemaDetails", "SalesOrder") ?? ""));
         const soOrderDataBase = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("OrderData", "SalesOrder", new { id = 0 }) ?? ""));
         const soCustomerProfileUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CustomerCommercialProfile", "SalesOrder") ?? ""));
+        const soEmporiumWalkIn = @(isEmporiumWalkIn ? "true" : "false");
+        const soWalkInSchemaId = @walkInSchemaId;
+        const soCreateWalkInUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("CreateWalkInCustomer", "SalesOrder") ?? ""));
+        (function ensureSoWalkInAddCustomerModalOnBody() {
+            var el = document.getElementById("soWalkInAddCustomerModal");
+            if (!el) return;
+            function moveToBodyEnd() {
+                document.body.appendChild(el);
+            }
+            function bumpZ() {
+                el.style.setProperty("z-index", "100070", "important");
+            }
+            el.addEventListener("show.bs.modal", function () {
+                moveToBodyEnd();
+                requestAnimationFrame(bumpZ);
+            });
+            el.addEventListener("shown.bs.modal", bumpZ);
+            if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", moveToBodyEnd);
+            else moveToBodyEnd();
+        })();
+        function soWalkInCustomerModalGet() {
+            var el = document.getElementById("soWalkInAddCustomerModal");
+            if (!el || !window.bootstrap) return null;
+            return bootstrap.Modal.getOrCreateInstance(el, { backdrop: false, keyboard: true });
+        }
+        function soUpdateWalkInCustomerSummary() {
+            var sum = document.getElementById("soWalkInCustomerSummary");
+            if (!sum) return;
+            var valEl = document.getElementById("soCustomer");
+            var cat = document.getElementById("soCustomerCatalog");
+            var id = (valEl && valEl.value) || "";
+            if (!id) { sum.textContent = "No customer selected."; return; }
+            var label = id;
+            if (cat) {
+                for (var i = 0; i < cat.options.length; i++) {
+                    if (cat.options[i].value === id) { label = (cat.options[i].textContent || "").trim() || id; break; }
+                }
+            }
+            sum.textContent = label;
+        }
         const soQuotationListUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("AvailableSalesQuotations", "SalesOrder") ?? ""));
         const soQuotationItemsUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("SalesQuotationItems", "SalesOrder") ?? ""));
         const soOpenEditId = @Html.Raw(openEditId is int oei ? oei.ToString() : "null");
@@ -539,12 +660,17 @@
             schemaCharges = d.schemaCharges || [];
             if (h.plantId && document.getElementById("soPlant")) document.getElementById("soPlant").value = h.plantId;
             if (h.distributionChannelId != null && document.getElementById("soDc")) document.getElementById("soDc").value = String(h.distributionChannelId);
-            if (document.getElementById("soSchema")) document.getElementById("soSchema").value = h.configurationSchemaId != null && h.configurationSchemaId !== "" ? String(h.configurationSchemaId) : "";
+            if (document.getElementById("soSchema")) {
+                if (soEmporiumWalkIn && soWalkInSchemaId > 0) document.getElementById("soSchema").value = String(soWalkInSchemaId);
+                else document.getElementById("soSchema").value = h.configurationSchemaId != null && h.configurationSchemaId !== "" ? String(h.configurationSchemaId) : "";
+            }
             if (h.orderDate && document.getElementById("soQd")) document.getElementById("soQd").value = h.orderDate;
             if (h.requestedDeliveryDate && document.getElementById("soVd")) document.getElementById("soVd").value = h.requestedDeliveryDate;
             if (document.getElementById("soNum")) document.getElementById("soNum").value = h.salesOrderNumber || "";
             if (document.getElementById("soModalTitle")) document.getElementById("soModalTitle").textContent = "Edit — " + (h.salesOrderNumber || "");
             if (document.getElementById("soCustomer")) document.getElementById("soCustomer").value = h.customerBusinessPartnerId || "";
+            soSyncCustomerSearchFromValue();
+            soUpdateWalkInCustomerSummary();
             if (document.getElementById("soAddr")) document.getElementById("soAddr").value = h.shipToAddress || "";
             if (document.getElementById("soItemChargeColumnIds")) document.getElementById("soItemChargeColumnIds").value = h.itemChargeColumnIds || "";
             if (document.getElementById("soQuotationLevelChargeIds")) document.getElementById("soQuotationLevelChargeIds").value = h.quotationLevelChargeIds || "";
@@ -638,6 +764,39 @@
             if (plantHidden) plantHidden.value = plantSel ? (plantSel.value || "") : "";
             if (dcHidden) dcHidden.value = dcSel ? (dcSel.value || "") : "";
             if (schemaHidden) schemaHidden.value = schemaSel ? (schemaSel.value || "") : "";
+        }
+        function applySoCustomerCommercialProfile(customerId) {
+            if (!customerId || !soCustomerProfileUrl) return;
+            fetch(soCustomerProfileUrl + (soCustomerProfileUrl.indexOf("?") >= 0 ? "&" : "?") + "bpId=" + encodeURIComponent(customerId))
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success || !res.profile) return;
+                    var p = res.profile;
+                    if (document.getElementById("soPlant") && p.plantId) document.getElementById("soPlant").value = p.plantId;
+                    if (document.getElementById("soDc") && p.distributionChannelId != null) document.getElementById("soDc").value = String(p.distributionChannelId);
+                    if (document.getElementById("soDc") && (!p.distributionChannelId) && p.distributionChannel) {
+                        var dcSel = document.getElementById("soDc");
+                        var want = String(p.distributionChannel || "").trim().toLowerCase();
+                        if (want && dcSel) {
+                            for (var i = 0; i < dcSel.options.length; i++) {
+                                var opt = dcSel.options[i];
+                                if ((opt.textContent || "").trim().toLowerCase() === want) { dcSel.value = opt.value; break; }
+                            }
+                        }
+                    }
+                    if (soEmporiumWalkIn && soWalkInSchemaId > 0) {
+                        if (document.getElementById("soSchema")) {
+                            document.getElementById("soSchema").value = String(soWalkInSchemaId);
+                            loadSchema(String(soWalkInSchemaId));
+                        }
+                    } else if (document.getElementById("soSchema") && p.configurationSchemaId != null) {
+                        document.getElementById("soSchema").value = String(p.configurationSchemaId);
+                        loadSchema(String(p.configurationSchemaId));
+                    }
+                    if (document.getElementById("soAddr") && p.shipToAddress) document.getElementById("soAddr").value = p.shipToAddress;
+                    syncHiddens();
+                    soUpdateWalkInCustomerSummary();
+                });
         }
         function readLineValObj(tr) {
             var o = {};
@@ -871,19 +1030,61 @@
         document.addEventListener("focusin", function (e) { if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search") || !e.target.closest(".so-fert-picker")) return; soFertFetch(e.target); });
         var _fertT = 0;
         document.addEventListener("input", function (e) { if (!e.target.classList || !e.target.classList.contains("bom-mat-picker-search") || !e.target.closest(".so-fert-picker")) return; clearTimeout(_fertT); var inp = e.target; _fertT = setTimeout(function () { soFertFetch(inp); }, 250); });
-        function soClose() { document.querySelectorAll(".so-fert-picker .bom-mat-picker-dropdown.show").forEach(function (d) { d.classList.remove("show"); d.innerHTML = ""; }); }
+        function soClearFertDropdownLayout(dd) {
+            if (!dd) return;
+            ["top", "left", "width", "maxHeight"].forEach(function (k) { dd.style.removeProperty(k); });
+        }
+        function soPositionFertDropdown(searchInput, dd) {
+            if (!searchInput || !dd || !dd.classList.contains("show")) return;
+            var r = searchInput.getBoundingClientRect();
+            var gap = 2;
+            var maxH = Math.max(80, Math.min(220, window.innerHeight - r.bottom - gap - 12));
+            dd.style.top = (r.bottom + gap) + "px";
+            dd.style.left = r.left + "px";
+            dd.style.width = r.width + "px";
+            dd.style.maxHeight = maxH + "px";
+        }
+        function soClose() {
+            document.querySelectorAll(".so-fert-picker .bom-mat-picker-dropdown.show").forEach(function (d) {
+                soClearFertDropdownLayout(d);
+                d.classList.remove("show");
+                d.innerHTML = "";
+            });
+        }
         function soFertFetch(searchInput) {
             var w = searchInput && searchInput.closest(".so-fert-picker");
             if (!w) return;
             var dd = w.querySelector(".bom-mat-picker-dropdown"); if (!dd) return;
             fetch(soFertBuildUrl(searchInput.value)).then(function (r) { return r.json(); }).then(function (d) {
-                if (!d || !d.success) { dd.innerHTML = "<div class=\"bom-mat-picker-empty\">Error</div>"; dd.classList.add("show"); return; }
+                if (!d || !d.success) {
+                    dd.innerHTML = "<div class=\"bom-mat-picker-empty\">Error</div>";
+                    dd.classList.add("show");
+                    soPositionFertDropdown(searchInput, dd);
+                    return;
+                }
                 var its = d.items || [];
                 if (!its.length) dd.innerHTML = "<div class=\"bom-mat-picker-empty\">No matches</div>";
                 else dd.innerHTML = its.map(function (it) { return "<div class=\"bom-mat-picker-item\" data-n=\"" + esc(it.n) + "\" data-d=\"" + esc(it.d) + "\"><strong>" + esc(it.n) + "</strong> <span class=\"text-muted\">" + esc(it.d) + "</span></div>"; }).join("");
                 dd.classList.add("show");
+                soPositionFertDropdown(searchInput, dd);
             });
         }
+        (function wireSoFertDropdownReposition() {
+            var modal = document.getElementById("addSalesOrderModal");
+            if (!modal) return;
+            function refit() {
+                document.querySelectorAll("#addSalesOrderModal .so-fert-picker .bom-mat-picker-dropdown.show").forEach(function (dd) {
+                    var wrap = dd.closest(".so-fert-picker");
+                    var inp = wrap && wrap.querySelector(".bom-mat-picker-search");
+                    soPositionFertDropdown(inp, dd);
+                });
+            }
+            var mb = modal.querySelector(".modal-body");
+            if (mb) mb.addEventListener("scroll", refit, true);
+            var tw = modal.querySelector(".so-items-table-wrap");
+            if (tw) tw.addEventListener("scroll", refit, true);
+            window.addEventListener("resize", refit);
+        })();
         document.addEventListener("click", function (e) {
             var it = e.target.closest(".so-fert-picker .bom-mat-picker-item");
             if (!it) { if (!e.target.closest(".so-fert-picker")) soClose(); return; }
@@ -892,7 +1093,7 @@
             var hid = w.querySelector(".so-matno"), s = w.querySelector(".bom-mat-picker-search");
             var n = it.getAttribute("data-n") || "", d0 = it.getAttribute("data-d") || "";
             if (hid) hid.value = n; if (s) s.value = n + (d0 ? " — " + d0 : "");
-            if (dd) { dd.classList.remove("show"); dd.innerHTML = ""; }
+            if (dd) { soClearFertDropdownLayout(dd); dd.classList.remove("show"); dd.innerHTML = ""; }
             var tr = w.closest("tr.so-item-row");
             uomFill(tr, n, d0);
         });
@@ -985,6 +1186,7 @@
             if (_soSkipFormReset) { _soSkipFormReset = false; return; }
             setSoFormToCreate();
             var f = document.getElementById("soForm"); if (f) f.reset();
+            if (typeof soHideCustomerDropdown === "function") soHideCustomerDropdown();
             document.getElementById("soQd") && (document.getElementById("soQd").value = defaults.today);
             document.getElementById("soVd") && (document.getElementById("soVd").value = defaults.twoW);
             document.getElementById("soPlant") && (document.getElementById("soPlant").value = "");
@@ -1009,8 +1211,20 @@
                 if (document.getElementById("soModalTitle")) document.getElementById("soModalTitle").textContent = "New sales order — " + (n || "");
             }).catch(function () { alert("Could not load next sales order number."); });
             soLoadQuotationOptions(null, null);
-            var sch = document.getElementById("soSchema") && document.getElementById("soSchema").value;
-            if (sch) loadSchema(sch); else loadSchema("");
+            if (soEmporiumWalkIn && soWalkInSchemaId > 0) {
+                if (document.getElementById("soPlant")) document.getElementById("soPlant").value = "Emp101";
+                if (document.getElementById("soDc")) document.getElementById("soDc").value = "2";
+                if (document.getElementById("soSchema")) document.getElementById("soSchema").value = String(soWalkInSchemaId);
+                if (document.getElementById("soCustomer")) document.getElementById("soCustomer").value = "";
+                if (document.getElementById("soCustomerSearch")) document.getElementById("soCustomerSearch").value = "";
+                soHideCustomerDropdown();
+                soUpdateWalkInCustomerSummary();
+                syncHiddens();
+                loadSchema(String(soWalkInSchemaId));
+            } else {
+                var sch = document.getElementById("soSchema") && document.getElementById("soSchema").value;
+                if (sch) loadSchema(sch); else loadSchema("");
+            }
         });
         (function init() {
             var soForm = document.getElementById("soForm");
@@ -1027,9 +1241,72 @@
             reindex();
             recalcFooter();
         });
-        document.getElementById("soCustomer") && document.getElementById("soCustomer").addEventListener("change", function () {
-            var customerId = this.value || "";
+        function soHideCustomerDropdown() {
+            var dd = document.getElementById("soCustomerDropdown");
+            if (!dd) return;
+            dd.style.display = "none";
+            dd.classList.remove("show");
+            dd.innerHTML = "";
+            ["top", "left", "width", "maxHeight"].forEach(function (k) { dd.style.removeProperty(k); });
+        }
+        function soPositionCustomerDropdown() {
+            var search = document.getElementById("soCustomerSearch");
+            var dd = document.getElementById("soCustomerDropdown");
+            if (!search || !dd || dd.style.display === "none") return;
+            var r = search.getBoundingClientRect();
+            var gap = 4;
+            var maxH = Math.max(120, Math.min(280, window.innerHeight - r.bottom - gap - 12));
+            dd.style.top = (r.bottom + gap) + "px";
+            dd.style.left = r.left + "px";
+            dd.style.width = r.width + "px";
+            dd.style.maxHeight = maxH + "px";
+            dd.classList.add("show");
+        }
+        function soRenderCustomerDropdown(filterText) {
+            var cat = document.getElementById("soCustomerCatalog");
+            var dd = document.getElementById("soCustomerDropdown");
+            if (!cat || !dd) return;
+            var q = (filterText || "").trim().toLowerCase();
+            var parts = ["<div class=\"so-customer-item px-2 py-1 border-bottom text-muted small\" role=\"option\" tabindex=\"0\" data-id=\"\">— Clear selection —</div>"];
+            var nShown = 0;
+            for (var i = 0; i < cat.options.length; i++) {
+                var opt = cat.options[i];
+                var v = (opt.value || "").trim();
+                if (!v) continue;
+                var t = (opt.textContent || "").trim().toLowerCase();
+                var ship = ((opt.getAttribute("data-ship") || "") + "").toLowerCase();
+                if (q && t.indexOf(q) < 0 && v.toLowerCase().indexOf(q) < 0 && ship.indexOf(q) < 0) continue;
+                parts.push("<div class=\"so-customer-item px-2 py-1 border-bottom small\" role=\"option\" tabindex=\"0\" data-id=\"" + esc(v) + "\">" + esc((opt.textContent || "").trim()) + "</div>");
+                nShown++;
+                if (nShown >= 80) break;
+            }
+            if (!nShown && q) dd.innerHTML = "<div class=\"px-2 py-2 text-muted small\">No matches</div>";
+            else dd.innerHTML = parts.join("");
+            dd.style.display = "block";
+            soPositionCustomerDropdown();
+        }
+        function soSyncCustomerSearchFromValue() {
+            var valEl = document.getElementById("soCustomer");
+            var search = document.getElementById("soCustomerSearch");
+            var cat = document.getElementById("soCustomerCatalog");
+            if (!valEl || !search || !cat) return;
+            var v = valEl.value || "";
+            if (!v) { search.value = ""; return; }
+            for (var i = 0; i < cat.options.length; i++) {
+                if (cat.options[i].value === v) {
+                    search.value = (cat.options[i].textContent || "").trim();
+                    return;
+                }
+            }
+            search.value = v;
+        }
+        function soCommitCustomerSelection(customerId) {
+            var valEl = document.getElementById("soCustomer");
+            if (valEl) valEl.value = customerId || "";
+            soSyncCustomerSearchFromValue();
+            soHideCustomerDropdown();
             if (!customerId) {
+                soUpdateWalkInCustomerSummary();
                 if (document.getElementById("soPlant")) document.getElementById("soPlant").value = "";
                 if (document.getElementById("soDc")) document.getElementById("soDc").value = "";
                 if (document.getElementById("soSchema")) document.getElementById("soSchema").value = "";
@@ -1037,32 +1314,89 @@
                 syncHiddens();
                 return;
             }
-            if (!soCustomerProfileUrl) return;
-            fetch(soCustomerProfileUrl + (soCustomerProfileUrl.indexOf("?") >= 0 ? "&" : "?") + "bpId=" + encodeURIComponent(customerId))
+            applySoCustomerCommercialProfile(customerId);
+        }
+        (function initSoCustomerCombo() {
+            var search = document.getElementById("soCustomerSearch");
+            var dd = document.getElementById("soCustomerDropdown");
+            if (!search || !dd) return;
+            var tOpen = 0;
+            search.addEventListener("focus", function () { soRenderCustomerDropdown(search.value); });
+            search.addEventListener("input", function () {
+                clearTimeout(tOpen);
+                tOpen = setTimeout(function () { soRenderCustomerDropdown(search.value); }, 120);
+            });
+            search.addEventListener("keydown", function (e) { if (e.key === "Escape") soHideCustomerDropdown(); });
+            dd.addEventListener("mousedown", function (e) { e.preventDefault(); });
+            dd.addEventListener("click", function (e) {
+                var item = e.target.closest(".so-customer-item");
+                if (!item) return;
+                soCommitCustomerSelection(item.getAttribute("data-id") || "");
+            });
+            document.addEventListener("mousedown", function (e) {
+                if (!e.target.closest(".so-customer-combo")) soHideCustomerDropdown();
+            });
+            var soModal = document.getElementById("addSalesOrderModal");
+            if (soModal) {
+                function refitDd() { if (dd.style.display !== "none") soPositionCustomerDropdown(); }
+                var mb = soModal.querySelector(".modal-body");
+                if (mb) mb.addEventListener("scroll", refitDd, true);
+                window.addEventListener("resize", refitDd);
+            }
+        })();
+        document.getElementById("soOpenWalkInCustomerBtn") && document.getElementById("soOpenWalkInCustomerBtn").addEventListener("click", function () {
+            ["soWkFirst", "soWkLast", "soWkAddr", "soWkMobile"].forEach(function (wid) { var e = document.getElementById(wid); if (e) e.value = ""; });
+            var wkErr = document.getElementById("soWkErr"); if (wkErr) { wkErr.style.display = "none"; wkErr.textContent = ""; }
+            var m = soWalkInCustomerModalGet(); if (m) m.show();
+        });
+        document.getElementById("soWkCreateBtn") && document.getElementById("soWkCreateBtn").addEventListener("click", function () {
+            if (!soCreateWalkInUrl) return;
+            var fn = (document.getElementById("soWkFirst") && document.getElementById("soWkFirst").value) || "";
+            var ln = (document.getElementById("soWkLast") && document.getElementById("soWkLast").value) || "";
+            var ad = (document.getElementById("soWkAddr") && document.getElementById("soWkAddr").value) || "";
+            var mb = (document.getElementById("soWkMobile") && document.getElementById("soWkMobile").value) || "";
+            var err = document.getElementById("soWkErr");
+            var tok = document.querySelector("#soForm input[name=\"__RequestVerificationToken\"]");
+            if (!tok || !tok.value) { if (err) { err.textContent = "Missing form token."; err.style.display = "inline"; } return; }
+            var body = new URLSearchParams();
+            body.append("__RequestVerificationToken", tok.value);
+            body.append("firstName", fn);
+            body.append("lastName", ln);
+            body.append("address", ad);
+            body.append("mobile", mb);
+            fetch(soCreateWalkInUrl, { method: "POST", body: body, headers: { "X-Requested-With": "XMLHttpRequest" } })
                 .then(function (r) { return r.json(); })
-                .then(function (res) {
-                    if (!res || !res.success || !res.profile) return;
-                    var p = res.profile;
-                    if (document.getElementById("soPlant") && p.plantId) document.getElementById("soPlant").value = p.plantId;
-                    if (document.getElementById("soDc") && p.distributionChannelId != null) document.getElementById("soDc").value = String(p.distributionChannelId);
-                    // Fallback: if API can't resolve to an ID but returns a name, try matching by option text.
-                    if (document.getElementById("soDc") && (!p.distributionChannelId) && p.distributionChannel) {
-                        var dcSel = document.getElementById("soDc");
-                        var want = String(p.distributionChannel || "").trim().toLowerCase();
-                        if (want) {
-                            for (var i = 0; i < dcSel.options.length; i++) {
-                                var opt = dcSel.options[i];
-                                if ((opt.textContent || "").trim().toLowerCase() === want) { dcSel.value = opt.value; break; }
-                            }
+                .then(function (d) {
+                    if (!d || !d.success) {
+                        if (err) { err.textContent = (d && d.message) ? d.message : "Could not create customer."; err.style.display = "inline"; }
+                        return;
+                    }
+                    if (err) { err.style.display = "none"; err.textContent = ""; }
+                    var valEl = document.getElementById("soCustomer");
+                    var cat = document.getElementById("soCustomerCatalog");
+                    if (valEl) valEl.value = d.bpId || "";
+                    if (cat && d.bpId) {
+                        var exists = false;
+                        for (var i = 0; i < cat.options.length; i++) { if (cat.options[i].value === d.bpId) { exists = true; break; } }
+                        if (!exists) {
+                            var o = document.createElement("option");
+                            o.value = d.bpId;
+                            o.textContent = d.displayName || d.bpId;
+                            o.setAttribute("data-ship", ad);
+                            cat.appendChild(o);
                         }
                     }
-                    if (document.getElementById("soSchema") && p.configurationSchemaId != null) {
-                        document.getElementById("soSchema").value = String(p.configurationSchemaId);
-                        loadSchema(String(p.configurationSchemaId));
+                    soSyncCustomerSearchFromValue();
+                    if (document.getElementById("soAddr")) document.getElementById("soAddr").value = ad;
+                    soUpdateWalkInCustomerSummary();
+                    var wkEl = document.getElementById("soWalkInAddCustomerModal");
+                    if (wkEl && window.bootstrap) {
+                        var wkInst = bootstrap.Modal.getInstance(wkEl);
+                        if (wkInst) wkInst.hide();
                     }
-                    if (document.getElementById("soAddr") && p.shipToAddress) document.getElementById("soAddr").value = p.shipToAddress;
-                    syncHiddens();
-                });
+                    applySoCustomerCommercialProfile(d.bpId);
+                })
+                .catch(function () { if (err) { err.textContent = "Request failed."; err.style.display = "inline"; } });
         });
         function soGridHasAnyItems() {
             var rows = Array.prototype.slice.call(document.querySelectorAll("#soItemsBody tr.so-item-row"));
@@ -1156,13 +1490,17 @@
             var h = d.header || {};
             if (document.getElementById("soSalesQuotationId")) document.getElementById("soSalesQuotationId").value = h.id ? String(h.id) : "";
             if (document.getElementById("soCustomer") && h.customerBusinessPartnerId) document.getElementById("soCustomer").value = h.customerBusinessPartnerId;
+            soSyncCustomerSearchFromValue();
+            soUpdateWalkInCustomerSummary();
             if (document.getElementById("soAddr")) document.getElementById("soAddr").value = h.shipToAddress || "";
             if (document.getElementById("soPlant") && h.plantId) document.getElementById("soPlant").value = h.plantId;
             if (document.getElementById("soDc") && h.distributionChannelId != null) document.getElementById("soDc").value = String(h.distributionChannelId);
             var rows = d.items || [];
-            if (document.getElementById("soSchema") && h.configurationSchemaId != null) {
-                document.getElementById("soSchema").value = String(h.configurationSchemaId);
-                loadSchema(String(h.configurationSchemaId), function () {
+            var schemaFromHeader = h.configurationSchemaId != null && h.configurationSchemaId !== "" ? String(h.configurationSchemaId) : "";
+            var schemaToUse = (soEmporiumWalkIn && soWalkInSchemaId > 0) ? String(soWalkInSchemaId) : schemaFromHeader;
+            if (document.getElementById("soSchema") && schemaToUse) {
+                document.getElementById("soSchema").value = schemaToUse;
+                loadSchema(schemaToUse, function () {
                     soApplyChargesFromQuotationHeader(h);
                     soPopulateItemsFromQuotationRows(rows);
                 });

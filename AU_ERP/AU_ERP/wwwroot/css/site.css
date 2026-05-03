@@ -851,6 +851,37 @@ body.modal-open:has(#salesOrderFilterModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+/* Emporium walk-in “Add customer” dialog — above #addQuotationModal / #addSalesOrderModal (100050); opened with backdrop:false */
+#sqWalkInAddCustomerModal.modal,
+#soWalkInAddCustomerModal.modal {
+  z-index: 100070 !important;
+}
+
+/* FERT material search dropdown in SQ/SO line modals: fixed layer above modal-body (which uses overflow-y:auto and clips absolute children). Top/left/width set in view JS. */
+#addQuotationModal .sq-fert-picker .bom-mat-picker-dropdown.show,
+#addSalesOrderModal .so-fert-picker .bom-mat-picker-dropdown.show {
+  position: fixed !important;
+  z-index: 100080 !important;
+  left: auto;
+  right: auto;
+  top: auto;
+  width: auto;
+  margin-top: 0;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
+#addQuotationModal .sq-customer-combo .sq-customer-dropdown.show,
+#addSalesOrderModal .so-customer-combo .so-customer-dropdown.show {
+  position: fixed !important;
+  z-index: 100085 !important;
+  left: auto;
+  right: auto;
+  top: auto;
+  width: auto;
+  margin-top: 0;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
 #addDeliveryChallanModal.dc-challan-modal.modal,
 #dcFilterModal.modal {
   z-index: 100050 !important;
@@ -862,6 +893,19 @@ body.modal-open:has(#salesOrderFilterModal.show) .modal-backdrop {
 body.modal-open:has(#addDeliveryChallanModal.show) .modal-backdrop,
 body.modal-open:has(#dcFilterModal.show) .modal-backdrop {
   z-index: 100040 !important;
+}
+
+/* Delivery challan — SO / material line pickers: fixed layer above modal-body and table scroll (position set in DeliveryChallan/Index script). */
+#addDeliveryChallanModal.dc-challan-modal .dc-so-line-picker .dc-dd.show,
+#addDeliveryChallanModal.dc-challan-modal .dc-ship-to-combo .dc-dd.show {
+  position: fixed !important;
+  z-index: 100090 !important;
+  left: auto;
+  right: auto;
+  top: auto;
+  width: auto;
+  margin-top: 0;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
 }
 
 /* Users — Add user modal (reparented to body; same stacking as BP/Stock). */

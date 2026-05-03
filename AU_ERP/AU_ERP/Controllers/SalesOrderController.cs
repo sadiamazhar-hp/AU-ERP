@@ -19,17 +19,20 @@ public class SalesOrderController : Controller
     private readonly SalesGoodsIssueService _salesGiService;
     private readonly DocumentNumberAllocator _documentNumbers;
     private readonly CompanyInfoService _companyInfo;
+    private readonly EmporiumWalkInCustomerService _emporiumWalkIn;
 
     public SalesOrderController(
         AppDbContext db,
         SalesGoodsIssueService salesGiService,
         DocumentNumberAllocator documentNumbers,
-        CompanyInfoService companyInfo)
+        CompanyInfoService companyInfo,
+        EmporiumWalkInCustomerService emporiumWalkIn)
     {
         _db = db;
         _salesGiService = salesGiService;
         _documentNumbers = documentNumbers;
         _companyInfo = companyInfo;
+        _emporiumWalkIn = emporiumWalkIn;
     }
 
     /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
@@ -105,6 +108,23 @@ public class SalesOrderController : Controller
                 shipToAddress = addr
             }
         });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<JsonResult> CreateWalkInCustomer(
+        [FromForm] string? firstName,
+        [FromForm] string? lastName,
+        [FromForm] string? address,
+        [FromForm] string? mobile,
+        CancellationToken ct = default)
+    {
+        var (ok, err, bpId, displayName) = await _emporiumWalkIn
+            .CreateWalkInCustomerAsync(User, firstName, lastName, address, mobile, ct)
+            .ConfigureAwait(false);
+        if (!ok)
+            return Json(new { success = false, message = err ?? "Could not create customer." });
+        return Json(new { success = true, bpId, displayName });
     }
 
     [HttpGet]
@@ -318,6 +338,9 @@ public class SalesOrderController : Controller
         ViewBag.DistributionChannels = channels;
         ViewBag.Customers = customers;
         ViewBag.ConfigurationSchemas = schemas;
+        var walkInSchemaId = await _emporiumWalkIn.GetWalkInSalesSchemaIdAsync(ct).ConfigureAwait(false);
+        ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
+        ViewBag.IsEmporiumWalkInUser = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
         var withDcIds = await _db.DeliveryChallans.AsNoTracking()
             .Where(d => d.SalesOrderId != null)
             .Select(d => d.SalesOrderId!.Value)
@@ -862,8 +885,14 @@ public class SalesOrderController : Controller
             .ConfigureAwait(false);
         if (existing != null)
         {
-            TempData["QuotationMessage"] = "A sales order already exists for this quotation. Open Sales Order to edit it.";
-            return RedirectToAction(nameof(Index), "SalesOrder", new { editId = existing.Id });
+            if (string.Equals(existing.Status, SalesOrder.StatusOpen, StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["QuotationMessage"] = "A sales order already exists for this quotation. Open Sales Order to edit it.";
+                return RedirectToAction(nameof(Index), "SalesOrder", new { editId = existing.Id });
+            }
+
+            TempData["QuotationError"] = "This quotation already has a confirmed sales order; a new sales order cannot be created from it.";
+            return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
         }
 
         string number;
@@ -973,6 +1002,11 @@ public class SalesOrderController : Controller
         if (o == null)
         {
             TempData["OrderError"] = "Sales order not found.";
+            return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
+        if (!string.Equals(o.Status, SalesOrder.StatusOpen, StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["OrderError"] = "Only open sales orders can be deleted.";
             return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
         }
         _db.SalesOrderItems.RemoveRange(o.Items);

@@ -21,6 +21,10 @@ public class DeliveryChallanCreateFormModel
     [MaxLength(40)]
     public string? ReferenceSalesOrderNumber { get; set; }
 
+    public int? DriverId { get; set; }
+
+    public int? VehicleId { get; set; }
+
     public List<DeliveryChallanItemFormRow> Items { get; set; } = new();
 }
 

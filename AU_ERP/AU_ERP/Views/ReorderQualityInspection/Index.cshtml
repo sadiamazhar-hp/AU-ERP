@@ -2,10 +2,42 @@
 @using System.Globalization
 @using AU_ERP.Models
 @{
-    ViewData["Title"] = "Reorder quality inspection";
+    ViewData["Title"] = "ROD Inspection";
+    var pendingCt = Model.Items.Count(x =>
+        string.Equals(x.Status ?? "", SalesReturnQualityInspection.StatusPending, StringComparison.OrdinalIgnoreCase));
+    var completedCt = Model.Items.Count - pendingCt;
 }
 
-<div class="py-3">
+@section Styles {
+    <style>
+        .rqi-page { color: var(--bs-body-color, #212529); }
+        .rqi-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+        .rqi-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--bs-emphasis-color, #212529); margin: 0 0 .25rem 0; }
+        .rqi-hero p { margin: 0; color: var(--bs-secondary-color, #6c757d); font-size: .9rem; max-width: 42rem; }
+        .rqi-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+        @@media (max-width: 576px) { .rqi-stats { grid-template-columns: 1fr; } }
+        .rqi-stat { background: #fff; border: 1px solid var(--bs-border-color, #dee2e6); border-radius: .375rem; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); border-top: 3px solid #0d6efd; }
+        .rqi-stat.rqi-stat-done { border-top-color: #198754; }
+        .rqi-stat.rqi-stat-open { border-top-color: #fd7e14; }
+        .rqi-stat .label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--bs-secondary-color, #6c757d); text-transform: uppercase; }
+        .rqi-stat .val { font-size: 1.45rem; font-weight: 600; line-height: 1.2; margin-top: .2rem; }
+        .rqi-card { background: #fff; border: 1px solid var(--bs-border-color, #dee2e6); border-radius: .375rem; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,.06); overflow: hidden; }
+        .rqi-table-wrap { overflow-x: auto; }
+        .rqi-table { width: 100%; border-collapse: collapse; font-size: .875rem; margin: 0; }
+        .rqi-table thead th { background: #354a5e; color: #fff; font-weight: 500; padding: .55rem .75rem; text-align: left; white-space: nowrap; border: none; }
+        .rqi-table tbody td { border: 1px solid #e9ecef; padding: .5rem .75rem; vertical-align: middle; }
+        .rqi-table tbody tr:nth-child(even) { background: #f8f9fa; }
+        .rqi-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
+        .rqi-badge-pending { background: #fff3cd; color: #664d03; }
+        .rqi-badge-done { background: #d1e7dd; color: #0f5132; }
+        .rqi-actions { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: flex-end; }
+        #rqiViewModal .modal-content { box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.2); border: 1px solid rgba(0,0,0,.12); }
+        #rqiViewModal.rqi-view-no-backdrop { z-index: 1060; }
+        #rqiViewModal .rqi-view-loading { padding: 2rem; text-align: center; color: #6c757d; }
+    </style>
+}
+
+<div class="rqi-page py-3">
     @if (TempData["RqiError"] is string err && !string.IsNullOrWhiteSpace(err))
     {
         <div class="alert alert-danger py-2 mb-3" role="alert">@err</div>
@@ -15,26 +47,37 @@
         <div class="alert alert-success py-2 mb-3" role="status">@ok</div>
     }
 
-    <h1 class="h4 mb-3">Sales return quality inspection</h1>
-    <p class="text-secondary small mb-3">Documents created when a sales return is saved. Complete inspection to post stock splits and close the invoice as returned.</p>
+    <div class="rqi-hero">
+        <div>
+            <h1>ROD Inspection</h1>
+            <p>Sales return quality inspections created when a return is saved. Complete a pending document to post stock splits and close the invoice; completed records stay available for review.</p>
+        </div>
+    </div>
 
-    <div class="table-responsive border rounded bg-white">
-        <table class="table table-sm table-striped mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>QI No.</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Invoice</th>
-                    <th>Return order</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
+    <div class="rqi-stats">
+        <div class="rqi-stat"><div class="label">Total</div><div class="val">@Model.Items.Count</div></div>
+        <div class="rqi-stat rqi-stat-open"><div class="label">Pending</div><div class="val">@pendingCt</div></div>
+        <div class="rqi-stat rqi-stat-done"><div class="label">Completed</div><div class="val">@completedCt</div></div>
+    </div>
+
+    <div class="rqi-card">
+        <div class="rqi-table-wrap">
+            <table class="rqi-table">
+                <thead>
+                    <tr>
+                        <th>QI No.</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Invoice</th>
+                        <th>Return order</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
                 @if (Model.Items.Count == 0)
                 {
                     <tr>
-                        <td colspan="6" class="text-secondary p-3">No quality inspections yet.</td>
+                        <td colspan="6" class="text-secondary p-4 text-center">No quality inspections yet.</td>
                     </tr>
                 }
                 else
@@ -45,26 +88,123 @@
                         var isPending = string.Equals(st, SalesReturnQualityInspection.StatusPending, StringComparison.OrdinalIgnoreCase);
                         <tr>
                             <td><strong>@row.DocumentNumber</strong></td>
-                            <td>@row.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
+                            <td class="text-nowrap">@row.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
                             <td>
                                 @if (isPending)
                                 {
-                                    <span class="badge text-bg-warning text-dark">@st</span>
+                                    <span class="rqi-badge rqi-badge-pending">@st</span>
                                 }
                                 else
                                 {
-                                    <span class="badge text-bg-secondary">@st</span>
+                                    <span class="rqi-badge rqi-badge-done">@st</span>
                                 }
                             </td>
                             <td>@row.InvoiceDocumentNumber</td>
                             <td>@row.ReturnOrderDocumentNumber</td>
                             <td class="text-end">
-                                <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@row.QiId">Open</a>
+                                <div class="rqi-actions">
+                                    @if (isPending)
+                                    {
+                                        <a class="btn btn-sm btn-primary" asp-action="Details" asp-route-id="@row.QiId">Open</a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary rqi-btn-view"
+                                                data-rqi-read-url="@Url.Action("ReadOnlyPartial", "ReorderQualityInspection", new { id = row.QiId })"
+                                                data-rqi-details-url="@Url.Action("Details", "ReorderQualityInspection", new { id = row.QiId })"
+                                                data-rqi-doc="@row.DocumentNumber" title="View summary in a popup (no backdrop)">View</button>
+                                    }
+                                </div>
                             </td>
                         </tr>
                     }
                 }
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
+
+<div class="modal fade rqi-view-no-backdrop" id="rqiViewModal" tabindex="-1" aria-labelledby="rqiViewModalTitle" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="rqiViewModalTitle">Inspection</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="rqiViewModalBody">
+                <div class="rqi-view-loading">Loading…</div>
+            </div>
+            <div class="modal-footer py-2">
+                <a class="btn btn-sm btn-outline-primary d-none" id="rqiViewOpenFull" href="#">Open full page</a>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var modalEl = document.getElementById('rqiViewModal');
+            var bodyEl = document.getElementById('rqiViewModalBody');
+            var titleEl = document.getElementById('rqiViewModalTitle');
+            var fullLink = document.getElementById('rqiViewOpenFull');
+            var viewModal = null;
+
+            function ensureViewModalOnBody() {
+                if (modalEl && modalEl.parentElement !== document.body)
+                    document.body.appendChild(modalEl);
+            }
+            function stripOrphanBackdrops() {
+                document.querySelectorAll('.modal-backdrop').forEach(function (b) { b.remove(); });
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('padding-right');
+                document.body.style.removeProperty('overflow');
+            }
+            function getViewModal() {
+                if (!modalEl || !window.bootstrap) return null;
+                ensureViewModalOnBody();
+                if (!viewModal)
+                    viewModal = new bootstrap.Modal(modalEl, { backdrop: false, keyboard: true, focus: true });
+                return viewModal;
+            }
+
+            if (modalEl) {
+                modalEl.addEventListener('show.bs.modal', function () {
+                    ensureViewModalOnBody();
+                    stripOrphanBackdrops();
+                });
+                modalEl.addEventListener('hidden.bs.modal', stripOrphanBackdrops);
+            }
+
+            document.querySelectorAll('.rqi-btn-view').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var url = btn.getAttribute('data-rqi-read-url');
+                    var detailsUrl = btn.getAttribute('data-rqi-details-url');
+                    var doc = btn.getAttribute('data-rqi-doc') || '';
+                    if (!url || !bodyEl) return;
+                    if (titleEl) titleEl.textContent = doc ? ('View — ' + doc) : 'View inspection';
+                    if (fullLink) {
+                        if (detailsUrl) fullLink.href = detailsUrl;
+                        fullLink.classList.remove('d-none');
+                    }
+                    bodyEl.innerHTML = '<div class="rqi-view-loading">Loading…</div>';
+                    var m = getViewModal();
+                    if (m) m.show();
+                    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then(function (r) {
+                            if (!r.ok)
+                                return r.text().then(function (t) { throw new Error(t || r.statusText); });
+                            return r.text();
+                        })
+                        .then(function (html) { bodyEl.innerHTML = html; })
+                        .catch(function (e) {
+                            bodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">' +
+                                (e && e.message ? e.message.replace(/</g, '&lt;') : 'Could not load inspection.') + '</div>';
+                        });
+                });
+            });
+        })();
+    </script>
+}

@@ -1,0 +1,56 @@
+@model AU_ERP.Models.ViewModels.ReturnOrderCreditMemoModalVm
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    Layout = null;
+    var cm = Model.CreditMemo;
+    var roId = Model.ReturnOrderId;
+    var dealer = cm.DealerDisplayName ?? cm.DealerBusinessPartnerId ?? "—";
+    string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
+    string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.CurrentCulture);
+}
+
+<div class="ro-cm-readonly small">
+    <div class="row g-2 text-secondary mb-3">
+        <div class="col-sm-6"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Credit memo</span><div class="text-dark fw-semibold">@cm.DocumentNumber</div></div>
+        <div class="col-sm-6"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Date</span><div class="text-dark">@cm.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</div></div>
+        <div class="col-sm-6"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Return order</span><div class="text-dark">@cm.ReturnOrderDocumentNumber</div></div>
+        <div class="col-sm-6"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Invoice</span><div class="text-dark">@cm.InvoiceDocumentNumber</div></div>
+        <div class="col-sm-6"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Dealer</span><div class="text-dark">@dealer</div></div>
+        <div class="col-sm-6"><span class="text-uppercase fw-semibold" style="font-size:.68rem;letter-spacing:.04em;">Total credit</span><div class="text-dark fw-semibold">@FmtMoney(cm.GrandTotalCredit)</div></div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-sm btn-outline-secondary" asp-action="CreditMemoPdf" asp-route-id="@roId" target="_blank" rel="noopener">Print PDF</a>
+        <a class="btn btn-sm btn-outline-primary" asp-action="CreditMemo" asp-route-id="@roId">Full page</a>
+        <a class="btn btn-sm btn-outline-secondary" asp-controller="Invoice" asp-action="Details" asp-route-id="@cm.SalesInvoiceId">Invoice</a>
+    </div>
+    <div class="table-responsive border rounded">
+        <table class="table table-sm table-striped mb-0 align-middle small">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Material</th>
+                    <th>Description</th>
+                    <th class="text-end">Returned</th>
+                    <th>UOM</th>
+                    <th class="text-end">Unit price</th>
+                    <th class="text-end">Credit</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ln in (cm.Lines ?? Array.Empty<SalesReturnCreditMemoLine>()).OrderBy(l => l.LineNo))
+                {
+                    <tr>
+                        <td>@ln.LineNo</td>
+                        <td><strong>@ln.MaterialNumber</strong></td>
+                        <td>@(ln.MaterialDescription ?? "—")</td>
+                        <td class="text-end">@FmtQty(ln.QuantityReturned)</td>
+                        <td>@(ln.QuantityUom?.Code ?? "—")</td>
+                        <td class="text-end">@FmtMoney(ln.UnitPrice)</td>
+                        <td class="text-end"><strong>@FmtMoney(ln.LineCreditAmount)</strong></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

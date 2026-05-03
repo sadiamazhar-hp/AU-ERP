@@ -1,7 +1,7 @@
 @model AU_ERP.Models.ViewModels.SalesPaymentIndexVm
 @using System.Globalization
 @{
-    ViewData["Title"] = "Update payment";
+    ViewData["Title"] = "Payments";
     string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.CurrentCulture);
     var n = Model.Payments.Count;
 }
@@ -23,7 +23,7 @@
 <div class="sp-page">
     <div class="sp-hero">
         <div>
-            <h1>Update payment</h1>
+            <h1>Payments</h1>
             <p>Edit payment document date, method, and cheque details. Document and invoice numbers cannot be changed.</p>
         </div>
     </div>

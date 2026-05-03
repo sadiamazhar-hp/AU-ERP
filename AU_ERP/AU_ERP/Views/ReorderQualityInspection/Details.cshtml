@@ -110,8 +110,10 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Material</th>
+                                <th>Description</th>
                                 <th>Batch</th>
                                 <th class="text-end">Returned</th>
+                                <th>UOM</th>
                                 <th class="text-end">Back</th>
                                 <th class="text-end">Convert</th>
                                 <th class="text-end">Scrap</th>
@@ -121,9 +123,11 @@
                             @foreach (var ln in Model.Lines)
                             {
                                 <tr>
-                                    <td>@ln.MaterialNumber</td>
+                                    <td><strong>@ln.MaterialNumber</strong></td>
+                                    <td>@(ln.MaterialDescription ?? "—")</td>
                                     <td>@(string.IsNullOrWhiteSpace(ln.BatchNumber) ? "—" : ln.BatchNumber)</td>
                                     <td class="text-end">@ln.QuantityReturned.ToString("N4", CultureInfo.InvariantCulture)</td>
+                                    <td>@(ln.UomCode ?? "—")</td>
                                     <td class="text-end">@ln.QtyBackToStock.ToString("N4", CultureInfo.InvariantCulture)</td>
                                     <td class="text-end">@ln.QtyConvertToRaw.ToString("N4", CultureInfo.InvariantCulture)</td>
                                     <td class="text-end">@ln.QtyScrap.ToString("N4", CultureInfo.InvariantCulture)</td>
@@ -137,7 +141,7 @@
     }
 </div>
 
-<div class="modal fade" id="rqiCompleteModal" tabindex="-1" aria-labelledby="rqiCompleteModalTitle" aria-hidden="true">
+<div class="modal fade" id="rqiCompleteModal" tabindex="-1" aria-labelledby="rqiCompleteModalTitle" aria-hidden="true" data-bs-backdrop="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -219,8 +223,21 @@
                     return;
                 }
                 if (errEl) errEl.classList.add('d-none');
-                if (modalEl && window.bootstrap) bootstrap.Modal.getInstance(modalEl)?.hide();
-                if (form) form.submit();
+                if (modalEl && window.bootstrap) {
+                    var inst = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+                    function afterHidden() {
+                        modalEl.removeEventListener('hidden.bs.modal', afterHidden);
+                        document.querySelectorAll('.modal-backdrop').forEach(function (b) { b.remove(); });
+                        document.body.classList.remove('modal-open');
+                        document.body.style.removeProperty('padding-right');
+                        document.body.style.removeProperty('overflow');
+                        if (form) form.submit();
+                    }
+                    modalEl.addEventListener('hidden.bs.modal', afterHidden);
+                    inst.hide();
+                } else if (form) {
+                    form.submit();
+                }
             });
         })();
     </script>
