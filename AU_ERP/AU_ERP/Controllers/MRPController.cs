@@ -162,6 +162,20 @@ namespace AU_ERP.Controllers
             var plantOk = await _db.PlantsSamples.AsNoTracking().AnyAsync(p => p.PlantID == plant, ct).ConfigureAwait(false);
             if (!plantOk)
                 return Json(new MrpRunResponseDto { Success = false, Message = "Invalid plant." });
+            
+            var mat = (dto.MaterialNumber ?? "").Trim();
+            var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
+                .Where(h => h.BomMaterialNumber == mat
+                            && h.Plant == plant
+                            && h.Status == "Active"
+                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
+                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
+                .Select(h => h.BomID)
+                .ToListAsync(ct);
+            if (bomCandidates.Count > 1 && (!dto.SelectedBomId.HasValue || dto.SelectedBomId.Value <= 0))
+                return Json(new MrpRunResponseDto { Success = false, Message = "BOM selection is required." });
+            if (dto.SelectedBomId.HasValue && dto.SelectedBomId.Value > 0 && !bomCandidates.Contains(dto.SelectedBomId.Value))
+                return Json(new MrpRunResponseDto { Success = false, Message = "Selected BOM is invalid/inactive." });
 
             var result = await MrpExplosionService.RunAsync(
                 _db,
@@ -169,6 +183,7 @@ namespace AU_ERP.Controllers
                 dto.Quantity,
                 dto.UomId,
                 requireFertMaterialOnly: false,
+                selectedBomId: dto.SelectedBomId,
                 plantIdForStockOverride: plant,
                 ct);
             return Json(result);
@@ -269,6 +284,70 @@ namespace AU_ERP.Controllers
                     allSatisfied = false;
                     continue;
                 }
+                
+                var bomOptions = await _db.BomHeadersSamples.AsNoTracking()
+                    .Where(h => h.BomMaterialNumber == mat
+                                && (h.Plant == plant || h.Plant == null || h.Plant == "")
+                                && h.Status == "Active"
+                                && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
+                                && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
+                    .OrderByDescending(h => h.IsDefaultBom)
+                    .ThenByDescending(h => h.ValidFrom)
+                    .ThenByDescending(h => h.BomID)
+                    .Select(h => new { h.BomID, h.BOMCode, h.IsDefaultBom })
+                    .ToListAsync(ct);
+                if (bomOptions.Count == 0)
+                {
+                    outLines.Add(new MrpMultiRunResultLineDto
+                    {
+                        LineNo = i + 1,
+                        MaterialNumber = mat,
+                        Description = ln.Description,
+                        Quantity = ln.Quantity,
+                        UomId = ln.UomId,
+                        PlantId = plant,
+                        Result = new MrpRunResponseDto { Success = false, Message = $"No active valid BOM exists for line {i + 1}." }
+                    });
+                    allSatisfied = false;
+                    continue;
+                }
+                var selectedBomId = ln.SelectedBomId;
+                var selectedBomRef = (ln.SelectedBomAlternative ?? "").Trim();
+                if (!selectedBomId.HasValue || selectedBomId.Value <= 0)
+                {
+                    if (bomOptions.Count == 1)
+                    {
+                        selectedBomId = bomOptions[0].BomID;
+                        selectedBomRef = bomOptions[0].BOMCode ?? "";
+                    }
+                    else
+                    {
+                        var def = bomOptions.FirstOrDefault(x => x.IsDefaultBom);
+                        selectedBomId = def?.BomID;
+                        if (def != null) selectedBomRef = def.BOMCode ?? "";
+                    }
+                }
+                else
+                {
+                    var picked = bomOptions.FirstOrDefault(x => x.BomID == selectedBomId.Value);
+                    if (picked != null && string.IsNullOrWhiteSpace(selectedBomRef))
+                        selectedBomRef = picked.BOMCode ?? "";
+                }
+                if (!selectedBomId.HasValue || selectedBomId.Value <= 0)
+                {
+                    outLines.Add(new MrpMultiRunResultLineDto
+                    {
+                        LineNo = i + 1,
+                        MaterialNumber = mat,
+                        Description = ln.Description,
+                        Quantity = ln.Quantity,
+                        UomId = ln.UomId,
+                        PlantId = plant,
+                        Result = new MrpRunResponseDto { Success = false, Message = $"Select BOM for line {i + 1}." }
+                    });
+                    allSatisfied = false;
+                    continue;
+                }
 
                 var result = await MrpExplosionService.RunAsync(
                     _db,
@@ -276,6 +355,7 @@ namespace AU_ERP.Controllers
                     ln.Quantity,
                     ln.UomId,
                     requireFertMaterialOnly: false,
+                    selectedBomId: selectedBomId,
                     plantIdForStockOverride: plant,
                     ct);
 
@@ -336,7 +416,9 @@ namespace AU_ERP.Controllers
                     Quantity = ln.Quantity,
                     UomId = ln.UomId,
                     PlantId = plant,
-                    Result = result
+                    Result = result,
+                    SelectedBomId = selectedBomId,
+                    SelectedBomAlternative = selectedBomRef
                 });
             }
 

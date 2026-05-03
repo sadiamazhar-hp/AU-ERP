@@ -1,0 +1,70 @@
+@model AU_ERP.Models.ViewModels.ReorderQiIndexVm
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Reorder quality inspection";
+}
+
+<div class="py-3">
+    @if (TempData["RqiError"] is string err && !string.IsNullOrWhiteSpace(err))
+    {
+        <div class="alert alert-danger py-2 mb-3" role="alert">@err</div>
+    }
+    @if (TempData["RqiMessage"] is string ok && !string.IsNullOrWhiteSpace(ok))
+    {
+        <div class="alert alert-success py-2 mb-3" role="status">@ok</div>
+    }
+
+    <h1 class="h4 mb-3">Sales return quality inspection</h1>
+    <p class="text-secondary small mb-3">Documents created when a sales return is saved. Complete inspection to post stock splits and close the invoice as returned.</p>
+
+    <div class="table-responsive border rounded bg-white">
+        <table class="table table-sm table-striped mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>QI No.</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Invoice</th>
+                    <th>Return order</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Items.Count == 0)
+                {
+                    <tr>
+                        <td colspan="6" class="text-secondary p-3">No quality inspections yet.</td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var row in Model.Items)
+                    {
+                        var st = row.Status ?? "";
+                        var isPending = string.Equals(st, SalesReturnQualityInspection.StatusPending, StringComparison.OrdinalIgnoreCase);
+                        <tr>
+                            <td><strong>@row.DocumentNumber</strong></td>
+                            <td>@row.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
+                            <td>
+                                @if (isPending)
+                                {
+                                    <span class="badge text-bg-warning text-dark">@st</span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">@st</span>
+                                }
+                            </td>
+                            <td>@row.InvoiceDocumentNumber</td>
+                            <td>@row.ReturnOrderDocumentNumber</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@row.QiId">Open</a>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

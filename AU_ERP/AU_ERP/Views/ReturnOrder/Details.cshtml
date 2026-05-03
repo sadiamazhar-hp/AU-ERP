@@ -1,0 +1,121 @@
+@model AU_ERP.Models.ViewModels.ReturnOrderDetailsVm
+@using System.Globalization
+@{
+    ViewData["Title"] = "Return order";
+    string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
+    string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.CurrentCulture);
+    var dealer = Model.DealerDisplayName ?? "—";
+    var bp = Model.DealerBusinessPartnerId ?? "—";
+}
+
+@section Styles {
+    <style>
+        .ro-det .ro-ro { background: #f8f9fa; }
+        .ro-det .ro-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        .ro-det .ro-table thead th { background: #354a5e; color: #fff; font-weight: 500; padding: .5rem .55rem; text-align: left; }
+        .ro-det .ro-table tbody td { border: 1px solid #ddd; padding: .4rem .5rem; }
+        .ro-det .ro-table tbody tr:nth-child(even) { background: #fafafa; }
+    </style>
+}
+
+<div class="ro-det">
+    <p class="small mb-3"><a asp-action="Index">&larr; Return order list</a> · <a asp-controller="Invoice" asp-action="Details" asp-route-id="@Model.SalesInvoiceId">Invoice</a></p>
+    <h1 class="h4 mb-3">Return order @Model.DocumentNumber</h1>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-header py-2 small text-uppercase text-secondary">Document</div>
+        <div class="card-body py-3">
+            <div class="fw-semibold small mb-2">Integration</div>
+            <div class="row g-2 align-items-end flex-wrap">
+                <div class="col-md-4 col-lg-3">
+                    <label for="roDocIntModule" class="form-label small mb-0">Module</label>
+                    <select id="roDocIntModule" class="form-select form-select-sm" aria-label="Linked document module">
+                        <option value="creditmemo">Credit memo</option>
+                    </select>
+                </div>
+                <div class="col-auto d-flex flex-wrap gap-2">
+                    @if (Model.CreditMemoId.HasValue && !string.IsNullOrWhiteSpace(Model.CreditMemoDocumentNumber))
+                    {
+                        <a class="btn btn-sm btn-outline-primary" asp-action="CreditMemo" asp-route-id="@Model.Id" id="roDocIntViewCm">View credit memo</a>
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="CreditMemoPdf" asp-route-id="@Model.Id" target="_blank" rel="noopener" id="roDocIntPrintCm">Print credit memo</a>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-primary" disabled title="No credit memo on file (older return or migration pending).">View credit memo</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="No credit memo on file.">Print credit memo</button>
+                    }
+                </div>
+            </div>
+            @if (Model.CreditMemoId.HasValue && !string.IsNullOrWhiteSpace(Model.CreditMemoDocumentNumber))
+            {
+                var cmTot = Model.CreditMemoGrandTotal ?? 0m;
+                <p class="small text-secondary mb-0 mt-2">Credit memo <strong>@Model.CreditMemoDocumentNumber</strong> · total credit <strong>@cmTot.ToString("N4", CultureInfo.CurrentCulture)</strong></p>
+            }
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body small">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Document date</dt>
+                <dd class="col-sm-9">@Model.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</dd>
+                <dt class="col-sm-3">Dealer</dt>
+                <dd class="col-sm-9">@dealer</dd>
+                <dt class="col-sm-3">Dealer number</dt>
+                <dd class="col-sm-9">@bp</dd>
+                <dt class="col-sm-3">Sales order</dt>
+                <dd class="col-sm-9">@(Model.SalesOrderNumber ?? "—")</dd>
+                <dt class="col-sm-3">DC delivery date</dt>
+                <dd class="col-sm-9">@Model.DeliveryChallanDocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</dd>
+                @if (Model.SalesOrderRequestedDeliveryDate is DateTime rd)
+                {
+                    <dt class="col-sm-3">SO requested delivery</dt>
+                    <dd class="col-sm-9">@rd.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</dd>
+                }
+                <dt class="col-sm-3">Invoice</dt>
+                <dd class="col-sm-9">@Model.InvoiceDocumentNumber (@FmtMoney(Model.InvoiceGrandTotal))</dd>
+                <dt class="col-sm-3">Items delivered total (qty)</dt>
+                <dd class="col-sm-9">@FmtQty(Model.ItemsDeliveredQuantityTotal)</dd>
+                <dt class="col-sm-3">Return reason</dt>
+                <dd class="col-sm-9">@Model.ReturnReason</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">Lines</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="ro-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Material</th>
+                            <th>Description</th>
+                            <th>UOM</th>
+                            <th class="text-end">Unit price</th>
+                            <th class="text-end">Line total</th>
+                            <th class="text-end">Invoiced</th>
+                            <th class="text-end">Returned</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in Model.Lines)
+                        {
+                            <tr>
+                                <td>@line.LineNo</td>
+                                <td><strong>@line.MaterialNumber</strong></td>
+                                <td class="small">@(line.MaterialDescription ?? "—")</td>
+                                <td>@(line.UomCode ?? "—")</td>
+                                <td class="text-end">@FmtMoney(line.UnitPrice)</td>
+                                <td class="text-end">@FmtMoney(line.LineTotal)</td>
+                                <td class="text-end">@FmtQty(line.QuantityInvoiced)</td>
+                                <td class="text-end"><strong>@FmtQty(line.QuantityReturned)</strong></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

@@ -190,7 +190,8 @@ public class StockOverviewController : Controller
                              && s.PlantID == requestedPlantId
                              && s.QuantityUomId == dto.QuantityUomId
                              && s.Status == st
-                             && s.Grade == g,
+                             && s.Grade == g
+                             && (s.BatchOrLot ?? "") == "",
                         ct)
                     .ConfigureAwait(false);
 
@@ -214,6 +215,7 @@ public class StockOverviewController : Controller
                     Grade = g,
                     StandardCostPerUom = dto.StandardCostPerUom,
                     StockValue = stockValue,
+                    BatchOrLot = "",
                     CreatedAt = now,
                     UpdatedAt = now
                 };

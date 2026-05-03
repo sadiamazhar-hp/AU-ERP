@@ -26,6 +26,11 @@ public class GoodsIssueDocumentLine
     
     [MaxLength(500)]
     public string? FertMaterialDescription { get; set; }
+    
+    public int? SelectedBomId { get; set; }
+    
+    [MaxLength(30)]
+    public string? SelectedBomAlternative { get; set; }
 
     [Column(TypeName = "decimal(18,4)")]
     public decimal RequiredQty { get; set; }
@@ -46,6 +51,9 @@ public class GoodsIssueDocumentLine
     
     [ForeignKey(nameof(ProductionOrderLineId))]
     public ProductionOrderLine? ProductionOrderLine { get; set; }
+    
+    [ForeignKey(nameof(SelectedBomId))]
+    public BomHeadersSample? SelectedBom { get; set; }
 
     [ForeignKey(nameof(RequiredUomId))]
     public UnitOfMeasurement? RequiredUom { get; set; }

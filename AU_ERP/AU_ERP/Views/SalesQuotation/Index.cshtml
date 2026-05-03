@@ -931,10 +931,19 @@
             if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = "";
             syncHiddens();
             fetch(nextQuotationUrl).then(function (r) { return r.json(); }).then(function (d) {
+                if (!d.success) {
+                    var m = d.message || "Could not load next quotation number.";
+                    if (typeof window.auShowInlineValidation === "function" && document.getElementById("sqForm"))
+                        window.auShowInlineValidation(document.getElementById("sqForm"), [], m);
+                    else alert(m);
+                    if (document.getElementById("sqNum")) document.getElementById("sqNum").value = "";
+                    if (document.getElementById("sqModalTitle")) document.getElementById("sqModalTitle").textContent = "New Sales Quotation";
+                    return;
+                }
                 var n = d.number || d.display;
                 if (document.getElementById("sqNum")) document.getElementById("sqNum").value = n || "";
                 if (document.getElementById("sqModalTitle")) document.getElementById("sqModalTitle").textContent = "New Sales Quotation — " + (n || "");
-            });
+            }).catch(function () { alert("Could not load next quotation number."); });
             var sch = document.getElementById("sqSchema") && document.getElementById("sqSchema").value;
             if (sch) loadSchema(sch); else loadSchema("");
         });

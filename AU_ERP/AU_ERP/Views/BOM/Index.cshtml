@@ -3,8 +3,7 @@
 @{
     ViewData["Title"] = "Bill Of Materials";
     string BomAssemblyLabel(string? code) =>
-        string.Equals(code, "FERT", StringComparison.OrdinalIgnoreCase) ? "FG"
-        : string.Equals(code, "HALB", StringComparison.OrdinalIgnoreCase) ? "SFG"
+        string.Equals(code, "FERT", StringComparison.OrdinalIgnoreCase) ? "FERT"
         : (code ?? "—");
     var safeModel = Model ?? new List<AU_ERP.Models.BomHeadersSample>();
     var bomTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
@@ -235,7 +234,7 @@
                             <input type="text" id="bomCreateTitle" class="form-control form-control-sm" />
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label"><span class="mandatory-bar"></span> BOM Level</label>
+                            <label class="form-label">BOM Level</label>
                             <select id="bomCreateBLevel" class="form-select form-select-sm">
                                 <option value="">-- Select --</option>
                                 @if (bomLevels != null)
@@ -243,10 +242,7 @@
                                     foreach (var item in bomLevels)
                                     {
                                         var lvlName = (item.Text ?? "").Trim();
-                                        var headerMatType = string.Equals(lvlName, "FG", StringComparison.OrdinalIgnoreCase) ? "FERT"
-                                            : string.Equals(lvlName, "SFG", StringComparison.OrdinalIgnoreCase) ? "HALB"
-                                            : (item.Value == "1" ? "FERT" : item.Value == "2" ? "HALB" : "");
-                                        <option value="@item.Value" data-header-material-type="@headerMatType">@item.Text</option>
+                                        <option value="@item.Value">@item.Text</option>
                                     }
                                 }
                             </select>
@@ -272,11 +268,28 @@
                             <label class="form-label">Valid From</label>
                             <input type="date" id="bomCreateValidFrom" class="form-control form-control-sm" />
                         </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valid To</label>
+                            <input type="date" id="bomCreateValidTo" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Status</label>
+                            <select id="bomCreateStatus" class="form-select form-select-sm">
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="bomCreateIsDefault">
+                                <label class="form-check-label small" for="bomCreateIsDefault">Base BOM</label>
+                            </div>
+                        </div>
                     </div>
                     <div class="row g-3 mt-1">
                         <div class="col-12">
-                            <label class="form-label"><span class="mandatory-bar"></span> Material <span class="text-muted small fw-normal">(FG → FERT, SFG → HALB per BOM level)</span></label>
-                            <div class="bom-mat-picker" data-purpose="header" data-bom-level-select-id="bomCreateBLevel">
+                            <label class="form-label"><span class="mandatory-bar"></span> FERT Material</label>
+                            <div class="bom-mat-picker" data-purpose="header">
                                 <input type="text" class="form-control form-control-sm bom-mat-picker-search" id="bomCreateHeaderMatSearch" placeholder="Search material number or description…" autocomplete="off" />
                                 <input type="hidden" id="bomCreateHeaderMat" class="bom-mat-picker-value" value="" />
                                 <div class="bom-mat-picker-dropdown" id="bomCreateHeaderMatDd"></div>
@@ -330,6 +343,7 @@
                             <th>Assembly</th>
                             <th>Level</th>
                             <th>Plant</th>
+                            <th>Status</th>
                             <th>Base Qty</th>
                             <th style="width:72px;">Action</th>
                         </tr>
@@ -351,6 +365,7 @@
                                 <td><input class="sap-input" value="@asmLabel" readonly /></td>
                                 <td><input class="sap-input" value="@levelName" readonly /></td>
                                 <td><input class="sap-input" value="@plantName" readonly /></td>
+                                <td><input class="sap-input" value="@h.Status@(h.IsDefaultBom ? " (Default)" : "")" readonly /></td>
                                 <td><input class="sap-input" value="@(h.BaseQty.HasValue ? h.BaseQty.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture) : "")" readonly /></td>
                                 <td class="col-action">
                                     <div class="dropdown">
@@ -409,10 +424,7 @@
                                     foreach (var item in bomLevels)
                                     {
                                         var lvlNameE = (item.Text ?? "").Trim();
-                                        var headerMatTypeE = string.Equals(lvlNameE, "FG", StringComparison.OrdinalIgnoreCase) ? "FERT"
-                                            : string.Equals(lvlNameE, "SFG", StringComparison.OrdinalIgnoreCase) ? "HALB"
-                                            : (item.Value == "1" ? "FERT" : item.Value == "2" ? "HALB" : "");
-                                        <option value="@item.Value" data-header-material-type="@headerMatTypeE">@item.Text</option>
+                                        <option value="@item.Value">@item.Text</option>
                                     }
                                 }
                             </select>
@@ -437,6 +449,23 @@
                         <div class="col-md-3">
                             <label class="form-label">Valid From</label>
                             <input type="date" id="bomEditValidFrom" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valid To</label>
+                            <input type="date" id="bomEditValidTo" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Status</label>
+                            <select id="bomEditStatus" class="form-select form-select-sm">
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="bomEditIsDefault">
+                                <label class="form-check-label small" for="bomEditIsDefault">Base BOM</label>
+                            </div>
                         </div>
                     </div>
                     <div class="row g-3 mt-1">
@@ -486,6 +515,7 @@
     var bomAllUoms = @Html.Raw(bomUomsJson);
     var bomNextCodeUrl = '@Url.Action("GetNextBomCode", "BOM")';
     var bomSearchMaterialsUrl = '@Url.Action("SearchBomMaterials", "MasterDataLookup")';
+    var bomCheckBaseUrl = '@Url.Action("CheckExistingBaseBom", "BOM")';
     var bomPickerTimers = {};
 
     function escBomAttr(s) {
@@ -507,11 +537,7 @@
             bomCloseAllMatPickers();
     });
 
-    function bomGetHeaderMaterialTypeFromLevelSel(sel) {
-        if (!sel || !sel.value) return "";
-        var opt = sel.options[sel.selectedIndex];
-        return (opt && opt.getAttribute("data-header-material-type") || "").trim().toUpperCase();
-    }
+    function bomGetHeaderMaterialTypeFromLevelSel(sel) { return "FERT"; }
 
     function bomMatPickerBuildUrl(purpose, q, matType) {
         var url = bomSearchMaterialsUrl + "?purpose=" + encodeURIComponent(purpose) + "&q=" + encodeURIComponent(q || "");
@@ -530,17 +556,7 @@
         var purpose = wrap.getAttribute("data-purpose") || "component";
         var dd = wrap.querySelector(".bom-mat-picker-dropdown");
         if (!dd) return;
-        var matType = "";
-        if (purpose === "header") {
-            var lvlId = wrap.getAttribute("data-bom-level-select-id");
-            var lvlSel = lvlId ? document.getElementById(lvlId) : null;
-            matType = bomGetHeaderMaterialTypeFromLevelSel(lvlSel);
-            if (!matType) {
-                dd.innerHTML = '<div class="bom-mat-picker-empty">Select BOM level (FG / SFG) first.</div>';
-                dd.classList.add("show");
-                return;
-            }
-        }
+        var matType = purpose === "header" ? "FERT" : "";
         fetch(bomMatPickerBuildUrl(purpose, searchInput.value, matType))
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -641,8 +657,8 @@
         if (tbodyId === "bomCreateItemsBody") {
             var blC = document.getElementById("bomCreateBLevel");
             var hmC = document.getElementById("bomCreateHeaderMat");
-            if (!blC || !(blC.value || "").trim() || !hmC || !(hmC.value || "").trim()) {
-                bomShowInline(bomCreateFormRoot(), [blC, hmC].filter(Boolean), "Select BOM level and header material before adding components.");
+            if (!hmC || !(hmC.value || "").trim()) {
+                bomShowInline(bomCreateFormRoot(), [blC, hmC].filter(Boolean), "Select header material before adding components.");
                 return;
             }
         }
@@ -715,8 +731,6 @@
         var code = (c && c.value || "").trim();
         if (code && code.length > 20) bad.push(c);
         if (!(t && (t.value || "").trim())) bad.push(t);
-        if (!(lv && (lv.value || "").trim())) bad.push(lv);
-        if (!bomGetHeaderMaterialTypeFromLevelSel(lv)) bad.push(lv);
         if (!(hm && (hm.value || "").trim())) bad.push(hms || hm);
         return bad;
     }
@@ -764,8 +778,7 @@
 
     function bomAssemblyReadonlyLabel(code) {
         var c = (code || "").trim().toUpperCase();
-        if (c === "FERT") return "FG";
-        if (c === "HALB") return "SFG";
+        if (c === "FERT") return "FERT";
         return c || "—";
     }
 
@@ -778,6 +791,9 @@
         document.getElementById("bomCreatePlant").value = "";
         document.getElementById("bomCreateBaseQty").value = "1";
         document.getElementById("bomCreateValidFrom").value = "";
+        document.getElementById("bomCreateValidTo").value = "";
+        document.getElementById("bomCreateStatus").value = "Active";
+        document.getElementById("bomCreateIsDefault").checked = false;
         var hm = document.getElementById("bomCreateHeaderMat");
         if (hm) hm.value = "";
         var hms = document.getElementById("bomCreateHeaderMatSearch");
@@ -801,7 +817,30 @@
         window.location.assign(u.toString());
     }
 
-    function bomSaveCreate() {
+    async function bomConfirmBaseSwitch(materialNumber, excludeBomId) {
+        if (!materialNumber) return true;
+        try {
+            const url = bomCheckBaseUrl
+                + "?materialNumber=" + encodeURIComponent(materialNumber)
+                + "&excludeBomId=" + encodeURIComponent(excludeBomId || 0);
+            const res = await fetch(url).then(function (r) { return r.json(); });
+            if (!(res && res.success && res.exists)) return true;
+            const existingCode = res.bomCode || ("BOM-" + (res.bomId || ""));
+            return await new Promise(function (resolve) {
+                var msg = "Base BOM (" + existingCode + ") already exists. Do you still want to make this BOM Base?";
+                if (typeof window.materialShowDeleteConfirmModalChoice === "function")
+                    window.materialShowDeleteConfirmModalChoice(msg, function (ok) { resolve(!!ok); });
+                else if (typeof window.materialShowDeleteConfirmModalThen === "function")
+                    window.materialShowDeleteConfirmModalThen(msg, function () { resolve(true); });
+                else
+                    resolve(window.confirm(msg));
+            });
+        } catch (_) {
+            return true;
+        }
+    }
+
+    async function bomSaveCreate() {
         var root = bomCreateFormRoot();
         if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
         var bad = bomValidateCreateHeader().concat(bomValidateComponentRows("bomCreateItemsBody"));
@@ -826,10 +865,18 @@
             Plant: document.getElementById("bomCreatePlant").value || null,
             BaseQty: parseFloat(document.getElementById("bomCreateBaseQty").value) || null,
             ValidFrom: document.getElementById("bomCreateValidFrom").value || null,
+            ValidTo: document.getElementById("bomCreateValidTo").value || null,
+            Status: document.getElementById("bomCreateStatus").value || null,
+            IsDefaultBom: !!document.getElementById("bomCreateIsDefault").checked,
             HeaderMaterialTypeCode: bomGetHeaderMaterialTypeFromLevelSel(document.getElementById("bomCreateBLevel")) || null,
             BomMaterialNumber: (document.getElementById("bomCreateHeaderMat")?.value || "").trim() || null,
             Items: bomCollectItems("bomCreateItemsBody")
         };
+
+        if (payload.IsDefaultBom) {
+            const okToSwitch = await bomConfirmBaseSwitch(payload.BomMaterialNumber || "", 0);
+            if (!okToSwitch) return;
+        }
 
         fetch(url, {
             method: "POST",
@@ -866,6 +913,9 @@
                 document.getElementById("bomEditPlant").value = b.plant || b.Plant || "";
                 document.getElementById("bomEditBaseQty").value = b.baseQty != null ? b.baseQty : (b.BaseQty || "");
                 document.getElementById("bomEditValidFrom").value = b.validFrom || b.ValidFrom || "";
+                document.getElementById("bomEditValidTo").value = b.validTo || b.ValidTo || "";
+                document.getElementById("bomEditStatus").value = b.status || b.Status || "Active";
+                document.getElementById("bomEditIsDefault").checked = !!(b.isDefaultBom || b.IsDefaultBom);
                 var eht = document.getElementById("bomEditHeaderMatType");
                 var htCode = (b.headerMaterialTypeCode || b.HeaderMaterialTypeCode || "").trim();
                 if (eht) eht.value = htCode;
@@ -909,7 +959,7 @@
             .catch(function () { bomShowInline(bomListPaneRoot(), [], "Failed to load BOM data."); });
     }
 
-    function bomSaveEdit() {
+    async function bomSaveEdit() {
         var root = bomEditFormRoot();
         if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(root);
         var bomId = parseInt(document.getElementById("bomEditBomID").value) || 0;
@@ -932,10 +982,18 @@
             Plant: document.getElementById("bomEditPlant").value || null,
             BaseQty: parseFloat(document.getElementById("bomEditBaseQty").value) || null,
             ValidFrom: document.getElementById("bomEditValidFrom").value || null,
+            ValidTo: document.getElementById("bomEditValidTo").value || null,
+            Status: document.getElementById("bomEditStatus").value || null,
+            IsDefaultBom: !!document.getElementById("bomEditIsDefault").checked,
             HeaderMaterialTypeCode: document.getElementById("bomEditHeaderMatType")?.value || null,
             BomMaterialNumber: (document.getElementById("bomEditHeaderMat")?.value || "").trim() || null,
             Items: bomCollectItems("bomEditItemsBody")
         };
+
+        if (payload.IsDefaultBom) {
+            const okToSwitch = await bomConfirmBaseSwitch(payload.BomMaterialNumber || "", bomId);
+            if (!okToSwitch) return;
+        }
 
         fetch('@Url.Action("Update", "BOM")', {
             method: "POST",

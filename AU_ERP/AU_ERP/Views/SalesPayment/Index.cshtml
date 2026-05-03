@@ -1,0 +1,81 @@
+@model AU_ERP.Models.ViewModels.SalesPaymentIndexVm
+@using System.Globalization
+@{
+    ViewData["Title"] = "Update payment";
+    string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.CurrentCulture);
+    var n = Model.Payments.Count;
+}
+
+@section Styles {
+    <style>
+        .sp-page { color: var(--text, #32363a); }
+        .sp-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; }
+        .sp-hero h1 { font-size:1.35rem; font-weight:600; color:var(--dark,#354a5e); margin:0 0 .25rem 0; }
+        .sp-hero p { margin:0; color:var(--subtle,#6a7c8e); font-size:.9rem; }
+        .sp-card { background:#fff; border:1px solid var(--border,#d9d9d9); border-radius:4px; padding:1rem 1.1rem; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+        .sp-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+        .sp-table thead th { background:#354a5e; color:#fff; font-weight:500; padding:.55rem .65rem; text-align:left; white-space:nowrap; }
+        .sp-table tbody td { border:1px solid #ddd; padding:.45rem .6rem; vertical-align:middle; }
+        .sp-table tbody tr:nth-child(even) { background:#fafafa; }
+    </style>
+}
+
+<div class="sp-page">
+    <div class="sp-hero">
+        <div>
+            <h1>Update payment</h1>
+            <p>Edit payment document date, method, and cheque details. Document and invoice numbers cannot be changed.</p>
+        </div>
+    </div>
+
+    @if (TempData["SpMessage"] is string okMsg && !string.IsNullOrWhiteSpace(okMsg))
+    {
+        <div class="alert alert-success py-2 small mb-3" role="status">@okMsg</div>
+    }
+    @if (TempData["SpError"] is string errMsg && !string.IsNullOrWhiteSpace(errMsg))
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="status">@errMsg</div>
+    }
+
+    <div class="sp-card">
+        <h2 class="h6 mb-3">Payments (@n.ToString("N0", CultureInfo.CurrentCulture))</h2>
+        <div class="table-responsive">
+            <table class="sp-table">
+                <thead>
+                    <tr>
+                        <th>Payment No.</th>
+                        <th>Date</th>
+                        <th>Invoice No.</th>
+                        <th>Dealer</th>
+                        <th class="text-end">Amount</th>
+                        <th>Method</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (n == 0)
+                    {
+                        <tr><td colspan="7" class="text-secondary">No payment records yet. Record a payment from an open invoice.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var row in Model.Payments)
+                        {
+                            <tr>
+                                <td><strong>@row.DocumentNumber</strong></td>
+                                <td>@row.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</td>
+                                <td>@row.InvoiceDocumentNumber</td>
+                                <td>@(row.DealerDisplayName ?? "—")</td>
+                                <td class="text-end">@FmtMoney(row.Amount)</td>
+                                <td>@row.PaymentMethod</td>
+                                <td>
+                                    <a class="btn btn-outline-primary btn-sm" asp-action="Edit" asp-route-id="@row.Id">Edit</a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

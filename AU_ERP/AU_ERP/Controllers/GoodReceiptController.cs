@@ -1,3 +1,4 @@
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -13,19 +14,29 @@ public class GoodReceiptController : Controller
     private readonly AppDbContext _db;
     private readonly GoodsReceiptPostingService _posting;
     private readonly GoodReceiptPdfService _pdf;
+    private readonly DocumentNumberAllocator _documentNumbers;
 
-    public GoodReceiptController(AppDbContext db, GoodsReceiptPostingService posting, GoodReceiptPdfService pdf)
+    public GoodReceiptController(
+        AppDbContext db,
+        GoodsReceiptPostingService posting,
+        GoodReceiptPdfService pdf,
+        DocumentNumberAllocator documentNumbers)
     {
         _db = db;
         _posting = posting;
         _pdf = pdf;
+        _documentNumbers = documentNumbers;
     }
 
     [HttpGet]
     public async Task<IActionResult> Index(int? productionOrderId, CancellationToken ct = default)
     {
         if (productionOrderId.HasValue && productionOrderId.Value > 0)
-            await EnsureDraftAsync(productionOrderId.Value, ct).ConfigureAwait(false);
+        {
+            var (ok, err) = await EnsureDraftAsync(productionOrderId.Value, ct).ConfigureAwait(false);
+            if (!ok && !string.IsNullOrWhiteSpace(err))
+                TempData["GoodReceiptError"] = err;
+        }
 
         var docs = await _db.GoodReceiptDocuments.AsNoTracking()
             .Include(d => d.ProductionOrder!)
@@ -50,7 +61,9 @@ public class GoodReceiptController : Controller
         if (productionOrderId <= 0)
             return BadRequest("Invalid production order.");
 
-        await EnsureDraftAsync(productionOrderId, ct).ConfigureAwait(false);
+        var (ok, err) = await EnsureDraftAsync(productionOrderId, ct).ConfigureAwait(false);
+        if (!ok && !string.IsNullOrWhiteSpace(err))
+            TempData["GoodReceiptError"] = err;
         return RedirectToAction(nameof(Index), new { productionOrderId });
     }
 
@@ -214,18 +227,18 @@ public class GoodReceiptController : Controller
         return File(bytes, "application/pdf", fileName);
     }
 
-    private async Task EnsureDraftAsync(int productionOrderId, CancellationToken ct)
+    private async Task<(bool Ok, string? Error)> EnsureDraftAsync(int productionOrderId, CancellationToken ct)
     {
         var exists = await _db.GoodReceiptDocuments.AnyAsync(d => d.ProductionOrderId == productionOrderId, ct).ConfigureAwait(false);
         if (exists)
-            return;
+            return (true, null);
 
         var po = await _db.ProductionOrders.AsNoTracking()
             .Include(p => p.Lines)
             .FirstOrDefaultAsync(p => p.Id == productionOrderId, ct)
             .ConfigureAwait(false);
         if (po == null)
-            return;
+            return (true, null);
 
         var lastOut = await _db.ProductionOrderStageProgresses.AsNoTracking()
             .Where(s => s.ProductionOrderId == productionOrderId && s.OutputQuantity.HasValue)
@@ -248,8 +261,22 @@ public class GoodReceiptController : Controller
             });
         }
         var defaultProduced = lastOut ?? poLines.Sum(l => l.PlannedQuantity);
-        var docNo = await GenerateNextGoodReceiptNumberAsync(ct).ConfigureAwait(false);
-        var batchNo = await GenerateNextBatchNumberAsync(ct).ConfigureAwait(false);
+        string docNo;
+        string batchNo;
+        try
+        {
+            docNo = await _documentNumbers.AllocateAsync(ModuleKeys.QualityInspection, ct).ConfigureAwait(false);
+            batchNo = await _documentNumbers.AllocateAsync(ModuleKeys.Batch, ct).ConfigureAwait(false);
+        }
+        catch (DocumentIntegrationMissingException ex)
+        {
+            return (false, ex.Message);
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            return (false, ex.Message);
+        }
+
         var lines = poLines.Select(l => new GoodsReceiptPostLineDto
         {
             ProductionOrderLineId = l.Id,
@@ -279,6 +306,7 @@ public class GoodReceiptController : Controller
             CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        return (true, null);
     }
 
     private static List<GoodsReceiptPostLineDto> ParseDraftLines(string? json)
@@ -296,54 +324,5 @@ public class GoodReceiptController : Controller
         }
     }
 
-    private async Task<string> GenerateNextGoodReceiptNumberAsync(CancellationToken ct)
-    {
-        const string prefix = "GR";
-        const int start = 1500;
-
-        var nums = await _db.GoodReceiptDocuments.AsNoTracking()
-            .Select(d => d.DocumentNumber)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-
-        var max = 0;
-        foreach (var s in nums)
-        {
-            var t = (s ?? "").Trim();
-            if (t.Length < prefix.Length + 1) continue;
-            if (!t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
-            var tail = t.Substring(prefix.Length).Trim();
-            if (int.TryParse(tail, out var n))
-                max = Math.Max(max, n);
-        }
-
-        var next = Math.Max(start, max + 1);
-        return $"{prefix}{next}";
-    }
-
-    private async Task<string> GenerateNextBatchNumberAsync(CancellationToken ct)
-    {
-        const string prefix = "BTH-";
-        const int start = 100;
-
-        var nums = await _db.GoodReceiptDocuments.AsNoTracking()
-            .Select(d => d.BatchNo)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-
-        var max = 0;
-        foreach (var s in nums)
-        {
-            var t = (s ?? "").Trim();
-            if (t.Length < prefix.Length + 1) continue;
-            if (!t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
-            var tail = t.Substring(prefix.Length).Trim();
-            if (int.TryParse(tail, out var n))
-                max = Math.Max(max, n);
-        }
-
-        var next = Math.Max(start, max + 1);
-        return $"{prefix}{next}";
-    }
 }
 

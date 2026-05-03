@@ -119,7 +119,8 @@ public sealed class StockMovementService
                 && s.PlantID == toPlant
                 && s.QuantityUomId == uom.Id
                 && s.Status == StockInventoryLine.StatusActive
-                && s.Grade == g, ct).ConfigureAwait(false);
+                && s.Grade == g
+                && (s.BatchOrLot ?? "") == "", ct).ConfigureAwait(false);
 
             if (dest == null)
             {
@@ -133,6 +134,7 @@ public sealed class StockMovementService
                     Quantity = qty,
                     StandardCostPerUom = moveCost,
                     StockValue = Math.Round(qty * moveCost, 2, MidpointRounding.AwayFromZero),
+                    BatchOrLot = "",
                     CreatedAt = now,
                     UpdatedAt = now
                 });

@@ -189,13 +189,15 @@ public sealed class GoodsReceiptPostingService
                     plantId)
                 .ConfigureAwait(false);
 
+            var batchKey = StockInventoryBatchKey.Normalize(batchNo);
             var line = await _db.StockInventoryLines
                 .FirstOrDefaultAsync(
                     s => s.PlantID == plantId
                          && s.MaterialNumber == lineDto.MaterialNumber
                          && s.QuantityUomId == lineDto.UomId
                          && s.Status == status
-                         && s.Grade == grade,
+                         && s.Grade == grade
+                         && (s.BatchOrLot ?? "") == batchKey,
                     ct)
                 .ConfigureAwait(false);
 
@@ -211,7 +213,7 @@ public sealed class GoodsReceiptPostingService
                     Quantity = qty,
                     StandardCostPerUom = stdCost,
                     StockValue = Math.Round(qty * stdCost, 2, MidpointRounding.AwayFromZero),
-                    BatchOrLot = (batchNo ?? "").Trim().Length == 0 ? null : (batchNo ?? "").Trim(),
+                    BatchOrLot = batchKey.Length == 0 ? "" : batchKey,
                     CreatedAt = now,
                     UpdatedAt = now
                 });
@@ -220,8 +222,8 @@ public sealed class GoodsReceiptPostingService
             {
                 line.Quantity += qty;
                 line.StockValue = Math.Round(line.Quantity * line.StandardCostPerUom, 2, MidpointRounding.AwayFromZero);
-                if (string.IsNullOrWhiteSpace(line.BatchOrLot) && !string.IsNullOrWhiteSpace(batchNo))
-                    line.BatchOrLot = batchNo.Trim();
+                if (string.IsNullOrWhiteSpace(line.BatchOrLot) && batchKey.Length > 0)
+                    line.BatchOrLot = batchKey;
                 line.UpdatedAt = now;
             }
         }

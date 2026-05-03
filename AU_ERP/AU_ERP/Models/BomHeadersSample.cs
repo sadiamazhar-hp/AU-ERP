@@ -28,7 +28,15 @@ namespace AU_ERP.Models
         public int? BLevel { get; set; }
         public int? AlternativeBOM { get; set; }
         public string? Plant { get; set; }
+        [MaxLength(30)]
+        public string BomUsage { get; set; } = "Production";
+        [MaxLength(30)]
+        public string AlternativeNo { get; set; } = "ALT-1";
+        [MaxLength(20)]
+        public string Status { get; set; } = "Active";
+        public bool IsDefaultBom { get; set; }
         public DateTime? ValidFrom { get; set; }
+        public DateTime? ValidTo { get; set; }
         public decimal? BaseQty { get; set; }
 
         public virtual ICollection<BomItemsSample> BomItemsSamples { get; set; }

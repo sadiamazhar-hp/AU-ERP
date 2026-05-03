@@ -14,4 +14,14 @@ public class SalesOrderListVm
 
     /// <summary>Sales orders that already have a delivery challan (hide “DC” action).</summary>
     public HashSet<int> SalesOrderIdsWithChallan { get; set; } = new();
+
+    /// <summary>Latest sales goods issue document status by sales order id.</summary>
+    public Dictionary<int, string> SalesOrderGiStatusById { get; set; } = new();
+
+    /// <summary>Latest sales goods issue document id by sales order id.</summary>
+    public Dictionary<int, int> SalesOrderGiDocIdByOrderId { get; set; } = new();
+
+    public Dictionary<int, string> SalesOrderGiDocumentNumberById { get; set; } = new();
+
+    public Dictionary<int, string> SalesOrderGiDispatchStatusById { get; set; } = new();
 }

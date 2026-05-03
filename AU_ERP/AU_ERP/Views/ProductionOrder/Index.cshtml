@@ -156,7 +156,13 @@
                             var isOperationTrackingCompleted = p.StageProgresses.Any()
                                 && p.StageProgresses.All(s => s.StageStatus == ProductionOrderStageProgress.StageCompleted);
                             <tr>
-                                <td><strong>PO-@p.ProductionNumber</strong></td>
+                                <td>
+                                    <strong>PO-@p.ProductionNumber</strong>
+                                    @if (!string.IsNullOrWhiteSpace(p.ProductionDocumentNumber))
+                                    {
+                                        <div class="text-secondary small">@p.ProductionDocumentNumber</div>
+                                    }
+                                </td>
                                 <td>@FmtDate(p.CreatedAt)</td>
                                 <td>@itemTxt</td>
                                 <td>@UiNumberFormat.D2(p.TargetQuantity) @uomCode</td>
@@ -169,9 +175,15 @@
                                         <button type="button" class="btn btn-outline-secondary btn-sm" title="BOM" onclick="poOpenBom(@p.Id)"><i class="bi bi-list-nested"></i> BOM</button>
                                         @if (p.Status == ProductionOrder.StatusPlanned)
                                         {
+                                            var giPoNum = Model.GoodsIssueDocumentNumberByProductionOrderId.TryGetValue(p.Id, out var gin) ? gin : null;
+                                            var giPoDisp = Model.GoodsIssueDispatchStatusByProductionOrderId.TryGetValue(p.Id, out var gidsp) ? gidsp : "";
                                             <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="poOpenEdit(@p.Id)"><i class="bi bi-pencil"></i></button>
                                             <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
-                                            <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Goods issue" onclick="poOpenGi(@p.Id)"><i class="bi bi-box-arrow-in-down"></i> GI</button>
+                                            @if (!string.IsNullOrEmpty(giPoNum))
+                                            {
+                                                <div class="w-100 small text-secondary mb-1">GI @giPoNum <span class="text-muted">(@giPoDisp)</span></div>
+                                            }
+                                            <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Stock goods issue (send / receive)" onclick="poOpenGiHub(@p.Id)"><i class="bi bi-send"></i> GI</button>
                                         }
                                         else if (p.ReleasedRoutingId != null && (p.Status == ProductionOrder.StatusReleased || p.Status == ProductionOrder.StatusInProgress || p.Status == ProductionOrder.StatusCompleted))
                                         {
@@ -1026,19 +1038,8 @@
         else if (confirm("Delete this production order?")) run();
     }
 
-    function poOpenGi(id) {
-        function run() {
-            fetch("@Url.Action("CreateOrOpen", "GoodsIssue")?productionOrderId=" + encodeURIComponent(id), { method: "POST" })
-                .then(function () {
-                    window.location.href = "@Url.Action("Index", "GoodsIssue")" + "?productionOrderId=" + encodeURIComponent(id);
-                })
-                .catch(function () {
-                    poShowInline(document.querySelector(".po-page"), "Could not open goods issue.");
-                });
-        }
-        if (typeof window.materialShowDeleteConfirmModalThen === "function")
-            window.materialShowDeleteConfirmModalThen("Create/open Goods Issue for this production order?", run);
-        else if (confirm("Create/open Goods Issue for this production order?")) run();
+    function poOpenGiHub(id) {
+        window.location.href = "@Url.Action("Index", "StockGoodsIssue")" + "?productionOrderId=" + encodeURIComponent(id);
     }
 
     var poTrackingDetailsUrl = "@Url.Action("Details", "OperationTracking")";

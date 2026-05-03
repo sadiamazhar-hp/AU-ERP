@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Services;
 
@@ -215,6 +216,156 @@ namespace AU_ERP.Controllers
                 _context.DocumentRanges.Remove(item);
                 await _context.SaveChangesAsync();
                 return Json(new { success = true, message = "Document Range Deleted Successfully !" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+            }
+        }
+
+        // ──── Document Integration ────
+
+        [HttpGet]
+        public async Task<IActionResult> Integration()
+        {
+            ViewBag.DocumentTypes = await _context.DocumentTypes
+                .Select(d => new SelectListItem
+                {
+                    Value = d.DocumentTypeID.ToString(),
+                    Text = (d.DocCode ?? "") + " - " + d.Description
+                }).ToListAsync();
+
+            ViewBag.ModuleKeys = ModuleKeys.All
+                .Select(x => new SelectListItem { Value = x.Key, Text = x.Display })
+                .ToList();
+
+            var data = await _context.DocumentIntegrations
+                .Include(i => i.DocumentType)
+                .OrderBy(i => i.ModuleKey)
+                .ToListAsync();
+            return View("Integration", data);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Integration(List<DocumentIntegration>? integrations)
+        {
+            var isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
+            var rows = (integrations ?? new List<DocumentIntegration>())
+                .Where(r => !string.IsNullOrWhiteSpace(r.ModuleKey) && r.DocumentTypeID > 0)
+                .ToList();
+
+            if (rows.Count == 0)
+            {
+                try
+                {
+                    var removeAll = await _context.DocumentIntegrations.ToListAsync();
+                    _context.DocumentIntegrations.RemoveRange(removeAll);
+                    await _context.SaveChangesAsync();
+                    if (isAjax) return Json(new { success = true, message = "Integration mappings cleared." });
+                    TempData["Success"] = "Integration mappings cleared.";
+                    return RedirectToAction(nameof(Integration));
+                }
+                catch (Exception ex)
+                {
+                    var msg = ex.InnerException?.Message ?? ex.Message;
+                    if (isAjax) return Json(new { success = false, message = "Save failed: " + msg });
+                    TempData["Error"] = msg;
+                    return RedirectToAction(nameof(Integration));
+                }
+            }
+
+            var dupKeys = rows.GroupBy(r => r.ModuleKey.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+            if (dupKeys.Count > 0)
+            {
+                var msg = "Each module can only appear once: duplicate " + string.Join(", ", dupKeys) + ".";
+                if (isAjax) return Json(new { success = false, message = msg });
+                TempData["Error"] = msg;
+                return RedirectToAction(nameof(Integration));
+            }
+
+            foreach (var r in rows)
+            {
+                var hasRange = await _context.DocumentRanges.AsNoTracking()
+                    .AnyAsync(x => x.DocumentTypeID == r.DocumentTypeID
+                        && x.FromNumber.HasValue && x.ToNumber.HasValue
+                        && (x.CurrentNumber ?? (x.FromNumber!.Value - 1)) < x.ToNumber!.Value);
+                if (!hasRange)
+                {
+                    var msg = $"Document type for module '{r.ModuleKey}' has no available number range (configure ranges with remaining capacity).";
+                    if (isAjax) return Json(new { success = false, message = msg });
+                    TempData["Error"] = msg;
+                    return RedirectToAction(nameof(Integration));
+                }
+            }
+
+            try
+            {
+                var postedIds = rows.Where(r => r.DocumentIntegrationID > 0).Select(r => r.DocumentIntegrationID).ToHashSet();
+                var toRemove = await _context.DocumentIntegrations
+                    .Where(i => !postedIds.Contains(i.DocumentIntegrationID))
+                    .ToListAsync();
+                _context.DocumentIntegrations.RemoveRange(toRemove);
+
+                var utc = DateTime.UtcNow;
+                foreach (var r in rows)
+                {
+                    r.ModuleKey = r.ModuleKey.Trim();
+                    if (r.DocumentIntegrationID > 0)
+                    {
+                        var existing = await _context.DocumentIntegrations.FindAsync(r.DocumentIntegrationID);
+                        if (existing != null)
+                        {
+                            existing.ModuleKey = r.ModuleKey;
+                            existing.DocumentTypeID = r.DocumentTypeID;
+                            existing.IsActive = r.IsActive;
+                            existing.UpdatedAt = utc;
+                        }
+                    }
+                    else
+                    {
+                        r.CreatedAt = utc;
+                        r.UpdatedAt = null;
+                        await _context.DocumentIntegrations.AddAsync(r);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                if (isAjax) return Json(new { success = true, message = "Document integration saved successfully." });
+                TempData["Success"] = "Data saved successfully!";
+            }
+            catch (DbUpdateException ex)
+            {
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + msg });
+                TempData["Error"] = $"Save failed: {msg}";
+            }
+            catch (Exception ex)
+            {
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                if (isAjax) return Json(new { success = false, message = "Save failed: " + msg });
+                TempData["Error"] = "Save failed: " + msg;
+            }
+
+            return RedirectToAction(nameof(Integration));
+        }
+
+        [HttpPost]
+        public async Task<JsonResult> DeleteDocumentIntegration(int id)
+        {
+            try
+            {
+                var item = await _context.DocumentIntegrations.FindAsync(id);
+                if (item == null)
+                    return Json(new { success = false, message = "Record not found" });
+
+                _context.DocumentIntegrations.Remove(item);
+                await _context.SaveChangesAsync();
+                return Json(new { success = true, message = "Integration row deleted successfully." });
             }
             catch (Exception ex)
             {

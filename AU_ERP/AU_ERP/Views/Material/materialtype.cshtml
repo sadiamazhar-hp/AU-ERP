@@ -28,6 +28,7 @@
                         <th style="width: 150px;">MTyp</th>
                         <th>Description</th>
                         <th style="width: 200px;">Field Ref</th>
+                        <th style="width: 460px;">Enabled Tabs</th>
                     </tr>
                 </thead>
                 <tbody id="gridBody">
@@ -43,6 +44,31 @@
                             </td>
                             <td>
                                 <input name="[@i].FieldReference" class="sap-input" value="@safeModel[i].FieldReference" readonly maxlength="4" />
+                            </td>
+                            <td class="px-2">
+                                @{
+                                    var enabled = new HashSet<string>(safeModel[i].EnabledTabs ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+                                }
+                                <label class="form-check form-check-inline m-0 me-2">
+                                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[@i].EnabledTabs" value="BasicData" @(enabled.Contains("BasicData") ? "checked" : "") disabled />
+                                    <span class="small">Basic Data</span>
+                                </label>
+                                <label class="form-check form-check-inline m-0 me-2">
+                                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[@i].EnabledTabs" value="Sales" @(enabled.Contains("Sales") ? "checked" : "") disabled />
+                                    <span class="small">Sales</span>
+                                </label>
+                                <label class="form-check form-check-inline m-0 me-2">
+                                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[@i].EnabledTabs" value="Purchasing" @(enabled.Contains("Purchasing") ? "checked" : "") disabled />
+                                    <span class="small">Purchasing</span>
+                                </label>
+                                <label class="form-check form-check-inline m-0 me-2">
+                                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[@i].EnabledTabs" value="MRP" @(enabled.Contains("MRP") ? "checked" : "") disabled />
+                                    <span class="small">MRP</span>
+                                </label>
+                                <label class="form-check form-check-inline m-0">
+                                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[@i].EnabledTabs" value="Accounting" @(enabled.Contains("Accounting") ? "checked" : "") disabled />
+                                    <span class="small">Accounting</span>
+                                </label>
                             </td>
                         </tr>
                     }
@@ -88,6 +114,7 @@
         isEditMode = edit;
         document.getElementById('app').classList.toggle('edit-mode', edit);
         document.querySelectorAll('.sap-input').forEach(input => { input.readOnly = !edit; });
+        document.querySelectorAll('.mt-enabled-tab').forEach(input => { input.disabled = !edit; });
         document.getElementById('btnEdit').disabled = edit;
         document.getElementById('btnNew').disabled = !edit;
         document.getElementById('btnSave').disabled = !edit;
@@ -102,9 +129,32 @@
             <td class="col-sel" onclick="selectRow(this)"></td>
             <td><input name="[${rowCount}].MaterialTypeCode" class="sap-input" maxlength="4" data-required="true"></td>
             <td><input name="[${rowCount}].Description" class="sap-input" data-required="true"></td>
-            <td><input name="[${rowCount}].FieldReference" class="sap-input" maxlength="4"></td>`;
+            <td><input name="[${rowCount}].FieldReference" class="sap-input" maxlength="4"></td>
+            <td class="px-2">
+                <label class="form-check form-check-inline m-0 me-2">
+                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[${rowCount}].EnabledTabs" value="BasicData">
+                    <span class="small">Basic Data</span>
+                </label>
+                <label class="form-check form-check-inline m-0 me-2">
+                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[${rowCount}].EnabledTabs" value="Sales">
+                    <span class="small">Sales</span>
+                </label>
+                <label class="form-check form-check-inline m-0 me-2">
+                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[${rowCount}].EnabledTabs" value="Purchasing">
+                    <span class="small">Purchasing</span>
+                </label>
+                <label class="form-check form-check-inline m-0 me-2">
+                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[${rowCount}].EnabledTabs" value="MRP">
+                    <span class="small">MRP</span>
+                </label>
+                <label class="form-check form-check-inline m-0">
+                    <input type="checkbox" class="form-check-input mt-enabled-tab" name="[${rowCount}].EnabledTabs" value="Accounting">
+                    <span class="small">Accounting</span>
+                </label>
+            </td>`;
         body.appendChild(tr);
         rowCount++;
+        tr.querySelectorAll('.mt-enabled-tab').forEach(input => { input.disabled = !isEditMode; });
         tr.querySelector('input').focus();
     }
 
@@ -122,6 +172,10 @@
             tr.querySelectorAll('.sap-input[data-required]').forEach(inp => {
                 if (!inp.value.trim()) bad.push(inp);
             });
+            var tabChecks = tr.querySelectorAll('.mt-enabled-tab');
+            if (tabChecks.length > 0 && !Array.from(tabChecks).some(chk => chk.checked)) {
+                bad.push(tabChecks[0]);
+            }
         });
         return bad;
     }
@@ -182,6 +236,9 @@
                 inputs[1].name = `[${index}].Description`;
                 inputs[2].name = `[${index}].FieldReference`;
             }
+            row.querySelectorAll('.mt-enabled-tab').forEach(chk => {
+                chk.name = `[${index}].EnabledTabs`;
+            });
         });
         rowCount = rows.length;
     }

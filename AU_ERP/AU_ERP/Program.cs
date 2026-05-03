@@ -48,6 +48,12 @@ builder.Services.AddAuthorization(options =>
     // Stock overview: users with Store department claim (seed data).
     options.AddPolicy("StoreDepartment", policy =>
         policy.RequireClaim(AuClaimTypes.Department, "Store"));
+    options.AddPolicy("InventoryGoodsIssue", policy =>
+        policy.RequireAssertion(ctx =>
+            ctx.User.HasClaim(AuClaimTypes.Department, "Store")
+            || ctx.User.HasClaim(AuClaimTypes.Department, "Production")
+            || ctx.User.HasClaim(AuClaimTypes.Department, "Sales")
+            || ctx.User.HasClaim(AuClaimTypes.Department, "Admin")));
 });
 
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -55,8 +61,15 @@ builder.Services.AddScoped<DashboardDataService>();
 builder.Services.AddScoped<GoodsReceiptPostingService>();
 builder.Services.AddScoped<GoodReceiptPdfService>();
 builder.Services.AddScoped<GoodsIssueService>();
+builder.Services.AddScoped<SalesGoodsIssueService>();
 builder.Services.AddScoped<GoodsIssuePdfService>();
 builder.Services.AddScoped<StockMovementService>();
+builder.Services.AddScoped<DocumentNumberAllocator>();
+builder.Services.AddScoped<SalesInvoiceFromDeliveryChallanService>();
+builder.Services.AddScoped<SalesReturnQiBomService>();
+builder.Services.AddScoped<SalesReturnQiPostingService>();
+builder.Services.AddScoped<SalesReturnCreditMemoPdfService>();
+builder.Services.AddScoped<CompanyInfoService>();
 
 builder.Services.AddControllersWithViews(options =>
 {
@@ -67,6 +80,14 @@ builder.Services.AddControllersWithViews(options =>
 });
 
 var app = builder.Build();
+
+// Ensure runtime database schema is aligned with EF migrations for the active
+// connection string (prevents missing-table errors when environment DB differs).
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync().ConfigureAwait(false);
+}
 
 if (!app.Environment.IsDevelopment())
 {

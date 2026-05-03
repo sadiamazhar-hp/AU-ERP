@@ -7,6 +7,8 @@ namespace AU_ERP.Models
         public int UomId { get; set; }
 
         public string? PlantId { get; set; }
+        public int? SelectedBomId { get; set; }
+        public string? SelectedBomAlternative { get; set; }
         /// <summary>When true (HALB drill-down), FERT-only restriction is skipped.</summary>
         public bool SubMrp { get; set; }
     }
@@ -18,6 +20,8 @@ namespace AU_ERP.Models
         public decimal Quantity { get; set; }
         public int UomId { get; set; }
         public string? PlantId { get; set; }
+        public int? SelectedBomId { get; set; }
+        public string? SelectedBomAlternative { get; set; }
     }
 
     public class MrpMultiRunRequestDto
@@ -33,6 +37,8 @@ namespace AU_ERP.Models
         public decimal Quantity { get; set; }
         public int UomId { get; set; }
         public string? PlantId { get; set; }
+        public int? SelectedBomId { get; set; }
+        public string? SelectedBomAlternative { get; set; }
         public MrpRunResponseDto Result { get; set; } = new();
     }
 

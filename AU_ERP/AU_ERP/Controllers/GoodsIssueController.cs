@@ -77,6 +77,8 @@ public class GoodsIssueController : Controller
                 documentNumber = doc.DocumentNumber,
                 documentDate = doc.DocumentDate.ToString("yyyy-MM-dd"),
                 status = doc.Status,
+                dispatchStatus = doc.DispatchStatus,
+                dispatchSentAt = doc.DispatchSentAt?.ToString("yyyy-MM-dd HH:mm") ?? "",
                 productionNumber = doc.ProductionOrder?.ProductionNumber,
                 materialNumber = doc.ProductionOrder?.FinishedMaterialNumber,
                 materialDescription = doc.ProductionOrder?.FinishedMaterial?.Description,
@@ -95,6 +97,16 @@ public class GoodsIssueController : Controller
                 })
             }
         });
+    }
+
+    [HttpPost]
+    public async Task<JsonResult> SendGoods(int id, CancellationToken ct = default)
+    {
+        var result = await _service.SendGoodsAsync(
+            id,
+            User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier),
+            ct);
+        return Json(new { success = result.success, message = result.message });
     }
 
     [HttpPost]

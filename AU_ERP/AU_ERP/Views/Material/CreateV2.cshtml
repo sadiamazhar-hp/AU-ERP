@@ -125,11 +125,37 @@
         @Html.ValidationSummary(false, "", new { @class = "text-danger small mb-2" })
         <div class="au-validation-summary" id="@("v2AuVal" + V2IdAffix)" style="display:none;" role="alert"></div>
 
-        <ul class="nav nav-tabs flex-wrap" id="@("createV2Tabs" + V2IdAffix)" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="@("v2info-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2info" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2info" + V2IdAffix)" aria-selected="true">Info</button>
-            </li>
-            <li class="nav-item" role="presentation">
+        <div class="v2-frame mb-2">
+            <div class="v2-frame-title">Header Data</div>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Material Number</label>
+                    @Html.TextBoxFor(m => m.MaterialNumber, new { @class = "form-control sap-readonly", @readonly = "readonly", id = "txtMaterialNumberV2" + V2IdAffix })
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Material Description</label>
+                    @Html.EditorFor(m => m.Description, new { htmlAttributes = new { @class = "form-control req" } })
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Material Type</label>
+                    @Html.DropDownListFor(m => m.MaterialTypeCode,
+                        ViewBag.MaterialTypeList as IEnumerable<SelectListItem>,
+                        "Select Type",
+                        new { @class = "form-control req", id = "matTypeV2" + V2IdAffix, onchange = "window.onMaterialTypeChangeV2" + v2HandlerKey + "()" })
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Industry Sector</label>
+                    @Html.DropDownListFor(m => m.IndustrySectorCode,
+                        ViewBag.IndustrySectors as IEnumerable<SelectListItem>,
+                        "Select Sector",
+                        new { @class = "form-control req" })
+                </div>
+            </div>
+            <div class="v2-status" id="@("statusBarV2" + V2IdAffix)">Select material type to load tabs.</div>
+        </div>
+
+        <ul class="nav nav-tabs flex-wrap" id="@("createV2Tabs" + V2IdAffix)" role="tablist" style="display:none;">
+            <li class="nav-item" role="presentation" id="@("nav-basic-v2" + V2IdAffix)">
                 <button class="nav-link" id="@("v2basic-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2basic" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2basic" + V2IdAffix)" aria-selected="false">Basic Data</button>
             </li>
             <li class="nav-item" role="presentation" id="@("nav-sales-v2" + V2IdAffix)">
@@ -138,50 +164,24 @@
             <li class="nav-item" role="presentation" id="@("nav-purch-v2" + V2IdAffix)">
                 <button class="nav-link" id="@("v2purch-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2purch" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2purch" + V2IdAffix)" aria-selected="false">Purchasing</button>
             </li>
-            <li class="nav-item" role="presentation">
+            <li class="nav-item" role="presentation" id="@("nav-mrp-v2" + V2IdAffix)">
                 <button class="nav-link" id="@("v2mrp-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2mrp" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2mrp" + V2IdAffix)" aria-selected="false">MRP</button>
             </li>
             @* Units of Measure tab — use Configuration → Unit Conversion + Basic Data alternative units. *@
             @*<li class="nav-item" role="presentation">
                 <button class="nav-link" id="@("v2uom-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2uom" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2uom" + V2IdAffix)" aria-selected="false">Units of Measure</button>
             </li>*@
-            <li class="nav-item" role="presentation">
+            <li class="nav-item" role="presentation" id="@("nav-acc-v2" + V2IdAffix)">
                 <button class="nav-link" id="@("v2acc-tab" + V2IdAffix)" data-bs-toggle="tab" data-bs-target="#@("v2acc" + V2IdAffix)" type="button" role="tab" aria-controls="@("v2acc" + V2IdAffix)" aria-selected="false">Accounting</button>
             </li>
         </ul>
 
-        <div class="tab-content">
-            <div class="tab-pane fade show active" id="@("v2info" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2info-tab" + V2IdAffix)">
-                <div class="row g-3 mt-1">
-                    <div class="col-12">
-                        <label class="form-label">Material Number</label>
-                        @Html.TextBoxFor(m => m.MaterialNumber, new { @class = "form-control sap-readonly", @readonly = "readonly", id = "txtMaterialNumberV2" + V2IdAffix })
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Industry Sector</label>
-                        @Html.DropDownListFor(m => m.IndustrySectorCode,
-                            ViewBag.IndustrySectors as IEnumerable<SelectListItem>,
-                            "Select Sector",
-                            new { @class = "form-control req" })
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Material Type</label>
-                        @Html.DropDownListFor(m => m.MaterialTypeCode,
-                            ViewBag.MaterialTypeList as IEnumerable<SelectListItem>,
-                            "Select Type",
-                            new { @class = "form-control req", id = "matTypeV2" + V2IdAffix, onchange = "window.onMaterialTypeChangeV2" + v2HandlerKey + "()" })
-                    </div>
-                </div>
-                <div class="v2-status" id="@("statusBarV2" + V2IdAffix)">Ready</div>
-            </div>
-
+        <div class="tab-content" id="@("createV2TabContent" + V2IdAffix)" style="display:none;">
             <div class="tab-pane fade" id="@("v2basic" + V2IdAffix)" role="tabpanel" aria-labelledby="@("v2basic-tab" + V2IdAffix)">
                 <div class="v2-frame">
                     <div class="v2-frame-title">Basic Data 1 &amp; 2</div>
                     <div class="row g-2">
                         <div class="col-md-6">
-                            <label class="form-label">Description</label>
-                            @Html.EditorFor(m => m.Description, new { htmlAttributes = new { @class = "form-control req" } })
                             <label class="form-label mt-2">Base Unit</label>
                             @{
                                 var uomItems = (ViewBag.UomList as IEnumerable<SelectListItem>) ?? new List<SelectListItem>();
@@ -344,6 +344,15 @@
         let createV2CommittedTypeCode = "";
         let createV2CommittedMaterialNumber = "";
         const urlGetAlternateUomsV2 = '@Url.Action("GetAlternateUomsForBaseCode", "Material")';
+        const urlGetEnabledTabsV2 = '@Url.Action("GetEnabledTabsForMaterialType", "Material")';
+        const tabMapV2 = {
+            BasicData: { nav: "nav-basic-v2", pane: "v2basic", tab: "v2basic-tab" },
+            Sales: { nav: "nav-sales-v2", pane: "v2sales", tab: "v2sales-tab" },
+            Purchasing: { nav: "nav-purch-v2", pane: "v2purch", tab: "v2purch-tab" },
+            MRP: { nav: "nav-mrp-v2", pane: "v2mrp", tab: "v2mrp-tab" },
+            Accounting: { nav: "nav-acc-v2", pane: "v2acc", tab: "v2acc-tab" }
+        };
+        let activeEnabledTabsV2 = [];
 
         if (v2IsModalCopy) {
             window.setCreateV2ModalEditState = function (v) {
@@ -359,24 +368,86 @@
             return base + V2_ID_AFFIX;
         }
 
-        function handleTabVisibilityV2() {
-            const typeEl = document.getElementById(v2id("matTypeV2"));
-            if (!typeEl) return;
-            const type = typeEl.value;
-            const salesLi = document.getElementById(v2id("nav-sales-v2"));
-            const purchLi = document.getElementById(v2id("nav-purch-v2"));
-            if (salesLi) salesLi.style.display = "";
-            if (purchLi) purchLi.style.display = "";
-            if ((type === "ROH" || type === "HALB" || type === "VERP") && salesLi) salesLi.style.display = "none";
-            if (type === "FERT" && purchLi) purchLi.style.display = "none";
+        function applyEnabledTabsV2(enabledTabs) {
+            const tabsWrap = document.getElementById(v2id("createV2Tabs"));
+            const tabContent = document.getElementById(v2id("createV2TabContent"));
+            const statusBox = document.getElementById(v2id("statusBarV2"));
+            const allowed = Object.keys(tabMapV2);
+            const selected = (enabledTabs || []).filter(function (x) { return allowed.indexOf(x) >= 0; });
+            activeEnabledTabsV2 = selected;
+
+            allowed.forEach(function (tabKey) {
+                const cfg = tabMapV2[tabKey];
+                const show = selected.indexOf(tabKey) >= 0;
+                const nav = document.getElementById(v2id(cfg.nav));
+                const pane = document.getElementById(v2id(cfg.pane));
+                if (nav) nav.style.display = show ? "" : "none";
+                if (pane) {
+                    pane.style.display = show ? "" : "none";
+                    if (!show) pane.classList.remove("show", "active");
+                }
+            });
+
+            if (!selected.length) {
+                if (tabsWrap) tabsWrap.style.display = "none";
+                if (tabContent) tabContent.style.display = "none";
+                if (statusBox) statusBox.innerText = "No tabs configured for selected material type.";
+                return;
+            }
+
+            if (tabsWrap) tabsWrap.style.display = "";
+            if (tabContent) tabContent.style.display = "";
+
+            var preferred = selected.indexOf("BasicData") >= 0 ? "BasicData" : selected[0];
+            var btn = document.getElementById(v2id(tabMapV2[preferred].tab));
+            if (btn && typeof bootstrap !== "undefined" && bootstrap.Tab)
+                bootstrap.Tab.getOrCreateInstance(btn).show();
+            if (statusBox) statusBox.innerText = "Tabs loaded.";
+        }
+
+        function clearTabsUntilTypeV2(messageText) {
+            const tabsWrap = document.getElementById(v2id("createV2Tabs"));
+            const tabContent = document.getElementById(v2id("createV2TabContent"));
+            const statusBox = document.getElementById(v2id("statusBarV2"));
+            activeEnabledTabsV2 = [];
+            if (tabsWrap) tabsWrap.style.display = "none";
+            if (tabContent) tabContent.style.display = "none";
+            if (statusBox && messageText) statusBox.innerText = messageText;
+        }
+
+        function loadEnabledTabsForTypeV2(typeCode) {
+            if (!typeCode) {
+                clearTabsUntilTypeV2("Select material type to load tabs.");
+                return Promise.resolve(false);
+            }
+            const statusBox = document.getElementById(v2id("statusBarV2"));
+            if (statusBox) statusBox.innerText = "Loading tab configuration...";
+            const url = urlGetEnabledTabsV2 + "?materialTypeCode=" + encodeURIComponent(typeCode);
+            return fetch(url)
+                .then(function (r) { return r.json(); })
+                .then(function (response) {
+                    if (!response || !response.success) {
+                        clearTabsUntilTypeV2(response && response.message ? response.message : "Unable to load tabs.");
+                        return false;
+                    }
+                    applyEnabledTabsV2(response.tabs || []);
+                    return true;
+                })
+                .catch(function () {
+                    clearTabsUntilTypeV2("Communication error while loading tabs.");
+                    return false;
+                });
         }
 
         window['onMaterialTypeChangeV2@(v2HandlerKey)'] = function () {
-            handleTabVisibilityV2();
-            if (createV2IsEdit)
-                fetchNextMaterialNumberV2ForEdit();
-            else
-                fetchNextMaterialNumberV2();
+            const typeCode = document.getElementById(v2id("matTypeV2"))?.value || "";
+            loadEnabledTabsForTypeV2(typeCode).then(function (ok) {
+                if (!ok) return;
+                if (createV2IsEdit)
+                    fetchNextMaterialNumberV2ForEdit();
+                else
+                    fetchNextMaterialNumberV2();
+            });
         };
 
         if (!createV2Embedded) {
@@ -468,16 +539,14 @@
             const countEl = document.getElementById(v2id("v2altUomCount"));
             const sumEl = document.getElementById(v2id("v2altUomSummary"));
             if (!menu || !countEl || !sumEl) return;
-            const sels = menu.querySelectorAll("select.v2-guc");
+            const checks = menu.querySelectorAll("input.v2-guc-chk[type='checkbox']");
             const bits = [];
             var n = 0;
-            sels.forEach(function (sel) {
-                const v = parseInt(sel.value, 10);
-                if (!isNaN(v) && v > 0) {
-                    n++;
-                    const t = (sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].text) ? sel.options[sel.selectedIndex].text : "";
-                    if (t) bits.push(t.trim());
-                }
+            checks.forEach(function (chk) {
+                if (!chk.checked) return;
+                n++;
+                const t = String(chk.getAttribute("data-label") || "").trim();
+                if (t) bits.push(t);
             });
             countEl.textContent = "(" + n + ")";
             sumEl.textContent = bits.length ? (bits.join("; ").length > 80 ? bits.join("; ").slice(0, 77) + "…" : bits.join("; ")) : "—";
@@ -521,9 +590,7 @@
                         var head = "Alt: " + String(code);
                         if (desc) head += " — " + String(desc);
                         html += '<li class="px-2 py-1 small border-bottom"><div class="text-muted mb-1" style="font-size:0.7rem;">' + escapeAttr(head) + "</div>";
-                        html += '<select class="form-select form-select-sm v2-guc" name="SelectedGlobalUnitConversionIds" data-alt-idx="' + gi + '">';
-                        html += '<option value="">— None —</option>';
-                        if (opts.length === 0) { html += "</select></li>"; return; }
+                        if (opts.length === 0) { html += '<div class="small text-muted">No conversion options.</div></li>'; return; }
                         const onlyOne = opts.length === 1;
                         opts.forEach(function (opt) {
                             var oid = opt.id != null ? opt.id : opt.Id;
@@ -533,14 +600,17 @@
                             var label = String(title) + " (1 base = " + String(qty) + " " + String(code) + ")";
                             var inPreset = !isNaN(gidi) && preset.has(gidi);
                             var autoOne = !hasPreset && onlyOne;
-                            var sel = (inPreset || autoOne) ? " selected" : "";
-                            html += '<option value="' + escapeAttr(String(oid)) + '"' + sel + ">" + escapeAttr(label) + "</option>";
+                            var isChecked = (inPreset || autoOne) ? " checked" : "";
+                            html += '<label class="form-check m-0 mb-1">';
+                            html += '<input class="form-check-input v2-guc-chk" type="checkbox" name="SelectedGlobalUnitConversionIds" value="' + escapeAttr(String(oid)) + '" data-label="' + escapeAttr(label) + '"' + isChecked + " />";
+                            html += '<span class="form-check-label">' + escapeAttr(label) + "</span>";
+                            html += "</label>";
                         });
-                        html += "</select></li>";
+                        html += "</li>";
                     });
                     menu.innerHTML = html;
-                    menu.querySelectorAll("select.v2-guc").forEach(function (sel) {
-                        sel.addEventListener("change", updateAltUomSummaryV2);
+                    menu.querySelectorAll("input.v2-guc-chk").forEach(function (chk) {
+                        chk.addEventListener("change", updateAltUomSummaryV2);
                     });
                     updateAltUomSummaryV2();
                 })
@@ -608,7 +678,14 @@
             function add(el) {
                 if (el && bad.indexOf(el) < 0) bad.push(el);
             }
+            var typeEl = document.getElementById(v2id("matTypeV2"));
+            if (!typeEl || !String(typeEl.value || "").trim()) {
+                add(typeEl);
+                return bad;
+            }
             form.querySelectorAll(".req").forEach(function (el) {
+                var pane = el.closest(".tab-pane");
+                if (pane && pane.style.display === "none") return;
                 if (!el.value || !String(el.value).trim()) add(el);
             });
             return bad;
@@ -658,10 +735,13 @@
                 else if (m.SelectedGlobalUnitConversionIds) selGuc = m.SelectedGlobalUnitConversionIds;
             }
             const sb = document.getElementById(v2id("statusBarV2"));
-            updateV2MatSalesState();
-            refreshAlternateUomMenuV2(Array.isArray(selGuc) ? selGuc : []).then(function () {
-                if (sb) sb.innerText = "Loaded for edit.";
+            const typeCode = pick(m, "materialTypeCode", "MaterialTypeCode") || "";
+            loadEnabledTabsForTypeV2(typeCode).then(function () {
                 updateV2MatSalesState();
+                refreshAlternateUomMenuV2(Array.isArray(selGuc) ? selGuc : []).then(function () {
+                    if (sb) sb.innerText = "Loaded for edit.";
+                    updateV2MatSalesState();
+                });
             });
 
             var origNum = pick(m, "materialNumber", "MaterialNumber");
@@ -689,11 +769,8 @@
             const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
             if (saveBtn) saveBtn.textContent = "Save";
             const sb = document.getElementById(v2id("statusBarV2"));
-            if (sb) sb.innerText = "Ready";
-            var firstTabBtn = document.getElementById(v2id("v2info-tab"));
-            if (firstTabBtn && typeof bootstrap !== "undefined" && bootstrap.Tab)
-                bootstrap.Tab.getOrCreateInstance(firstTabBtn).show();
-            handleTabVisibilityV2();
+            if (sb) sb.innerText = "Select material type to load tabs.";
+            clearTabsUntilTypeV2("Select material type to load tabs.");
             syncMrpQtyFieldsV2();
             updateV2MatSalesState();
             applyDeliveringPlantFromValueV2("");
@@ -708,7 +785,7 @@
         document.addEventListener("DOMContentLoaded", function () {
             if (!createV2Embedded && typeof window.moveCreateV2ModalToBody === "function")
                 window.moveCreateV2ModalToBody();
-            handleTabVisibilityV2();
+            clearTabsUntilTypeV2("Select material type to load tabs.");
             const baseUomSel = document.getElementById(v2id("BaseUnitCodeV2"));
             if (baseUomSel) {
                 baseUomSel.addEventListener("change", function () { refreshAlternateUomMenuV2(); updateV2MatSalesState(); });
@@ -719,6 +796,8 @@
             refreshAlternateUomMenuV2();
             updateV2MatSalesState();
             applyDeliveringPlantFromValueV2((document.getElementById(v2id("DeliveringPlantCodeV2")) || {}).value || "");
+            var initialType = document.getElementById(v2id("matTypeV2"))?.value || "";
+            if (initialType) loadEnabledTabsForTypeV2(initialType);
             const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
             if (saveBtn) {
                 saveBtn.addEventListener("click", function () {

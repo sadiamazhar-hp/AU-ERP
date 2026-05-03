@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 namespace AU_ERP.Main_Controller
 {
@@ -117,7 +118,12 @@ namespace AU_ERP.Main_Controller
             material.ReorderPoint = null;
         }
 
-        /// <summary>Builds per-material <see cref="UnitConversion"/> from chosen <see cref="GlobalUnitConversion"/> rows (1 base = Qty alt → Numerator=1, Denominator=Qty).</summary>
+        /// <summary>
+        /// Builds per-material <see cref="UnitConversion"/> from chosen <see cref="GlobalUnitConversion"/> rows.
+        /// Supports selections where material base UOM appears on either side of global definition:
+        /// - Global: 1 base = qty alt, and material base == global base  => alt=global alt, factor alt->base = 1/qty.
+        /// - Global: 1 base = qty alt, and material base == global alt   => alt=global base, factor alt->base = qty.
+        /// </summary>
         private async Task<(List<UnitConversion> Conversions, string? ErrorMessage)> BuildUnitConversionsFromGlobalIdsAsync(
             string? materialNumber,
             string? baseUnitCode,
@@ -148,26 +154,37 @@ namespace AU_ERP.Main_Controller
             var seenPairs = new HashSet<(int BaseId, int AltId)>();
             foreach (var g in globals)
             {
-                if (g.BaseUnitId != baseUom.Id)
+                var usesBaseSide = g.BaseUnitId == baseUom.Id;
+                var usesAltSide = g.AltUnitId == baseUom.Id;
+                if (!usesBaseSide && !usesAltSide)
                     return (list, $"The conversion \"{g.Title}\" does not use the current base UOM. Pick another recipe or change the base unit.");
-                if (g.AltUnitId == baseUom.Id)
-                    return (list, "Invalid conversion: alternate unit cannot match the base unit.");
                 if (g.Quantity <= 0)
                     return (list, "Invalid master conversion quantity for one of the selected definitions.");
-                if (!seenPairs.Add((g.BaseUnitId, g.AltUnitId)))
+
+                var derivedAltId = usesBaseSide ? g.AltUnitId : g.BaseUnitId;
+                if (derivedAltId == baseUom.Id)
+                    return (list, "Invalid conversion: alternate unit cannot match the base unit.");
+
+                if (!seenPairs.Add((baseUom.Id, derivedAltId)))
                     return (list, "Select only one conversion recipe per base/alternate UOM pair (e.g. you cannot pick two different \"box → kg\" definitions).");
             }
             foreach (var g in globals)
             {
-                var d = (float)g.Quantity;
-                if (d <= 0f)
+                var qty = (float)g.Quantity;
+                if (qty <= 0f)
                     return (list, "Invalid master conversion quantity for one of the selected definitions.");
+
+                var usesBaseSide = g.BaseUnitId == baseUom.Id;
+                var altUnitId = usesBaseSide ? g.AltUnitId : g.BaseUnitId;
+                var numerator = usesBaseSide ? 1f : qty;
+                var denominator = usesBaseSide ? qty : 1f;
+
                 list.Add(new UnitConversion
                 {
                     MaterialNumber = mn,
-                    AltUnitId = g.AltUnitId,
-                    Numerator = 1f,
-                    Denominator = d,
+                    AltUnitId = altUnitId,
+                    Numerator = numerator,
+                    Denominator = denominator,
                     GlobalUnitConversionId = g.Id
                 });
             }
@@ -198,6 +215,50 @@ namespace AU_ERP.Main_Controller
         {
             if (!string.IsNullOrEmpty(purchasingGroupCode) && purchasingGroupCode.Length > 20)
                 return "Purchasing group must be at most 20 characters.";
+            return null;
+        }
+
+        private static List<string> NormalizeEnabledTabs(IEnumerable<string>? tabs)
+        {
+            var allowed = new HashSet<string>(AU_ERP.Models.MaterialType.AllowedTabs, StringComparer.OrdinalIgnoreCase);
+            return (tabs ?? Array.Empty<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Where(x => allowed.Contains(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> ParseEnabledTabs(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return new List<string>();
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+                return NormalizeEnabledTabs(parsed);
+            }
+            catch
+            {
+                return new List<string>();
+            }
+        }
+
+        private async Task<string?> ValidateMaterialTypeTabsConfiguredAsync(string? materialTypeCode, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(materialTypeCode))
+                return "Material type is required.";
+
+            var type = await _context.MaterialTypes.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.MaterialTypeCode == materialTypeCode, ct);
+            if (type == null)
+                return "Selected material type is invalid.";
+
+            var enabled = ParseEnabledTabs(type.EnabledTabsJson);
+            if (enabled.Count == 0)
+                return $"Material type {materialTypeCode} has no enabled tabs configured. Update Material Type configuration first.";
+
             return null;
         }
 
@@ -233,6 +294,14 @@ namespace AU_ERP.Main_Controller
                 PrepareViewBags();
                 return View(material);
             }
+            var tabCfgErr = await ValidateMaterialTypeTabsConfiguredAsync(material.MaterialTypeCode);
+            if (tabCfgErr != null)
+            {
+                ModelState.Clear();
+                PrepareViewBags();
+                TempData["ErrorMessage"] = tabCfgErr;
+                return View(material);
+            }
 
             var (ok, error) = await TryPersistNewMaterialAsync(material, selectedGlobalUnitConversionIds);
             if (ok)
@@ -265,6 +334,9 @@ namespace AU_ERP.Main_Controller
                     .Select(e => e.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
                 return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
             }
+            var tabCfgErr = await ValidateMaterialTypeTabsConfiguredAsync(material.MaterialTypeCode);
+            if (tabCfgErr != null)
+                return Json(new { success = false, message = tabCfgErr });
 
             var (ok, error) = await TryPersistNewMaterialAsync(material, selectedGlobalUnitConversionIds);
             if (ok)
@@ -325,7 +397,9 @@ namespace AU_ERP.Main_Controller
             var globalCandidates = baseU == null || altIds.Count == 0
                 ? new List<GlobalUnitConversion>()
                 : await _context.GlobalUnitConversions.AsNoTracking()
-                    .Where(g => g.BaseUnitId == baseU.Id && altIds.Contains(g.AltUnitId))
+                    .Where(g =>
+                        (g.BaseUnitId == baseU.Id && altIds.Contains(g.AltUnitId))
+                        || (g.AltUnitId == baseU.Id && altIds.Contains(g.BaseUnitId)))
                     .ToListAsync();
             var selectedGlobalList = new List<int>();
             foreach (var c in convRows)
@@ -337,8 +411,20 @@ namespace AU_ERP.Main_Controller
                 }
                 if (baseU == null) continue;
                 var match = globalCandidates.FirstOrDefault(
-                    g => g.AltUnitId == c.AltUnitId
-                         && Math.Abs((double)g.Quantity - c.Denominator) < 0.0001);
+                    g =>
+                        (
+                            g.BaseUnitId == baseU.Id
+                            && g.AltUnitId == c.AltUnitId
+                            && Math.Abs((double)g.Quantity - c.Denominator) < 0.0001
+                            && Math.Abs((double)c.Numerator - 1d) < 0.0001
+                        )
+                        ||
+                        (
+                            g.AltUnitId == baseU.Id
+                            && g.BaseUnitId == c.AltUnitId
+                            && Math.Abs((double)g.Quantity - c.Numerator) < 0.0001
+                            && Math.Abs((double)c.Denominator - 1d) < 0.0001
+                        ));
                 if (match != null) selectedGlobalList.Add(match.Id);
             }
 
@@ -351,7 +437,10 @@ namespace AU_ERP.Main_Controller
             });
         }
 
-        /// <summary>Alternate UOMs that have at least one global conversion from the given base, grouped by alt with recipe options (title, qty).</summary>
+        /// <summary>
+        /// Alternate UOMs that have at least one global conversion using the given base UOM
+        /// (base can appear as global base or global alt), grouped by derived alternate UOM.
+        /// </summary>
         [HttpGet]
         public async Task<JsonResult> GetAlternateUomsForBaseCode(string? baseCode, CancellationToken ct = default)
         {
@@ -364,16 +453,24 @@ namespace AU_ERP.Main_Controller
             if (baseUom == null)
                 return Json(new { success = true, altGroups = Array.Empty<object>(), baseUomId = (int?)null });
             var flat = await _context.GlobalUnitConversions.AsNoTracking()
-                .Where(x => x.BaseUnitId == baseUom.Id)
+                .Where(x => x.BaseUnitId == baseUom.Id || x.AltUnitId == baseUom.Id)
+                .Select(g => new
+                {
+                    g.Id,
+                    g.Title,
+                    g.Quantity,
+                    DerivedAltUnitId = g.BaseUnitId == baseUom.Id ? g.AltUnitId : g.BaseUnitId,
+                    QuantityForBase = g.BaseUnitId == baseUom.Id ? g.Quantity : (g.Quantity <= 0 ? 0 : 1m / g.Quantity)
+                })
                 .Join(_context.UnitOfMeasurements,
-                    g => g.AltUnitId,
+                    g => g.DerivedAltUnitId,
                     u => u.Id,
                     (g, u) => new
                     {
                         g.Id,
                         g.Title,
-                        g.Quantity,
-                        g.AltUnitId,
+                        Quantity = g.QuantityForBase,
+                        AltUnitId = g.DerivedAltUnitId,
                         AltCode = u.Code,
                         AltDesc = u.Description
                     })
@@ -406,6 +503,9 @@ namespace AU_ERP.Main_Controller
                     .Select(e => e.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
                 return Json(new { success = false, message = string.IsNullOrWhiteSpace(msg) ? "Validation failed." : msg });
             }
+            var tabCfgErr = await ValidateMaterialTypeTabsConfiguredAsync(material.MaterialTypeCode);
+            if (tabCfgErr != null)
+                return Json(new { success = false, message = tabCfgErr });
 
             var original = Request.Form["OriginalMaterialNumber"].ToString();
             var (ok, error) = !string.IsNullOrWhiteSpace(original)
@@ -652,6 +752,24 @@ namespace AU_ERP.Main_Controller
             {
                 return Json(new { success = false, message = ex.Message });
             }
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetEnabledTabsForMaterialType(string? materialTypeCode)
+        {
+            if (string.IsNullOrWhiteSpace(materialTypeCode))
+                return Json(new { success = false, message = "Material type is required.", tabs = Array.Empty<string>() });
+
+            var type = await _context.MaterialTypes.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.MaterialTypeCode == materialTypeCode);
+            if (type == null)
+                return Json(new { success = false, message = "Material type not found.", tabs = Array.Empty<string>() });
+
+            var tabs = ParseEnabledTabs(type.EnabledTabsJson);
+            if (tabs.Count == 0)
+                return Json(new { success = false, message = "No tabs are configured for selected material type.", tabs = Array.Empty<string>() });
+
+            return Json(new { success = true, tabs });
         }
 
         // GET
@@ -940,15 +1058,43 @@ namespace AU_ERP.Main_Controller
 
             try
             {
+                var allowed = new HashSet<string>(AU_ERP.Models.MaterialType.AllowedTabs, StringComparer.OrdinalIgnoreCase);
                 foreach (var item in materialTypes)
                 {
                     if (string.IsNullOrEmpty(item.MaterialTypeCode)) continue;
+                    if (string.IsNullOrWhiteSpace(item.Description))
+                    {
+                        var msg = $"Description is required for material type {item.MaterialTypeCode}.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        ModelState.AddModelError("", msg);
+                        return View("materialtype", materialTypes);
+                    }
+
+                    var tabs = NormalizeEnabledTabs(item.EnabledTabs);
+                    var postedTabs = item.EnabledTabs ?? new List<string>();
+                    if (postedTabs.Any(x => !string.IsNullOrWhiteSpace(x) && !allowed.Contains(x)))
+                    {
+                        var msg = $"Material type {item.MaterialTypeCode} includes invalid tabs.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        ModelState.AddModelError("", msg);
+                        return View("materialtype", materialTypes);
+                    }
+                    if (tabs.Count == 0)
+                    {
+                        var msg = $"At least one tab must be enabled for material type {item.MaterialTypeCode}.";
+                        if (isAjax) return Json(new { success = false, message = msg });
+                        ModelState.AddModelError("", msg);
+                        return View("materialtype", materialTypes);
+                    }
+
+                    item.EnabledTabs = tabs;
 
                     var existing = await _context.MaterialTypes.FindAsync(item.MaterialTypeCode);
                     if (existing != null)
                     {
                         existing.Description = item.Description;
                         existing.FieldReference = item.FieldReference;
+                        existing.EnabledTabs = tabs;
                     }
                     else
                     {

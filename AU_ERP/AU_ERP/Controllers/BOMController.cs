@@ -12,19 +12,35 @@ namespace AU_ERP.Controllers
     public class BOMController : Controller
     {
         private readonly AppDbContext _db;
+        private static readonly HashSet<string> AllowedBomStatuses = new(StringComparer.OrdinalIgnoreCase) { "Active", "Inactive" };
 
         public BOMController(AppDbContext db) => _db = db;
 
-        /// <summary>FG BOM level → FERT header; SFG → HALB.</summary>
-        private static string? ExpectedHeaderMaterialTypeFromBomLevel(BOMLevelsSample? level)
+        /// <summary>All planning BOM headers are FERT in simplified flow.</summary>
+        private const string HeaderMaterialTypeFixed = "FERT";
+        
+        private static string NormalizeBomStatus(string? status)
         {
-            if (level == null || string.IsNullOrWhiteSpace(level.LevelName))
-                return null;
-            var n = level.LevelName.Trim();
-            if (string.Equals(n, "FG", StringComparison.OrdinalIgnoreCase))
-                return "FERT";
-            if (string.Equals(n, "SFG", StringComparison.OrdinalIgnoreCase))
-                return "HALB";
+            var v = (status ?? "Active").Trim();
+            if (v.Length == 0) v = "Active";
+            return AllowedBomStatuses.Contains(v) ? AllowedBomStatuses.First(x => x.Equals(v, StringComparison.OrdinalIgnoreCase)) : v;
+        }
+        
+        private async Task<string?> ValidateBomHeaderBusinessRulesAsync(BomCreateDto dto, int? editingBomId, CancellationToken ct)
+        {
+            var status = NormalizeBomStatus(dto.Status);
+            var plant = (dto.Plant ?? "").Trim();
+            var headerMat = (dto.BomMaterialNumber ?? "").Trim();
+            if (!AllowedBomStatuses.Contains(status))
+                return "Invalid BOM status.";
+            if (dto.ValidFrom.HasValue && dto.ValidTo.HasValue && dto.ValidFrom.Value.Date > dto.ValidTo.Value.Date)
+                return "Valid To date must be on or after Valid From date.";
+            var headerMaterial = await _db.CreateMaterialMaster.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.MaterialNumber == headerMat, ct);
+            if (headerMaterial == null)
+                return $"Header material '{headerMat}' does not exist.";
+            if (!string.Equals(headerMaterial.MaterialTypeCode, HeaderMaterialTypeFixed, StringComparison.OrdinalIgnoreCase))
+                return "BOM header material must be FERT.";
             return null;
         }
 
@@ -53,9 +69,13 @@ namespace AU_ERP.Controllers
                 await _db.BOMLevelsSamples.AsNoTracking().OrderBy(l => l.LevelID).ToListAsync(ct),
                 "LevelID", "LevelName");
 
-            ViewBag.Plants = new SelectList(
-                await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantID).ToListAsync(ct),
-                "PlantID", "PlantName");
+            var plantsForBom = await _db.PlantsSamples.AsNoTracking()
+                .OrderBy(p => p.PlantID)
+                .Where(p =>
+                    !string.Equals((p.PlantName ?? "").Trim(), "Emporium", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals((p.PlantID ?? "").Trim(), "Emp101", StringComparison.OrdinalIgnoreCase))
+                .ToListAsync(ct);
+            ViewBag.Plants = new SelectList(plantsForBom, "PlantID", "PlantName");
 
             ViewBag.UomList = await _db.UnitOfMeasurements.AsNoTracking()
                 .OrderBy(u => u.Code)
@@ -85,7 +105,7 @@ namespace AU_ERP.Controllers
             return Json(new { success = true, nextBomCode = next });
         }
 
-        /// <summary>Materials for BOM UI: header = HALB/FERT (optionally narrowed by materialType); component = ROH/HALB. Search q is partial match on number or description.</summary>
+        /// <summary>Materials for BOM UI: header = FERT only; component = ROH/HALB. Search q is partial match on number or description.</summary>
         [HttpGet]
         public async Task<JsonResult> SearchBomMaterials(string? purpose, string? q, string? materialType, CancellationToken ct = default)
         {
@@ -95,13 +115,7 @@ namespace AU_ERP.Controllers
             if (p == "component")
                 query = query.Where(m => m.MaterialTypeCode == "ROH" || m.MaterialTypeCode == "HALB");
             else if (p == "header")
-            {
-                var mt = (materialType ?? "").Trim().ToUpperInvariant();
-                if (mt is "HALB" or "FERT")
-                    query = query.Where(m => m.MaterialTypeCode == mt);
-                else
-                    query = query.Where(m => m.MaterialTypeCode == "HALB" || m.MaterialTypeCode == "FERT");
-            }
+                query = query.Where(m => m.MaterialTypeCode == HeaderMaterialTypeFixed);
             else
                 return Json(new { success = false, message = "Invalid purpose. Use header or component." });
 
@@ -159,35 +173,14 @@ namespace AU_ERP.Controllers
                 if (await _db.BomHeadersSamples.AnyAsync(h => h.BOMCode == code, ct))
                     return Json(new { success = false, message = "This BOM code is already in use." });
 
-                var headerType = dto.HeaderMaterialTypeCode?.Trim().ToUpperInvariant();
+                var headerType = HeaderMaterialTypeFixed;
                 var headerMat = dto.BomMaterialNumber?.Trim();
                 if (string.IsNullOrEmpty(headerType) || string.IsNullOrEmpty(headerMat))
                     return Json(new { success = false, message = "Material Type and Material are required for the BOM header." });
-                if (headerType is not ("HALB" or "FERT"))
-                    return Json(new { success = false, message = "Header Material Type must be HALB or FERT." });
-
-                var headerMaterial = await _db.CreateMaterialMaster.AsNoTracking()
-                    .FirstOrDefaultAsync(m => m.MaterialNumber == headerMat, ct);
-                if (headerMaterial == null)
-                    return Json(new { success = false, message = $"Header material '{headerMat}' does not exist." });
-                if (headerMaterial.MaterialTypeCode != headerType)
-                    return Json(new { success = false, message = "Header material does not match the selected Material Type." });
-
-                if (dto.BLevel is int bLevelId)
-                {
-                    var level = await _db.BOMLevelsSamples.AsNoTracking()
-                        .FirstOrDefaultAsync(l => l.LevelID == bLevelId, ct);
-                    var expected = ExpectedHeaderMaterialTypeFromBomLevel(level);
-                    if (expected != null
-                        && !string.Equals(headerType, expected, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return Json(new
-                        {
-                            success = false,
-                            message = "Header assembly must match BOM level: FG requires a FERT material; SFG requires a HALB material."
-                        });
-                    }
-                }
+                
+                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, null, ct);
+                if (hdrErr != null)
+                    return Json(new { success = false, message = hdrErr });
 
                 var header = new BomHeadersSample
                 {
@@ -198,7 +191,12 @@ namespace AU_ERP.Controllers
                     BLevel = dto.BLevel,
                     Plant = dto.Plant,
                     BaseQty = dto.BaseQty,
-                    ValidFrom = dto.ValidFrom
+                    ValidFrom = dto.ValidFrom,
+                    ValidTo = dto.ValidTo,
+                    BomUsage = "Production",
+                    AlternativeNo = code,
+                    Status = NormalizeBomStatus(dto.Status),
+                    IsDefaultBom = dto.IsDefaultBom
                 };
 
                 if (dto.Items != null)
@@ -236,8 +234,18 @@ namespace AU_ERP.Controllers
                     }
                 }
 
+                await using var tx = await _db.Database.BeginTransactionAsync(ct);
+                if (header.IsDefaultBom)
+                {
+                    var others = await _db.BomHeadersSamples
+                        .Where(h => h.BomMaterialNumber == header.BomMaterialNumber && h.IsDefaultBom)
+                        .ToListAsync(ct);
+                    foreach (var other in others)
+                        other.IsDefaultBom = false;
+                }
                 await _db.BomHeadersSamples.AddAsync(header, ct);
                 await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
 
                 return Json(new { success = true, message = "BOM Created Successfully !", bomId = header.BomID });
             }
@@ -283,8 +291,13 @@ namespace AU_ERP.Controllers
                     bom.BaseQty,
                     bom.HeaderMaterialTypeCode,
                     bom.BomMaterialNumber,
+                    bom.BomUsage,
+                    bom.AlternativeNo,
+                    bom.Status,
+                    bom.IsDefaultBom,
                     HeaderMaterialDisplay = headerMatDisplay,
                     ValidFrom = bom.ValidFrom?.ToString("yyyy-MM-dd"),
+                    ValidTo = bom.ValidTo?.ToString("yyyy-MM-dd"),
                     Items = bom.BomItemsSamples.Select(i => new
                     {
                         i.ItemID,
@@ -297,6 +310,62 @@ namespace AU_ERP.Controllers
                         i.ScrapPercentage
                     })
                 }
+            });
+        }
+        
+        [HttpGet]
+        public async Task<JsonResult> GetBomOptionsForMrp(string? materialNumber, string? plantId, CancellationToken ct = default)
+        {
+            var mat = (materialNumber ?? "").Trim();
+            var plant = (plantId ?? "").Trim();
+            if (mat.Length == 0 || plant.Length == 0)
+                return Json(new { success = true, items = Array.Empty<object>() });
+            var today = DateTime.Today;
+            var list = await _db.BomHeadersSamples.AsNoTracking()
+                .Where(h => h.BomMaterialNumber == mat
+                            && (h.Plant == plant || h.Plant == null || h.Plant == "")
+                            && h.Status == "Active"
+                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= today)
+                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= today))
+                .OrderByDescending(h => h.IsDefaultBom)
+                .ThenByDescending(h => h.ValidFrom)
+                .ThenByDescending(h => h.BomID)
+                .Select(h => new
+                {
+                    bomId = h.BomID,
+                    bomCode = h.BOMCode,
+                    validFrom = h.ValidFrom,
+                    validTo = h.ValidTo,
+                    isDefault = h.IsDefaultBom
+                })
+                .ToListAsync(ct);
+            return Json(new { success = true, items = list });
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> CheckExistingBaseBom(string? materialNumber, int? excludeBomId, CancellationToken ct = default)
+        {
+            var mat = (materialNumber ?? "").Trim();
+            if (mat.Length == 0)
+                return Json(new { success = true, exists = false });
+
+            var existing = await _db.BomHeadersSamples.AsNoTracking()
+                .Where(h => h.BomMaterialNumber == mat
+                            && h.IsDefaultBom
+                            && (!excludeBomId.HasValue || h.BomID != excludeBomId.Value))
+                .OrderByDescending(h => h.BomID)
+                .Select(h => new { h.BomID, h.BOMCode })
+                .FirstOrDefaultAsync(ct);
+
+            if (existing == null)
+                return Json(new { success = true, exists = false });
+
+            return Json(new
+            {
+                success = true,
+                exists = true,
+                bomId = existing.BomID,
+                bomCode = existing.BOMCode ?? ("BOM-" + existing.BomID)
             });
         }
 
@@ -330,22 +399,15 @@ namespace AU_ERP.Controllers
                 header.Plant = dto.Plant;
                 header.BaseQty = dto.BaseQty;
                 header.ValidFrom = dto.ValidFrom;
-
-                if (dto.BLevel is int bLevelUp)
-                {
-                    var level = await _db.BOMLevelsSamples.AsNoTracking()
-                        .FirstOrDefaultAsync(l => l.LevelID == bLevelUp, ct);
-                    var expected = ExpectedHeaderMaterialTypeFromBomLevel(level);
-                    if (expected != null
-                        && !string.Equals(header.HeaderMaterialTypeCode, expected, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return Json(new
-                        {
-                            success = false,
-                            message = "BOM level does not match this assembly (FG → FERT, SFG → HALB)."
-                        });
-                    }
-                }
+                header.ValidTo = dto.ValidTo;
+                header.BomUsage = "Production";
+                header.AlternativeNo = header.BOMCode ?? header.AlternativeNo;
+                header.Status = NormalizeBomStatus(dto.Status);
+                header.IsDefaultBom = dto.IsDefaultBom;
+                
+                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, dto.BomID, ct);
+                if (hdrErr != null)
+                    return Json(new { success = false, message = hdrErr });
 
                 _db.BomItemsSamples.RemoveRange(header.BomItemsSamples);
 
@@ -384,7 +446,19 @@ namespace AU_ERP.Controllers
                     }
                 }
 
+                await using var tx = await _db.Database.BeginTransactionAsync(ct);
+                if (header.IsDefaultBom)
+                {
+                    var others = await _db.BomHeadersSamples
+                        .Where(h => h.BomID != header.BomID
+                                    && h.BomMaterialNumber == header.BomMaterialNumber
+                                    && h.IsDefaultBom)
+                        .ToListAsync(ct);
+                    foreach (var other in others)
+                        other.IsDefaultBom = false;
+                }
                 await _db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
                 return Json(new { success = true, message = "BOM Updated Successfully !" });
             }
             catch (Exception ex)
@@ -431,6 +505,9 @@ namespace AU_ERP.Controllers
         public string? Plant { get; set; }
         public decimal? BaseQty { get; set; }
         public DateTime? ValidFrom { get; set; }
+        public DateTime? ValidTo { get; set; }
+        public string? Status { get; set; }
+        public bool IsDefaultBom { get; set; }
         public List<BomItemDto>? Items { get; set; }
     }
 

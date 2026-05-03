@@ -1,0 +1,131 @@
+@model AU_ERP.Models.ViewModels.ReturnOrderCreateVm
+@using System.Globalization
+@{
+    ViewData["Title"] = "Create return order";
+    string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
+    string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.CurrentCulture);
+    var dealer = Model.DealerDisplayName ?? "—";
+    var bp = Model.DealerBusinessPartnerId ?? "—";
+}
+
+@section Styles {
+    <style>
+        .ro-create .ro-ro { background: #f8f9fa; }
+        .ro-create .ro-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        .ro-create .ro-table thead th { background: #354a5e; color: #fff; font-weight: 500; padding: .5rem .55rem; text-align: left; white-space: nowrap; }
+        .ro-create .ro-table tbody td { border: 1px solid #ddd; padding: .4rem .5rem; vertical-align: middle; }
+        .ro-create .ro-table tbody tr:nth-child(even) { background: #fafafa; }
+        .ro-create .ro-qty { max-width: 8rem; }
+    </style>
+}
+
+<div class="ro-create">
+    <h1 class="h4 mb-2">Create return order</h1>
+    <p class="small text-secondary mb-4"><a asp-controller="Invoice" asp-action="Index">&larr; Back to invoices</a></p>
+
+    @if (TempData["RoError"] is string err && !string.IsNullOrWhiteSpace(err))
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="alert">@err</div>
+    }
+
+    <form asp-action="Create" method="post" class="card shadow-sm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="InvoiceId" />
+
+        <div class="card-body border-bottom">
+            <h2 class="h6 mb-3">Header (readonly)</h2>
+            <div class="row g-2 small">
+                <div class="col-md-6">
+                    <label class="form-label text-secondary mb-0">Dealer</label>
+                    <input class="form-control form-control-sm ro-ro" value="@dealer" readonly />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-secondary mb-0">Dealer number (BP)</label>
+                    <input class="form-control form-control-sm ro-ro" value="@bp" readonly />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-secondary mb-0">Sales order</label>
+                    <input class="form-control form-control-sm ro-ro" value="@(Model.SalesOrderNumber ?? "—")" readonly />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-secondary mb-0">Delivery date (DC document date)</label>
+                    <input class="form-control form-control-sm ro-ro" value="@Model.DeliveryChallanDocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)" readonly />
+                </div>
+                @if (Model.SalesOrderRequestedDeliveryDate is DateTime rd)
+                {
+                    <div class="col-md-6">
+                        <label class="form-label text-secondary mb-0">SO requested delivery date</label>
+                        <input class="form-control form-control-sm ro-ro" value="@rd.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)" readonly />
+                    </div>
+                }
+                <div class="col-md-6">
+                    <label class="form-label text-secondary mb-0">Invoice number</label>
+                    <input class="form-control form-control-sm ro-ro" value="@Model.InvoiceDocumentNumber" readonly />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-secondary mb-0">Invoice total</label>
+                    <input class="form-control form-control-sm ro-ro text-end" value="@FmtMoney(Model.InvoiceGrandTotal)" readonly />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-secondary mb-0">Items delivered total (qty)</label>
+                    <input class="form-control form-control-sm ro-ro text-end" value="@FmtQty(Model.ItemsDeliveredQuantityTotal)" readonly />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" asp-for="DocumentDate">Return document date</label>
+                    <input class="form-control form-control-sm" asp-for="DocumentDate" type="date" required />
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body border-bottom">
+            <label class="form-label" for="ReturnReason">Return reason <span class="text-danger">*</span></label>
+            <textarea class="form-control form-control-sm" asp-for="ReturnReason" id="ReturnReason" rows="3" maxlength="2000" required placeholder="Describe why goods are being returned"></textarea>
+        </div>
+
+        <div class="card-body">
+            <h2 class="h6 mb-3">Lines — enter return quantity only</h2>
+            <div class="table-responsive">
+                <table class="ro-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Material</th>
+                            <th>Description</th>
+                            <th>UOM</th>
+                            <th class="text-end">Unit price</th>
+                            <th class="text-end">Line total</th>
+                            <th class="text-end">Invoiced qty</th>
+                            <th class="text-end">Return qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < Model.Lines.Count; i++)
+                        {
+                            var line = Model.Lines[i];
+                            <tr>
+                                <td>@line.LineNo</td>
+                                <td><strong>@line.MaterialNumber</strong></td>
+                                <td class="small">@(line.MaterialDescription ?? "—")</td>
+                                <td>@(line.UomCode ?? "—")</td>
+                                <td class="text-end">@FmtMoney(line.UnitPrice)</td>
+                                <td class="text-end">@FmtMoney(line.LineTotal)</td>
+                                <td class="text-end ro-ro">@FmtQty(line.QuantityInvoiced)</td>
+                                <td class="text-end">
+                                    <input type="hidden" name="Lines[@i].SalesInvoiceLineId" value="@line.SalesInvoiceLineId" />
+                                    <input type="number" step="0.0001" min="0" max="@line.QuantityInvoiced.ToString(CultureInfo.InvariantCulture)"
+                                           name="Lines[@i].QuantityReturned" value="@line.QuantityReturned.ToString(CultureInfo.InvariantCulture)"
+                                           class="form-control form-control-sm ro-qty text-end" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card-footer bg-white d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">Save return order</button>
+            <a asp-controller="Invoice" asp-action="Index" class="btn btn-outline-secondary btn-sm">Cancel</a>
+        </div>
+    </form>
+</div>

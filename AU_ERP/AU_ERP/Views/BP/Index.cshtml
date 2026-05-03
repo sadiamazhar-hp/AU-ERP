@@ -130,7 +130,9 @@
     var editDistChannels = ViewBag.DistributionChannels as List<AU_ERP.Models.DistributionChannel> ?? new List<AU_ERP.Models.DistributionChannel>();
     var editSalesConfigSchemas = ViewBag.SalesConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
     var editPurchaseConfigSchemas = ViewBag.PurchaseConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
+    var editRoleDriverId = ViewBag.RoleDriverId is int erdi ? erdi : 0;
     var editTypeCustomerId = ViewBag.TypeCustomerId is int etci ? etci : 0;
+    var editTypeDriverId = ViewBag.TypeDriverId is int etdi ? etdi : 0;
     var editGroupLocalId = ViewBag.GroupLocalId is int egli ? egli : 0;
 }
 <div class="modal fade" id="bpEditModal" tabindex="-1" aria-labelledby="bpEditModalLabel" aria-hidden="true">
@@ -149,7 +151,7 @@
                 <div class="modal-body">
                     <ul class="nav nav-tabs flex-wrap" id="bpEditTabs" role="tablist">
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="bpEditTab-info" data-bs-toggle="tab" data-bs-target="#bpEditPane-info" type="button" role="tab">Info</button>
+                            <button class="nav-link active" id="bpEditTab-info" data-bs-toggle="tab" data-bs-target="#bpEditPane-info" type="button" role="tab">Basic Info</button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="bpEditTab-address" data-bs-toggle="tab" data-bs-target="#bpEditPane-address" type="button" role="tab">Address</button>
@@ -203,6 +205,29 @@
                                         {
                                             <option value="@g.Id">@g.GroupName</option>
                                         }
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">First Name</label>
+                                    <input name="FirstName" id="bpEditFirstName" class="form-control" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Last Name</label>
+                                    <input name="LastName" id="bpEditLastName" class="form-control" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">CNIC</label>
+                                    <input name="CNIC" id="bpEditCNIC" class="form-control" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Licence No</label>
+                                    <input name="LicenceNo" id="bpEditLicenceNo" class="form-control" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Status</label>
+                                    <select name="IsActive" id="bpEditIsActive" class="form-select">
+                                        <option value="true">Active</option>
+                                        <option value="false">Inactive</option>
                                     </select>
                                 </div>
                             </div>
@@ -444,6 +469,13 @@
             var roleSel = document.getElementById("bpEditRole");
             var opt = roleSel && roleSel.options[roleSel.selectedIndex];
             var code = opt ? (opt.getAttribute("data-code") || "") : "";
+            if (code === "FLDR01") {
+                req("bpEditFirstName");
+                req("bpEditLastName");
+                req("bpEditCNIC");
+                req("bpEditLicenceNo");
+                return bad;
+            }
             if (code !== "FLCU00")
                 req("bpEditType");
             if (code !== "FLCU00" && code !== "FLVN01")
@@ -543,11 +575,14 @@
             var groupWrap = document.getElementById("bpEditGroupWrap");
             var typeSel = document.getElementById("bpEditType");
             var groupSel = document.getElementById("bpEditGroup");
+            var typeSel = document.getElementById("bpEditType");
+            var selectedTypeId = parseInt((typeSel && typeSel.value) ? typeSel.value : "0", 10) || 0;
+            var isDriver = code === "FLDR01" || (@editTypeDriverId > 0 && selectedTypeId === @editTypeDriverId);
             if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
             if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
 
             if (typeWrap) typeWrap.style.display = (code === "FLCU00") ? "none" : "";
-            if (groupWrap) groupWrap.style.display = (code === "FLCU00" || code === "FLVN01") ? "none" : "";
+            if (groupWrap) groupWrap.style.display = (code === "FLCU00" || code === "FLVN01" || isDriver) ? "none" : "";
 
             if (code === "FLCU01") {
                 var customerTypeId = @editTypeCustomerId;
@@ -561,6 +596,28 @@
             }
             if (code === "FLVN01" && groupSel) {
                 groupSel.value = "";
+            }
+            if (isDriver) {
+                var driverTypeId = @editTypeDriverId;
+                if (typeSel && driverTypeId > 0) typeSel.value = String(driverTypeId);
+                if (groupSel) groupSel.value = "";
+                var tabs = ["bpEditTab-address", "bpEditTab-comm", "bpEditTab-company", "bpEditNavSales", "bpEditNavPurch"];
+                tabs.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    el.style.display = "none";
+                });
+                var basicTab = document.getElementById("bpEditTab-info");
+                if (basicTab && typeof bootstrap !== "undefined" && bootstrap.Tab)
+                    bootstrap.Tab.getOrCreateInstance(basicTab).show();
+            } else {
+                ["bpEditTab-address", "bpEditTab-comm", "bpEditTab-company"].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    el.style.display = "";
+                });
+                if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
+                if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
             }
         }
 
@@ -603,6 +660,11 @@
                     setEditField("bpEditType", p.bpTypeId || p.BPTypeId || "");
                     setEditField("bpEditGroup", p.bpGroupingId || p.BPGroupingId || "");
                     setEditField("bpEditFullName", p.fullName || p.FullName);
+                    setEditField("bpEditFirstName", p.firstName || p.FirstName);
+                    setEditField("bpEditLastName", p.lastName || p.LastName);
+                    setEditField("bpEditCNIC", p.cnic || p.CNIC);
+                    setEditField("bpEditLicenceNo", p.licenceNo || p.LicenceNo);
+                    setEditField("bpEditIsActive", String((p.isActive ?? p.IsActive) ? "true" : "false"));
                     setEditField("bpEditStreet", p.street || p.Street);
                     setEditField("bpEditHouseNo", p.houseNo || p.HouseNo);
                     setEditField("bpEditCity", p.city || p.City);

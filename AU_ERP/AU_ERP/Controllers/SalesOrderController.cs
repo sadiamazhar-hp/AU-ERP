@@ -1,8 +1,11 @@
 using System.Globalization;
 using System.IO;
+using System.Security.Claims;
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
+using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,10 +16,14 @@ namespace AU_ERP.Controllers;
 public class SalesOrderController : Controller
 {
     private readonly AppDbContext _db;
+    private readonly SalesGoodsIssueService _salesGiService;
+    private readonly DocumentNumberAllocator _documentNumbers;
 
-    public SalesOrderController(AppDbContext db)
+    public SalesOrderController(AppDbContext db, SalesGoodsIssueService salesGiService, DocumentNumberAllocator documentNumbers)
     {
         _db = db;
+        _salesGiService = salesGiService;
+        _documentNumbers = documentNumbers;
     }
 
     /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
@@ -162,8 +169,19 @@ public class SalesOrderController : Controller
     [HttpGet]
     public async Task<JsonResult> NextSalesOrderNumber(CancellationToken ct = default)
     {
-        var n = await NextSalesOrderNumberAsync(ct).ConfigureAwait(false);
-        return Json(new { success = true, number = n, display = n });
+        try
+        {
+            var n = await _documentNumbers.PeekNextAsync(ModuleKeys.SaleOrder, ct).ConfigureAwait(false);
+            return Json(new { success = true, number = n, display = n });
+        }
+        catch (DocumentIntegrationMissingException ex)
+        {
+            return Json(new { success = false, message = ex.Message });
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            return Json(new { success = false, message = ex.Message });
+        }
     }
 
     [HttpGet]
@@ -300,6 +318,24 @@ public class SalesOrderController : Controller
             .Distinct()
             .ToListAsync(ct)
             .ConfigureAwait(false);
+        var orderIds = list.Select(x => x.Id).ToList();
+        List<SalesGoodsIssueDocument> giRows;
+        try
+        {
+            giRows = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+                .Where(g => orderIds.Contains(g.SalesOrderId))
+                .GroupBy(g => g.SalesOrderId)
+                .Select(gr => gr.OrderByDescending(x => x.Id).First())
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+        catch (SqlException ex) when (
+            ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) &&
+            ex.Message.Contains("SalesGoodsIssueDocuments", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["OrderError"] = "Sales GI tables are missing in the current database. Run database migrations for this environment.";
+            giRows = new List<SalesGoodsIssueDocument>();
+        }
         var vm = new SalesOrderListVm
         {
             Items = list,
@@ -307,7 +343,11 @@ public class SalesOrderController : Controller
             Status = string.IsNullOrEmpty(st) ? "All" : st,
             PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,
             DistributionChannelId = distributionChannelId is > 0 ? distributionChannelId : null,
-            SalesOrderIdsWithChallan = withDcIds.ToHashSet()
+            SalesOrderIdsWithChallan = withDcIds.ToHashSet(),
+            SalesOrderGiStatusById = giRows.ToDictionary(x => x.SalesOrderId, x => x.Status),
+            SalesOrderGiDocIdByOrderId = giRows.ToDictionary(x => x.SalesOrderId, x => x.Id),
+            SalesOrderGiDocumentNumberById = giRows.ToDictionary(x => x.SalesOrderId, x => x.DocumentNumber),
+            SalesOrderGiDispatchStatusById = giRows.ToDictionary(x => x.SalesOrderId, x => x.DispatchStatus)
         };
         return View(vm);
     }
@@ -636,13 +676,36 @@ public class SalesOrderController : Controller
                 : (isConfirmSubmit ? SalesOrder.StatusConfirmed : SalesOrder.StatusOpen);
             foreach (var li in lineEntities) toUpdate.Items.Add(li);
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+            if (isConfirmSubmit && string.Equals(toUpdate.Status, SalesOrder.StatusConfirmed, StringComparison.OrdinalIgnoreCase))
+            {
+                var (giOk, giMsg, _) = await _salesGiService.CreateOrOpenPendingAsync(
+                    toUpdate.Id,
+                    User.FindFirstValue(ClaimTypes.NameIdentifier),
+                    ct).ConfigureAwait(false);
+                if (!giOk)
+                    TempData["OrderWarning"] = giMsg;
+            }
             TempData["OrderMessage"] = isDraftSubmit
                 ? "Sales order updated (open)."
                 : "Sales order confirmed.";
             return RedirectToOrderListFromModel(model);
         }
 
-        var number = await NextSalesOrderNumberAsync(ct).ConfigureAwait(false);
+        string number;
+        try
+        {
+            number = await _documentNumbers.AllocateAsync(ModuleKeys.SaleOrder, ct).ConfigureAwait(false);
+        }
+        catch (DocumentIntegrationMissingException ex)
+        {
+            TempData["OrderError"] = ex.Message;
+            return RedirectToOrderListFromModel(model);
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            TempData["OrderError"] = ex.Message;
+            return RedirectToOrderListFromModel(model);
+        }
 
         var header = new SalesOrder
         {
@@ -671,6 +734,15 @@ public class SalesOrderController : Controller
 
         _db.SalesOrders.Add(header);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        if (isConfirmSubmit && string.Equals(header.Status, SalesOrder.StatusConfirmed, StringComparison.OrdinalIgnoreCase))
+        {
+            var (giOk, giMsg, _) = await _salesGiService.CreateOrOpenPendingAsync(
+                header.Id,
+                User.FindFirstValue(ClaimTypes.NameIdentifier),
+                ct).ConfigureAwait(false);
+            if (!giOk)
+                TempData["OrderWarning"] = giMsg;
+        }
         TempData["OrderMessage"] = isDraftSubmit
             ? "Sales order saved (open)."
             : "Sales order confirmed.";
@@ -787,7 +859,22 @@ public class SalesOrderController : Controller
             return RedirectToAction(nameof(Index), "SalesOrder", new { editId = existing.Id });
         }
 
-        var number = await NextSalesOrderNumberAsync(ct).ConfigureAwait(false);
+        string number;
+        try
+        {
+            number = await _documentNumbers.AllocateAsync(ModuleKeys.SaleOrder, ct).ConfigureAwait(false);
+        }
+        catch (DocumentIntegrationMissingException ex)
+        {
+            TempData["QuotationError"] = ex.Message;
+            return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            TempData["QuotationError"] = ex.Message;
+            return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
+
         var now = DateTime.Today;
         var header = new SalesOrder
         {
@@ -888,6 +975,44 @@ public class SalesOrderController : Controller
         return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateOrOpenGoodsIssue(
+        int id,
+        [FromForm] string? returnQ,
+        [FromForm] string? returnStatus,
+        [FromForm] string? returnPlantId,
+        [FromForm] int? returnDistributionChannelId,
+        CancellationToken ct = default)
+    {
+        var (ok, message, _) = await _salesGiService.CreateOrOpenPendingAsync(
+            id,
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            ct);
+        if (ok) TempData["OrderMessage"] = message;
+        else TempData["OrderError"] = message;
+        return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GoodsReceive(
+        int id,
+        [FromForm] string? returnQ,
+        [FromForm] string? returnStatus,
+        [FromForm] string? returnPlantId,
+        [FromForm] int? returnDistributionChannelId,
+        CancellationToken ct = default)
+    {
+        var (ok, message, _) = await _salesGiService.ReceiveBySalesOrderAsync(
+            id,
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            ct);
+        if (ok) TempData["OrderMessage"] = message;
+        else TempData["OrderError"] = message;
+        return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+    }
+
     private async Task<SalesOrder?> LoadSalesOrderForPdfAsync(int id, CancellationToken ct) =>
         await _db.SalesOrders.AsNoTracking()
             .Include(x => x.Items)!.ThenInclude(i => i.QuantityUom)
@@ -926,33 +1051,6 @@ public class SalesOrderController : Controller
 
     private IActionResult RedirectToOrderListFromModel(SalesOrderCreateFormModel? m) =>
         RedirectToOrderList(m?.ReturnQ, m?.ReturnStatus, m?.ReturnPlantId, m?.ReturnDistributionChannelId);
-
-    private const int OrderSequenceFloor = 2000;
-
-    private async Task<string> NextSalesOrderNumberAsync(CancellationToken ct)
-    {
-        var existing = await _db.SalesOrders.AsNoTracking()
-            .Select(o => o.SalesOrderNumber)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-        var max = OrderSequenceFloor - 1;
-        foreach (var raw in existing)
-        {
-            var s = (raw ?? "").Trim();
-            if (string.IsNullOrEmpty(s)) continue;
-            if (s.StartsWith("SO-", StringComparison.OrdinalIgnoreCase) && s.Length > 3
-                && int.TryParse(s.AsSpan(3), NumberStyles.None, CultureInfo.InvariantCulture, out var seq))
-            {
-                if (seq > max) max = seq;
-            }
-            else if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= OrderSequenceFloor)
-            {
-                if (n > max) max = n;
-            }
-        }
-        var next = Math.Max(OrderSequenceFloor, max + 1);
-        return "SO-" + next.ToString("D5", CultureInfo.InvariantCulture);
-    }
 
     private static string NormalizeQuotationLineGrade(string? g)
     {

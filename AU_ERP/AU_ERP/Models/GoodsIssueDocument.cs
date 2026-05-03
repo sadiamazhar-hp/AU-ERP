@@ -9,6 +9,10 @@ public class GoodsIssueDocument
     public const string StatusPending = "Pending";
     public const string StatusCompleted = "Completed";
 
+    /// <summary>Dispatch gate: receipt / stock movement only after <see cref="DispatchSent"/>.</summary>
+    public const string DispatchPending = "Pending";
+    public const string DispatchSent = "Sent";
+
     [Key]
     public int Id { get; set; }
 
@@ -27,6 +31,16 @@ public class GoodsIssueDocument
     [Required]
     [MaxLength(20)]
     public string Status { get; set; } = StatusDraft;
+
+    /// <summary>Dispatch lifecycle for centralized GI: Pending until Send Goods, then Sent.</summary>
+    [Required]
+    [MaxLength(20)]
+    public string DispatchStatus { get; set; } = DispatchPending;
+
+    public DateTime? DispatchSentAt { get; set; }
+
+    [MaxLength(450)]
+    public string? DispatchSentByUserId { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

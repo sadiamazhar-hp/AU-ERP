@@ -43,6 +43,7 @@ namespace AU_ERP.Services
             decimal quantity,
             int uomId,
             bool requireFertMaterialOnly,
+            int? selectedBomId = null,
             string? plantIdForStockOverride = null,
             CancellationToken ct = default)
         {
@@ -102,15 +103,26 @@ namespace AU_ERP.Services
                 return resp;
             }
 
-            var header = await db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == key && h.HeaderMaterialTypeCode == mt)
-                .OrderByDescending(h => h.ValidFrom)
+            var today = DateTime.Today;
+            IQueryable<BomHeadersSample> headerQ = db.BomHeadersSamples.AsNoTracking()
+                .Where(h => h.BomMaterialNumber == key
+                            && h.HeaderMaterialTypeCode == mt
+                            && h.Status == "Active"
+                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= today)
+                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= today));
+            if (selectedBomId.HasValue && selectedBomId.Value > 0)
+                headerQ = headerQ.Where(h => h.BomID == selectedBomId.Value);
+            var header = await headerQ
+                .OrderByDescending(h => h.IsDefaultBom)
+                .ThenByDescending(h => h.ValidFrom)
                 .ThenByDescending(h => h.BomID)
                 .FirstOrDefaultAsync(ct);
 
             if (header == null)
             {
-                resp.Message = $"No bill of materials found for material '{key}' with header type {mt}.";
+                resp.Message = selectedBomId.HasValue
+                    ? $"Selected BOM is invalid/inactive for material '{key}'."
+                    : $"No active valid BOM found for material '{key}' with header type {mt}.";
                 return resp;
             }
 
@@ -235,12 +247,21 @@ namespace AU_ERP.Services
             AppDbContext db,
             string materialNumber,
             string headerMaterialTypeCode,
+            int? selectedBomId = null,
             CancellationToken ct = default)
         {
             var key = materialNumber.Trim();
             var mt = headerMaterialTypeCode.Trim().ToUpperInvariant();
-            return await db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == key && h.HeaderMaterialTypeCode == mt)
+            var today = DateTime.Today;
+            IQueryable<BomHeadersSample> q = db.BomHeadersSamples.AsNoTracking()
+                .Where(h => h.BomMaterialNumber == key
+                            && h.HeaderMaterialTypeCode == mt
+                            && h.Status == "Active"
+                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= today)
+                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= today));
+            if (selectedBomId.HasValue && selectedBomId.Value > 0)
+                q = q.Where(h => h.BomID == selectedBomId.Value);
+            return await q
                 .OrderByDescending(h => h.ValidFrom)
                 .ThenByDescending(h => h.BomID)
                 .FirstOrDefaultAsync(ct);
@@ -262,7 +283,7 @@ namespace AU_ERP.Services
             if (mt != "FERT" && mt != "HALB")
                 return new List<MrpBomLineDisplayDto>();
 
-            var header = await ResolveBomHeaderAsync(db, key, mt, ct);
+            var header = await ResolveBomHeaderAsync(db, key, mt, null, ct);
             if (header == null)
                 return new List<MrpBomLineDisplayDto>();
 
@@ -305,7 +326,7 @@ namespace AU_ERP.Services
             if (mt != "FERT" && mt != "HALB")
                 return (true, null, lines);
 
-            var header = await ResolveBomHeaderAsync(db, key, mt, ct);
+            var header = await ResolveBomHeaderAsync(db, key, mt, order.SelectedBomId, ct);
             if (header == null)
                 return (false, $"No bill of materials found for '{key}' (type {mt}).", lines);
 

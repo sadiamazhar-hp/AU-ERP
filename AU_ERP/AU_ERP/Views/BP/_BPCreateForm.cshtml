@@ -11,7 +11,9 @@
     var roleBasicId = ViewBag.RoleBasicId is int rb ? rb : 0;
     var roleCustomerId = ViewBag.RoleCustomerId is int rc ? rc : 0;
     var roleVendorId = ViewBag.RoleVendorId is int rv ? rv : 0;
+    var roleDriverId = ViewBag.RoleDriverId is int rd ? rd : 0;
     var typeCustomerId = ViewBag.TypeCustomerId is int tc ? tc : 0;
+    var typeDriverId = ViewBag.TypeDriverId is int td ? td : 0;
     var groupLocalId = ViewBag.GroupLocalId is int gl ? gl : 0;
     string NormCh(string? s) => (s ?? "").Replace(" ", "").Trim().ToLowerInvariant();
     string DistLabel(AU_ERP.Models.DistributionChannel ch)
@@ -22,7 +24,7 @@
         return ch.DistributionChannelName;
     }
 }
-<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")" data-initial-sales-schema="@(Model.SalesSchema ?? "")" data-role-basic-id="@roleBasicId" data-role-customer-id="@roleCustomerId" data-role-vendor-id="@roleVendorId" data-type-customer-id="@typeCustomerId" data-group-local-id="@groupLocalId">
+<form asp-controller="BP" asp-action="Create" method="post" class="bp-create-form" id="bpCreateRoot" data-bp-type-committed="@(Model.BPTypeId?.ToString() ?? "")" data-initial-sales-schema="@(Model.SalesSchema ?? "")" data-role-basic-id="@roleBasicId" data-role-customer-id="@roleCustomerId" data-role-vendor-id="@roleVendorId" data-role-driver-id="@roleDriverId" data-type-customer-id="@typeCustomerId" data-type-driver-id="@typeDriverId" data-group-local-id="@groupLocalId">
     @Html.AntiForgeryToken()
     <input type="hidden" name="returnTo" value="@(ViewBag.FormReturnTo ?? "Index")" />
     <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
@@ -92,6 +94,7 @@
         </div>
 
         <div class="bp-itab-bar d-flex flex-wrap border-bottom bg-light px-2">
+            <button type="button" class="bp-itab-btn" onclick="bpSwitchTab(this, 'basic')">Basic info</button>
             <button type="button" class="bp-itab-btn active" onclick="bpSwitchTab(this, 'address')">Address</button>
             <button type="button" class="bp-itab-btn" onclick="bpSwitchTab(this, 'comm')">Communication</button>
             <button type="button" class="bp-itab-btn" onclick="bpSwitchTab(this, 'company')">Company code</button>
@@ -100,6 +103,36 @@
         </div>
 
         <div class="bp-content-area p-3">
+            <div class="tab-pane tab-basic d-none">
+                <div class="bp-section-box">
+                    <h3 class="bp-section-title">Basic info</h3>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>First name</label>
+                        @Html.TextBoxFor(m => m.FirstName, new { @class = "form-control form-control-sm f-firstname" })
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Last name</label>
+                        @Html.TextBoxFor(m => m.LastName, new { @class = "form-control form-control-sm f-lastname" })
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>CNIC</label>
+                        @Html.TextBoxFor(m => m.CNIC, new { @class = "form-control form-control-sm f-cnic", placeholder = "xxxxx-xxxxxxx-x" })
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Licence No</label>
+                        @Html.TextBoxFor(m => m.LicenceNo, new { @class = "form-control form-control-sm f-licence" })
+                    </div>
+                    <div class="bp-field-row">
+                        <div class="bp-mandatory-bar"></div>
+                        <label>Status</label>
+                        @Html.DropDownListFor(m => m.IsActive, new SelectList(new[] { new { Value = "true", Text = "Active" }, new { Value = "false", Text = "Inactive" } }, "Value", "Text", Model.IsActive.ToString().ToLowerInvariant()), new { @class = "form-select form-select-sm f-status", style = "max-width:12rem;" })
+                    </div>
+                </div>
+            </div>
             <div class="tab-pane tab-address">
                 <div class="bp-section-box">
                     <h3 class="bp-section-title">General data</h3>
@@ -273,9 +306,15 @@
         const opt = select.options[select.selectedIndex];
         const roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
         const customerTypeId = parseInt(root.getAttribute('data-type-customer-id') || '0', 10) || 0;
+        const driverTypeId = parseInt(root.getAttribute('data-type-driver-id') || '0', 10) || 0;
         const localGroupId = parseInt(root.getAttribute('data-group-local-id') || '0', 10) || 0;
+        const driverRoleId = parseInt(root.getAttribute('data-role-driver-id') || '0', 10) || 0;
         const sales = root.querySelector('.tab-sales-btn');
         const purch = root.querySelector('.tab-purch-btn');
+        const basicTabBtn = Array.prototype.find.call(root.querySelectorAll('.bp-itab-btn'), function (b) {
+            return (b.getAttribute('onclick') || '').indexOf("'basic'") >= 0;
+        });
+        const allTabBtns = root.querySelectorAll('.bp-itab-btn');
         const typeSel = root.querySelector('.f-type');
         const typeHidden = root.querySelector('.f-type-hidden');
         const groupSel = root.querySelector('.f-group');
@@ -285,6 +324,10 @@
         const isBasic = roleCode === 'FLCU00';
         const isCustomer = roleCode === 'FLCU01';
         const isVendor = roleCode === 'FLVN01';
+        const selectedTypeId = parseInt((typeSel && typeSel.value) ? typeSel.value : '0', 10) || 0;
+        const isDriver = roleCode === 'FLDR01'
+            || (driverRoleId > 0 && parseInt(select.value || '0', 10) === driverRoleId)
+            || (driverTypeId > 0 && selectedTypeId === driverTypeId);
         var showSales = roleCode === 'FLCU01' || roleCode === 'FLCU00';
         var showPurch = roleCode === 'FLVN01' || roleCode === 'FLCU00';
         if (sales) sales.classList.toggle('d-none', !showSales);
@@ -292,7 +335,21 @@
 
         if (typeRow) typeRow.classList.toggle('d-none', isBasic);
         if (bpidRow) bpidRow.classList.toggle('d-none', isBasic);
-        if (groupRow) groupRow.classList.toggle('d-none', isBasic || isVendor);
+        if (groupRow) groupRow.classList.toggle('d-none', isBasic || isVendor || isDriver);
+        if (basicTabBtn) basicTabBtn.classList.toggle('d-none', !isDriver);
+        allTabBtns.forEach(function (b) {
+            if (b === basicTabBtn) return;
+            b.classList.toggle('d-none', isDriver);
+        });
+
+        ['address', 'comm', 'company', 'sales', 'purch'].forEach(function (nm) {
+            var pane = root.querySelector('.tab-' + nm);
+            if (!pane) return;
+            if (isDriver) pane.classList.add('d-none');
+            else pane.classList.remove('d-none');
+        });
+        var basicPane = root.querySelector('.tab-basic');
+        if (basicPane) basicPane.classList.toggle('d-none', !isDriver);
 
         if (isCustomer) {
             if (typeSel && customerTypeId > 0 && String(typeSel.value || '') !== String(customerTypeId)) {
@@ -325,6 +382,22 @@
 
         if (isVendor && groupSel)
             groupSel.value = '';
+
+        if (isDriver) {
+            if (typeSel && driverTypeId > 0) {
+                typeSel.value = String(driverTypeId);
+                if (typeHidden) typeHidden.value = String(driverTypeId);
+            }
+            if (groupSel) groupSel.value = '';
+            if (basicTabBtn) bpSwitchTab(basicTabBtn, 'basic');
+            if (bpidRow) bpidRow.classList.remove('d-none');
+            bpFetchNextBPID(root);
+        } else {
+            var addrBtn = Array.prototype.find.call(root.querySelectorAll('.bp-itab-btn'), function (b) {
+                return (b.getAttribute('onclick') || '').indexOf("'address'") >= 0;
+            });
+            if (addrBtn) bpSwitchTab(addrBtn, 'address');
+        }
     }
     function bpSwitchTab(btn, tab) {
         const root = btn.closest('#bpCreateRoot');
@@ -364,11 +437,19 @@
         var roleId = parseInt((roleSel && roleSel.value) ? roleSel.value : '0', 10) || 0;
         var basicId = parseInt(root.getAttribute('data-role-basic-id') || '0', 10) || 0;
         var vendorId = parseInt(root.getAttribute('data-role-vendor-id') || '0', 10) || 0;
+        var driverId = parseInt(root.getAttribute('data-role-driver-id') || '0', 10) || 0;
+        if (roleId === driverId) {
+            req('.f-firstname');
+            req('.f-lastname');
+            req('.f-cnic');
+            req('.f-licence');
+            return bad;
+        }
         if (roleId !== basicId) {
             req('.f-type');
             req('.f-bpid');
         }
-        if (roleId !== basicId && roleId !== vendorId)
+        if (roleId !== basicId && roleId !== vendorId && roleId !== driverId)
             req('.f-group');
         req('.f-name');
         req('.f-street');

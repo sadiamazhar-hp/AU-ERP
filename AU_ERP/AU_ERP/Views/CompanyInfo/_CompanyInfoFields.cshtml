@@ -1,0 +1,123 @@
+@model AU_ERP.Models.ViewModels.CompanyInfoEditVm
+
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Company basic</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="CompanyName"></label>
+                <input class="form-control form-control-sm" asp-for="CompanyName" />
+                <span asp-validation-for="CompanyName" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="Language"></label>
+                <input class="form-control form-control-sm" asp-for="Language" />
+                <span asp-validation-for="Language" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <label class="form-label small" asp-for="Address"></label>
+                <input class="form-control form-control-sm" asp-for="Address" />
+                <span asp-validation-for="Address" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="City"></label>
+                <input class="form-control form-control-sm" asp-for="City" />
+                <span asp-validation-for="City" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="Country"></label>
+                <input class="form-control form-control-sm" asp-for="Country" />
+                <span asp-validation-for="Country" class="text-danger small"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Communication</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="PhoneNumber"></label>
+                <input class="form-control form-control-sm" asp-for="PhoneNumber" />
+                <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="Fax"></label>
+                <input class="form-control form-control-sm" asp-for="Fax" />
+                <span asp-validation-for="Fax" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="Email"></label>
+                <input class="form-control form-control-sm" asp-for="Email" type="email" />
+                <span asp-validation-for="Email" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="Website"></label>
+                <input class="form-control form-control-sm" asp-for="Website" />
+                <span asp-validation-for="Website" class="text-danger small"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Tax</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="TaxNumberNtn"></label>
+                <input class="form-control form-control-sm" asp-for="TaxNumberNtn" />
+                <span asp-validation-for="TaxNumberNtn" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="GstOrTaxRate"></label>
+                <input class="form-control form-control-sm" asp-for="GstOrTaxRate" type="number" step="0.0001" min="0" max="100" />
+                <span asp-validation-for="GstOrTaxRate" class="text-danger small"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header fw-semibold">Bank</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="BankCountry"></label>
+                <input class="form-control form-control-sm" asp-for="BankCountry" />
+                <span asp-validation-for="BankCountry" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="BankKey"></label>
+                <input class="form-control form-control-sm" asp-for="BankKey" />
+                <span asp-validation-for="BankKey" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="BankName"></label>
+                <input class="form-control form-control-sm" asp-for="BankName" />
+                <span asp-validation-for="BankName" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="BankAccountNumber"></label>
+                <input class="form-control form-control-sm" asp-for="BankAccountNumber" />
+                <span asp-validation-for="BankAccountNumber" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="BankAccountHolderName"></label>
+                <input class="form-control form-control-sm" asp-for="BankAccountHolderName" />
+                <span asp-validation-for="BankAccountHolderName" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small" asp-for="Branch"></label>
+                <input class="form-control form-control-sm" asp-for="Branch" />
+                <span asp-validation-for="Branch" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <label class="form-label small" asp-for="BankAddress"></label>
+                <input class="form-control form-control-sm" asp-for="BankAddress" />
+                <span asp-validation-for="BankAddress" class="text-danger small"></span>
+            </div>
+        </div>
+    </div>
+</div>

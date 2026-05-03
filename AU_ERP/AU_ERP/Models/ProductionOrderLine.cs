@@ -26,6 +26,9 @@ namespace AU_ERP.Models
         
         [MaxLength(450)]
         public string? PlantId { get; set; }
+        public int? SelectedBomId { get; set; }
+        [MaxLength(30)]
+        public string? SelectedBomAlternative { get; set; }
 
         [ForeignKey(nameof(ProductionOrderId))]
         public virtual ProductionOrder? ProductionOrder { get; set; }
@@ -38,5 +41,8 @@ namespace AU_ERP.Models
 
         [ForeignKey(nameof(PlantId))]
         public virtual PlantsSample? Plant { get; set; }
+        
+        [ForeignKey(nameof(SelectedBomId))]
+        public virtual BomHeadersSample? SelectedBom { get; set; }
     }
 }

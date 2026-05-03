@@ -1,0 +1,89 @@
+@model AU_ERP.Models.ViewModels.SalesPaymentEditVm
+@using AU_ERP.Models
+@using System.Globalization
+@{
+    ViewData["Title"] = "Update payment";
+    string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.CurrentCulture);
+    var dealer = Model.DealerDisplayName ?? "—";
+}
+
+@section Styles {
+    <style>
+        .sp-edit-page { max-width: 36rem; }
+        .sp-edit-page .form-label { font-size: .85rem; font-weight: 500; }
+        .sp-readonly { background-color: #f8f9fa; }
+    </style>
+}
+
+<div class="sp-edit-page">
+    <h1 class="h4 mb-3">Update payment</h1>
+    <p class="text-secondary small mb-4">
+        <a asp-action="Index">← Back to list</a>
+    </p>
+
+    @if (TempData["SpError"] is string errMsg && !string.IsNullOrWhiteSpace(errMsg))
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="status">@errMsg</div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Id" />
+
+                <div class="mb-3">
+                    <label class="form-label">Payment document no.</label>
+                    <input class="form-control sp-readonly" value="@Model.DocumentNumber" readonly />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" asp-for="DocumentDate">Payment document date</label>
+                    <input class="form-control" asp-for="DocumentDate" type="date" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Invoice no.</label>
+                    <input class="form-control sp-readonly" value="@Model.InvoiceDocumentNumber" readonly />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Dealer</label>
+                    <input class="form-control sp-readonly" value="@dealer" readonly />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Amount</label>
+                    <input class="form-control sp-readonly text-end" value="@FmtMoney(Model.Amount)" readonly />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" asp-for="PaymentMethod">Payment method</label>
+                    <select class="form-select" asp-for="PaymentMethod" id="spPayMethod">
+                        <option value="@SalesPayment.MethodCash">cash</option>
+                        <option value="@SalesPayment.MethodCheque">cheque</option>
+                        <option value="@SalesPayment.MethodOnline">online</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="spChequeRow" style="display:none;">
+                    <label class="form-label" asp-for="ChequeNumber">Cheque number</label>
+                    <input class="form-control" asp-for="ChequeNumber" maxlength="64" autocomplete="off" />
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var sel = document.getElementById('spPayMethod');
+            var row = document.getElementById('spChequeRow');
+            function sync() {
+                if (!sel || !row) return;
+                row.style.display = sel.value === 'cheque' ? '' : 'none';
+            }
+            if (sel) sel.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
+}

@@ -22,6 +22,8 @@ public class GoodsIssueRowVm
         ProductionNumber = d.ProductionOrder?.ProductionNumber;
         FinishedMaterialNumber = d.ProductionOrder?.FinishedMaterialNumber;
         FinishedMaterialName = d.ProductionOrder?.FinishedMaterial?.Description;
+        DispatchStatus = d.DispatchStatus;
+        DispatchSentAt = d.DispatchSentAt;
     }
 
     public int Id { get; set; }
@@ -34,4 +36,6 @@ public class GoodsIssueRowVm
     public int? ProductionNumber { get; set; }
     public string? FinishedMaterialNumber { get; set; }
     public string? FinishedMaterialName { get; set; }
+    public string DispatchStatus { get; set; } = GoodsIssueDocument.DispatchPending;
+    public DateTime? DispatchSentAt { get; set; }
 }

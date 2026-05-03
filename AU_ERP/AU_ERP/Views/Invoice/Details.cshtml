@@ -1,0 +1,140 @@
+@model AU_ERP.Models.SalesInvoice
+@using System.Globalization
+@using System.Text.Json
+@using AU_ERP.Models
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = $"Invoice {Model.DocumentNumber}";
+    var payPrefillUrl = Url.Action("PaymentPrefill", "Invoice") ?? "";
+    var payCreateUrl = Url.Action("CreatePayment", "Invoice") ?? "";
+    var canPay = ViewBag.CanPay as bool? == true;
+    var canCreateReturn = ViewBag.CanCreateReturn as bool? == true;
+    int? returnOrderId = ViewBag.ReturnOrderId is int ro ? ro : null;
+    int? qiId = ViewBag.QiId as int?;
+    var qiPending = ViewBag.QiIsPending as bool? == true;
+    var isReturned = string.Equals(Model.Status, SalesInvoice.StatusReturned, StringComparison.OrdinalIgnoreCase);
+    var isRip = string.Equals(Model.Status, SalesInvoice.StatusReturnInProcess, StringComparison.OrdinalIgnoreCase);
+    var lines = (Model.Lines ?? Array.Empty<AU_ERP.Models.SalesInvoiceLine>()).OrderBy(l => l.LineNo).ToList();
+    string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
+}
+
+<div class="mb-3">
+    <a asp-action="Index" class="btn btn-sm btn-outline-secondary">&larr; Back to list</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h1 class="h5 mb-3">Invoice @Model.DocumentNumber</h1>
+        <dl class="row mb-0 small">
+            <dt class="col-sm-3">Date</dt>
+            <dd class="col-sm-9">@Model.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</dd>
+            <dt class="col-sm-3">Due date</dt>
+            <dd class="col-sm-9">@Model.DueDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</dd>
+            <dt class="col-sm-3">Dealer</dt>
+            <dd class="col-sm-9">@(Model.DealerDisplayName ?? Model.DealerBusinessPartnerId ?? "—")</dd>
+            <dt class="col-sm-3">DC number</dt>
+            <dd class="col-sm-9">@Model.DcNumber</dd>
+            <dt class="col-sm-3">Payment terms</dt>
+            <dd class="col-sm-9">@(Model.PaymentTermsSnapshot ?? "—")</dd>
+            <dt class="col-sm-3">Status</dt>
+            <dd class="col-sm-9">@Model.Status</dd>
+            <dt class="col-sm-3">Subtotal</dt>
+            <dd class="col-sm-9">@FmtMoney(Model.Subtotal)</dd>
+            <dt class="col-sm-3">Grand total</dt>
+            <dd class="col-sm-9"><strong>@FmtMoney(Model.GrandTotal)</strong></dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header fw-semibold">Material lines (including line charge values)</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0 small">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Material</th>
+                        <th>Description</th>
+                        <th class="text-end">Qty</th>
+                        <th>UOM</th>
+                        <th class="text-end">Unit price</th>
+                        <th class="text-end">Line subtotal</th>
+                        <th class="text-end">Line total</th>
+                        <th>Charge values (JSON)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ln in lines)
+                    {
+                        var uom = ln.QuantityUom?.Code ?? "—";
+                        <tr>
+                            <td>@ln.LineNo</td>
+                            <td>@ln.MaterialNumber</td>
+                            <td>@(ln.MaterialDescription ?? "—")</td>
+                            <td class="text-end">@ln.Quantity.ToString("N4", CultureInfo.InvariantCulture)</td>
+                            <td>@uom</td>
+                            <td class="text-end">@FmtMoney(ln.UnitPrice)</td>
+                            <td class="text-end">@FmtMoney(ln.LineSubtotal)</td>
+                            <td class="text-end"><strong>@FmtMoney(ln.LineTotal)</strong></td>
+                            <td class="text-break"><code class="small">@(string.IsNullOrWhiteSpace(ln.ItemChargeValuesJson) ? "—" : ln.ItemChargeValuesJson)</code></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    @if (canPay)
+    {
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="invOpenPayModal(@Model.Id)">Pay</button>
+    }
+    else
+    {
+        <button type="button" class="btn btn-sm btn-outline-primary" disabled title="Only open invoices without a payment can use Pay.">Pay</button>
+    }
+    @if (isReturned)
+    {
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Invoice is already returned.">Return</button>
+        @if (returnOrderId.HasValue)
+        {
+            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@returnOrderId.Value">View return</a>
+        }
+        @if (qiId.HasValue)
+        {
+            <a class="btn btn-sm btn-outline-info" asp-controller="ReorderQualityInspection" asp-action="Details" asp-route-id="@qiId.Value">View QI</a>
+        }
+    }
+    else if (isRip || qiPending)
+    {
+        @if (qiId.HasValue)
+        {
+            <a class="btn btn-sm btn-primary" asp-controller="ReorderQualityInspection" asp-action="Details" asp-route-id="@qiId.Value">QI</a>
+        }
+        @if (returnOrderId.HasValue)
+        {
+            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@returnOrderId.Value">View return</a>
+        }
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Return quality inspection must be completed first.">Return</button>
+    }
+    else if (returnOrderId.HasValue)
+    {
+        <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@returnOrderId.Value">View return</a>
+    }
+    else if (canCreateReturn)
+    {
+        <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Create" asp-route-invoiceId="@Model.Id">Return</a>
+    }
+    else
+    {
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Return is not available.">Return</button>
+    }
+</div>
+
+<script>
+    window.invPayPrefillUrl = @Html.Raw(JsonSerializer.Serialize(payPrefillUrl));
+    window.invPayCreateUrl = @Html.Raw(JsonSerializer.Serialize(payCreateUrl));
+</script>
+<partial name="_PaymentModal" />

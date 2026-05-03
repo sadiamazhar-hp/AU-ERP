@@ -1,5 +1,7 @@
+using System.Data;
 using System.Globalization;
 using System.IO;
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
@@ -13,9 +15,18 @@ namespace AU_ERP.Controllers;
 public class DeliveryChallanController : Controller
 {
     private readonly AppDbContext _db;
-    private const int NumberSequenceFloor = 1000;
+    private readonly DocumentNumberAllocator _documentNumbers;
+    private readonly SalesInvoiceFromDeliveryChallanService _invoiceFromDc;
 
-    public DeliveryChallanController(AppDbContext db) => _db = db;
+    public DeliveryChallanController(
+        AppDbContext db,
+        DocumentNumberAllocator documentNumbers,
+        SalesInvoiceFromDeliveryChallanService invoiceFromDc)
+    {
+        _db = db;
+        _documentNumbers = documentNumbers;
+        _invoiceFromDc = invoiceFromDc;
+    }
 
     [HttpGet]
     public async Task<JsonResult> MaterialUomContextForDeliveryChallan(string? materialNumber, int? includeUomIdForEdit, CancellationToken ct = default)
@@ -132,6 +143,14 @@ public class DeliveryChallanController : Controller
         var withDcSet = withDc.ToHashSet();
         IQueryable<SalesOrder> query = _db.SalesOrders.AsNoTracking()
             .Where(x => x.Status == SalesOrder.StatusConfirmed);
+        var receivedGiSoIds = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+            .Where(g => g.Status == SalesGoodsIssueDocument.StatusReceived)
+            .Select(g => g.SalesOrderId)
+            .Distinct()
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var receivedGiSet = receivedGiSoIds.ToHashSet();
+        query = query.Where(x => receivedGiSet.Contains(x.Id));
         if (withDcSet.Count > 0)
             query = query.Where(x => !withDcSet.Contains(x.Id));
         var t = (q ?? "").Trim();
@@ -177,6 +196,11 @@ public class DeliveryChallanController : Controller
             return Json(new { success = false, message = "Sales order not found." });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders are listed." });
+        var giReceived = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+            .AnyAsync(g => g.SalesOrderId == o.Id && g.Status == SalesGoodsIssueDocument.StatusReceived, ct)
+            .ConfigureAwait(false);
+        if (!giReceived)
+            return Json(new { success = false, message = "Sales goods issue must be received before delivery challan." });
         var lines = o.Items
             .OrderBy(i => i.Id)
             .Select(i => new
@@ -238,6 +262,11 @@ public class DeliveryChallanController : Controller
             return Json(new { success = false, message = "Sales order not found." });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders can create a delivery challan." });
+        var giReceived = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+            .AnyAsync(g => g.SalesOrderId == o.Id && g.Status == SalesGoodsIssueDocument.StatusReceived, ct)
+            .ConfigureAwait(false);
+        if (!giReceived)
+            return Json(new { success = false, message = "Sales goods issue must be received before delivery challan." });
         var hasDc0 = await _db.DeliveryChallans.AsNoTracking()
             .AnyAsync(d => d.SalesOrderId == o.Id, ct)
             .ConfigureAwait(false);
@@ -325,6 +354,14 @@ public class DeliveryChallanController : Controller
                 TempData["DcError"] = "The linked sales order is not confirmed.";
                 return RedirectToAction(nameof(Index));
             }
+            var giReceived = await _db.SalesGoodsIssueDocuments.AsNoTracking()
+                .AnyAsync(g => g.SalesOrderId == s && g.Status == SalesGoodsIssueDocument.StatusReceived, ct)
+                .ConfigureAwait(false);
+            if (!giReceived)
+            {
+                TempData["DcError"] = "Sales goods issue must be received before delivery challan.";
+                return RedirectToAction(nameof(Index));
+            }
         }
         if (soId is int dupSo)
         {
@@ -345,7 +382,6 @@ public class DeliveryChallanController : Controller
                 .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false) ?? "";
         }
-        var number = await NextDeliveryChallanNumberAsync(ct).ConfigureAwait(false);
         var matNums = rows
             .Select(r => (r.MaterialNumber ?? "").Trim())
             .Where(m => m.Length > 0)
@@ -356,17 +392,6 @@ public class DeliveryChallanController : Controller
             .ToDictionaryAsync(m => m.MaterialNumber, m => m.Description, ct)
             .ConfigureAwait(false);
 
-        IReadOnlyDictionary<int, string?>? gradeBySoItem = null;
-        if (soId is int soForGrade)
-        {
-            var gmap = await _db.SalesOrderItems.AsNoTracking()
-                .Where(i => i.SalesOrderId == soForGrade)
-                .ToDictionaryAsync(i => i.Id, i => (string?)i.SalesPriceGrade, ct)
-                .ConfigureAwait(false);
-            gradeBySoItem = gmap;
-        }
-
-        var deducts = new List<DeliveryChallanStockService.LineDeduct>();
         var lineBuild = new List<(string Mat, decimal Qty, int Uom, int? SItem, string? LineRef, string? MDesc)>();
         int? soIdForItem = soId;
         foreach (var r in rows)
@@ -392,72 +417,85 @@ public class DeliveryChallanController : Controller
             if (descMap.TryGetValue(mat, out var d) && !string.IsNullOrEmpty(d))
                 mdesc = d[..Math.Min(500, d.Length)];
             var qR = Math.Round(qty, 4, MidpointRounding.AwayFromZero);
-            deducts.Add(new DeliveryChallanStockService.LineDeduct
-            {
-                MaterialNumber = mat,
-                Qty = qR,
-                QuantityUomId = uom,
-                SalesOrderItemId = sItemId
-            });
             lineBuild.Add((mat, qR, uom, sItemId, string.IsNullOrEmpty(lineRef) ? null : lineRef, mdesc));
         }
 
-        if (deducts.Count == 0)
+        if (lineBuild.Count == 0)
         {
             TempData["DcError"] = "Add at least one line with a material and delivery quantity.";
             return RedirectToAction(nameof(Index));
         }
 
-        var header = new DeliveryChallan
-        {
-            DeliveryChallanNumber = number,
-            PlantId = model.PlantId,
-            DeliveryType = delType,
-            ShipToBusinessPartnerId = model.ShipToBusinessPartnerId,
-            ShipToDisplayName = string.IsNullOrWhiteSpace(shipName) ? null : shipName![..Math.Min(500, shipName.Length)],
-            DocumentDate = docDate,
-            SalesOrderId = soId,
-            ReferenceSalesOrderNumber = string.IsNullOrEmpty(refSoNum) ? null : refSoNum[..Math.Min(40, refSoNum.Length)]
-        };
-
-        await using var tx = await _db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var strategy = _db.Database.CreateExecutionStrategy();
         try
         {
-            var (okSt, stErr, batchLabels) = await DeliveryChallanStockService
-                .DeductAndGetBatchLabelsAsync(_db, deducts, gradeBySoItem, model.PlantId!.Trim(), ct)
-                .ConfigureAwait(false);
-            if (!okSt)
+            await strategy.ExecuteAsync(async () =>
             {
-                await tx.RollbackAsync(ct).ConfigureAwait(false);
-                TempData["DcError"] = stErr ?? "Could not post stock for this challan.";
-                return RedirectToAction(nameof(Index));
-            }
-            for (var idx = 0; idx < lineBuild.Count; idx++)
-            {
-                var lb = lineBuild[idx];
-                var b = (batchLabels != null && idx < batchLabels.Count) ? batchLabels[idx] : null;
-                header.Items.Add(new DeliveryChallanItem
+                await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
+                    .ConfigureAwait(false);
+                try
                 {
-                    ReferenceSalesOrderNumber = lb.LineRef is { } lr ? lr[..Math.Min(40, lr.Length)] : null,
-                    MaterialNumber = lb.Mat,
-                    MaterialDescription = lb.MDesc,
-                    DeliveryQuantity = lb.Qty,
-                    QuantityUomId = lb.Uom,
-                    Batch = string.IsNullOrWhiteSpace(b) ? null : b[..Math.Min(64, b.Length)],
-                    SalesOrderItemId = lb.SItem
-                });
-            }
-            _db.DeliveryChallans.Add(header);
-            await _db.SaveChangesAsync(ct).ConfigureAwait(false);
-            await tx.CommitAsync(ct).ConfigureAwait(false);
+                    var dcNum = await _documentNumbers.AllocateAsync(ModuleKeys.DeliveryChallan, ct).ConfigureAwait(false);
+
+                    var header = new DeliveryChallan
+                    {
+                        DeliveryChallanNumber = dcNum,
+                        PlantId = model.PlantId,
+                        DeliveryType = delType,
+                        ShipToBusinessPartnerId = model.ShipToBusinessPartnerId,
+                        ShipToDisplayName = string.IsNullOrWhiteSpace(shipName) ? null : shipName![..Math.Min(500, shipName.Length)],
+                        DocumentDate = docDate,
+                        SalesOrderId = soId,
+                        ReferenceSalesOrderNumber = string.IsNullOrEmpty(refSoNum) ? null : refSoNum[..Math.Min(40, refSoNum.Length)]
+                    };
+
+                    foreach (var lb in lineBuild)
+                    {
+                        header.Items.Add(new DeliveryChallanItem
+                        {
+                            ReferenceSalesOrderNumber = lb.LineRef is { } lr ? lr[..Math.Min(40, lr.Length)] : null,
+                            MaterialNumber = lb.Mat,
+                            MaterialDescription = lb.MDesc,
+                            DeliveryQuantity = lb.Qty,
+                            QuantityUomId = lb.Uom,
+                            Batch = null,
+                            SalesOrderItemId = lb.SItem
+                        });
+                    }
+
+                    await _db.DeliveryChallans.AddAsync(header, ct).ConfigureAwait(false);
+                    await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                    var invNum = await _documentNumbers.AllocateAsync(ModuleKeys.Invoice, ct).ConfigureAwait(false);
+                    await _invoiceFromDc.AddInvoiceForDeliveryChallanAsync(header, invNum, ct).ConfigureAwait(false);
+                    await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                    await tx.CommitAsync(ct).ConfigureAwait(false);
+                    TempData["DcMessage"] = $"Delivery challan {dcNum} created.";
+                }
+                catch
+                {
+                    await tx.RollbackAsync(ct).ConfigureAwait(false);
+                    throw;
+                }
+            }).ConfigureAwait(false);
         }
-        catch
+        catch (DocumentIntegrationMissingException ex)
         {
-            await tx.RollbackAsync(ct).ConfigureAwait(false);
-            throw;
+            TempData["DcError"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            TempData["DcError"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
+        catch (Exception ex)
+        {
+            TempData["DcError"] = ex.InnerException?.Message ?? ex.Message;
+            return RedirectToAction(nameof(Index));
         }
 
-        TempData["DcMessage"] = $"Delivery challan {number} created.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -479,24 +517,4 @@ public class DeliveryChallanController : Controller
         return s;
     }
 
-    private async Task<string> NextDeliveryChallanNumberAsync(CancellationToken ct)
-    {
-        var existing = await _db.DeliveryChallans.AsNoTracking()
-            .Select(d => d.DeliveryChallanNumber)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-        var max = NumberSequenceFloor - 1;
-        foreach (var raw in existing)
-        {
-            var s = (raw ?? "").Trim();
-            if (string.IsNullOrEmpty(s)) continue;
-            if (s.StartsWith("DC-", StringComparison.OrdinalIgnoreCase) && s.Length > 3
-                && int.TryParse(s.AsSpan(3), NumberStyles.None, CultureInfo.InvariantCulture, out var seq))
-            {
-                if (seq > max) max = seq;
-            }
-        }
-        var next = Math.Max(NumberSequenceFloor, max + 1);
-        return "DC-" + next.ToString("D5", CultureInfo.InvariantCulture);
-    }
 }

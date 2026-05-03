@@ -1,0 +1,49 @@
+@model AU_ERP.Models.ViewModels.CompanyInfoEditVm
+@{
+    ViewData["Title"] = "Company info";
+}
+
+<div class="py-2">
+    @if (TempData["CompanyInfoMessage"] is string ok && !string.IsNullOrWhiteSpace(ok))
+    {
+        <div class="alert alert-success py-2 mb-3" role="status">@ok</div>
+    }
+
+    <h1 class="h4 mb-3">Company information</h1>
+    <p class="text-secondary small mb-4">
+        @if (Model.CanEdit)
+        {
+            <span>Update organizational details used across the application.</span>
+        }
+        else
+        {
+            <span>View only. Contact an administrator to change company details.</span>
+        }
+    </p>
+
+    @if (Model.CanEdit)
+    {
+        <form asp-action="Save" method="post" class="company-info-form">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+            @await Html.PartialAsync("_CompanyInfoFields", Model)
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary btn-sm">Save</button>
+            </div>
+        </form>
+    }
+    else
+    {
+        <fieldset disabled class="border-0 p-0 m-0">
+            <legend class="visually-hidden">Company information (read only)</legend>
+            @await Html.PartialAsync("_CompanyInfoFields", Model)
+        </fieldset>
+    }
+</div>
+
+@if (Model.CanEdit)
+{
+    @section Scripts {
+        <partial name="_ValidationScriptsPartial" />
+    }
+}

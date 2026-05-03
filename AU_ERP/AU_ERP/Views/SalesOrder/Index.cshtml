@@ -114,6 +114,10 @@
     {
         <div class="alert alert-danger py-2 small mb-3" role="status">@errMsg2</div>
     }
+    @if (TempData["OrderWarning"] is string warnMsg2)
+    {
+        <div class="alert alert-warning py-2 small mb-3" role="status">@warnMsg2</div>
+    }
 
     <div class="so-table-card">
         <div class="so-table-head">
@@ -155,8 +159,28 @@
                 {
                     var isOpen = o.Status == SalesOrder.StatusOpen;
                     var deleteConfirm = isOpen ? "Delete this open order?" : "Delete this confirmed order? This cannot be undone.";
+                    var hasDc = Model?.SalesOrderIdsWithChallan?.Contains(o.Id) ?? false;
+                    var giStatus = Model?.SalesOrderGiStatusById != null && Model.SalesOrderGiStatusById.TryGetValue(o.Id, out var stGi)
+                        ? (stGi ?? "")
+                        : "";
+                    var giPending = string.Equals(giStatus, SalesGoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase);
+                    var giReceived = string.Equals(giStatus, SalesGoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase);
+                    var giDisp = Model?.SalesOrderGiDispatchStatusById != null && Model.SalesOrderGiDispatchStatusById.TryGetValue(o.Id, out var gdsv)
+                        ? (gdsv ?? "")
+                        : "";
+                    var giDispatchSent = string.Equals(giDisp, SalesGoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase);
+                    var giDocNum = Model?.SalesOrderGiDocumentNumberById != null && Model.SalesOrderGiDocumentNumberById.TryGetValue(o.Id, out var gdnum)
+                        ? gdnum
+                        : null;
+                    var hasGiRow = !string.IsNullOrEmpty(giDocNum) || (Model?.SalesOrderGiDocIdByOrderId?.ContainsKey(o.Id) ?? false);
                     <tr>
-                        <td class="text-nowrap"><strong>@o.SalesOrderNumber</strong></td>
+                        <td class="text-nowrap">
+                            <strong>@o.SalesOrderNumber</strong>
+                            @if (!isOpen && hasGiRow && !string.IsNullOrEmpty(giDocNum))
+                            {
+                                <div class="small text-secondary">GI @giDocNum <span class="text-muted">(@giDisp)</span></div>
+                            }
+                        </td>
                         <td class="text-nowrap">@(o.SalesQuotation?.QuotationNumber ?? "—")</td>
                         <td>@(o.Plant?.PlantName ?? "—")</td>
                         <td>@(o.DistributionChannel?.DistributionChannelName ?? "—")</td>
@@ -178,9 +202,42 @@
                                 {
                                     <button type="button" class="btn btn-outline-secondary btn-sm so-btn-view" data-so-id="@o.Id" title="View"><i class="bi bi-eye"></i> View</button>
                                 }
-                                @if (!isOpen && !(Model?.SalesOrderIdsWithChallan?.Contains(o.Id) ?? false))
+                                @if (!isOpen)
                                 {
-                                    <a class="btn btn-outline-primary btn-sm" href="@Url.Action("Index", "DeliveryChallan", new { fromSalesOrderId = o.Id })" title="Create delivery challan from this order"><i class="bi bi-truck"></i> DC</a>
+                                    if (giReceived)
+                                    {
+                                        if (!hasDc)
+                                        {
+                                            <a class="btn btn-outline-primary btn-sm" href="@Url.Action("Index", "DeliveryChallan", new { fromSalesOrderId = o.Id })" title="Create delivery challan from this order"><i class="bi bi-truck"></i> DC</a>
+                                        }
+                                    }
+                                    else if (giPending && giDispatchSent)
+                                    {
+                                        <form asp-action="GoodsReceive" asp-controller="SalesOrder" asp-route-id="@o.Id" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="returnQ" value="@listQ" />
+                                            <input type="hidden" name="returnStatus" value="@listStatus" />
+                                            <input type="hidden" name="returnPlantId" value="@listPlantId" />
+                                            <input type="hidden" name="returnDistributionChannelId" value="@(listDcId?.ToString() ?? "")" />
+                                            <button type="submit" class="btn btn-outline-warning btn-sm" title="Receive sales goods issue"><i class="bi bi-box-seam"></i> Goods Receive</button>
+                                        </form>
+                                    }
+                                    else if (giPending && !giDispatchSent && hasGiRow)
+                                    {
+                                        <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("Index", "StockGoodsIssue", new { salesOrderId = o.Id })" title="Send goods from Stock Goods Issue before receiving"><i class="bi bi-send"></i> Open GI</a>
+                                        <button type="button" class="btn btn-outline-warning btn-sm" disabled title="Send goods from Stock Goods Issue first"><i class="bi bi-box-seam"></i> Goods Receive</button>
+                                    }
+                                    else
+                                    {
+                                        <form asp-action="CreateOrOpenGoodsIssue" asp-controller="SalesOrder" asp-route-id="@o.Id" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="returnQ" value="@listQ" />
+                                            <input type="hidden" name="returnStatus" value="@listStatus" />
+                                            <input type="hidden" name="returnPlantId" value="@listPlantId" />
+                                            <input type="hidden" name="returnDistributionChannelId" value="@(listDcId?.ToString() ?? "")" />
+                                            <button type="submit" class="btn btn-outline-primary btn-sm" title="Create sales goods issue"><i class="bi bi-box-arrow-in-right"></i> Goods Issue</button>
+                                        </form>
+                                    }
                                 }
                                 <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "SalesOrder", new { id = o.Id })" title="Download order as PDF"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
                                 <form asp-action="Delete" asp-controller="SalesOrder" asp-route-id="@o.Id" method="post" class="d-inline" onsubmit="return confirm('@deleteConfirm');">
@@ -938,10 +995,19 @@
             if (document.getElementById("soSchema")) document.getElementById("soSchema").value = "";
             syncHiddens();
             fetch(nextOrderUrl).then(function (r) { return r.json(); }).then(function (d) {
+                if (!d.success) {
+                    var m = d.message || "Could not load next sales order number.";
+                    if (typeof window.auShowInlineValidation === "function" && document.getElementById("soForm"))
+                        window.auShowInlineValidation(document.getElementById("soForm"), [], m);
+                    else alert(m);
+                    if (document.getElementById("soNum")) document.getElementById("soNum").value = "";
+                    if (document.getElementById("soModalTitle")) document.getElementById("soModalTitle").textContent = "New sales order";
+                    return;
+                }
                 var n = d.number || d.display;
                 if (document.getElementById("soNum")) document.getElementById("soNum").value = n || "";
                 if (document.getElementById("soModalTitle")) document.getElementById("soModalTitle").textContent = "New sales order — " + (n || "");
-            });
+            }).catch(function () { alert("Could not load next sales order number."); });
             soLoadQuotationOptions(null, null);
             var sch = document.getElementById("soSchema") && document.getElementById("soSchema").value;
             if (sch) loadSchema(sch); else loadSchema("");

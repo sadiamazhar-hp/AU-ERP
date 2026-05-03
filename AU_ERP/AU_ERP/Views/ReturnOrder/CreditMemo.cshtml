@@ -1,0 +1,72 @@
+@model AU_ERP.Models.SalesReturnCreditMemo
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = $"Credit memo {Model.DocumentNumber}";
+    var roId = ViewBag.ReturnOrderId as int? ?? 0;
+    var dealer = Model.DealerDisplayName ?? Model.DealerBusinessPartnerId ?? "—";
+    string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
+    string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.CurrentCulture);
+}
+
+<div class="mb-3">
+    <a asp-action="Details" asp-route-id="@roId">&larr; Back to return order</a>
+    · <a asp-controller="Invoice" asp-action="Details" asp-route-id="@Model.SalesInvoiceId">Invoice</a>
+</div>
+
+<h1 class="h4 mb-3">Credit memo @Model.DocumentNumber</h1>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body small">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Document date</dt>
+            <dd class="col-sm-9">@Model.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.CurrentCulture)</dd>
+            <dt class="col-sm-3">Return order</dt>
+            <dd class="col-sm-9">@Model.ReturnOrderDocumentNumber</dd>
+            <dt class="col-sm-3">Invoice</dt>
+            <dd class="col-sm-9">@Model.InvoiceDocumentNumber</dd>
+            <dt class="col-sm-3">Dealer</dt>
+            <dd class="col-sm-9">@dealer</dd>
+            <dt class="col-sm-3">Total credit</dt>
+            <dd class="col-sm-9"><strong>@FmtMoney(Model.GrandTotalCredit)</strong></dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span>Lines</span>
+        <a class="btn btn-sm btn-outline-secondary" asp-action="CreditMemoPdf" asp-route-id="@roId" target="_blank" rel="noopener">Print PDF</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0 small">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Material</th>
+                        <th>Description</th>
+                        <th class="text-end">Returned</th>
+                        <th>UOM</th>
+                        <th class="text-end">Unit price</th>
+                        <th class="text-end">Credit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ln in (Model.Lines ?? Array.Empty<SalesReturnCreditMemoLine>()).OrderBy(l => l.LineNo))
+                    {
+                        <tr>
+                            <td>@ln.LineNo</td>
+                            <td><strong>@ln.MaterialNumber</strong></td>
+                            <td>@(ln.MaterialDescription ?? "—")</td>
+                            <td class="text-end">@FmtQty(ln.QuantityReturned)</td>
+                            <td>@(ln.QuantityUom?.Code ?? "—")</td>
+                            <td class="text-end">@FmtMoney(ln.UnitPrice)</td>
+                            <td class="text-end"><strong>@FmtMoney(ln.LineCreditAmount)</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -496,6 +496,32 @@ body.modal-open:has(#giViewModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+/* Invoice “Record payment” modal — backdrop is on body; modal markup lives under .au-main (Bootstrap does not move it by default). */
+#invPayModal.modal {
+  z-index: 100050 !important;
+}
+
+#invPayModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#invPayModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+/* Sales return QI — complete confirmation modal */
+#rqiCompleteModal.modal {
+  z-index: 100050 !important;
+}
+
+#rqiCompleteModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#rqiCompleteModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
 /* Status-style pills (Sales Quotation, Users, etc.) */
 .sq-badge {
   display: inline-block;

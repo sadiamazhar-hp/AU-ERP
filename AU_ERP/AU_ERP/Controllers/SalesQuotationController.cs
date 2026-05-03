@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Mail;
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
@@ -16,12 +17,18 @@ public class SalesQuotationController : Controller
     private readonly AppDbContext _db;
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
+    private readonly DocumentNumberAllocator _documentNumbers;
 
-    public SalesQuotationController(AppDbContext db, IEmailService emailService, IConfiguration configuration)
+    public SalesQuotationController(
+        AppDbContext db,
+        IEmailService emailService,
+        IConfiguration configuration,
+        DocumentNumberAllocator documentNumbers)
     {
         _db = db;
         _emailService = emailService;
         _configuration = configuration;
+        _documentNumbers = documentNumbers;
     }
 
     /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
@@ -102,8 +109,19 @@ public class SalesQuotationController : Controller
     [HttpGet]
     public async Task<JsonResult> NextQuotationNumber(CancellationToken ct = default)
     {
-        var n = await NextQuotationNumberAsync(ct).ConfigureAwait(false);
-        return Json(new { success = true, number = n, display = n });
+        try
+        {
+            var n = await _documentNumbers.PeekNextAsync(ModuleKeys.SaleQuotation, ct).ConfigureAwait(false);
+            return Json(new { success = true, number = n, display = n });
+        }
+        catch (DocumentIntegrationMissingException ex)
+        {
+            return Json(new { success = false, message = ex.Message });
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            return Json(new { success = false, message = ex.Message });
+        }
     }
 
     [HttpGet]
@@ -594,7 +612,21 @@ public class SalesQuotationController : Controller
             return RedirectToQuotationListFromModel(model);
         }
 
-        var number = await NextQuotationNumberAsync(ct).ConfigureAwait(false);
+        string number;
+        try
+        {
+            number = await _documentNumbers.AllocateAsync(ModuleKeys.SaleQuotation, ct).ConfigureAwait(false);
+        }
+        catch (DocumentIntegrationMissingException ex)
+        {
+            TempData["QuotationError"] = ex.Message;
+            return RedirectToQuotationListFromModel(model);
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            TempData["QuotationError"] = ex.Message;
+            return RedirectToQuotationListFromModel(model);
+        }
 
         var header = new SalesQuotation
         {
@@ -884,33 +916,6 @@ public class SalesQuotationController : Controller
         if (string.IsNullOrEmpty(s)) s = "quotation";
         if (!s.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) s += ".pdf";
         return s;
-    }
-
-    private const int QuotationSequenceFloor = 2000;
-
-    private async Task<string> NextQuotationNumberAsync(CancellationToken ct)
-    {
-        var existing = await _db.SalesQuotations.AsNoTracking()
-            .Select(q => q.QuotationNumber)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-        var max = QuotationSequenceFloor - 1;
-        foreach (var raw in existing)
-        {
-            var s = (raw ?? "").Trim();
-            if (string.IsNullOrEmpty(s)) continue;
-            if (s.StartsWith("SQ-", StringComparison.OrdinalIgnoreCase) && s.Length > 3
-                && int.TryParse(s.AsSpan(3), NumberStyles.None, CultureInfo.InvariantCulture, out var seq))
-            {
-                if (seq > max) max = seq;
-            }
-            else if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= QuotationSequenceFloor)
-            {
-                if (n > max) max = n;
-            }
-        }
-        var next = Math.Max(QuotationSequenceFloor, max + 1);
-        return "SQ-" + next.ToString("D5", CultureInfo.InvariantCulture);
     }
 
     private static string NormalizeQuotationLineGrade(string? g)

@@ -54,9 +54,27 @@
     };
 
     /**
+     * Maroon one-button ERROR modal.
+     */
+    window.materialShowErrorModal = function (message) {
+        var text = message || "Operation failed.";
+        var bodyEl = document.getElementById("bpRangeErrorModalBody");
+        if (bodyEl) bodyEl.textContent = text;
+        var el = document.getElementById("bpRangeErrorModal");
+        if (!el || typeof bootstrap === "undefined" || !bootstrap.Modal) {
+            window.alert(text);
+            return;
+        }
+        if (el.parentElement !== document.body)
+            document.body.appendChild(el);
+        var modal = bootstrap.Modal.getOrCreateInstance(el);
+        modal.show();
+    };
+
+    /**
      * Maroon WARNING modal; onConfirm runs only if user clicks OK (not Cancel / Esc / backdrop).
      */
-    window.materialShowDeleteConfirmModalThen = function (message, onConfirm) {
+    window.materialShowDeleteConfirmModalChoice = function (message, onDecision) {
         var text = message || "Do you want to Delete this Material?";
         var bodyEl = document.getElementById("materialDeleteConfirmModalBody");
         if (bodyEl) bodyEl.textContent = text;
@@ -64,7 +82,7 @@
         var el = document.getElementById("materialDeleteConfirmModal");
         var okBtn = document.getElementById("materialDeleteConfirmModalOk");
         if (!el || !okBtn || typeof bootstrap === "undefined" || !bootstrap.Modal) {
-            if (window.confirm(text) && typeof onConfirm === "function") onConfirm();
+            if (typeof onDecision === "function") onDecision(!!window.confirm(text));
             return;
         }
 
@@ -81,12 +99,18 @@
         function onHidden() {
             el.removeEventListener("hidden.bs.modal", onHidden);
             okBtn.removeEventListener("click", onOkClick);
-            if (confirmed && typeof onConfirm === "function") onConfirm();
+            if (typeof onDecision === "function") onDecision(confirmed);
         }
 
         okBtn.addEventListener("click", onOkClick);
         el.addEventListener("hidden.bs.modal", onHidden, { once: true });
         modal.show();
+    };
+
+    window.materialShowDeleteConfirmModalThen = function (message, onConfirm) {
+        window.materialShowDeleteConfirmModalChoice(message, function (confirmed) {
+            if (confirmed && typeof onConfirm === "function") onConfirm();
+        });
     };
 
     /**

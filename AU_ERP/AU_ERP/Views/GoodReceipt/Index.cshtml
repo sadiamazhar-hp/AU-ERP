@@ -1,7 +1,7 @@
 @model AU_ERP.Models.GoodReceiptIndexVm
 
 @{
-    ViewData["Title"] = "Good Receipt";
+    ViewData["Title"] = "Quality Inspection";
     var draftCount = Model.Documents.Count(x => !x.IsPosted);
     var postedCount = Model.Documents.Count(x => x.IsPosted);
 }
@@ -36,9 +36,13 @@
 }
 
 <div class="po-page">
+    @if (TempData["GoodReceiptError"] is string gre && !string.IsNullOrWhiteSpace(gre))
+    {
+        <div class="alert alert-danger py-2 mb-3" role="alert">@gre</div>
+    }
     <div class="po-hero">
         <div>
-            <h1>Good Receipt</h1>
+            <h1>Quality Inspection</h1>
             <p>Create draft receipts from Operation Tracking, then post to update inventory.</p>
         </div>
     </div>
@@ -60,7 +64,7 @@
 
     <div class="po-table-card">
         <div class="po-table-head">
-            <h2 class="po-table-title">Good Receipts (@Model.Documents.Count)</h2>
+        <h2 class="po-table-title">Quality Inspections (@Model.Documents.Count)</h2>
             <div class="po-toolbar">
                 <a class="btn btn-sm btn-outline-secondary" asp-controller="OperationTracking" asp-action="Index">Go to Operation Tracking</a>
             </div>
@@ -83,7 +87,7 @@
                 <tbody>
                 @if (Model.Documents.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-secondary">No good receipts found.</td></tr>
+                    <tr><td colspan="8" class="text-secondary">No quality inspections found.</td></tr>
                 }
                 else
                 {
@@ -146,7 +150,7 @@
         <div class="modal-content au-create-v2-modal">
             <div class="modal-header bg-dark text-white border-secondary py-2">
                 <div>
-                    <h5 class="modal-title fs-6 mb-0" id="grEditModalTitle">Good Receipt</h5>
+                <h5 class="modal-title fs-6 mb-0" id="grEditModalTitle">Quality Inspection</h5>
                     <div class="small text-white-50" id="grEditMaterialLine" style="line-height:1.2;"></div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -213,7 +217,7 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Good Receipt</h5>
+                <h5 class="modal-title">Quality Inspection</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="grViewBody">
@@ -230,6 +234,23 @@
             const viewModalEl = document.getElementById('grViewModal');
             const editModal = editModalEl ? bootstrap.Modal.getOrCreateInstance(editModalEl) : null;
             const viewModal = viewModalEl ? bootstrap.Modal.getOrCreateInstance(viewModalEl) : null;
+            function grShowError(msg) {
+                if (typeof window.materialShowErrorModal === 'function') window.materialShowErrorModal(msg || 'Operation failed.');
+                else alert(msg || 'Operation failed.');
+            }
+            function grShowSuccessThen(msg, cb) {
+                if (typeof window.materialShowSuccessModalThen === 'function')
+                    window.materialShowSuccessModalThen(msg || 'Saved successfully.', cb || function () { });
+                else {
+                    alert(msg || 'Saved successfully.');
+                    if (typeof cb === 'function') cb();
+                }
+            }
+            function grConfirmThen(msg, onOk) {
+                if (typeof window.materialShowDeleteConfirmModalThen === 'function')
+                    window.materialShowDeleteConfirmModalThen(msg, onOk);
+                else if (confirm(msg)) onOk();
+            }
 
             function ensureOnBody(el) {
                 if (!el) return;
@@ -339,10 +360,7 @@
                 if (btn.classList.contains('gr-edit-draft-btn')) {
                     const res = await fetch('@Url.Action("GetDraft", "GoodReceipt")?id=' + encodeURIComponent(id));
                     const payload = await res.json();
-                    if (!payload.success) {
-                        alert(payload.message || 'Unable to load draft.');
-                        return;
-                    }
+                    if (!payload.success) { grShowError(payload.message || 'Unable to load draft.'); return; }
                     const d = payload.data || {};
                     const ml = document.getElementById('grEditMaterialLine');
                     if (ml) {
@@ -366,10 +384,7 @@
                 if (btn.classList.contains('gr-edit-posted-btn')) {
                     const res = await fetch('@Url.Action("GetDraft", "GoodReceipt")?id=' + encodeURIComponent(id));
                     const payload = await res.json();
-                    if (!payload.success) {
-                        alert(payload.message || 'Unable to load draft.');
-                        return;
-                    }
+                    if (!payload.success) { grShowError(payload.message || 'Unable to load draft.'); return; }
                     const d = payload.data || {};
                     const ml = document.getElementById('grEditMaterialLine');
                     if (ml) {
@@ -395,10 +410,7 @@
                 if (btn.classList.contains('gr-post-btn')) {
                     const res = await fetch('@Url.Action("GetDraft", "GoodReceipt")?id=' + encodeURIComponent(id));
                     const payload = await res.json();
-                    if (!payload.success) {
-                        alert(payload.message || 'Unable to load draft.');
-                        return;
-                    }
+                    if (!payload.success) { grShowError(payload.message || 'Unable to load draft.'); return; }
                     const d = payload.data || {};
                     const ml = document.getElementById('grEditMaterialLine');
                     if (ml) {
@@ -454,11 +466,8 @@
                         body: JSON.stringify(dto)
                     });
                     const data = await resp.json();
-                    if (!data.success) {
-                        alert(data.message || 'Save failed.');
-                        return;
-                    }
-                    window.location.reload();
+                    if (!data.success) { grShowError(data.message || 'Save failed.'); return; }
+                    grShowSuccessThen(data.message || 'Saved successfully.', function () { window.location.reload(); });
                 });
             }
 
@@ -470,40 +479,34 @@
 
                     const produced = numVal('grProducedQty');
                     const sum = numVal('grAQty') + numVal('grBQty') + numVal('grCQty') + numVal('grScrapQty');
-                    if (Math.abs(produced - sum) > 0.0001) {
-                        alert('Produced must equal A + B + C + Scrap before posting.');
-                        return;
-                    }
+                    if (Math.abs(produced - sum) > 0.0001) { grShowError('Produced must equal A + B + C + Scrap before posting.'); return; }
 
-                    if (!confirm('Post this Good Receipt? This will update inventory and cannot be posted again.')) return;
+                        grConfirmThen('Post this Quality Inspection? This will update inventory and cannot be posted again.', async function () {
+                        const dto = {
+                            id: id,
+                            documentDate: document.getElementById('grDocDate').value,
+                            documentNumber: document.getElementById('grDocNo').value,
+                            batchNo: document.getElementById('grBatchNo').value,
+                            producedQty: numVal('grProducedQty'),
+                            qtyFirstQuality: numVal('grAQty'),
+                            qtySecondQuality: numVal('grBQty'),
+                            qtyThirdQuality: numVal('grCQty'),
+                            rejectedScrapQty: numVal('grScrapQty')
+                        };
 
-                    const dto = {
-                        id: id,
-                        documentDate: document.getElementById('grDocDate').value,
-                        documentNumber: document.getElementById('grDocNo').value,
-                        batchNo: document.getElementById('grBatchNo').value,
-                        producedQty: numVal('grProducedQty'),
-                        qtyFirstQuality: numVal('grAQty'),
-                        qtySecondQuality: numVal('grBQty'),
-                        qtyThirdQuality: numVal('grCQty'),
-                        rejectedScrapQty: numVal('grScrapQty')
-                    };
+                        const saveResp = await fetch('@Url.Action("SaveDraft", "GoodReceipt")', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(dto)
+                        });
+                        const saveData = await saveResp.json();
+                        if (!saveData.success) { grShowError(saveData.message || 'Save failed.'); return; }
 
-                    const saveResp = await fetch('@Url.Action("SaveDraft", "GoodReceipt")', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(dto)
+                        const postResp = await fetch('@Url.Action("PostReceipt", "GoodReceipt")?id=' + encodeURIComponent(id), { method: 'POST' });
+                        const postData = await postResp.json();
+                        if (!postData.success) { grShowError(postData.message || 'Failed.'); return; }
+                        grShowSuccessThen(postData.message || 'Posted.', function () { window.location.reload(); });
                     });
-                    const saveData = await saveResp.json();
-                    if (!saveData.success) {
-                        alert(saveData.message || 'Save failed.');
-                        return;
-                    }
-
-                    const postResp = await fetch('@Url.Action("PostReceipt", "GoodReceipt")?id=' + encodeURIComponent(id), { method: 'POST' });
-                    const postData = await postResp.json();
-                    alert(postData.message || (postData.success ? 'Posted.' : 'Failed.'));
-                    if (postData.success) window.location.reload();
                 });
             }
         })();

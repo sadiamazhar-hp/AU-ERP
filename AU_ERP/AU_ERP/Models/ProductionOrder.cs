@@ -28,6 +28,10 @@ namespace AU_ERP.Models
         /// <summary>User-facing document number; first issued value is 40000.</summary>
         public int ProductionNumber { get; set; }
 
+        /// <summary>Prefixed document number issued via <see cref="DocumentIntegration"/> (e.g. PO-1001).</summary>
+        [MaxLength(32)]
+        public string? ProductionDocumentNumber { get; set; }
+
         public DateTime CreatedAt { get; set; }
 
         [Required]
@@ -59,6 +63,9 @@ namespace AU_ERP.Models
 
         /// <summary>JSON array of scaled BOM lines (<see cref="MrpBomLineDisplayDto"/>) frozen at release; when set, PO BOM uses this instead of the live material BOM.</summary>
         public string? ReleasedBomSnapshotJson { get; set; }
+        public int? SelectedBomId { get; set; }
+        [MaxLength(30)]
+        public string? SelectedBomAlternative { get; set; }
 
         [ForeignKey(nameof(FinishedMaterialNumber))]
         public virtual CreateMaterialMaster? FinishedMaterial { get; set; }
@@ -68,6 +75,9 @@ namespace AU_ERP.Models
 
         [ForeignKey(nameof(ReleasedRoutingId))]
         public virtual RoutingHeadersSample? ReleasedRouting { get; set; }
+        
+        [ForeignKey(nameof(SelectedBomId))]
+        public virtual BomHeadersSample? SelectedBom { get; set; }
 
         public virtual ICollection<ProductionOrderStageProgress> StageProgresses { get; set; }
 

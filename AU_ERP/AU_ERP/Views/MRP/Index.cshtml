@@ -39,11 +39,13 @@
             <table class="table table-sm table-bordered align-middle">
                 <thead>
                     <tr>
-                        <th style="width:34%;">Material</th>
-                        <th style="width:18%;">Quantity (auto)</th>
-                        <th style="width:18%;">UOM (auto)</th>
-                        <th style="width:20%;">Status</th>
-                        <th style="width:10%;"></th>
+                        <th style="width:24%;">Material</th>
+                        <th style="width:12%;">Plant</th>
+                        <th style="width:20%;">BOM Selection</th>
+                        <th style="width:14%;">Quantity (auto)</th>
+                        <th style="width:12%;">UOM (auto)</th>
+                        <th style="width:12%;">Status</th>
+                        <th style="width:6%;"></th>
                     </tr>
                 </thead>
                 <tbody id="mrpLinesBody"></tbody>
@@ -66,6 +68,7 @@
     const runMultiUrl = "@Url.Action("RunMulti", "MRP")";
     const createPoUrl = "@Url.Action("CreateFromMrpMulti", "ProductionOrder")";
     const poIndexUrl = "@Url.Action("Index", "ProductionOrder")";
+    const bomOptionsUrl = "@Url.Action("GetBomOptionsForMrp", "BOM")";
 
     const linesBody = document.getElementById("mrpLinesBody");
     const fromEl = document.getElementById("mrpFromDate");
@@ -92,6 +95,8 @@
         const tr = document.createElement("tr");
         tr.innerHTML =
             '<td><select class="form-select form-select-sm mrp-line-mat"><option value="">-- Select material --</option></select></td>' +
+            '<td><input type="text" class="form-control form-control-sm mrp-line-plant" value="Man102"></td>' +
+            '<td><select class="form-select form-select-sm mrp-line-bom"><option value="">-- Select BOM --</option></select><div class="small text-muted mt-1 mrp-line-bom-hint">Select material + plant</div></td>' +
             '<td><input type="number" class="form-control form-control-sm mrp-line-qty" step="0.0001" readonly></td>' +
             '<td><input type="text" class="form-control form-control-sm mrp-line-uom" readonly><input type="hidden" class="mrp-line-uom-id"></td>' +
             '<td><span class="small text-muted mrp-line-status">Waiting</span></td>' +
@@ -111,7 +116,10 @@
         const materialNumber = (tr.querySelector(".mrp-line-mat").value || "").trim();
         const quantity = parseFloat(tr.querySelector(".mrp-line-qty").value || "0") || 0;
         const uomId = parseInt(tr.querySelector(".mrp-line-uom-id").value || "0", 10) || 0;
-        return { materialNumber, quantity, uomId };
+        const plantId = (tr.querySelector(".mrp-line-plant")?.value || "").trim();
+        const selectedBomId = parseInt(tr.querySelector(".mrp-line-bom")?.value || "0", 10) || 0;
+        const selectedBomRef = tr.querySelector(".mrp-line-bom")?.selectedOptions?.[0]?.getAttribute("data-ref") || "";
+        return { materialNumber, quantity, uomId, plantId, selectedBomId, selectedBomRef };
     }
 
     function setLineStatus(tr, text, ok) {
@@ -132,11 +140,12 @@
             const rows = result.rows || result.Rows || [];
             const mat = ln.materialNumber || ln.MaterialNumber || "";
             const qty = ln.quantity != null ? ln.quantity : ln.Quantity;
+            const bomRef = ln.selectedBomAlternative || ln.SelectedBomAlternative || "";
             const ok = !!result.success;
             const allSat = !!(result.allSatisfied || result.AllSatisfied);
 
             let html = '<div class="mb-3 p-2 border rounded">';
-            html += '<div class="fw-semibold mb-1">' + (idx + 1) + '. ' + mat + ' (Qty: ' + fmtQty(qty) + ')</div>';
+            html += '<div class="fw-semibold mb-1">' + (idx + 1) + '. ' + mat + ' (Qty: ' + fmtQty(qty) + ')' + (bomRef ? (' | BOM: ' + bomRef) : '') + '</div>';
             html += '<div class="small ' + (ok ? (allSat ? 'text-success' : 'text-warning') : 'text-danger') + ' mb-2">'
                 + ((result.message || result.Message || (ok ? 'MRP completed.' : 'MRP failed.')))
                 + '</div>';
@@ -195,8 +204,57 @@
                 uomEl.value = (res.baseUomCode || "");
                 uomIdEl.value = String(res.baseUomId || 0);
                 setLineStatus(tr, qty > 0 ? "Demand loaded" : "No demand in range", qty > 0);
+                loadBomOptionsForLine(tr);
             })
             .catch(() => setLineStatus(tr, "Demand failed", false));
+    }
+    
+    function loadBomOptionsForLine(tr) {
+        const materialNumber = (tr.querySelector(".mrp-line-mat").value || "").trim();
+        const plantId = (tr.querySelector(".mrp-line-plant")?.value || "").trim();
+        const bomSel = tr.querySelector(".mrp-line-bom");
+        const hint = tr.querySelector(".mrp-line-bom-hint");
+        if (!bomSel) return;
+        bomSel.innerHTML = '<option value="">-- Select BOM --</option>';
+        if (!materialNumber || !plantId) {
+            if (hint) hint.textContent = "Select material + plant";
+            return;
+        }
+        if (hint) hint.textContent = "Loading...";
+        fetch(bomOptionsUrl + "?materialNumber=" + encodeURIComponent(materialNumber) + "&plantId=" + encodeURIComponent(plantId))
+            .then(r => r.json())
+            .then(res => {
+                const items = (res && res.success && res.items) ? res.items : [];
+                if (!items.length) {
+                    if (hint) hint.textContent = "No active valid BOM";
+                    return;
+                }
+                items.forEach(function (it) {
+                    const o = document.createElement("option");
+                    o.value = String(it.bomId || it.BomID || "");
+                    const bomCode = String(it.bomCode || it.BOMCode || ("BOM-" + o.value));
+                    const isBase = !!(it.isDefault || it.IsDefaultBom);
+                    o.textContent = bomCode + (isBase ? " (Base)" : "");
+                    o.setAttribute("data-ref", bomCode);
+                    if (it.isDefault) o.setAttribute("data-default", "1");
+                    bomSel.appendChild(o);
+                });
+                if (items.length === 1) {
+                    bomSel.value = String(items[0].bomId || "");
+                    if (hint) hint.textContent = "Auto-selected (single BOM)";
+                    return;
+                }
+                const def = items.find(x => x.isDefault);
+                if (def) {
+                    bomSel.value = String(def.bomId || "");
+                    if (hint) hint.textContent = "Base BOM selected";
+                } else {
+                    if (hint) hint.textContent = "Select BOM";
+                }
+            })
+            .catch(() => {
+                if (hint) hint.textContent = "BOM load failed";
+            });
     }
 
     function collectRunLines() {
@@ -208,7 +266,10 @@
             out.push({
                 materialNumber: p.materialNumber,
                 quantity: p.quantity,
-                uomId: p.uomId
+                uomId: p.uomId,
+                plantId: p.plantId || null,
+                selectedBomId: p.selectedBomId > 0 ? p.selectedBomId : null,
+                selectedBomAlternative: p.selectedBomRef || null
             });
         });
         return out;
@@ -223,6 +284,7 @@
         const tr = e.target.closest("tr");
         if (!tr) return;
         if (e.target.classList.contains("mrp-line-mat")) fetchDemandForLine(tr);
+        if (e.target.classList.contains("mrp-line-plant")) loadBomOptionsForLine(tr);
     });
     linesBody.addEventListener("click", function (e) {
         const btn = e.target.closest(".mrp-del-line");
@@ -276,7 +338,10 @@
                     materialNumber: x.materialNumber || x.MaterialNumber || "",
                     materialDescription: x.description || x.Description || "",
                     plannedQuantity: x.quantity || x.Quantity || 0,
-                    uomId: x.uomId || x.UomId || 0
+                    uomId: x.uomId || x.UomId || 0,
+                    plantId: x.plantId || x.PlantId || null,
+                    selectedBomId: x.selectedBomId || x.SelectedBomId || null,
+                    selectedBomAlternative: x.selectedBomAlternative || x.SelectedBomAlternative || null
                 };
             })
         };

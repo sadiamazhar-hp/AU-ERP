@@ -10,6 +10,11 @@ namespace AU_ERP.Models
         public int? BPTypeId { get; set; }
         public int? BPGroupingId { get; set; }
         public string? FullName { get; set; }
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? CNIC { get; set; }
+        public string? LicenceNo { get; set; }
+        public bool IsActive { get; set; } = true;
         public string? Street { get; set; }
         public string? HouseNo { get; set; }
         public string? City { get; set; }

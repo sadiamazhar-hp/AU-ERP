@@ -1,0 +1,227 @@
+@model AU_ERP.Models.ViewModels.ReorderQiDetailsVm
+@using System.Globalization
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = $"QI {Model.DocumentNumber}";
+    var isPending = string.Equals(Model.Status, SalesReturnQualityInspection.StatusPending, StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="py-3">
+    @if (TempData["RqiError"] is string err && !string.IsNullOrWhiteSpace(err))
+    {
+        <div class="alert alert-danger py-2 mb-3" role="alert">@err</div>
+    }
+    @if (TempData["RqiMessage"] is string ok && !string.IsNullOrWhiteSpace(ok))
+    {
+        <div class="alert alert-success py-2 mb-3" role="status">@ok</div>
+    }
+
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-sm btn-outline-secondary">&larr; Back to list</a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h1 class="h5 mb-2">@Model.DocumentNumber</h1>
+            <dl class="row mb-0 small">
+                <dt class="col-sm-3">Date</dt>
+                <dd class="col-sm-9">@Model.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</dd>
+                <dt class="col-sm-3">Status</dt>
+                <dd class="col-sm-9">@Model.Status</dd>
+                <dt class="col-sm-3">Plant</dt>
+                <dd class="col-sm-9">@(string.IsNullOrWhiteSpace(Model.PlantId) ? "—" : Model.PlantId)</dd>
+                <dt class="col-sm-3">Invoice</dt>
+                <dd class="col-sm-9">@Model.InvoiceDocumentNumber</dd>
+                <dt class="col-sm-3">Return order</dt>
+                <dd class="col-sm-9">@Model.ReturnOrderDocumentNumber</dd>
+            </dl>
+        </div>
+    </div>
+
+    @if (isPending)
+    {
+        <form asp-action="Complete" method="post" id="rqiCompleteForm" class="card mb-3">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="QiId" value="@Model.QiId" />
+            <div class="card-header fw-semibold">Line disposition (must sum to returned quantity per line)</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0 align-middle small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Material</th>
+                                <th>Description</th>
+                                <th>Batch</th>
+                                <th class="text-end">Returned</th>
+                                <th>UOM</th>
+                                <th class="text-end">Back to stock</th>
+                                <th class="text-end">Convert to raw</th>
+                                <th class="text-end">Scrap</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < Model.Lines.Count; i++)
+                            {
+                                var ln = Model.Lines[i];
+                                <tr data-rqi-line="@i" data-rqi-returned="@ln.QuantityReturned.ToString(CultureInfo.InvariantCulture)">
+                                    <td>
+                                        <strong>@ln.MaterialNumber</strong>
+                                        <input type="hidden" name="Lines[@i].LineId" value="@ln.LineId" />
+                                    </td>
+                                    <td>@(ln.MaterialDescription ?? "—")</td>
+                                    <td>@(string.IsNullOrWhiteSpace(ln.BatchNumber) ? "—" : ln.BatchNumber)</td>
+                                    <td class="text-end">@ln.QuantityReturned.ToString("N4", CultureInfo.InvariantCulture)</td>
+                                    <td>@(ln.UomCode ?? "—")</td>
+                                    <td class="text-end" style="max-width:7rem;">
+                                        <input class="form-control form-control-sm text-end rqi-qty" type="number" step="0.0001" min="0"
+                                               name="Lines[@i].QtyBackToStock" value="@ln.QtyBackToStock.ToString(CultureInfo.InvariantCulture)" />
+                                    </td>
+                                    <td class="text-end" style="max-width:7rem;">
+                                        <input class="form-control form-control-sm text-end rqi-qty" type="number" step="0.0001" min="0"
+                                               name="Lines[@i].QtyConvertToRaw" value="@ln.QtyConvertToRaw.ToString(CultureInfo.InvariantCulture)" />
+                                        @if (!ln.HasBomRoh && ln.QtyConvertToRaw > 0)
+                                        {
+                                            <div class="text-danger small mt-1">No active BOM with ROH for convert.</div>
+                                        }
+                                    </td>
+                                    <td class="text-end" style="max-width:7rem;">
+                                        <input class="form-control form-control-sm text-end rqi-qty" type="number" step="0.0001" min="0"
+                                               name="Lines[@i].QtyScrap" value="@ln.QtyScrap.ToString(CultureInfo.InvariantCulture)" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer d-flex flex-wrap gap-2 align-items-center">
+                <button type="button" class="btn btn-sm btn-primary" id="rqiOpenConfirmBtn">Complete inspection</button>
+                <span class="text-secondary small">Posts inventory and marks the invoice as returned.</span>
+            </div>
+        </form>
+    }
+    else
+    {
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">Lines (read-only)</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Material</th>
+                                <th>Batch</th>
+                                <th class="text-end">Returned</th>
+                                <th class="text-end">Back</th>
+                                <th class="text-end">Convert</th>
+                                <th class="text-end">Scrap</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ln in Model.Lines)
+                            {
+                                <tr>
+                                    <td>@ln.MaterialNumber</td>
+                                    <td>@(string.IsNullOrWhiteSpace(ln.BatchNumber) ? "—" : ln.BatchNumber)</td>
+                                    <td class="text-end">@ln.QuantityReturned.ToString("N4", CultureInfo.InvariantCulture)</td>
+                                    <td class="text-end">@ln.QtyBackToStock.ToString("N4", CultureInfo.InvariantCulture)</td>
+                                    <td class="text-end">@ln.QtyConvertToRaw.ToString("N4", CultureInfo.InvariantCulture)</td>
+                                    <td class="text-end">@ln.QtyScrap.ToString("N4", CultureInfo.InvariantCulture)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="modal fade" id="rqiCompleteModal" tabindex="-1" aria-labelledby="rqiCompleteModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rqiCompleteModalTitle">Complete quality inspection</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">This will post stock movements (finished good, scrap, and raw where applicable) and mark the inspection and invoice as closed. Continue?</p>
+                <div class="alert alert-danger py-2 mt-3 mb-0 small d-none" id="rqiClientErr" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="rqiModalDoPost">Yes, complete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isPending)
+{
+    <script>
+        (function () {
+            var form = document.getElementById('rqiCompleteForm');
+            var modalEl = document.getElementById('rqiCompleteModal');
+            var errEl = document.getElementById('rqiClientErr');
+            var eps = 0.00015;
+            function ensureRqiModalOnBody() {
+                if (modalEl && modalEl.parentElement !== document.body)
+                    document.body.appendChild(modalEl);
+            }
+            ensureRqiModalOnBody();
+            if (modalEl) modalEl.addEventListener('show.bs.modal', ensureRqiModalOnBody);
+
+            function parseNum(v) {
+                var n = parseFloat(String(v).replace(',', '.'));
+                return isFinite(n) ? n : 0;
+            }
+
+            function validateClient() {
+                if (!form) return 'Form not found.';
+                var rows = form.querySelectorAll('tr[data-rqi-line]');
+                for (var r = 0; r < rows.length; r++) {
+                    var row = rows[r];
+                    var ret = parseNum(row.getAttribute('data-rqi-returned'));
+                    var inputs = row.querySelectorAll('.rqi-qty');
+                    if (inputs.length < 3) continue;
+                    var back = parseNum(inputs[0].value);
+                    var conv = parseNum(inputs[1].value);
+                    var scrap = parseNum(inputs[2].value);
+                    if (back < 0 || conv < 0 || scrap < 0) return 'Quantities cannot be negative.';
+                    var sum = back + conv + scrap;
+                    if (Math.abs(sum - ret) > eps)
+                        return 'Each line: back + convert + scrap must equal returned quantity.';
+                }
+                return '';
+            }
+
+            var openBtn = document.getElementById('rqiOpenConfirmBtn');
+            if (openBtn) openBtn.addEventListener('click', function () {
+                var msg = validateClient();
+                if (errEl) {
+                    if (msg) { errEl.textContent = msg; errEl.classList.remove('d-none'); }
+                    else { errEl.textContent = ''; errEl.classList.add('d-none'); }
+                }
+                if (modalEl && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                } else if (form) {
+                    if (msg) { window.alert(msg); return; }
+                    if (!window.confirm('Complete quality inspection and post inventory?')) return;
+                    form.submit();
+                }
+            });
+
+            var doPost = document.getElementById('rqiModalDoPost');
+            if (doPost) doPost.addEventListener('click', function () {
+                var msg = validateClient();
+                if (msg) {
+                    if (errEl) { errEl.textContent = msg; errEl.classList.remove('d-none'); }
+                    return;
+                }
+                if (errEl) errEl.classList.add('d-none');
+                if (modalEl && window.bootstrap) bootstrap.Modal.getInstance(modalEl)?.hide();
+                if (form) form.submit();
+            });
+        })();
+    </script>
+}

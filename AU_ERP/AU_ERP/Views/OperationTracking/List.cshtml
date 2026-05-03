@@ -52,7 +52,7 @@
     {
         <div class="otl-empty">
             <p class="mb-2 fw-semibold text-dark">No orders in tracking</p>
-            <p class="small mb-0">Complete Goods Issue for a planned production order to create stages here.</p>
+            <p class="small mb-0">Complete Reservation Issue for a planned production order to create stages here.</p>
         </div>
     }
     else
@@ -64,9 +64,9 @@
                 var uom = string.IsNullOrWhiteSpace(o.UomCode) ? "" : o.UomCode;
                 var canOpenGr = o.StagesTotal > 0 && o.StagesCompleted == o.StagesTotal && !o.GoodsReceiptPosted;
                 var grDisabledTitle = o.GoodsReceiptPosted
-                    ? "Goods receipt has already been posted for this order."
+                    ? "Quality inspection has already been posted for this order."
                     : (o.StagesTotal == 0 || o.StagesCompleted < o.StagesTotal
-                        ? "Complete all operation stages on this order before posting goods receipt."
+                        ? "Complete all operation stages on this order before posting quality inspection."
                         : "");
                 <article class="otl-card">
                     <div class="otl-card-top">
@@ -90,7 +90,7 @@
                             <form asp-controller="GoodReceipt" asp-action="CreateOrOpen" asp-route-productionOrderId="@o.ProductionOrderId" method="post" class="d-inline">
                                 @Html.AntiForgeryToken()
                                 <button type="submit" class="btn btn-success btn-sm">
-                                    <i class="bi bi-box-seam me-1"></i>Good receipt
+                                    <i class="bi bi-box-seam me-1"></i>Quality inspection
                                 </button>
                             </form>
                         }
@@ -99,8 +99,8 @@
                             <button type="button"
                                     class="btn btn-outline-secondary btn-sm"
                                     disabled
-                                    title="Goods receipt has already been posted for this order.">
-                                <i class="bi bi-check2-circle me-1"></i>Goods receipt posted
+                                    title="Quality inspection has already been posted for this order.">
+                                <i class="bi bi-check2-circle me-1"></i>Quality inspection posted
                             </button>
                         }
                         else
@@ -109,7 +109,7 @@
                                     class="btn btn-success btn-sm"
                                     disabled
                                     title="@grDisabledTitle">
-                                <i class="bi bi-box-seam me-1"></i>Good receipt
+                                <i class="bi bi-box-seam me-1"></i>Quality inspection
                             </button>
                         }
                     </div>

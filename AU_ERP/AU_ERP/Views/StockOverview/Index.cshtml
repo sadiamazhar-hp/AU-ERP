@@ -107,6 +107,7 @@
                                 <th>Material number</th>
                                 <th>Material name</th>
                                 <th>Type</th>
+                                <th>Batch No</th>
                                 <th>Grade</th>
                                 <th>Quantity</th>
                                 <th>Status</th>
@@ -122,13 +123,16 @@
                                 var typeLabel = mat?.MaterialType != null
                                     ? (!string.IsNullOrWhiteSpace(mat.MaterialType.Description) ? mat.MaterialType.Description : mat.MaterialType.MaterialTypeCode)
                                     : (mat?.MaterialTypeCode ?? "—");
+                                var isFert = string.Equals(mat?.MaterialTypeCode, "FERT", StringComparison.OrdinalIgnoreCase);
                                 var name = mat?.Description ?? "—";
                                 var uom = row.QuantityUom?.Code ?? "—";
+                                var batchNo = isFert ? (string.IsNullOrWhiteSpace(row.BatchOrLot) ? "—" : row.BatchOrLot) : "—";
                                 var gradeLabel = string.IsNullOrEmpty(row.Grade) ? "—" : row.Grade;
                                 <tr>
                                     <td><strong>@row.MaterialNumber</strong></td>
                                     <td>@name</td>
                                     <td>@typeLabel</td>
+                                    <td>@batchNo</td>
                                     <td>@gradeLabel</td>
                                     <td>@FmtQty(row.Quantity) @uom</td>
                                     <td><span class="@StatusBadge(row.Status)">@StatusUi(row.Status)</span></td>

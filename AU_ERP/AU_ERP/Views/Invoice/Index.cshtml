@@ -1,0 +1,171 @@
+@model AU_ERP.Models.ViewModels.InvoiceIndexVm
+@using System.Globalization
+@using System.Text.Json
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Invoice";
+    string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.CurrentCulture);
+    var payPrefillUrl = Url.Action("PaymentPrefill", "Invoice") ?? "";
+    var payCreateUrl = Url.Action("CreatePayment", "Invoice") ?? "";
+}
+
+@section Styles {
+    <style>
+        .inv-page { color: var(--text, #32363a); }
+        .inv-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+        @@media (max-width: 1100px) { .inv-stats { grid-template-columns: repeat(2, 1fr) !important; } }
+        @@media (max-width: 900px) { .inv-stats { grid-template-columns: 1fr !important; } }
+        .inv-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); border-top: 3px solid var(--blue, #0070f2); }
+        .inv-stat-card.inv-stat-overdue { border-top-color: #c62828; }
+        .inv-stat-card.inv-stat-collected { border-top-color: #2e7d32; }
+        .inv-stat-card.inv-stat-rip { border-top-color: #ef6c00; }
+        .inv-stat-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: #6a7c8e; text-transform: uppercase; }
+        .inv-stat-val { font-size: 1.35rem; font-weight: 600; color: #354a5e; margin-top: .2rem; }
+        .inv-stat-sub { font-size: .8rem; color: #6a7c8e; margin-top: .15rem; }
+        .inv-table-card { background: #fff; border: 1px solid #d9d9d9; border-radius: 4px; padding: 1rem 1.1rem; }
+        .inv-table-wrap { overflow-x: auto; }
+        .inv-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .inv-table thead th { background: #354a5e; color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; }
+        .inv-table tbody td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: middle; }
+        .inv-table tbody tr:nth-child(even) { background: #fafafa; }
+    </style>
+}
+
+<div class="inv-page">
+    @if (TempData["InvoiceError"] is string ie && !string.IsNullOrWhiteSpace(ie))
+    {
+        <div class="alert alert-danger py-2 mb-3" role="alert">@ie</div>
+    }
+    @if (TempData["InvoiceMessage"] is string im && !string.IsNullOrWhiteSpace(im))
+    {
+        <div class="alert alert-success py-2 mb-3" role="status">@im</div>
+    }
+    @if (TempData["RoError"] is string roe && !string.IsNullOrWhiteSpace(roe))
+    {
+        <div class="alert alert-danger py-2 mb-3" role="alert">@roe</div>
+    }
+    @if (TempData["RoMessage"] is string rom && !string.IsNullOrWhiteSpace(rom))
+    {
+        <div class="alert alert-success py-2 mb-3" role="status">@rom</div>
+    }
+    <h1 class="h4 mb-3">Invoice</h1>
+
+    <div class="inv-stats" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="inv-stat-card">
+            <div class="inv-stat-label">Open</div>
+            <div class="inv-stat-val">@FmtMoney(Model.OpenAmount)</div>
+            <div class="inv-stat-sub">@Model.OpenCount.ToString("N0", CultureInfo.CurrentCulture) document(s)</div>
+        </div>
+        <div class="inv-stat-card inv-stat-overdue">
+            <div class="inv-stat-label">Overdue</div>
+            <div class="inv-stat-val">@FmtMoney(Model.OverdueAmount)</div>
+            <div class="inv-stat-sub">@Model.OverdueCount.ToString("N0", CultureInfo.CurrentCulture) document(s)</div>
+        </div>
+        <div class="inv-stat-card inv-stat-collected">
+            <div class="inv-stat-label">Collected</div>
+            <div class="inv-stat-val">@FmtMoney(Model.CollectedAmount)</div>
+            <div class="inv-stat-sub">@Model.CollectedCount.ToString("N0", CultureInfo.CurrentCulture) document(s)</div>
+        </div>
+        <div class="inv-stat-card inv-stat-rip">
+            <div class="inv-stat-label">Return in process</div>
+            <div class="inv-stat-val">@FmtMoney(Model.ReturnInProcessAmount)</div>
+            <div class="inv-stat-sub">@Model.ReturnInProcessCount.ToString("N0", CultureInfo.CurrentCulture) document(s)</div>
+        </div>
+    </div>
+
+    <div class="inv-table-card">
+        <h2 class="h6 mb-3">Invoices (@Model.Invoices.Count)</h2>
+        <div class="inv-table-wrap">
+            <table class="inv-table">
+                <thead>
+                    <tr>
+                        <th>Document No.</th>
+                        <th>Date</th>
+                        <th>Due date</th>
+                        <th>Dealer</th>
+                        <th>DC No.</th>
+                        <th class="text-end">Subtotal</th>
+                        <th class="text-end">Grand total</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Invoices.Count == 0)
+                    {
+                        <tr><td colspan="9" class="text-secondary">No invoices yet. Invoices are created when you save a delivery challan.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var inv in Model.Invoices)
+                        {
+                            var dealer = inv.DealerDisplayName ?? inv.DealerBusinessPartnerId ?? "—";
+                            var isReturned = string.Equals(inv.Status, SalesInvoice.StatusReturned, StringComparison.OrdinalIgnoreCase);
+                            var isRip = string.Equals(inv.Status, SalesInvoice.StatusReturnInProcess, StringComparison.OrdinalIgnoreCase);
+                            Model.QiByInvoiceId.TryGetValue(inv.Id, out var qiNav);
+                            var hasRo = Model.ReturnOrderIdByInvoiceId.TryGetValue(inv.Id, out var roId);
+                            <tr>
+                                <td><a asp-action="Details" asp-route-id="@inv.Id"><strong>@inv.DocumentNumber</strong></a></td>
+                                <td>@inv.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
+                                <td>@inv.DueDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
+                                <td>@dealer</td>
+                                <td>@inv.DcNumber</td>
+                                <td class="text-end">@FmtMoney(inv.Subtotal)</td>
+                                <td class="text-end"><strong>@FmtMoney(inv.GrandTotal)</strong></td>
+                                <td>@inv.Status</td>
+                                <td>
+                                    @if (string.Equals(inv.Status, SalesInvoice.StatusOpen, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="invOpenPayModal(@inv.Id)">Pay</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-primary" disabled title="Only open invoices can be paid.">Pay</button>
+                                    }
+                                    @if (isReturned)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Invoice is already returned.">Return</button>
+                                        @if (hasRo)
+                                        {
+                                            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@roId">View return</a>
+                                        }
+                                        @if (qiNav != null)
+                                        {
+                                            <a class="btn btn-sm btn-outline-info" asp-controller="ReorderQualityInspection" asp-action="Details" asp-route-id="@qiNav.QiId">View QI</a>
+                                        }
+                                    }
+                                    else if (isRip || (qiNav?.IsPending ?? false))
+                                    {
+                                        @if (qiNav != null)
+                                        {
+                                            <a class="btn btn-sm btn-primary" asp-controller="ReorderQualityInspection" asp-action="Details" asp-route-id="@qiNav.QiId">QI</a>
+                                        }
+                                        @if (hasRo)
+                                        {
+                                            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@roId">View return</a>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Return quality inspection must be completed first.">Return</button>
+                                    }
+                                    else if (hasRo)
+                                    {
+                                        <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@roId">View return</a>
+                                    }
+                                    else
+                                    {
+                                        <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Create" asp-route-invoiceId="@inv.Id">Return</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.invPayPrefillUrl = @Html.Raw(JsonSerializer.Serialize(payPrefillUrl));
+    window.invPayCreateUrl = @Html.Raw(JsonSerializer.Serialize(payCreateUrl));
+</script>
+<partial name="_PaymentModal" />

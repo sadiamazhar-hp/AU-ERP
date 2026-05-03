@@ -1,7 +1,7 @@
 @model AU_ERP.Models.GoodsIssueIndexVm
 @using AU_ERP.Models
 @{
-    ViewData["Title"] = "Goods Issue";
+    ViewData["Title"] = "Reservation Issue";
     var total = Model.Documents.Count;
     var pending = Model.Documents.Count(d => string.Equals(d.Status, GoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase));
     var completed = Model.Documents.Count(d => string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase));
@@ -33,7 +33,7 @@
 <div class="gi-page">
     <div class="gi-hero">
         <div>
-            <h1>Goods Issue</h1>
+            <h1>Reservation Issue</h1>
             <p>Review BOM consumption before releasing production orders to operations.</p>
         </div>
     </div>
@@ -45,7 +45,7 @@
     </div>
 
     <div class="gi-card">
-        <h2 class="po-table-title mb-3">Goods Issue Documents (@total)</h2>
+        <h2 class="po-table-title mb-3">Reservation Issue Documents (@total)</h2>
         <div class="table-responsive">
             <table class="gi-table">
                 <thead>
@@ -55,13 +55,14 @@
                         <th>Production Order</th>
                         <th>Material</th>
                         <th>Status</th>
+                        <th>Dispatch</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                 @if (!Model.Documents.Any())
                 {
-                    <tr><td colspan="6" class="text-secondary">No goods issue records found.</td></tr>
+                    <tr><td colspan="7" class="text-secondary">No reservation issue records found.</td></tr>
                 }
                 else
                 {
@@ -81,11 +82,28 @@
                             <td>PO-@d.ProductionNumber</td>
                             <td>@mat</td>
                             <td><span class="@badgeClass">@d.Status</span></td>
+                            <td>@d.DispatchStatus</td>
                             <td>
                                 <div class="gi-actions">
+                                    @{
+                                        var dispSent = string.Equals(d.DispatchStatus, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase);
+                                        var dispPend = string.Equals(d.DispatchStatus, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase);
+                                    }
                                     @if (!string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
                                     {
-                                        <button type="button" class="btn btn-success btn-sm" onclick="giReceive(@d.Id)">Receive Goods</button>
+                                        @if (dispPend)
+                                        {
+                                            <button type="button" class="btn btn-primary btn-sm" onclick="giSend(@d.Id)">Send Goods</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Send goods first">Receive Goods</button>
+                                        }
+                                        else if (dispSent)
+                                        {
+                                            <button type="button" class="btn btn-success btn-sm" onclick="giReceive(@d.Id)">Receive Goods</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Dispatch state not supported">Receive Goods</button>
+                                        }
                                     }
                                     else
                                     {
@@ -108,7 +126,7 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Goods Issue</h5>
+                <h5 class="modal-title">Reservation Issue</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="giViewBody">
@@ -130,16 +148,43 @@
         modalEl.addEventListener("show.bs.modal", ensureOnBody);
     })();
 
-    function giReceive(id) {
-        if (!confirm("Receive goods for this GI? Inventory will be deducted and production order released to operations.")) return;
-        fetch("@Url.Action("ReceiveGoods", "GoodsIssue")?id=" + encodeURIComponent(id), { method: "POST" })
+    function giSend(id) {
+        var run = function () {
+            fetch("@Url.Action("SendGoods", "GoodsIssue")?id=" + encodeURIComponent(id), { method: "POST" })
             .then(r => r.json())
             .then(res => {
                 if (res && res.success) {
                     if (typeof window.materialShowSuccessModalThen === "function") {
-                        window.materialShowSuccessModalThen(res.message || "Goods issue completed.", function () { window.location.reload(); });
+                        window.materialShowSuccessModalThen(res.message || "Dispatch sent.", function () { window.location.reload(); });
                     } else {
-                        alert(res.message || "Goods issue completed.");
+                        alert(res.message || "Dispatch sent.");
+                        window.location.reload();
+                    }
+                } else {
+                    if (typeof window.materialShowErrorModal === "function") window.materialShowErrorModal(res.message || "Send goods failed.");
+                    else alert(res.message || "Send goods failed.");
+                }
+            })
+            .catch(() => {
+                if (typeof window.materialShowErrorModal === "function") window.materialShowErrorModal("Send goods failed.");
+                else alert("Send goods failed.");
+            });
+        };
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Send goods for this GI? Quantities will be locked for editing; receipt stays on the source document flow.", run);
+        else if (confirm("Send goods for this GI?")) run();
+    }
+
+    function giReceive(id) {
+        var run = function () {
+            fetch("@Url.Action("ReceiveGoods", "GoodsIssue")?id=" + encodeURIComponent(id), { method: "POST" })
+            .then(r => r.json())
+            .then(res => {
+                if (res && res.success) {
+                    if (typeof window.materialShowSuccessModalThen === "function") {
+                        window.materialShowSuccessModalThen(res.message || "Reservation issue completed.", function () { window.location.reload(); });
+                    } else {
+                        alert(res.message || "Reservation issue completed.");
                         window.location.reload();
                     }
                 } else {
@@ -147,7 +192,15 @@
                     else alert(res.message || "Receive goods failed.");
                 }
             })
-            .catch(() => alert("Receive goods failed."));
+            .catch(() => {
+                if (typeof window.materialShowErrorModal === "function") window.materialShowErrorModal("Receive goods failed.");
+                else alert("Receive goods failed.");
+            });
+        };
+        if (typeof window.materialShowDeleteConfirmModalThen === "function")
+            window.materialShowDeleteConfirmModalThen("Receive goods for this RI? Inventory will be deducted and production order released to operations.", run);
+        else if (confirm("Receive goods for this RI? Inventory will be deducted and production order released to operations."))
+            run();
     }
 
     function giView(id) {
@@ -159,7 +212,10 @@
                 var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("giViewModal"));
                 modal.show();
             })
-            .catch(() => alert("Could not load details."));
+            .catch(() => {
+                if (typeof window.materialShowErrorModal === "function") window.materialShowErrorModal("Could not load details.");
+                else alert("Could not load details.");
+            });
     }
 </script>
 }

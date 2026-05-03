@@ -21,6 +21,7 @@
     <div><strong>GI Number:</strong> @Model.DocumentNumber</div>
     <div><strong>Date:</strong> @Model.DocumentDate.ToString("dd-MMM-yyyy")</div>
     <div><strong>Status:</strong> @Model.Status</div>
+    <div><strong>Dispatch:</strong> @Model.DispatchStatus@if (Model.DispatchSentAt is DateTime ds){<text> (sent @ds.ToString("dd-MMM-yyyy HH:mm"))</text>}</div>
     <div><strong>Production Order:</strong> PO-@(po != null ? po.ProductionNumber.ToString() : "—")</div>
     <div><strong>Finished Material:</strong> @mat</div>
 </div>

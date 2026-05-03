@@ -33,6 +33,7 @@ namespace AU_ERP.Models
         public DbSet<RoutingOperationsSample> RoutingOperationsSamples { get; set; }
         public DbSet<DocumentType> DocumentTypes { get; set; }
         public DbSet<DocumentRange> DocumentRanges { get; set; }
+        public DbSet<DocumentIntegration> DocumentIntegrations { get; set; }
         public DbSet<ProductionVersion> ProductionVersions { get; set; }
         public DbSet<UnitOfMeasurement> UnitOfMeasurements { get; set; }
         public DbSet<ProductionOrder> ProductionOrders { get; set; }
@@ -49,11 +50,23 @@ namespace AU_ERP.Models
         public DbSet<SalesQuotationItem> SalesQuotationItems { get; set; }
         public DbSet<SalesOrder> SalesOrders { get; set; }
         public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
+        public DbSet<SalesGoodsIssueDocument> SalesGoodsIssueDocuments { get; set; }
+        public DbSet<SalesGoodsIssueDocumentLine> SalesGoodsIssueDocumentLines { get; set; }
         public DbSet<ConfigurationSchema> ConfigurationSchemas { get; set; }
         public DbSet<ConfigurationSchemaCharge> ConfigurationSchemaCharges { get; set; }
         public DbSet<GlobalUnitConversion> GlobalUnitConversions { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
         public DbSet<DeliveryChallanItem> DeliveryChallanItems { get; set; }
+        public DbSet<SalesInvoice> SalesInvoices { get; set; }
+        public DbSet<SalesInvoiceLine> SalesInvoiceLines { get; set; }
+        public DbSet<SalesPayment> SalesPayments { get; set; }
+        public DbSet<SalesReturnOrder> SalesReturnOrders { get; set; }
+        public DbSet<SalesReturnOrderLine> SalesReturnOrderLines { get; set; }
+        public DbSet<SalesReturnQualityInspection> SalesReturnQualityInspections { get; set; }
+        public DbSet<SalesReturnQualityInspectionLine> SalesReturnQualityInspectionLines { get; set; }
+        public DbSet<SalesReturnCreditMemo> SalesReturnCreditMemos { get; set; }
+        public DbSet<SalesReturnCreditMemoLine> SalesReturnCreditMemoLines { get; set; }
+        public DbSet<CompanyInfo> CompanyInfos { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -127,10 +140,10 @@ namespace AU_ERP.Models
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<MaterialType>().HasData(
-                new MaterialType { MaterialTypeCode = "FERT", Description = "Finished products" },
-                new MaterialType { MaterialTypeCode = "HALB", Description = "Semifinished products" },
-                new MaterialType { MaterialTypeCode = "PACK", Description = "Packaging" },
-                new MaterialType { MaterialTypeCode = "ROH", Description = "Raw materials" }
+                new MaterialType { MaterialTypeCode = "FERT", Description = "Finished products", EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Sales\"]" },
+                new MaterialType { MaterialTypeCode = "HALB", Description = "Semifinished products", EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Purchasing\"]" },
+                new MaterialType { MaterialTypeCode = "PACK", Description = "Packaging", EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Purchasing\"]" },
+                new MaterialType { MaterialTypeCode = "ROH", Description = "Raw materials", EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Purchasing\"]" }
             );
 
             modelBuilder.Entity<MaterialNumberRange>()
@@ -196,6 +209,33 @@ namespace AU_ERP.Models
             modelBuilder.Entity<BomHeadersSample>()
                 .Property(h => h.BOMCode)
                 .HasMaxLength(20);
+            
+            modelBuilder.Entity<BomHeadersSample>()
+                .Property(h => h.BomUsage)
+                .HasMaxLength(30)
+                .HasDefaultValue("Production");
+            
+            modelBuilder.Entity<BomHeadersSample>()
+                .Property(h => h.AlternativeNo)
+                .HasMaxLength(30)
+                .HasDefaultValue("AUTO");
+            
+            modelBuilder.Entity<BomHeadersSample>()
+                .Property(h => h.Status)
+                .HasMaxLength(20)
+                .HasDefaultValue("Active");
+            
+            modelBuilder.Entity<BomHeadersSample>()
+                .HasIndex(h => new { h.BomMaterialNumber, h.Plant, h.BomUsage, h.AlternativeNo })
+                .IsUnique();
+            
+            modelBuilder.Entity<BomHeadersSample>()
+                .HasIndex(h => new { h.BomMaterialNumber, h.Plant, h.IsDefaultBom, h.Status });
+            
+            modelBuilder.Entity<BomHeadersSample>()
+                .HasIndex(h => h.BomMaterialNumber)
+                .HasFilter("[IsDefaultBom] = 1")
+                .IsUnique();
 
             // modelBuilder.Entity<BomHeadersSample>()
             //     .HasOne(h => h.MaterialType)
@@ -233,7 +273,8 @@ namespace AU_ERP.Models
             modelBuilder.Entity<BPRole>().HasData(
                 new BPRole { Id = 1, RoleCode = "FLCU00", RoleName = "Basic" },
                 new BPRole { Id = 2, RoleCode = "FLCU01", RoleName = "Customer (Sales)" },
-                new BPRole { Id = 3, RoleCode = "FLVN01", RoleName = "Vendor" });
+                new BPRole { Id = 3, RoleCode = "FLVN01", RoleName = "Vendor" },
+                new BPRole { Id = 4, RoleCode = "FLDR01", RoleName = "Driver" });
 
             modelBuilder.Entity<BPTypeSample>()
                 .Property(e => e.Id)
@@ -241,8 +282,29 @@ namespace AU_ERP.Models
 
             modelBuilder.Entity<BPTypeSample>().HasData(
                 new BPTypeSample { Id = 1, TypeName = "Customer", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
-                new BPTypeSample { Id = 2, TypeName = "Vendor", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
+                new BPTypeSample { Id = 2, TypeName = "Vendor", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new BPTypeSample { Id = 3, TypeName = "Driver", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
             );
+
+            modelBuilder.Entity<BusinessPartnerMasterSample>()
+                .Property(m => m.FirstName)
+                .HasMaxLength(120);
+
+            modelBuilder.Entity<BusinessPartnerMasterSample>()
+                .Property(m => m.LastName)
+                .HasMaxLength(120);
+
+            modelBuilder.Entity<BusinessPartnerMasterSample>()
+                .Property(m => m.CNIC)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<BusinessPartnerMasterSample>()
+                .Property(m => m.LicenceNo)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<BusinessPartnerMasterSample>()
+                .Property(m => m.IsActive)
+                .HasDefaultValue(true);
 
             modelBuilder.Entity<BPGrouping>()
                 .Property(e => e.Id)
@@ -383,6 +445,16 @@ namespace AU_ERP.Models
                 .HasForeignKey(d => d.DocumentTypeID)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<DocumentIntegration>(e =>
+            {
+                e.Property(p => p.DocumentIntegrationID).ValueGeneratedOnAdd();
+                e.HasIndex(p => p.ModuleKey).IsUnique();
+                e.HasOne(p => p.DocumentType)
+                    .WithMany()
+                    .HasForeignKey(p => p.DocumentTypeID)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
             modelBuilder.Entity<UnitOfMeasurement>()
                 .Property(e => e.Id)
                 .ValueGeneratedOnAdd();
@@ -434,6 +506,16 @@ namespace AU_ERP.Models
                 .WithMany()
                 .HasForeignKey(p => p.ReleasedRoutingId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<ProductionOrder>()
+                .HasOne(p => p.SelectedBom)
+                .WithMany()
+                .HasForeignKey(p => p.SelectedBomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductionOrder>()
+                .Property(p => p.ProductionDocumentNumber)
+                .HasMaxLength(32);
 
             modelBuilder.Entity<ProductionOrderLine>()
                 .Property(e => e.Id)
@@ -469,6 +551,12 @@ namespace AU_ERP.Models
                 .HasOne(x => x.Plant)
                 .WithMany()
                 .HasForeignKey(x => x.PlantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<ProductionOrderLine>()
+                .HasOne(x => x.SelectedBom)
+                .WithMany()
+                .HasForeignKey(x => x.SelectedBomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<ProductionOrderStageProgress>()
@@ -603,6 +691,15 @@ namespace AU_ERP.Models
                 .HasMaxLength(20);
 
             modelBuilder.Entity<GoodsIssueDocument>()
+                .Property(g => g.DispatchStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue(GoodsIssueDocument.DispatchPending);
+
+            modelBuilder.Entity<GoodsIssueDocument>()
+                .Property(g => g.DispatchSentByUserId)
+                .HasMaxLength(450);
+
+            modelBuilder.Entity<GoodsIssueDocument>()
                 .HasOne(g => g.ProductionOrder)
                 .WithMany()
                 .HasForeignKey(g => g.ProductionOrderId)
@@ -651,6 +748,12 @@ namespace AU_ERP.Models
                 .HasOne(l => l.RequiredUom)
                 .WithMany()
                 .HasForeignKey(l => l.RequiredUomId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            modelBuilder.Entity<GoodsIssueDocumentLine>()
+                .HasOne(l => l.SelectedBom)
+                .WithMany()
+                .HasForeignKey(l => l.SelectedBomId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<StockMovement>()
@@ -733,7 +836,7 @@ namespace AU_ERP.Models
                 .HasMaxLength(64);
 
             modelBuilder.Entity<StockInventoryLine>()
-                .HasIndex(s => new { s.PlantID, s.MaterialNumber, s.QuantityUomId, s.Status, s.Grade })
+                .HasIndex(s => new { s.PlantID, s.MaterialNumber, s.QuantityUomId, s.Status, s.Grade, s.BatchOrLot })
                 .IsUnique();
 
             modelBuilder.Entity<StockInventoryLine>()
@@ -980,6 +1083,87 @@ namespace AU_ERP.Models
                 .HasForeignKey(i => i.LineTaxChargeId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .Property(g => g.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .Property(g => g.Status)
+                .HasMaxLength(20)
+                .HasDefaultValue(SalesGoodsIssueDocument.StatusPending);
+
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .Property(g => g.DispatchStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue(SalesGoodsIssueDocument.DispatchPending);
+
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .Property(g => g.DispatchSentByUserId)
+                .HasMaxLength(450);
+
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .HasIndex(g => g.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .HasIndex(g => g.SalesOrderId)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesGoodsIssueDocument>()
+                .HasOne(g => g.SalesOrder)
+                .WithMany()
+                .HasForeignKey(g => g.SalesOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .Property(l => l.MaterialNumber)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .Property(l => l.SalesPriceGrade)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .Property(l => l.RequiredQty)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .Property(l => l.IssuedQty)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .Property(l => l.RemainingQty)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .HasIndex(l => l.SalesGoodsIssueDocumentId);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .HasOne(l => l.SalesGoodsIssueDocument)
+                .WithMany(g => g.Lines)
+                .HasForeignKey(l => l.SalesGoodsIssueDocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .HasOne(l => l.SalesOrderItem)
+                .WithMany()
+                .HasForeignKey(l => l.SalesOrderItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesGoodsIssueDocumentLine>()
+                .HasOne(l => l.RequiredUom)
+                .WithMany()
+                .HasForeignKey(l => l.RequiredUomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             modelBuilder.Entity<ConfigurationSchema>()
                 .Property(s => s.Title)
                 .HasMaxLength(200);
@@ -1099,6 +1283,338 @@ namespace AU_ERP.Models
                 .HasOne(i => i.QuantityUom)
                 .WithMany()
                 .HasForeignKey(i => i.QuantityUomId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<SalesInvoice>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesInvoice>()
+                .Property(i => i.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesInvoice>()
+                .Property(i => i.DcNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesInvoice>()
+                .Property(i => i.Subtotal)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesInvoice>()
+                .Property(i => i.GrandTotal)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesInvoice>()
+                .HasIndex(i => i.DeliveryChallanId)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesInvoice>()
+                .HasIndex(i => i.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesInvoice>()
+                .HasOne(i => i.DeliveryChallan)
+                .WithMany()
+                .HasForeignKey(i => i.DeliveryChallanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesInvoice>()
+                .HasOne(i => i.DealerBusinessPartner)
+                .WithMany()
+                .HasForeignKey(i => i.DealerBusinessPartnerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<SalesInvoiceLine>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesInvoiceLine>()
+                .Property(l => l.Quantity)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesInvoiceLine>()
+                .Property(l => l.UnitPrice)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesInvoiceLine>()
+                .Property(l => l.LineSubtotal)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesInvoiceLine>()
+                .Property(l => l.LineTotal)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesInvoiceLine>()
+                .HasOne(l => l.SalesInvoice)
+                .WithMany(i => i.Lines)
+                .HasForeignKey(l => l.SalesInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SalesInvoiceLine>()
+                .HasOne(l => l.QuantityUom)
+                .WithMany()
+                .HasForeignKey(l => l.QuantityUomId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<SalesPayment>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesPayment>()
+                .Property(p => p.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesPayment>()
+                .Property(p => p.InvoiceDocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesPayment>()
+                .Property(p => p.Amount)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesPayment>()
+                .HasIndex(p => p.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesPayment>()
+                .HasIndex(p => p.SalesInvoiceId)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesPayment>()
+                .HasOne(p => p.SalesInvoice)
+                .WithOne(i => i.SalesPayment)
+                .HasForeignKey<SalesPayment>(p => p.SalesInvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .Property(r => r.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .Property(r => r.InvoiceDocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .Property(r => r.InvoiceGrandTotal)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .Property(r => r.ItemsDeliveredQuantityTotal)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .HasIndex(r => r.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .HasIndex(r => r.SalesInvoiceId)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesReturnOrder>()
+                .HasOne(r => r.SalesInvoice)
+                .WithOne(i => i.SalesReturnOrder)
+                .HasForeignKey<SalesReturnOrder>(r => r.SalesInvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .Property(l => l.UnitPrice)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .Property(l => l.LineTotal)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .Property(l => l.QuantityInvoiced)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .Property(l => l.QuantityReturned)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .HasOne(l => l.SalesReturnOrder)
+                .WithMany(r => r.Lines)
+                .HasForeignKey(l => l.SalesReturnOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .HasOne(l => l.SalesInvoiceLine)
+                .WithMany()
+                .HasForeignKey(l => l.SalesInvoiceLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .HasOne(l => l.QuantityUom)
+                .WithMany()
+                .HasForeignKey(l => l.QuantityUomId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<SalesReturnOrderLine>()
+                .HasIndex(l => new { l.SalesReturnOrderId, l.SalesInvoiceLineId })
+                .IsUnique();
+
+            modelBuilder.Entity<SalesReturnQualityInspection>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesReturnQualityInspection>()
+                .Property(q => q.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesReturnQualityInspection>()
+                .Property(q => q.Status)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<SalesReturnQualityInspection>()
+                .Property(q => q.PlantId)
+                .HasMaxLength(450);
+
+            modelBuilder.Entity<SalesReturnQualityInspection>()
+                .HasIndex(q => q.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesReturnQualityInspection>()
+                .HasIndex(q => q.SalesReturnOrderId)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesReturnQualityInspection>()
+                .HasOne(q => q.SalesReturnOrder)
+                .WithOne(r => r.SalesReturnQualityInspection)
+                .HasForeignKey<SalesReturnQualityInspection>(q => q.SalesReturnOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .Property(l => l.QuantityReturned)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .Property(l => l.UnitPrice)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .Property(l => l.QtyBackToStock)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .Property(l => l.QtyConvertToRaw)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .Property(l => l.QtyScrap)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .HasOne(l => l.SalesReturnQualityInspection)
+                .WithMany(q => q.Lines)
+                .HasForeignKey(l => l.SalesReturnQualityInspectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .HasOne(l => l.SalesReturnOrderLine)
+                .WithMany()
+                .HasForeignKey(l => l.SalesReturnOrderLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesReturnQualityInspectionLine>()
+                .HasOne(l => l.QuantityUom)
+                .WithMany()
+                .HasForeignKey(l => l.QuantityUomId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .Property(c => c.DocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .Property(c => c.ReturnOrderDocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .Property(c => c.InvoiceDocumentNumber)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .Property(c => c.GrandTotalCredit)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .HasIndex(c => c.DocumentNumber)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .HasIndex(c => c.SalesReturnOrderId)
+                .IsUnique();
+
+            modelBuilder.Entity<SalesReturnCreditMemo>()
+                .HasOne(c => c.SalesReturnOrder)
+                .WithOne(r => r.SalesReturnCreditMemo)
+                .HasForeignKey<SalesReturnCreditMemo>(c => c.SalesReturnOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesReturnCreditMemoLine>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<SalesReturnCreditMemoLine>()
+                .Property(l => l.QuantityReturned)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnCreditMemoLine>()
+                .Property(l => l.UnitPrice)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnCreditMemoLine>()
+                .Property(l => l.LineCreditAmount)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<SalesReturnCreditMemoLine>()
+                .HasOne(l => l.SalesReturnCreditMemo)
+                .WithMany(c => c.Lines)
+                .HasForeignKey(l => l.SalesReturnCreditMemoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SalesReturnCreditMemoLine>()
+                .HasOne(l => l.SalesReturnOrderLine)
+                .WithMany()
+                .HasForeignKey(l => l.SalesReturnOrderLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<SalesReturnCreditMemoLine>()
+                .HasOne(l => l.QuantityUom)
+                .WithMany()
+                .HasForeignKey(l => l.QuantityUomId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<CompanyInfo>()
+                .Property(e => e.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<CompanyInfo>()
+                .Property(c => c.GstOrTaxRate)
+                .HasPrecision(18, 4);
+
+            modelBuilder.Entity<CompanyInfo>()
+                .HasOne(c => c.UpdatedByUser)
+                .WithMany()
+                .HasForeignKey(c => c.UpdatedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<PlantsSample>().HasData(

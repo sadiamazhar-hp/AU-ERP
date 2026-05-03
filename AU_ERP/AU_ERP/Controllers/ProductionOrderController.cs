@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Services;
 
@@ -11,8 +13,18 @@ namespace AU_ERP.Controllers
     public class ProductionOrderController : Controller
     {
         private readonly AppDbContext _db;
+        private readonly DocumentNumberAllocator _documentNumbers;
+        private readonly GoodsIssueService _goodsIssueService;
 
-        public ProductionOrderController(AppDbContext db) => _db = db;
+        public ProductionOrderController(
+            AppDbContext db,
+            DocumentNumberAllocator documentNumbers,
+            GoodsIssueService goodsIssueService)
+        {
+            _db = db;
+            _documentNumbers = documentNumbers;
+            _goodsIssueService = goodsIssueService;
+        }
 
         private static readonly string[] AllowedPriorities =
         {
@@ -87,6 +99,21 @@ namespace AU_ERP.Controllers
             vm.Items = await filtered
                 .OrderByDescending(p => p.ProductionNumber)
                 .ToListAsync(ct);
+
+            var poIds = vm.Items.Select(p => p.Id).ToList();
+            if (poIds.Count > 0)
+            {
+                var gis = await _db.GoodsIssueDocuments.AsNoTracking()
+                    .Where(g => poIds.Contains(g.ProductionOrderId))
+                    .Select(g => new { g.ProductionOrderId, g.Id, g.DocumentNumber, g.DispatchStatus })
+                    .ToListAsync(ct);
+                foreach (var g in gis)
+                {
+                    vm.GoodsIssueIdByProductionOrderId[g.ProductionOrderId] = g.Id;
+                    vm.GoodsIssueDocumentNumberByProductionOrderId[g.ProductionOrderId] = g.DocumentNumber;
+                    vm.GoodsIssueDispatchStatusByProductionOrderId[g.ProductionOrderId] = g.DispatchStatus;
+                }
+            }
 
             return View(vm);
         }
@@ -166,7 +193,9 @@ namespace AU_ERP.Controllers
                             l.MaterialDescription,
                             l.PlannedQuantity,
                             l.UomId,
-                            l.PlantId
+                            l.PlantId,
+                            l.SelectedBomId,
+                            l.SelectedBomAlternative
                         })
                         .ToListAsync(ct)
                 }
@@ -216,7 +245,9 @@ namespace AU_ERP.Controllers
                     FinishedMaterialNumber = ln.MaterialNumber,
                     TargetQuantity = (int)Math.Round(ln.PlannedQuantity, MidpointRounding.AwayFromZero),
                     UomId = ln.UomId,
-                    ReleasedBomSnapshotJson = p.ReleasedBomSnapshotJson
+                    ReleasedBomSnapshotJson = p.ReleasedBomSnapshotJson,
+                    SelectedBomId = ln.SelectedBomId,
+                    SelectedBomAlternative = ln.SelectedBomAlternative
                 };
                 var (ok, err, lines) = await MrpExplosionService.GetBomLinesScaledForProductionOrderAsync(_db, poLike, ct);
                 if (!ok)
@@ -255,6 +286,7 @@ namespace AU_ERP.Controllers
                         li.PlannedQuantity,
                         li.UomId,
                         requireFertMaterialOnly: false,
+                        selectedBomId: li.SelectedBomId,
                         plantIdForStockOverride: li.PlantId,
                         ct);
                     if (!mrp.Success)
@@ -274,10 +306,25 @@ namespace AU_ERP.Controllers
                 }
 
                 var number = await AllocateNextProductionNumberAsync(ct);
+                string prodDocNo;
+                try
+                {
+                    prodDocNo = await _documentNumbers.AllocateAsync(ModuleKeys.ProductionOrder, ct).ConfigureAwait(false);
+                }
+                catch (DocumentIntegrationMissingException ex)
+                {
+                    return Json(new { success = false, message = ex.Message });
+                }
+                catch (DocumentIntegrationRangeExhaustedException ex)
+                {
+                    return Json(new { success = false, message = ex.Message });
+                }
+
                 var first = lineItems.OrderBy(x => x.LineNo).First();
                 var entity = new ProductionOrder
                 {
                     ProductionNumber = number,
+                    ProductionDocumentNumber = prodDocNo,
                     CreatedAt = DateTime.UtcNow,
                     FinishedMaterialNumber = first.MaterialNumber,
                     TargetQuantity = (int)Math.Round(first.PlannedQuantity, MidpointRounding.AwayFromZero),
@@ -286,7 +333,9 @@ namespace AU_ERP.Controllers
                     PlannedEndDate = end,
                     Priority = priority,
                     Status = ProductionOrder.StatusPlanned,
-                    Remarks = string.IsNullOrWhiteSpace(dto.Remarks) ? null : dto.Remarks.Trim()
+                    Remarks = string.IsNullOrWhiteSpace(dto.Remarks) ? null : dto.Remarks.Trim(),
+                    SelectedBomId = first.SelectedBomId,
+                    SelectedBomAlternative = first.SelectedBomAlternative
                 };
                 foreach (var li in lineItems.OrderBy(x => x.LineNo))
                 {
@@ -297,12 +346,19 @@ namespace AU_ERP.Controllers
                         MaterialDescription = li.MaterialDescription,
                         PlannedQuantity = li.PlannedQuantity,
                         UomId = li.UomId,
-                        PlantId = li.PlantId
+                        PlantId = li.PlantId,
+                        SelectedBomId = li.SelectedBomId,
+                        SelectedBomAlternative = li.SelectedBomAlternative
                     });
                 }
 
                 await _db.ProductionOrders.AddAsync(entity, ct);
                 await _db.SaveChangesAsync(ct);
+
+                _ = await _goodsIssueService.CreateOrOpenPendingAsync(
+                    entity.Id,
+                    User.FindFirstValue(ClaimTypes.NameIdentifier),
+                    ct);
 
                 return Json(new { success = true, message = "Production order created." });
             }
@@ -362,6 +418,8 @@ namespace AU_ERP.Controllers
                 entity.PlannedEndDate = end;
                 entity.Priority = priority;
                 entity.Remarks = string.IsNullOrWhiteSpace(dto.Remarks) ? null : dto.Remarks.Trim();
+                entity.SelectedBomId = first.SelectedBomId;
+                entity.SelectedBomAlternative = first.SelectedBomAlternative;
                 
                 var existing = await _db.ProductionOrderLines
                     .Where(l => l.ProductionOrderId == entity.Id)
@@ -377,7 +435,9 @@ namespace AU_ERP.Controllers
                         MaterialDescription = li.MaterialDescription,
                         PlannedQuantity = li.PlannedQuantity,
                         UomId = li.UomId,
-                        PlantId = li.PlantId
+                        PlantId = li.PlantId,
+                        SelectedBomId = li.SelectedBomId,
+                        SelectedBomAlternative = li.SelectedBomAlternative
                     });
                 }
 
@@ -409,7 +469,7 @@ namespace AU_ERP.Controllers
                     return Json(new
                     {
                         success = false,
-                        message = "This production order cannot be deleted because a Goods Issue document exists for it. Delete/cancel the linked Goods Issue first."
+                        message = "This production order cannot be deleted because a Reservation Issue document exists for it. Delete/cancel the linked Reservation Issue first."
                     });
                 }
 
@@ -452,7 +512,7 @@ namespace AU_ERP.Controllers
             return Json(new
             {
                 success = false,
-                message = "Direct release is disabled. Use the GI action to create/complete Goods Issue before operations."
+                message = "Direct release is disabled. Use the RI action to create/complete Reservation Issue before operations."
             });
         }
 
@@ -609,7 +669,9 @@ namespace AU_ERP.Controllers
                     MaterialDescription = string.IsNullOrWhiteSpace(l.MaterialDescription) ? null : l.MaterialDescription.Trim(),
                     PlannedQuantity = l.PlannedQuantity,
                     UomId = l.UomId,
-                    PlantId = string.IsNullOrWhiteSpace(l.PlantId) ? null : l.PlantId.Trim()
+                    PlantId = string.IsNullOrWhiteSpace(l.PlantId) ? null : l.PlantId.Trim(),
+                    SelectedBomId = l.SelectedBomId,
+                    SelectedBomAlternative = string.IsNullOrWhiteSpace(l.SelectedBomAlternative) ? null : l.SelectedBomAlternative.Trim()
                 })
                 .ToList();
             if (lines.Count > 0)
@@ -621,7 +683,9 @@ namespace AU_ERP.Controllers
                     LineNo = 1,
                     MaterialNumber = (dto.FinishedMaterialNumber ?? "").Trim(),
                     PlannedQuantity = dto.TargetQuantity,
-                    UomId = dto.UomId
+                    UomId = dto.UomId,
+                    SelectedBomId = null,
+                    SelectedBomAlternative = null
                 }
             };
         }
@@ -652,6 +716,24 @@ namespace AU_ERP.Controllers
                     if (!plantOk)
                         return $"Line {l.LineNo}: invalid plant.";
                 }
+                
+                var matEntity = await _db.CreateMaterialMaster.AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.MaterialNumber == l.MaterialNumber, ct);
+                var hdrType = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
+                var plantId = (l.PlantId ?? "").Trim();
+                var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
+                    .Where(h => h.BomMaterialNumber == l.MaterialNumber
+                                && h.HeaderMaterialTypeCode == hdrType
+                                && (plantId == "" || h.Plant == plantId)
+                                && h.Status == "Active"
+                                && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
+                                && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
+                    .Select(h => h.BomID)
+                    .ToListAsync(ct);
+                if (bomCandidates.Count > 1 && (!l.SelectedBomId.HasValue || l.SelectedBomId.Value <= 0))
+                    return $"Line {l.LineNo}: BOM selection is required.";
+                if (l.SelectedBomId.HasValue && l.SelectedBomId.Value > 0 && !bomCandidates.Contains(l.SelectedBomId.Value))
+                    return $"Line {l.LineNo}: selected BOM is invalid/inactive.";
             }
             return null;
         }
@@ -682,6 +764,8 @@ namespace AU_ERP.Controllers
         public decimal PlannedQuantity { get; set; }
         public int UomId { get; set; }
         public string? PlantId { get; set; }
+        public int? SelectedBomId { get; set; }
+        public string? SelectedBomAlternative { get; set; }
     }
     
     public class ProductionOrderCreateFromMrpDto

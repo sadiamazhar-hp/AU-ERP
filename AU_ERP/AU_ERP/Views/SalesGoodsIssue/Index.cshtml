@@ -1,0 +1,174 @@
+@model AU_ERP.Models.SalesGoodsIssueIndexVm
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Sales Goods Issue";
+    var total = Model.Documents.Count;
+    var pending = Model.Documents.Count(d => string.Equals(d.Status, SalesGoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase));
+    var received = Model.Documents.Count(d => string.Equals(d.Status, SalesGoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase));
+}
+
+@section Styles {
+    <style>
+        .gi-page { color: var(--text, #32363a); }
+        .gi-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; }
+        .gi-hero h1 { font-size:1.35rem; font-weight:600; color:var(--dark,#354a5e); margin:0 0 .25rem 0; }
+        .gi-hero p { margin:0; color:var(--subtle,#6a7c8e); font-size:.9rem; }
+        .gi-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; margin-bottom:1.25rem; }
+        .gi-stat { background:#fff; border:1px solid var(--border,#d9d9d9); border-radius:4px; padding:.85rem 1rem; box-shadow:var(--sh,0 2px 8px rgba(0,0,0,.12)); border-top:3px solid var(--blue,#0070f2); }
+        .gi-stat .label { font-size:.72rem; font-weight:600; letter-spacing:.04em; color:var(--subtle,#6a7c8e); text-transform:uppercase; }
+        .gi-stat .val { font-size:1.55rem; font-weight:600; color:var(--dark,#354a5e); line-height:1.2; margin-top:.2rem; }
+        .gi-card { background:#fff; border:1px solid var(--border,#d9d9d9); border-radius:4px; padding:1rem 1.1rem; box-shadow:var(--sh,0 2px 8px rgba(0,0,0,.12)); }
+        .gi-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+        .gi-table thead th { background:var(--dark,#354a5e); color:#fff; font-weight:500; padding:.55rem .65rem; text-align:left; white-space:nowrap; }
+        .gi-table tbody td { border:1px solid #ddd; padding:.45rem .6rem; vertical-align:middle; }
+        .gi-table tbody tr:nth-child(even) { background:#fafafa; }
+        .gi-badge { display:inline-block; padding:.2rem .55rem; border-radius:999px; font-size:.75rem; font-weight:500; }
+        .gi-badge-pending { background:#fff3cd; color:#664d03; }
+        .gi-badge-done { background:#d1e7dd; color:#0f5132; }
+        .gi-actions { display:flex; flex-wrap:wrap; gap:.35rem; }
+    </style>
+}
+
+<div class="gi-page">
+    <div class="gi-hero">
+        <div>
+            <h1>Sales Goods Issue</h1>
+            <p>Pre-dispatch stock confirmation for sales orders before delivery challan.</p>
+        </div>
+    </div>
+
+    @if (TempData["SgiMessage"] is string okMsg)
+    {
+        <div class="alert alert-success py-2 small mb-3" role="status">@okMsg</div>
+    }
+    @if (TempData["SgiError"] is string errMsg)
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="status">@errMsg</div>
+    }
+
+    <div class="gi-stats">
+        <div class="gi-stat"><div class="label">Total</div><div class="val">@total</div></div>
+        <div class="gi-stat"><div class="label">Pending</div><div class="val">@pending</div></div>
+        <div class="gi-stat"><div class="label">Received</div><div class="val">@received</div></div>
+    </div>
+
+    <div class="gi-card">
+        <h2 class="po-table-title mb-3">Sales GI Documents (@total)</h2>
+        <div class="table-responsive">
+            <table class="gi-table">
+                <thead>
+                    <tr>
+                        <th>GI No.</th>
+                        <th>Date</th>
+                        <th>Sales Order</th>
+                        <th>Customer</th>
+                        <th>Status</th>
+                        <th>Dispatch</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (!Model.Documents.Any())
+                {
+                    <tr><td colspan="7" class="text-secondary">No sales goods issue records found.</td></tr>
+                }
+                else
+                {
+                    foreach (var d in Model.Documents)
+                    {
+                        var badgeClass = string.Equals(d.Status, SalesGoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase)
+                            ? "gi-badge gi-badge-done"
+                            : "gi-badge gi-badge-pending";
+                        <tr data-sgi-id="@d.Id" @(Model.FocusSalesOrderId == d.SalesOrderId ? "style=outline:2px solid #9ec5fe" : "")>
+                            <td><strong>@d.DocumentNumber</strong></td>
+                            <td>@d.DocumentDate.ToString("dd-MMM-yyyy")</td>
+                            <td>@(d.SalesOrderNumber ?? ("SO-" + d.SalesOrderId))</td>
+                            <td>@(d.CustomerName ?? "—")</td>
+                            <td><span class="@badgeClass">@d.Status</span></td>
+                            <td>@d.DispatchStatus</td>
+                            <td>
+                                <div class="gi-actions">
+                                    @{
+                                        var sDispPend = string.Equals(d.DispatchStatus, SalesGoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase);
+                                        var sDispSent = string.Equals(d.DispatchStatus, SalesGoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase);
+                                    }
+                                    @if (!string.Equals(d.Status, SalesGoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        @if (sDispPend)
+                                        {
+                                            <form asp-action="Send" asp-route-id="@d.Id" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-primary btn-sm">Send Goods</button>
+                                            </form>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Send goods first">Goods Receive</button>
+                                        }
+                                        else if (sDispSent)
+                                        {
+                                            <form asp-action="Receive" asp-route-id="@d.Id" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-success btn-sm">Goods Receive</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Dispatch state not supported">Goods Receive</button>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Received</button>
+                                    }
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sgiView(@d.Id)">View</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sgiViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Sales Goods Issue</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="sgiViewBody">
+                <div class="text-secondary">Loading…</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function () {
+        const modalEl = document.getElementById("sgiViewModal");
+        if (!modalEl) return;
+        function ensureOnBody() {
+            if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+        }
+        ensureOnBody();
+        modalEl.addEventListener("show.bs.modal", ensureOnBody);
+    })();
+
+    function sgiView(id) {
+        fetch("@Url.Action("View", "SalesGoodsIssue")?id=" + encodeURIComponent(id))
+            .then(r => r.text())
+            .then(html => {
+                var body = document.getElementById("sgiViewBody");
+                body.innerHTML = html;
+                var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("sgiViewModal"));
+                modal.show();
+            })
+            .catch(() => {
+                if (typeof window.materialShowErrorModal === "function") window.materialShowErrorModal("Could not load details.");
+                else alert("Could not load details.");
+            });
+    }
+</script>
+}

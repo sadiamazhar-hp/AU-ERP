@@ -212,6 +212,12 @@ namespace AU_ERP.Migrations
                             Id = 3,
                             RoleCode = "FLVN01",
                             RoleName = "Vendor"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            RoleCode = "FLDR01",
+                            RoleName = "Driver"
                         });
                 });
 
@@ -281,6 +287,13 @@ namespace AU_ERP.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsActive = true,
                             TypeName = "Vendor"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            TypeName = "Driver"
                         });
                 });
 
@@ -294,6 +307,13 @@ namespace AU_ERP.Migrations
 
                     b.Property<int?>("AlternativeBOM")
                         .HasColumnType("int");
+
+                    b.Property<string>("AlternativeNo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("AUTO");
 
                     b.Property<int?>("BLevel")
                         .HasColumnType("int");
@@ -313,14 +333,34 @@ namespace AU_ERP.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("BomUsage")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("Production");
+
                     b.Property<string>("HeaderMaterialTypeCode")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<bool>("IsDefaultBom")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Plant")
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Active");
+
                     b.Property<DateTime?>("ValidFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ValidTo")
                         .HasColumnType("datetime2");
 
                     b.HasKey("BomID");
@@ -329,7 +369,17 @@ namespace AU_ERP.Migrations
 
                     b.HasIndex("BLevel");
 
+                    b.HasIndex("BomMaterialNumber")
+                        .IsUnique()
+                        .HasFilter("[IsDefaultBom] = 1");
+
                     b.HasIndex("Plant");
+
+                    b.HasIndex("BomMaterialNumber", "Plant", "BomUsage", "AlternativeNo")
+                        .IsUnique()
+                        .HasFilter("[BomMaterialNumber] IS NOT NULL AND [Plant] IS NOT NULL");
+
+                    b.HasIndex("BomMaterialNumber", "Plant", "IsDefaultBom", "Status");
 
                     b.ToTable("BomHeadersSamples");
                 });
@@ -390,6 +440,10 @@ namespace AU_ERP.Migrations
                     b.Property<string>("BankName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("CNIC")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("City")
                         .HasColumnType("nvarchar(max)");
 
@@ -405,14 +459,31 @@ namespace AU_ERP.Migrations
                     b.Property<string>("Email")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
                     b.Property<string>("FullName")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HouseNo")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Language")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("LicenceNo")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Mobile")
                         .HasColumnType("nvarchar(max)");
@@ -493,6 +564,100 @@ namespace AU_ERP.Migrations
                         .IsUnique();
 
                     b.ToTable("Charges");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.CompanyInfo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("BankAccountHolderName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(34)
+                        .HasColumnType("nvarchar(34)");
+
+                    b.Property<string>("BankAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("BankCountry")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("BankKey")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Branch")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Fax")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("GstOrTaxRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Language")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TaxNumberNtn")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("CompanyInfos");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.ConfigurationSchema", b =>
@@ -824,6 +989,41 @@ namespace AU_ERP.Migrations
                         });
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.DocumentIntegration", b =>
+                {
+                    b.Property<int>("DocumentIntegrationID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DocumentIntegrationID"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DocumentTypeID")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModuleKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("DocumentIntegrationID");
+
+                    b.HasIndex("DocumentTypeID");
+
+                    b.HasIndex("ModuleKey")
+                        .IsUnique();
+
+                    b.ToTable("DocumentIntegrations");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.DocumentRange", b =>
                 {
                     b.Property<int>("RangeID")
@@ -990,6 +1190,20 @@ namespace AU_ERP.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<DateTime?>("DispatchSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DispatchSentByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DispatchStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending");
+
                     b.Property<DateTime>("DocumentDate")
                         .HasColumnType("date");
 
@@ -1063,6 +1277,13 @@ namespace AU_ERP.Migrations
                     b.Property<int>("RequiredUomId")
                         .HasColumnType("int");
 
+                    b.Property<string>("SelectedBomAlternative")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("SelectedBomId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("FertMaterialNumber");
@@ -1074,6 +1295,8 @@ namespace AU_ERP.Migrations
                     b.HasIndex("ProductionOrderLineId");
 
                     b.HasIndex("RequiredUomId");
+
+                    b.HasIndex("SelectedBomId");
 
                     b.ToTable("GoodsIssueDocumentLines");
                 });
@@ -1203,6 +1426,10 @@ namespace AU_ERP.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("EnabledTabsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("FieldReference")
                         .HasColumnType("nvarchar(max)");
 
@@ -1214,22 +1441,26 @@ namespace AU_ERP.Migrations
                         new
                         {
                             MaterialTypeCode = "FERT",
-                            Description = "Finished products"
+                            Description = "Finished products",
+                            EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Sales\"]"
                         },
                         new
                         {
                             MaterialTypeCode = "HALB",
-                            Description = "Semifinished products"
+                            Description = "Semifinished products",
+                            EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Purchasing\"]"
                         },
                         new
                         {
                             MaterialTypeCode = "PACK",
-                            Description = "Packaging"
+                            Description = "Packaging",
+                            EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Purchasing\"]"
                         },
                         new
                         {
                             MaterialTypeCode = "ROH",
-                            Description = "Raw materials"
+                            Description = "Raw materials",
+                            EnabledTabsJson = "[\"Accounting\",\"BasicData\",\"MRP\",\"Purchasing\"]"
                         });
                 });
 
@@ -1286,6 +1517,10 @@ namespace AU_ERP.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("ProductionDocumentNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<int>("ProductionNumber")
                         .HasColumnType("int");
 
@@ -1297,6 +1532,13 @@ namespace AU_ERP.Migrations
 
                     b.Property<string>("Remarks")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SelectedBomAlternative")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("SelectedBomId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1317,6 +1559,8 @@ namespace AU_ERP.Migrations
                         .IsUnique();
 
                     b.HasIndex("ReleasedRoutingId");
+
+                    b.HasIndex("SelectedBomId");
 
                     b.HasIndex("UomId");
 
@@ -1354,6 +1598,13 @@ namespace AU_ERP.Migrations
                     b.Property<int>("ProductionOrderId")
                         .HasColumnType("int");
 
+                    b.Property<string>("SelectedBomAlternative")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("SelectedBomId")
+                        .HasColumnType("int");
+
                     b.Property<int>("UomId")
                         .HasColumnType("int");
 
@@ -1362,6 +1613,8 @@ namespace AU_ERP.Migrations
                     b.HasIndex("MaterialNumber");
 
                     b.HasIndex("PlantId");
+
+                    b.HasIndex("SelectedBomId");
 
                     b.HasIndex("UomId");
 
@@ -1603,6 +1856,254 @@ namespace AU_ERP.Migrations
                     b.ToTable("RoutingOperationsSamples");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.SalesGoodsIssueDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("DispatchSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DispatchSentByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DispatchStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<DateTime>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReceivedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SalesOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("SalesOrderId")
+                        .IsUnique();
+
+                    b.ToTable("SalesGoodsIssueDocuments");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesGoodsIssueDocumentLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("IssuedQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("MaterialDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaterialNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("RemainingQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("RequiredQty")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("RequiredUomId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesGoodsIssueDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalesOrderItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SalesPriceGrade")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequiredUomId");
+
+                    b.HasIndex("SalesGoodsIssueDocumentId");
+
+                    b.HasIndex("SalesOrderItemId");
+
+                    b.ToTable("SalesGoodsIssueDocumentLines");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesInvoice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DcNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("DealerBusinessPartnerId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DealerDisplayName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DeliveryChallanId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("GrandTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("PaymentTermsSnapshot")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DealerBusinessPartnerId");
+
+                    b.HasIndex("DeliveryChallanId")
+                        .IsUnique();
+
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.ToTable("SalesInvoices");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesInvoiceLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ItemChargeValuesJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("LineSubtotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("MaterialDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaterialNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("QuantityUomId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SourceSalesOrderItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuantityUomId");
+
+                    b.HasIndex("SalesInvoiceId");
+
+                    b.ToTable("SalesInvoiceLines");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.SalesOrder", b =>
                 {
                     b.Property<int>("Id")
@@ -1772,6 +2273,65 @@ namespace AU_ERP.Migrations
                     b.ToTable("SalesOrderItems");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.SalesPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ChequeNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DealerBusinessPartnerId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DealerDisplayName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("InvoiceDocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int>("SalesInvoiceId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("SalesInvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("SalesPayments");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.SalesQuotation", b =>
                 {
                     b.Property<int>("Id")
@@ -1936,6 +2496,356 @@ namespace AU_ERP.Migrations
                     b.ToTable("SalesQuotationItems");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnCreditMemo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DealerBusinessPartnerId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DealerDisplayName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("GrandTotalCredit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("InvoiceDocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("ReturnOrderDocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("SalesInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReturnOrderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("SalesReturnOrderId")
+                        .IsUnique();
+
+                    b.ToTable("SalesReturnCreditMemos");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnCreditMemoLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("LineCreditAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaterialDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaterialNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("QuantityReturned")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("QuantityUomId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReturnCreditMemoId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReturnOrderLineId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuantityUomId");
+
+                    b.HasIndex("SalesReturnCreditMemoId");
+
+                    b.HasIndex("SalesReturnOrderLineId");
+
+                    b.ToTable("SalesReturnCreditMemoLines");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DealerBusinessPartnerId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DealerDisplayName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("DeliveryChallanDocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("InvoiceDocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("InvoiceGrandTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ItemsDeliveredQuantityTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ReturnReason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("SalesInvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SalesOrderNumber")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("SalesOrderRequestedDeliveryDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("SalesInvoiceId")
+                        .IsUnique();
+
+                    b.ToTable("SalesReturnOrders");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnOrderLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("MaterialDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaterialNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("QuantityInvoiced")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QuantityReturned")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("QuantityUomId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesInvoiceLineId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReturnOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuantityUomId");
+
+                    b.HasIndex("SalesInvoiceLineId");
+
+                    b.HasIndex("SalesReturnOrderId", "SalesInvoiceLineId")
+                        .IsUnique();
+
+                    b.ToTable("SalesReturnOrderLines");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnQualityInspection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("PlantId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("SalesReturnOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("SalesReturnOrderId")
+                        .IsUnique();
+
+                    b.ToTable("SalesReturnQualityInspections");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnQualityInspectionLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ConvertTargetMaterialNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ItemChargeValuesJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("MaterialDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MaterialNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("QtyBackToStock")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QtyConvertToRaw")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QtyScrap")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QuantityReturned")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("QuantityUomId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReturnOrderLineId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalesReturnQualityInspectionId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuantityUomId");
+
+                    b.HasIndex("SalesReturnOrderLineId");
+
+                    b.HasIndex("SalesReturnQualityInspectionId");
+
+                    b.ToTable("SalesReturnQualityInspectionLines");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.SalesSchemaRow", b =>
                 {
                     b.Property<int>("ConditionTypeID")
@@ -2027,8 +2937,9 @@ namespace AU_ERP.Migrations
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("PlantID", "MaterialNumber", "QuantityUomId", "Status", "Grade")
-                        .IsUnique();
+                    b.HasIndex("PlantID", "MaterialNumber", "QuantityUomId", "Status", "Grade", "BatchOrLot")
+                        .IsUnique()
+                        .HasFilter("[BatchOrLot] IS NOT NULL");
 
                     b.ToTable("StockInventoryLines");
                 });
@@ -2446,6 +3357,16 @@ namespace AU_ERP.Migrations
                     b.Navigation("TypeSample");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.CompanyInfo", b =>
+                {
+                    b.HasOne("AU_ERP.Models.ApplicationUser", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UpdatedByUser");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.ConfigurationSchemaCharge", b =>
                 {
                     b.HasOne("AU_ERP.Models.Charge", "Charge")
@@ -2531,6 +3452,17 @@ namespace AU_ERP.Migrations
                     b.Navigation("SalesOrderItem");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.DocumentIntegration", b =>
+                {
+                    b.HasOne("AU_ERP.Models.DocumentType", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeID")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DocumentType");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.DocumentRange", b =>
                 {
                     b.HasOne("AU_ERP.Models.DocumentType", "DocumentType")
@@ -2612,6 +3544,11 @@ namespace AU_ERP.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("AU_ERP.Models.BomHeadersSample", "SelectedBom")
+                        .WithMany()
+                        .HasForeignKey("SelectedBomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("FertMaterial");
 
                     b.Navigation("GoodsIssueDocument");
@@ -2621,6 +3558,8 @@ namespace AU_ERP.Migrations
                     b.Navigation("ProductionOrderLine");
 
                     b.Navigation("RequiredUom");
+
+                    b.Navigation("SelectedBom");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.GoodsProduceBatch", b =>
@@ -2681,6 +3620,11 @@ namespace AU_ERP.Migrations
                         .HasForeignKey("ReleasedRoutingId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("AU_ERP.Models.BomHeadersSample", "SelectedBom")
+                        .WithMany()
+                        .HasForeignKey("SelectedBomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("AU_ERP.Models.UnitOfMeasurement", "Uom")
                         .WithMany()
                         .HasForeignKey("UomId")
@@ -2690,6 +3634,8 @@ namespace AU_ERP.Migrations
                     b.Navigation("FinishedMaterial");
 
                     b.Navigation("ReleasedRouting");
+
+                    b.Navigation("SelectedBom");
 
                     b.Navigation("Uom");
                 });
@@ -2713,6 +3659,11 @@ namespace AU_ERP.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("AU_ERP.Models.BomHeadersSample", "SelectedBom")
+                        .WithMany()
+                        .HasForeignKey("SelectedBomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("AU_ERP.Models.UnitOfMeasurement", "Uom")
                         .WithMany()
                         .HasForeignKey("UomId")
@@ -2724,6 +3675,8 @@ namespace AU_ERP.Migrations
                     b.Navigation("Plant");
 
                     b.Navigation("ProductionOrder");
+
+                    b.Navigation("SelectedBom");
 
                     b.Navigation("Uom");
                 });
@@ -2824,6 +3777,79 @@ namespace AU_ERP.Migrations
                     b.Navigation("WorkCenter");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.SalesGoodsIssueDocument", b =>
+                {
+                    b.HasOne("AU_ERP.Models.SalesOrder", "SalesOrder")
+                        .WithMany()
+                        .HasForeignKey("SalesOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SalesOrder");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesGoodsIssueDocumentLine", b =>
+                {
+                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "RequiredUom")
+                        .WithMany()
+                        .HasForeignKey("RequiredUomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AU_ERP.Models.SalesGoodsIssueDocument", "SalesGoodsIssueDocument")
+                        .WithMany("Lines")
+                        .HasForeignKey("SalesGoodsIssueDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AU_ERP.Models.SalesOrderItem", "SalesOrderItem")
+                        .WithMany()
+                        .HasForeignKey("SalesOrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("RequiredUom");
+
+                    b.Navigation("SalesGoodsIssueDocument");
+
+                    b.Navigation("SalesOrderItem");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesInvoice", b =>
+                {
+                    b.HasOne("AU_ERP.Models.BusinessPartnerMasterSample", "DealerBusinessPartner")
+                        .WithMany()
+                        .HasForeignKey("DealerBusinessPartnerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AU_ERP.Models.DeliveryChallan", "DeliveryChallan")
+                        .WithMany()
+                        .HasForeignKey("DeliveryChallanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DealerBusinessPartner");
+
+                    b.Navigation("DeliveryChallan");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesInvoiceLine", b =>
+                {
+                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "QuantityUom")
+                        .WithMany()
+                        .HasForeignKey("QuantityUomId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AU_ERP.Models.SalesInvoice", "SalesInvoice")
+                        .WithMany("Lines")
+                        .HasForeignKey("SalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QuantityUom");
+
+                    b.Navigation("SalesInvoice");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.SalesOrder", b =>
                 {
                     b.HasOne("AU_ERP.Models.ConfigurationSchema", "ConfigurationSchema")
@@ -2887,6 +3913,17 @@ namespace AU_ERP.Migrations
                     b.Navigation("SalesOrder");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.SalesPayment", b =>
+                {
+                    b.HasOne("AU_ERP.Models.SalesInvoice", "SalesInvoice")
+                        .WithOne("SalesPayment")
+                        .HasForeignKey("AU_ERP.Models.SalesPayment", "SalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SalesInvoice");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.SalesQuotation", b =>
                 {
                     b.HasOne("AU_ERP.Models.ConfigurationSchema", "ConfigurationSchema")
@@ -2941,6 +3978,117 @@ namespace AU_ERP.Migrations
                     b.Navigation("QuantityUom");
 
                     b.Navigation("SalesQuotation");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnCreditMemo", b =>
+                {
+                    b.HasOne("AU_ERP.Models.SalesReturnOrder", "SalesReturnOrder")
+                        .WithOne("SalesReturnCreditMemo")
+                        .HasForeignKey("AU_ERP.Models.SalesReturnCreditMemo", "SalesReturnOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SalesReturnOrder");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnCreditMemoLine", b =>
+                {
+                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "QuantityUom")
+                        .WithMany()
+                        .HasForeignKey("QuantityUomId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AU_ERP.Models.SalesReturnCreditMemo", "SalesReturnCreditMemo")
+                        .WithMany("Lines")
+                        .HasForeignKey("SalesReturnCreditMemoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AU_ERP.Models.SalesReturnOrderLine", "SalesReturnOrderLine")
+                        .WithMany()
+                        .HasForeignKey("SalesReturnOrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("QuantityUom");
+
+                    b.Navigation("SalesReturnCreditMemo");
+
+                    b.Navigation("SalesReturnOrderLine");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnOrder", b =>
+                {
+                    b.HasOne("AU_ERP.Models.SalesInvoice", "SalesInvoice")
+                        .WithOne("SalesReturnOrder")
+                        .HasForeignKey("AU_ERP.Models.SalesReturnOrder", "SalesInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SalesInvoice");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnOrderLine", b =>
+                {
+                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "QuantityUom")
+                        .WithMany()
+                        .HasForeignKey("QuantityUomId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AU_ERP.Models.SalesInvoiceLine", "SalesInvoiceLine")
+                        .WithMany()
+                        .HasForeignKey("SalesInvoiceLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AU_ERP.Models.SalesReturnOrder", "SalesReturnOrder")
+                        .WithMany("Lines")
+                        .HasForeignKey("SalesReturnOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QuantityUom");
+
+                    b.Navigation("SalesInvoiceLine");
+
+                    b.Navigation("SalesReturnOrder");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnQualityInspection", b =>
+                {
+                    b.HasOne("AU_ERP.Models.SalesReturnOrder", "SalesReturnOrder")
+                        .WithOne("SalesReturnQualityInspection")
+                        .HasForeignKey("AU_ERP.Models.SalesReturnQualityInspection", "SalesReturnOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SalesReturnOrder");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnQualityInspectionLine", b =>
+                {
+                    b.HasOne("AU_ERP.Models.UnitOfMeasurement", "QuantityUom")
+                        .WithMany()
+                        .HasForeignKey("QuantityUomId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AU_ERP.Models.SalesReturnOrderLine", "SalesReturnOrderLine")
+                        .WithMany()
+                        .HasForeignKey("SalesReturnOrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AU_ERP.Models.SalesReturnQualityInspection", "SalesReturnQualityInspection")
+                        .WithMany("Lines")
+                        .HasForeignKey("SalesReturnQualityInspectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QuantityUom");
+
+                    b.Navigation("SalesReturnOrderLine");
+
+                    b.Navigation("SalesReturnQualityInspection");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.StockInventoryLine", b =>
@@ -3188,6 +4336,20 @@ namespace AU_ERP.Migrations
                     b.Navigation("RoutingOperationsSamples");
                 });
 
+            modelBuilder.Entity("AU_ERP.Models.SalesGoodsIssueDocument", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesInvoice", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("SalesPayment");
+
+                    b.Navigation("SalesReturnOrder");
+                });
+
             modelBuilder.Entity("AU_ERP.Models.SalesOrder", b =>
                 {
                     b.Navigation("Items");
@@ -3196,6 +4358,25 @@ namespace AU_ERP.Migrations
             modelBuilder.Entity("AU_ERP.Models.SalesQuotation", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnCreditMemo", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnOrder", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("SalesReturnCreditMemo");
+
+                    b.Navigation("SalesReturnQualityInspection");
+                });
+
+            modelBuilder.Entity("AU_ERP.Models.SalesReturnQualityInspection", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("AU_ERP.Models.WorkCenterMasterSample", b =>

@@ -1,0 +1,190 @@
+@model AU_ERP.Models.StockGoodsIssueIndexVm
+@using AU_ERP.Models
+@{
+    ViewData["Title"] = "Stock Goods Issue";
+    var total = Model.Rows.Count;
+}
+
+@section Styles {
+    <style>
+        .sgi-hub-page { color: var(--text, #32363a); }
+        .sgi-hub-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; }
+        .sgi-hub-hero h1 { font-size:1.35rem; font-weight:600; color:var(--dark,#354a5e); margin:0 0 .25rem 0; }
+        .sgi-hub-hero p { margin:0; color:var(--subtle,#6a7c8e); font-size:.9rem; }
+        .sgi-hub-card { background:#fff; border:1px solid var(--border,#d9d9d9); border-radius:4px; padding:1rem 1.1rem; box-shadow:var(--sh,0 2px 8px rgba(0,0,0,.12)); }
+        .sgi-hub-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+        .sgi-hub-table thead th { background:var(--dark,#354a5e); color:#fff; font-weight:500; padding:.55rem .65rem; text-align:left; white-space:nowrap; }
+        .sgi-hub-table tbody td { border:1px solid #ddd; padding:.45rem .6rem; vertical-align:middle; }
+        .sgi-hub-table tbody tr:nth-child(even) { background:#fafafa; }
+        .sgi-hub-badge { display:inline-block; padding:.2rem .55rem; border-radius:999px; font-size:.75rem; font-weight:500; }
+        .sgi-hub-badge-pending { background:#fff3cd; color:#664d03; }
+        .sgi-hub-badge-sent { background:#cfe2ff; color:#084298; }
+        .sgi-hub-actions { display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; }
+    </style>
+}
+
+<div class="sgi-hub-page">
+    <div class="sgi-hub-hero">
+        <div>
+            <h1>Stock Goods Issue</h1>
+            <p>Central dispatch for reservation and sales goods issues. Send goods here before confirming receipt on the source document.</p>
+        </div>
+    </div>
+
+    @if (TempData["SgiHubMessage"] is string hubOk)
+    {
+        <div class="alert alert-success py-2 small mb-3" role="status">@hubOk</div>
+    }
+    @if (TempData["SgiHubError"] is string hubErr)
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="status">@hubErr</div>
+    }
+
+    <div class="sgi-hub-card">
+        <h2 class="h6 mb-3">Goods issue documents (@total)</h2>
+        <div class="table-responsive">
+            <table class="sgi-hub-table">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>GI No.</th>
+                        <th>Date</th>
+                        <th>Linked document</th>
+                        <th>Workflow</th>
+                        <th>Dispatch</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (!Model.Rows.Any())
+                {
+                    <tr><td colspan="7" class="text-secondary">No goods issue documents yet.</td></tr>
+                }
+                else foreach (var r in Model.Rows)
+                {
+                    var focus = (Model.FocusProductionOrderId is int fp && fp == r.SourceId && r.SourceKind == StockGoodsIssueRowVm.SourceReservation)
+                        || (Model.FocusSalesOrderId is int fs && fs == r.SourceId && r.SourceKind == StockGoodsIssueRowVm.SourceSalesOrder);
+                    var dispBadge = string.Equals(r.DispatchStatus, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(r.DispatchStatus, SalesGoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase)
+                        ? "sgi-hub-badge sgi-hub-badge-sent"
+                        : "sgi-hub-badge sgi-hub-badge-pending";
+                    <tr style="@(focus ? "outline:2px solid #9ec5fe" : null)">
+                        <td>@(r.SourceKind == StockGoodsIssueRowVm.SourceSalesOrder ? "Sales order" : "Reservation")</td>
+                        <td><strong>@r.DocumentNumber</strong></td>
+                        <td>@r.DocumentDate.ToString("dd-MMM-yyyy")</td>
+                        <td>
+                            <div>@r.SourceLabel</div>
+                            @if (!string.IsNullOrWhiteSpace(r.DetailHint))
+                            {
+                                <div class="small text-secondary">@r.DetailHint</div>
+                            }
+                        </td>
+                        <td>@r.DocumentWorkflowStatus</td>
+                        <td><span class="@dispBadge">@r.DispatchStatus</span></td>
+                        <td>
+                            <div class="sgi-hub-actions">
+                                @if (string.Equals(r.DispatchStatus, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(r.DispatchStatus, SalesGoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    @if (r.SourceKind == StockGoodsIssueRowVm.SourceReservation
+                                        && !string.Equals(r.DocumentWorkflowStatus, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <form asp-controller="StockGoodsIssue" asp-action="SendReservation" asp-route-id="@r.DocumentId" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-primary btn-sm">Send Goods</button>
+                                        </form>
+                                    }
+                                    else if (r.SourceKind == StockGoodsIssueRowVm.SourceSalesOrder
+                                        && !string.Equals(r.DocumentWorkflowStatus, SalesGoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <form asp-controller="StockGoodsIssue" asp-action="SendSales" asp-route-id="@r.DocumentId" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-primary btn-sm">Send Goods</button>
+                                        </form>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="small text-secondary">Dispatch locked</span>
+                                }
+                                @if (r.SourceKind == StockGoodsIssueRowVm.SourceReservation)
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sgiHubViewRes(@r.DocumentId)">View</button>
+                                    <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "GoodsIssue", new { id = r.DocumentId })">PDF</a>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sgiHubViewSales(@r.DocumentId)">View</button>
+                                    <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("LinkedSalesOrderPdf", "StockGoodsIssue", new { salesOrderId = r.SourceId })">PDF</a>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sgiHubViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Goods issue details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="sgiHubViewBody">
+                <div class="text-secondary">Loading…</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function () {
+        var modalEl = document.getElementById("sgiHubViewModal");
+        if (!modalEl) return;
+        function ensureModalOnBody() {
+            if (modalEl.parentElement !== document.body)
+                document.body.appendChild(modalEl);
+        }
+        ensureModalOnBody();
+        modalEl.addEventListener("show.bs.modal", ensureModalOnBody);
+        modalEl.addEventListener("hidden.bs.modal", function () {
+            if (document.querySelectorAll(".modal.show").length > 0) return;
+            document.querySelectorAll(".modal-backdrop").forEach(function (b) { b.remove(); });
+            document.body.classList.remove("modal-open");
+            document.body.style.removeProperty("overflow");
+            document.body.style.removeProperty("padding-right");
+        });
+    })();
+
+    function sgiHubShowDetailsModal() {
+        var el = document.getElementById("sgiHubViewModal");
+        if (!el) return;
+        if (el.parentElement !== document.body)
+            document.body.appendChild(el);
+        var inst = bootstrap.Modal.getOrCreateInstance(el);
+        inst.show();
+    }
+
+    function sgiHubViewRes(id) {
+        fetch("@Url.Action("View", "GoodsIssue")?id=" + encodeURIComponent(id))
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                document.getElementById("sgiHubViewBody").innerHTML = html;
+                sgiHubShowDetailsModal();
+            });
+    }
+    function sgiHubViewSales(id) {
+        fetch("@Url.Action("View", "SalesGoodsIssue")?id=" + encodeURIComponent(id))
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                document.getElementById("sgiHubViewBody").innerHTML = html;
+                sgiHubShowDetailsModal();
+            });
+    }
+</script>
+}

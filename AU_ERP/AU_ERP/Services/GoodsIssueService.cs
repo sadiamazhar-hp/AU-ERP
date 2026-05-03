@@ -1,3 +1,4 @@
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,11 +7,13 @@ namespace AU_ERP.Services;
 public sealed class GoodsIssueService
 {
     private readonly AppDbContext _db;
+    private readonly DocumentNumberAllocator _documentNumbers;
     private const decimal InventoryEpsilon = 0.0001m;
 
-    public GoodsIssueService(AppDbContext db)
+    public GoodsIssueService(AppDbContext db, DocumentNumberAllocator documentNumbers)
     {
         _db = db;
+        _documentNumbers = documentNumbers;
     }
 
     public async Task<(bool success, string message, int? goodsIssueId)> CreateOrOpenPendingAsync(
@@ -49,7 +52,20 @@ public sealed class GoodsIssueService
             });
         }
 
-        var docNumber = await GenerateNextGoodsIssueNumberAsync(ct);
+        string docNumber;
+        try
+        {
+            docNumber = await _documentNumbers.AllocateAsync(ModuleKeys.StockGoodsIssue, ct).ConfigureAwait(false);
+        }
+        catch (DocumentIntegrationMissingException ex)
+        {
+            return (false, ex.Message, null);
+        }
+        catch (DocumentIntegrationRangeExhaustedException ex)
+        {
+            return (false, ex.Message, null);
+        }
+
         var now = DateTime.UtcNow;
         var doc = new GoodsIssueDocument
         {
@@ -57,6 +73,7 @@ public sealed class GoodsIssueService
             DocumentDate = DateTime.Today,
             DocumentNumber = docNumber,
             Status = GoodsIssueDocument.StatusPending,
+            DispatchStatus = GoodsIssueDocument.DispatchPending,
             CreatedAt = now,
             CreatedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim()
         };
@@ -75,6 +92,7 @@ public sealed class GoodsIssueService
                 line.PlannedQuantity,
                 line.UomId,
                 requireFertMaterialOnly: false,
+                selectedBomId: line.SelectedBomId,
                 plantIdForStockOverride: line.PlantId ?? routing.PlantID,
                 ct);
             if (!mrp.Success)
@@ -107,7 +125,9 @@ public sealed class GoodsIssueService
                     RequiredQty = required,
                     IssuedQty = 0m,
                     RemainingQty = required,
-                    RequiredUomId = row.RequiredUomId
+                    RequiredUomId = row.RequiredUomId,
+                    SelectedBomId = line.SelectedBomId,
+                    SelectedBomAlternative = line.SelectedBomAlternative
                 });
             }
         }
@@ -115,6 +135,66 @@ public sealed class GoodsIssueService
         _db.GoodsIssueDocuments.Add(doc);
         await _db.SaveChangesAsync(ct);
         return (true, "Goods issue created.", doc.Id);
+    }
+
+    /// <summary>Marks dispatch as sent after validating lines (no stock movement).</summary>
+    public async Task<(bool success, string message)> SendGoodsAsync(
+        int goodsIssueId,
+        string? userId,
+        CancellationToken ct = default)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var doc = await _db.GoodsIssueDocuments
+                .Include(g => g.Lines)
+                .FirstOrDefaultAsync(g => g.Id == goodsIssueId, ct);
+            if (doc == null)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Goods issue document not found.");
+            }
+
+            if (string.Equals(doc.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Goods issue is already completed.");
+            }
+
+            if (!string.Equals(doc.DispatchStatus, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase))
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Send Goods is only available while dispatch is pending.");
+            }
+
+            if (doc.Lines == null || doc.Lines.Count == 0)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Cannot send: no materials on this goods issue.");
+            }
+
+            foreach (var line in doc.Lines)
+            {
+                if (string.IsNullOrWhiteSpace(line.MaterialNumber) || line.RequiredUomId <= 0 || line.RequiredQty <= 0)
+                {
+                    await tx.RollbackAsync(ct);
+                    return (false, "Cannot send: all lines must have material, UOM, and a positive required quantity.");
+                }
+            }
+
+            var now = DateTime.UtcNow;
+            doc.DispatchStatus = GoodsIssueDocument.DispatchSent;
+            doc.DispatchSentAt = now;
+            doc.DispatchSentByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return (true, "Goods issue marked as sent. Receipt is now allowed on the source document.");
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(ct);
+            return (false, ex.InnerException?.Message ?? ex.Message);
+        }
     }
 
     public async Task<(bool success, string message)> ReceiveGoodsAsync(
@@ -140,6 +220,12 @@ public sealed class GoodsIssueService
             {
                 await tx.RollbackAsync(ct);
                 return (false, "Goods issue is already completed.");
+            }
+
+            if (!string.Equals(doc.DispatchStatus, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase))
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Receive goods is only allowed after dispatch has been sent from Stock Goods Issue.");
             }
 
             var po = doc.ProductionOrder;
@@ -248,7 +334,9 @@ public sealed class GoodsIssueService
                         FinishedMaterialNumber = line.MaterialNumber,
                         TargetQuantity = (int)Math.Round(line.PlannedQuantity, MidpointRounding.AwayFromZero),
                         UomId = line.UomId,
-                        ReleasedBomSnapshotJson = po.ReleasedBomSnapshotJson
+                        ReleasedBomSnapshotJson = po.ReleasedBomSnapshotJson,
+                        SelectedBomId = line.SelectedBomId,
+                        SelectedBomAlternative = line.SelectedBomAlternative
                     };
                     var (bomOk, bomErr, bomLines) = await MrpExplosionService.GetBomLinesScaledForProductionOrderAsync(_db, poLike, ct);
                     if (!bomOk)
@@ -417,28 +505,4 @@ public sealed class GoodsIssueService
         return routing?.PlantID;
     }
 
-    private async Task<string> GenerateNextGoodsIssueNumberAsync(CancellationToken ct)
-    {
-        const string prefix = "GI-";
-        const int start = 1000;
-
-        var numbers = await _db.GoodsIssueDocuments.AsNoTracking()
-            .Select(g => g.DocumentNumber)
-            .ToListAsync(ct);
-
-        var max = 0;
-        foreach (var s in numbers)
-        {
-            var t = (s ?? string.Empty).Trim();
-            if (!t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var tail = t.Substring(prefix.Length).Trim();
-            if (int.TryParse(tail, out var n))
-                max = Math.Max(max, n);
-        }
-
-        var next = Math.Max(start, max + 1);
-        return $"{prefix}{next}";
-    }
 }

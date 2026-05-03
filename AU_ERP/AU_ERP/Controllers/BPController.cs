@@ -4,7 +4,6 @@ using System.Text.Json;
 using AU_ERP.Models;
 using AU_ERP.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -15,37 +14,11 @@ namespace AU_ERP.Main_Controller
     public class BPController : Controller
     {
         private readonly AppDbContext _db;
-        private readonly IWebHostEnvironment _env;
 
-        public BPController(AppDbContext db, IWebHostEnvironment env)
+        public BPController(AppDbContext db)
         {
             _db = db;
-            _env = env;
         }
-
-        // #region agent log
-        private void AgentDebugNdjson(string hypothesisId, string location, string message, object? data)
-        {
-            try
-            {
-                var path = Path.GetFullPath(Path.Combine(_env.ContentRootPath, "..", "..", "debug-9c40b7.log"));
-                var payload = new
-                {
-                    sessionId = "9c40b7",
-                    hypothesisId,
-                    location,
-                    message,
-                    data,
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                };
-                System.IO.File.AppendAllText(path, JsonSerializer.Serialize(payload) + "\n");
-            }
-            catch
-            {
-                /* ignore debug I/O errors */
-            }
-        }
-        // #endregion
 
         private async Task PrepareBpLookupListsAsync(CancellationToken ct = default)
         {
@@ -62,8 +35,10 @@ namespace AU_ERP.Main_Controller
             ViewBag.RoleBasicId = roles.FirstOrDefault(r => r.RoleCode == "FLCU00")?.Id ?? 0;
             ViewBag.RoleCustomerId = roles.FirstOrDefault(r => r.RoleCode == "FLCU01")?.Id ?? 0;
             ViewBag.RoleVendorId = roles.FirstOrDefault(r => r.RoleCode == "FLVN01")?.Id ?? 0;
+            ViewBag.RoleDriverId = roles.FirstOrDefault(r => r.RoleCode == "FLDR01")?.Id ?? 0;
             ViewBag.TypeCustomerId = types.FirstOrDefault(t => string.Equals(t.TypeName, "Customer", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
             ViewBag.TypeVendorId = types.FirstOrDefault(t => string.Equals(t.TypeName, "Vendor", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+            ViewBag.TypeDriverId = types.FirstOrDefault(t => string.Equals(t.TypeName, "Driver", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
             ViewBag.GroupLocalId = groups.FirstOrDefault(g => string.Equals(g.GroupName, "local", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
 
             // Business rule: only allow these two distribution channels in BP forms.
@@ -247,7 +222,56 @@ namespace AU_ERP.Main_Controller
                     model.BPTypeId = vendorTypeId;
                 }
                 model.BPGroupingId = null;
+                return;
             }
+
+            if (roleCode == "FLDR01")
+            {
+                var driverTypeId = await _db.BPTypeSamples.AsNoTracking()
+                    .Where(t => (t.IsActive == null || t.IsActive == true) && t.TypeName.ToLower() == "driver")
+                    .Select(t => t.Id)
+                    .FirstOrDefaultAsync(ct);
+                if (driverTypeId <= 0)
+                {
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.BPTypeId), "Driver type is not configured.");
+                }
+                else
+                {
+                    model.BPTypeId = driverTypeId;
+                }
+                model.BPGroupingId = null;
+            }
+        }
+
+        private async Task ApplyDriverBasicInfoRulesAsync(BusinessPartnerMasterSample model, CancellationToken ct = default)
+        {
+            if (model.BPRoleId is not int roleId || roleId <= 0)
+                return;
+
+            var roleCode = await _db.BPRoles.AsNoTracking()
+                .Where(r => r.Id == roleId)
+                .Select(r => r.RoleCode)
+                .FirstOrDefaultAsync(ct);
+            if (!string.Equals(roleCode, "FLDR01", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            model.FirstName = string.IsNullOrWhiteSpace(model.FirstName) ? null : model.FirstName.Trim();
+            model.LastName = string.IsNullOrWhiteSpace(model.LastName) ? null : model.LastName.Trim();
+            model.CNIC = string.IsNullOrWhiteSpace(model.CNIC) ? null : model.CNIC.Trim();
+            model.LicenceNo = string.IsNullOrWhiteSpace(model.LicenceNo) ? null : model.LicenceNo.Trim();
+
+            if (string.IsNullOrWhiteSpace(model.FirstName))
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.FirstName), "First name is required for Driver.");
+            if (string.IsNullOrWhiteSpace(model.LastName))
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.LastName), "Last name is required for Driver.");
+            if (string.IsNullOrWhiteSpace(model.CNIC))
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.CNIC), "CNIC is required for Driver.");
+            if (string.IsNullOrWhiteSpace(model.LicenceNo))
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.LicenceNo), "Licence no is required for Driver.");
+
+            var full = $"{model.FirstName} {model.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(full))
+                model.FullName = full;
         }
 
         private static bool TryComputeNextFromRange(BPTypeNumberRanges range, out int nextNumber, out string? error)
@@ -309,22 +333,7 @@ namespace AU_ERP.Main_Controller
                 if (bpTypeId <= 0)
                     return Json(new { success = false, message = "Invalid BP type." });
 
-                // #region agent log
-                var cntByTypeId = await _db.BPTypeNumberRanges.AsNoTracking().CountAsync(r => r.BPTypeId == bpTypeId, ct);
-                var cntActiveFilter = await ActiveRangeQuery(bpTypeId).AsNoTracking().CountAsync(ct);
-                var probe = await _db.BPTypeNumberRanges.AsNoTracking()
-                    .Where(r => r.BPTypeId == bpTypeId)
-                    .Select(r => new { r.RangeID, r.BPTypeId, r.StartNumber, r.EndNumber })
-                    .FirstOrDefaultAsync(ct);
-                AgentDebugNdjson("H1-H5", "BPController.GetNextBPTypeNumber:beforeActiveQuery", "BPTypeNumberRanges probe",
-                    new { bpTypeId, cntByTypeId, cntActiveFilter, probe, contentRootPath = _env.ContentRootPath });
-                // #endregion
-
                 var range = await ResolveBpTypeRangeNoTrackingAsync(bpTypeId, ct);
-                // #region agent log
-                AgentDebugNdjson("post-fix", "BPController.GetNextBPTypeNumber:afterResolve", "resolved range",
-                    new { bpTypeId, rangeFound = range != null, usedInactiveFallback = range != null && cntActiveFilter == 0 && cntByTypeId > 0, rangeId = range?.RangeID });
-                // #endregion
                 if (range == null)
                     return Json(new { success = false, message = "No number range defined for this BP type." });
 
@@ -379,6 +388,7 @@ namespace AU_ERP.Main_Controller
             NormalizePartnerFkIds(model);
             await ApplyRoleDerivedDefaultsAsync(model, ct);
             await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
+            await ApplyDriverBasicInfoRulesAsync(model, ct);
 
             if (string.IsNullOrWhiteSpace(model.FullName))
             {
@@ -473,6 +483,11 @@ namespace AU_ERP.Main_Controller
                     p.BPTypeId,
                     p.BPGroupingId,
                     p.FullName,
+                    p.FirstName,
+                    p.LastName,
+                    p.CNIC,
+                    p.LicenceNo,
+                    p.IsActive,
                     p.Street,
                     p.HouseNo,
                     p.City,
@@ -502,6 +517,7 @@ namespace AU_ERP.Main_Controller
             NormalizePartnerFkIds(model);
             await ApplyRoleDerivedDefaultsAsync(model, ct);
             await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
+            await ApplyDriverBasicInfoRulesAsync(model, ct);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -520,6 +536,11 @@ namespace AU_ERP.Main_Controller
             existing.BPTypeId = model.BPTypeId;
             existing.BPGroupingId = model.BPGroupingId;
             existing.FullName = model.FullName;
+            existing.FirstName = model.FirstName;
+            existing.LastName = model.LastName;
+            existing.CNIC = model.CNIC;
+            existing.LicenceNo = model.LicenceNo;
+            existing.IsActive = model.IsActive;
             existing.Street = model.Street;
             existing.HouseNo = model.HouseNo;
             existing.City = model.City;

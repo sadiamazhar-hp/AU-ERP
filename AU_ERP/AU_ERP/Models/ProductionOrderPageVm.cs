@@ -14,5 +14,11 @@ namespace AU_ERP.Models
         public string? Priority { get; set; }
 
         public int FilteredTotalQty => Items.Sum(i => i.TargetQuantity);
+
+        public Dictionary<int, int> GoodsIssueIdByProductionOrderId { get; set; } = new();
+
+        public Dictionary<int, string> GoodsIssueDocumentNumberByProductionOrderId { get; set; } = new();
+
+        public Dictionary<int, string> GoodsIssueDispatchStatusByProductionOrderId { get; set; } = new();
     }
 }
