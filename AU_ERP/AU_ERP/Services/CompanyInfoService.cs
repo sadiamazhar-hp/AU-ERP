@@ -18,6 +18,19 @@ public sealed class CompanyInfoService
         return MapToVm(row, canEdit);
     }
 
+    /// <summary>Company name and phone for document PDFs / print views when configured.</summary>
+    public async Task<CompanyPdfHeader> GetPdfHeaderAsync(CancellationToken ct = default)
+    {
+        var row = await _db.CompanyInfos.AsNoTracking()
+            .Where(c => c.Id == CompanyInfo.SingletonId)
+            .Select(c => new { c.CompanyName, c.PhoneNumber })
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        return row == null
+            ? default
+            : new CompanyPdfHeader(row.CompanyName, row.PhoneNumber);
+    }
+
     public static CompanyInfoEditVm MapToVm(CompanyInfo? row, bool canEdit)
     {
         if (row == null)

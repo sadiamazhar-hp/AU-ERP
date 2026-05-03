@@ -72,8 +72,8 @@ namespace AU_ERP.Controllers
             var plantsForBom = await _db.PlantsSamples.AsNoTracking()
                 .OrderBy(p => p.PlantID)
                 .Where(p =>
-                    !string.Equals((p.PlantName ?? "").Trim(), "Emporium", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals((p.PlantID ?? "").Trim(), "Emp101", StringComparison.OrdinalIgnoreCase))
+                    (p.PlantName ?? "").Trim().ToLower() != "emporium"
+                    && (p.PlantID ?? "").Trim().ToLower() != "emp101")
                 .ToListAsync(ct);
             ViewBag.Plants = new SelectList(plantsForBom, "PlantID", "PlantName");
 

@@ -8,7 +8,7 @@ namespace AU_ERP.Services;
 
 public static class SalesQuotationPdfService
 {
-    public static byte[] BuildPdf(SalesQuotation q, IReadOnlyList<SalesQuotationItem> items)
+    public static byte[] BuildPdf(SalesQuotation q, IReadOnlyList<SalesQuotationItem> items, CompanyPdfHeader companyHeader = default)
     {
         var inv = CultureInfo.InvariantCulture;
         var lines = (items ?? Array.Empty<SalesQuotationItem>()).OrderBy(x => x.Id).ToList();
@@ -25,6 +25,7 @@ public static class SalesQuotationPdfService
                 {
                     row.RelativeItem().Column(c =>
                     {
+                        DocumentPdfCompanyHeader.Compose(c, companyHeader);
                         c.Item().Text("SALES QUOTATION").FontSize(18).SemiBold().FontColor(Colors.Blue.Darken3);
                         c.Item().PaddingTop(4).Text(text =>
                         {

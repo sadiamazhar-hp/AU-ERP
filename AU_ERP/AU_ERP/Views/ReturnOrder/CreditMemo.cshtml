@@ -5,8 +5,25 @@
     ViewData["Title"] = $"Credit memo {Model.DocumentNumber}";
     var roId = ViewBag.ReturnOrderId as int? ?? 0;
     var dealer = Model.DealerDisplayName ?? Model.DealerBusinessPartnerId ?? "—";
+    var coName = ViewBag.CompanyPrintName as string;
+    var coPhone = ViewBag.CompanyPrintPhone as string;
+    var showLetterhead = !string.IsNullOrWhiteSpace(coName) || !string.IsNullOrWhiteSpace(coPhone);
     string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
     string FmtQty(decimal v) => v.ToString("0.####", CultureInfo.CurrentCulture);
+}
+
+@if (showLetterhead)
+{
+    <div class="text-center border-bottom pb-2 mb-3">
+        @if (!string.IsNullOrWhiteSpace(coName))
+        {
+            <div class="fw-semibold">@coName</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(coPhone))
+        {
+            <div class="text-secondary small">Tel: @coPhone</div>
+        }
+    </div>
 }
 
 <div class="mb-3">

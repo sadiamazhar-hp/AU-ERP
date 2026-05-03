@@ -130,9 +130,7 @@
     var editDistChannels = ViewBag.DistributionChannels as List<AU_ERP.Models.DistributionChannel> ?? new List<AU_ERP.Models.DistributionChannel>();
     var editSalesConfigSchemas = ViewBag.SalesConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
     var editPurchaseConfigSchemas = ViewBag.PurchaseConfigurationSchemas as List<AU_ERP.Models.ConfigurationSchema> ?? new List<AU_ERP.Models.ConfigurationSchema>();
-    var editRoleDriverId = ViewBag.RoleDriverId is int erdi ? erdi : 0;
     var editTypeCustomerId = ViewBag.TypeCustomerId is int etci ? etci : 0;
-    var editTypeDriverId = ViewBag.TypeDriverId is int etdi ? etdi : 0;
     var editGroupLocalId = ViewBag.GroupLocalId is int egli ? egli : 0;
 }
 <div class="modal fade" id="bpEditModal" tabindex="-1" aria-labelledby="bpEditModalLabel" aria-hidden="true">
@@ -469,13 +467,6 @@
             var roleSel = document.getElementById("bpEditRole");
             var opt = roleSel && roleSel.options[roleSel.selectedIndex];
             var code = opt ? (opt.getAttribute("data-code") || "") : "";
-            if (code === "FLDR01") {
-                req("bpEditFirstName");
-                req("bpEditLastName");
-                req("bpEditCNIC");
-                req("bpEditLicenceNo");
-                return bad;
-            }
             if (code !== "FLCU00")
                 req("bpEditType");
             if (code !== "FLCU00" && code !== "FLVN01")
@@ -575,14 +566,11 @@
             var groupWrap = document.getElementById("bpEditGroupWrap");
             var typeSel = document.getElementById("bpEditType");
             var groupSel = document.getElementById("bpEditGroup");
-            var typeSel = document.getElementById("bpEditType");
-            var selectedTypeId = parseInt((typeSel && typeSel.value) ? typeSel.value : "0", 10) || 0;
-            var isDriver = code === "FLDR01" || (@editTypeDriverId > 0 && selectedTypeId === @editTypeDriverId);
             if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
             if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
 
             if (typeWrap) typeWrap.style.display = (code === "FLCU00") ? "none" : "";
-            if (groupWrap) groupWrap.style.display = (code === "FLCU00" || code === "FLVN01" || isDriver) ? "none" : "";
+            if (groupWrap) groupWrap.style.display = (code === "FLCU00" || code === "FLVN01") ? "none" : "";
 
             if (code === "FLCU01") {
                 var customerTypeId = @editTypeCustomerId;
@@ -597,28 +585,13 @@
             if (code === "FLVN01" && groupSel) {
                 groupSel.value = "";
             }
-            if (isDriver) {
-                var driverTypeId = @editTypeDriverId;
-                if (typeSel && driverTypeId > 0) typeSel.value = String(driverTypeId);
-                if (groupSel) groupSel.value = "";
-                var tabs = ["bpEditTab-address", "bpEditTab-comm", "bpEditTab-company", "bpEditNavSales", "bpEditNavPurch"];
-                tabs.forEach(function (id) {
-                    var el = document.getElementById(id);
-                    if (!el) return;
-                    el.style.display = "none";
-                });
-                var basicTab = document.getElementById("bpEditTab-info");
-                if (basicTab && typeof bootstrap !== "undefined" && bootstrap.Tab)
-                    bootstrap.Tab.getOrCreateInstance(basicTab).show();
-            } else {
-                ["bpEditTab-address", "bpEditTab-comm", "bpEditTab-company"].forEach(function (id) {
-                    var el = document.getElementById(id);
-                    if (!el) return;
-                    el.style.display = "";
-                });
-                if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
-                if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
-            }
+            ["bpEditTab-address", "bpEditTab-comm", "bpEditTab-company"].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.style.display = "";
+            });
+            if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
+            if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
         }
 
         function setEditField(id, val) {

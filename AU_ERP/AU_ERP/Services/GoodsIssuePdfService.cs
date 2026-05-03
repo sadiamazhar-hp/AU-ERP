@@ -8,9 +8,14 @@ namespace AU_ERP.Services;
 
 public sealed class GoodsIssuePdfService
 {
-    public Task<byte[]> BuildPdfAsync(GoodsIssueDocument doc, CancellationToken ct = default)
+    private readonly CompanyInfoService _companyInfo;
+
+    public GoodsIssuePdfService(CompanyInfoService companyInfo) => _companyInfo = companyInfo;
+
+    public async Task<byte[]> BuildPdfAsync(GoodsIssueDocument doc, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
         var inv = CultureInfo.InvariantCulture;
         var po = doc.ProductionOrder;
         var docNo = (doc.DocumentNumber ?? string.Empty).Trim();
@@ -26,6 +31,7 @@ public sealed class GoodsIssuePdfService
                 {
                     row.RelativeItem().Column(c =>
                     {
+                        DocumentPdfCompanyHeader.Compose(c, companyHeader);
                         c.Item().Text("GOODS ISSUE").FontSize(18).SemiBold().FontColor(Colors.Blue.Darken3);
                         c.Item().PaddingTop(4).Text(text =>
                         {
@@ -95,6 +101,6 @@ public sealed class GoodsIssuePdfService
             });
         }).GeneratePdf();
 
-        return Task.FromResult(bytes);
+        return bytes;
     }
 }

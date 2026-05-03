@@ -1,4 +1,5 @@
 using AU_ERP.Models;
+using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,29 +21,97 @@ public class StockMovementController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken ct = default)
+    public async Task<IActionResult> Index(
+        string? materialFilter,
+        string? fromPlantFilter,
+        string? toPlantFilter,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        string? searchNo,
+        CancellationToken ct = default)
     {
         var assignedPlantIds = UserPlantResolution.GetStorePlantIds(User);
         var fromPlantOptions = await _db.PlantsSamples.AsNoTracking()
             .Where(p => assignedPlantIds.Contains(p.PlantID))
             .OrderBy(p => p.PlantID)
-            .Select(p => new { plantId = p.PlantID, plantName = p.PlantName })
+            .Select(p => new { p.PlantID, p.PlantName })
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var fromPlantId = fromPlantOptions.FirstOrDefault()?.plantId ?? "";
-        var rows = await _db.StockMovements.AsNoTracking()
+        var fromPlantTuples = fromPlantOptions
+            .Select(p => new StockMovementPlantOptionVm { PlantId = p.PlantID, PlantName = p.PlantName ?? "" })
+            .ToList();
+        var defaultFromPlantId = fromPlantTuples.Count > 0 ? fromPlantTuples[0].PlantId : "";
+
+        var allPlants = await _db.PlantsSamples.AsNoTracking()
+            .OrderBy(p => p.PlantID)
+            .Select(p => new { p.PlantID, p.PlantName })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var allPlantTuples = allPlants
+            .Select(p => new StockMovementPlantOptionVm { PlantId = p.PlantID, PlantName = p.PlantName ?? "" })
+            .ToList();
+
+        var query = _db.StockMovements.AsNoTracking()
             .Include(x => x.Material)
             .Include(x => x.QuantityUom)
             .Include(x => x.FromPlant)
             .Include(x => x.ToPlant)
+            .AsQueryable();
+
+        var mat = (materialFilter ?? "").Trim();
+        if (mat.Length > 0)
+        {
+            var matLower = mat.ToLower();
+            query = query.Where(x =>
+                x.MaterialNumber.ToLower().Contains(matLower)
+                || (x.Material != null && x.Material.Description != null && x.Material.Description.ToLower().Contains(matLower)));
+        }
+
+        var fp = (fromPlantFilter ?? "").Trim();
+        if (fp.Length > 0)
+            query = query.Where(x => x.FromPlantId == fp);
+
+        var tp = (toPlantFilter ?? "").Trim();
+        if (tp.Length > 0)
+            query = query.Where(x => x.ToPlantId == tp);
+
+        if (dateFrom.HasValue)
+        {
+            var d0 = dateFrom.Value.Date;
+            query = query.Where(x => x.MovementDate >= d0);
+        }
+
+        if (dateTo.HasValue)
+        {
+            var d1 = dateTo.Value.Date;
+            query = query.Where(x => x.MovementDate <= d1);
+        }
+
+        var no = (searchNo ?? "").Trim();
+        if (no.Length > 0)
+            query = query.Where(x => x.MovementNumber.Contains(no));
+
+        var rows = await query
             .OrderByDescending(x => x.Id)
-            .Take(100)
+            .Take(500)
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        ViewBag.FromPlantId = fromPlantId;
-        ViewBag.FromPlantOptions = fromPlantOptions;
-        return View(rows);
+        var vm = new StockMovementIndexVm
+        {
+            Rows = rows,
+            MaterialFilter = materialFilter,
+            FromPlantFilter = fromPlantFilter,
+            ToPlantFilter = toPlantFilter,
+            DateFrom = dateFrom,
+            DateTo = dateTo,
+            SearchNo = searchNo,
+            DefaultFromPlantId = defaultFromPlantId,
+            FromPlantOptions = fromPlantTuples,
+            AllPlantOptions = allPlantTuples
+        };
+
+        return View(vm);
     }
 
     [HttpGet]

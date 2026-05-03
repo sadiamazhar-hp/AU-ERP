@@ -522,6 +522,22 @@ body.modal-open:has(#rqiCompleteModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+/* Drivers & vehicles add modals — same stacking as BP/material (backdrop-filter on .au-card). */
+#modalAddDriver.modal,
+#modalAddVehicle.modal {
+  z-index: 100050 !important;
+}
+
+#modalAddDriver.modal ~ .modal-backdrop,
+#modalAddVehicle.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#modalAddDriver.show) .modal-backdrop,
+body.modal-open:has(#modalAddVehicle.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
 /* Status-style pills (Sales Quotation, Users, etc.) */
 .sq-badge {
   display: inline-block;
@@ -966,23 +982,29 @@ body.modal-open:has(#otGoodsReceiptModal.show) .modal-backdrop {
 }
 
 /* Material delete confirmation — maroon WARNING dialog */
-#materialDeleteConfirmModal.modal {
+/* Shared with Sales Quotation “send email” confirm (#sqEmailConfirmModal). */
+#materialDeleteConfirmModal.modal,
+#sqEmailConfirmModal.modal {
   z-index: 100050 !important;
 }
 
-#materialDeleteConfirmModal.modal ~ .modal-backdrop {
+#materialDeleteConfirmModal.modal ~ .modal-backdrop,
+#sqEmailConfirmModal.modal ~ .modal-backdrop {
   z-index: 100040 !important;
 }
 
-body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
+body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop,
+body.modal-open:has(#sqEmailConfirmModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-dialog {
+#materialDeleteConfirmModal .au-material-delete-confirm-dialog,
+#sqEmailConfirmModal .au-material-delete-confirm-dialog {
   max-width: 24rem;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-content {
+#materialDeleteConfirmModal .au-material-delete-confirm-content,
+#sqEmailConfirmModal .au-material-delete-confirm-content {
   border-radius: 0;
   border: 1px solid #7b3434;
   background: #f5f5f5;
@@ -990,7 +1012,8 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
   overflow: hidden;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-inner {
+#materialDeleteConfirmModal .au-material-delete-confirm-inner,
+#sqEmailConfirmModal .au-material-delete-confirm-inner {
   padding: 1.75rem 1.85rem 1.65rem;
   text-align: center;
   display: flex;
@@ -999,7 +1022,8 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
   gap: 1rem;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-title {
+#materialDeleteConfirmModal .au-material-delete-confirm-title,
+#sqEmailConfirmModal .au-material-delete-confirm-title {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
@@ -1008,7 +1032,8 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
   text-transform: uppercase;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-message {
+#materialDeleteConfirmModal .au-material-delete-confirm-message,
+#sqEmailConfirmModal .au-material-delete-confirm-message {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 400;
@@ -1017,7 +1042,8 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
   max-width: 100%;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-actions {
+#materialDeleteConfirmModal .au-material-delete-confirm-actions,
+#sqEmailConfirmModal .au-material-delete-confirm-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -1025,7 +1051,8 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
   margin-top: 0.25rem;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-cancel {
+#materialDeleteConfirmModal .au-material-delete-confirm-cancel,
+#sqEmailConfirmModal .au-material-delete-confirm-cancel {
   min-width: 5.5rem;
   padding: 0.5rem 1.1rem;
   border: 1px solid #7b3434;
@@ -1039,11 +1066,13 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
   cursor: pointer;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-cancel:hover {
+#materialDeleteConfirmModal .au-material-delete-confirm-cancel:hover,
+#sqEmailConfirmModal .au-material-delete-confirm-cancel:hover {
   background: rgba(123, 52, 52, 0.06);
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-ok {
+#materialDeleteConfirmModal .au-material-delete-confirm-ok,
+#sqEmailConfirmModal .au-material-delete-confirm-ok {
   min-width: 5.5rem;
   padding: 0.5rem 1.25rem;
   border: none;
@@ -1057,12 +1086,15 @@ body.modal-open:has(#materialDeleteConfirmModal.show) .modal-backdrop {
   cursor: pointer;
 }
 
-#materialDeleteConfirmModal .au-material-delete-confirm-ok:hover {
+#materialDeleteConfirmModal .au-material-delete-confirm-ok:hover,
+#sqEmailConfirmModal .au-material-delete-confirm-ok:hover {
   filter: brightness(1.06);
 }
 
 #materialDeleteConfirmModal .au-material-delete-confirm-cancel:focus-visible,
-#materialDeleteConfirmModal .au-material-delete-confirm-ok:focus-visible {
+#materialDeleteConfirmModal .au-material-delete-confirm-ok:focus-visible,
+#sqEmailConfirmModal .au-material-delete-confirm-cancel:focus-visible,
+#sqEmailConfirmModal .au-material-delete-confirm-ok:focus-visible {
   outline: 2px solid #7b3434;
   outline-offset: 2px;
 }

@@ -8,9 +8,14 @@ namespace AU_ERP.Services;
 
 public sealed class SalesReturnCreditMemoPdfService
 {
-    public Task<byte[]> BuildPdfAsync(SalesReturnCreditMemo memo, CancellationToken ct = default)
+    private readonly CompanyInfoService _companyInfo;
+
+    public SalesReturnCreditMemoPdfService(CompanyInfoService companyInfo) => _companyInfo = companyInfo;
+
+    public async Task<byte[]> BuildPdfAsync(SalesReturnCreditMemo memo, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
         var inv = CultureInfo.InvariantCulture;
         var docNo = (memo.DocumentNumber ?? string.Empty).Trim();
         var dealer = memo.DealerDisplayName ?? memo.DealerBusinessPartnerId ?? "—";
@@ -26,6 +31,7 @@ public sealed class SalesReturnCreditMemoPdfService
                 {
                     row.RelativeItem().Column(c =>
                     {
+                        DocumentPdfCompanyHeader.Compose(c, companyHeader);
                         c.Item().Text("CREDIT MEMO").FontSize(18).SemiBold().FontColor(Colors.Blue.Darken3);
                         c.Item().PaddingTop(4).Text(text =>
                         {
@@ -107,6 +113,6 @@ public sealed class SalesReturnCreditMemoPdfService
             });
         }).GeneratePdf();
 
-        return Task.FromResult(bytes);
+        return bytes;
     }
 }

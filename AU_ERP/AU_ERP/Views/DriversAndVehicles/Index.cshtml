@@ -1,0 +1,214 @@
+@model AU_ERP.Models.ViewModels.DriversAndVehiclesIndexVm
+@{
+    ViewData["Title"] = "Drivers and vehicles";
+    var activeTab = ViewBag.ActiveTab as string ?? Context.Request.Query["tab"].ToString();
+    if (string.IsNullOrWhiteSpace(activeTab))
+        activeTab = "drivers";
+    var driversTabActive = string.Equals(activeTab, "drivers", StringComparison.OrdinalIgnoreCase);
+}
+
+@if (TempData["DriversVehiclesMessage"] is string msg && !string.IsNullOrWhiteSpace(msg))
+{
+    <div class="alert alert-success py-2 small mb-3" role="alert">@msg</div>
+}
+
+@Html.ValidationSummary(false, "", new { @class = "text-danger small mb-3" })
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="h5 mb-0">Drivers and vehicles</h1>
+</div>
+
+<ul class="nav nav-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link @(driversTabActive ? "active" : null)" id="dvTabDrivers" data-bs-toggle="tab" data-bs-target="#dvPaneDrivers" type="button" role="tab">Drivers</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link @(!driversTabActive ? "active" : null)" id="dvTabVehicles" data-bs-toggle="tab" data-bs-target="#dvPaneVehicles" type="button" role="tab">Vehicles</button>
+    </li>
+</ul>
+<div class="tab-content border border-top-0 rounded-bottom bg-white p-3">
+    <div class="tab-pane fade @(driversTabActive ? "show active" : null)" id="dvPaneDrivers" role="tabpanel">
+        <div class="d-flex justify-content-end mb-2">
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddDriver">Add driver</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>CNIC</th>
+                        <th>Licence</th>
+                        <th>Mobile</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in Model.Drivers)
+                    {
+                        <tr>
+                            <td>@($"{d.FirstName} {d.LastName}".Trim())</td>
+                            <td>@(d.CNIC ?? "")</td>
+                            <td>@(d.LicenceNo ?? "")</td>
+                            <td>@(d.Mobile ?? "")</td>
+                            <td>@(d.IsActive ? "Active" : "Inactive")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.Drivers.Count == 0)
+        {
+            <p class="text-secondary small mb-0">No drivers yet. Use Add driver to create one.</p>
+        }
+    </div>
+    <div class="tab-pane fade @(!driversTabActive ? "show active" : null)" id="dvPaneVehicles" role="tabpanel">
+        <div class="d-flex justify-content-end mb-2">
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddVehicle">Add vehicle</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Number plate</th>
+                        <th>Car type</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in Model.Vehicles)
+                    {
+                        <tr>
+                            <td>@v.NumberPlate</td>
+                            <td>@v.CarType</td>
+                            <td>@(v.IsActive ? "Active" : "Inactive")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.Vehicles.Count == 0)
+        {
+            <p class="text-secondary small mb-0">No vehicles yet. Use Add vehicle to create one.</p>
+        }
+    </div>
+</div>
+
+<div class="modal fade" id="modalAddDriver" tabindex="-1" aria-labelledby="modalAddDriverLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="CreateDriver" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalAddDriverLabel">Add driver</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">First name</label>
+                        <input name="FirstName" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Last name</label>
+                        <input name="LastName" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">CNIC</label>
+                        <input name="CNIC" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Licence number</label>
+                        <input name="LicenceNo" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Mobile</label>
+                        <input name="Mobile" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Status</label>
+                        <select name="IsActive" class="form-select form-select-sm">
+                            <option value="true" selected>Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAddVehicle" tabindex="-1" aria-labelledby="modalAddVehicleLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="CreateVehicle" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalAddVehicleLabel">Add vehicle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Number plate</label>
+                        <input name="NumberPlate" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Car type</label>
+                        <select name="CarType" class="form-select form-select-sm">
+                            @foreach (var carTypeOption in AU_ERP.Models.VehicleCarTypes.All)
+                            {
+                                <option value="@carTypeOption">@carTypeOption</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label">Status</label>
+                        <select name="IsActive" class="form-select form-select-sm">
+                            <option value="true" selected>Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    @{
+        var tabScript = ViewBag.ActiveTab as string ?? Context.Request.Query["tab"].ToString();
+    }
+    @if (!string.IsNullOrWhiteSpace(tabScript) || ViewBag.ShowDriverModal is true || ViewBag.ShowVehicleModal is true)
+    {
+        <script>
+            (function () {
+                var tab = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(string.IsNullOrWhiteSpace(tabScript) ? "drivers" : tabScript));
+                if (tab === "vehicles") {
+                    var el = document.getElementById("dvTabVehicles");
+                    if (el && window.bootstrap && bootstrap.Tab) bootstrap.Tab.getOrCreateInstance(el).show();
+                }
+                @if (ViewBag.ShowDriverModal is bool sd && sd)
+                {
+                    <text>
+                    var md = document.getElementById("modalAddDriver");
+                    if (md && window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(md).show();
+                    </text>
+                }
+                @if (ViewBag.ShowVehicleModal is bool sv && sv)
+                {
+                    <text>
+                    var mv = document.getElementById("modalAddVehicle");
+                    if (mv && window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(mv).show();
+                    </text>
+                }
+            })();
+        </script>
+    }
+}

@@ -178,7 +178,7 @@
                                     <a class="btn btn-sq-so btn-sm" title="Create sales order from this quotation" href="@Url.Action("CreateFromQuotation", "SalesOrder", new { quotationId = q.Id, returnQ = listQ, returnStatus = listStatus, returnPlantId = string.IsNullOrEmpty(listPlantId) ? null : listPlantId, returnDistributionChannelId = listDcId })"><i class="bi bi-cart"></i> SO</a>
                                 }
                                 <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("DownloadPdf", "SalesQuotation", new { id = q.Id })" title="Download PDF"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
-                                <form asp-action="EmailToCustomer" asp-controller="SalesQuotation" asp-route-id="@q.Id" method="post" class="d-inline" onsubmit="return confirm('Send the quotation PDF to the customer email (from the business partner Communication tab)?');">
+                                <form asp-action="EmailToCustomer" asp-controller="SalesQuotation" asp-route-id="@q.Id" method="post" class="d-inline sq-quotation-email-form">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="returnQ" value="@listQ" />
                                     <input type="hidden" name="returnStatus" value="@listStatus" />
@@ -411,6 +411,21 @@
     </div>
 </div>
 
+<div class="modal fade" id="sqEmailConfirmModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sqEmailConfirmModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered au-material-delete-confirm-dialog">
+        <div class="modal-content au-material-delete-confirm-content shadow-none">
+            <div class="au-material-delete-confirm-inner">
+                <h2 class="au-material-delete-confirm-title" id="sqEmailConfirmModalTitle">Send email</h2>
+                <p class="au-material-delete-confirm-message" id="sqEmailConfirmModalBody">Send the quotation PDF to the customer email (from the business partner Communication tab)?</p>
+                <div class="au-material-delete-confirm-actions">
+                    <button type="button" class="au-material-delete-confirm-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="au-material-delete-confirm-ok" id="sqEmailConfirmModalOk">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     (function () {
         (function ensureSqViewModalOnBody() {
@@ -422,6 +437,67 @@
             el.addEventListener("show.bs.modal", move);
             if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", move);
             else move();
+        })();
+        (function ensureSqEmailConfirmModalOnBody() {
+            var el = document.getElementById("sqEmailConfirmModal");
+            if (!el) return;
+            function move() {
+                if (el.parentElement !== document.body) document.body.appendChild(el);
+            }
+            el.addEventListener("show.bs.modal", move);
+            if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", move);
+            else move();
+        })();
+        (function wireSqEmailConfirmModal() {
+            var modalEl = document.getElementById("sqEmailConfirmModal");
+            var okBtn = document.getElementById("sqEmailConfirmModalOk");
+            if (!modalEl || !okBtn || !window.bootstrap) return;
+            var pendingListEmailForm = null;
+            var pendingModalEmailSubmitter = null;
+            var bypassModalEmail = false;
+            document.querySelectorAll("form.sq-quotation-email-form").forEach(function (form) {
+                form.addEventListener("submit", function (ev) {
+                    ev.preventDefault();
+                    pendingListEmailForm = form;
+                    pendingModalEmailSubmitter = null;
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                });
+            });
+            modalEl.addEventListener("hidden.bs.modal", function () {
+                pendingListEmailForm = null;
+                pendingModalEmailSubmitter = null;
+            });
+            okBtn.addEventListener("click", function () {
+                if (pendingListEmailForm) {
+                    var f = pendingListEmailForm;
+                    pendingListEmailForm = null;
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                    f.submit();
+                    return;
+                }
+                if (pendingModalEmailSubmitter) {
+                    var sub = pendingModalEmailSubmitter;
+                    pendingModalEmailSubmitter = null;
+                    var sqForm = document.getElementById("sqForm");
+                    if (sqForm && sub) {
+                        bypassModalEmail = true;
+                        sqForm.requestSubmit(sub);
+                        bypassModalEmail = false;
+                    }
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                }
+            });
+            var sqForm = document.getElementById("sqForm");
+            if (!sqForm) return;
+            sqForm.addEventListener("submit", function (ev) {
+                var sub = ev.submitter;
+                if (!bypassModalEmail && sub && sub.getAttribute("name") === "SubmitAction" && sub.getAttribute("value") === "email") {
+                    ev.preventDefault();
+                    pendingModalEmailSubmitter = sub;
+                    pendingListEmailForm = null;
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            });
         })();
         const sqDetailsModalUrlPlaceholder = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(sqDetailsModalUrlPlaceholder));
         function sqDetailsModalUrl(id) { return (sqDetailsModalUrlPlaceholder || "").replace("900000001", id); }

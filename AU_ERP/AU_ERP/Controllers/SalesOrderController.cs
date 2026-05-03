@@ -18,12 +18,18 @@ public class SalesOrderController : Controller
     private readonly AppDbContext _db;
     private readonly SalesGoodsIssueService _salesGiService;
     private readonly DocumentNumberAllocator _documentNumbers;
+    private readonly CompanyInfoService _companyInfo;
 
-    public SalesOrderController(AppDbContext db, SalesGoodsIssueService salesGiService, DocumentNumberAllocator documentNumbers)
+    public SalesOrderController(
+        AppDbContext db,
+        SalesGoodsIssueService salesGiService,
+        DocumentNumberAllocator documentNumbers,
+        CompanyInfoService companyInfo)
     {
         _db = db;
         _salesGiService = salesGiService;
         _documentNumbers = documentNumbers;
+        _companyInfo = companyInfo;
     }
 
     /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
@@ -358,7 +364,8 @@ public class SalesOrderController : Controller
         var o = await LoadSalesOrderForPdfAsync(id, ct).ConfigureAwait(false);
         if (o == null)
             return NotFound();
-        var bytes = SalesOrderPdfService.BuildPdf(o, o.Items.OrderBy(i => i.Id).ToList());
+        var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
+        var bytes = SalesOrderPdfService.BuildPdf(o, o.Items.OrderBy(i => i.Id).ToList(), companyHeader);
         var fileName = SafeSalesOrderPdfName(o.SalesOrderNumber);
         return File(bytes, "application/pdf", fileName);
     }

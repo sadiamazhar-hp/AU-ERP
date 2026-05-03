@@ -3,6 +3,11 @@
 @{
     ViewData["Title"] = "Stock Goods Issue";
     var total = Model.Rows.Count;
+    var qVal = Model.Q ?? "";
+    var dispatchVal = Model.Dispatch ?? "";
+    var sourceVal = Model.Source ?? "";
+    var df = Model.DateFrom?.ToString("yyyy-MM-dd") ?? "";
+    var dt = Model.DateTo?.ToString("yyyy-MM-dd") ?? "";
 }
 
 @section Styles {
@@ -39,6 +44,70 @@
     {
         <div class="alert alert-danger py-2 small mb-3" role="status">@hubErr</div>
     }
+
+    <div class="sgi-hub-card mb-3">
+        <h2 class="h6 mb-2">Search and filter</h2>
+        <form method="get" asp-controller="StockGoodsIssue" asp-action="Index" class="row g-2 align-items-end small">
+            @if (Model.FocusProductionOrderId is int fpo)
+            {
+                <input type="hidden" name="productionOrderId" value="@fpo" />
+            }
+            @if (Model.FocusSalesOrderId is int fso)
+            {
+                <input type="hidden" name="salesOrderId" value="@fso" />
+            }
+            <div class="col-12 col-md-4 col-lg-3">
+                <label class="form-label mb-0 text-secondary">Search (GI no., linked doc)</label>
+                <input type="search" name="q" class="form-control form-control-sm" value="@qVal" placeholder="GI number, PO/SO…" />
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label mb-0 text-secondary">Dispatch</label>
+                <select name="dispatch" class="form-select form-select-sm">
+                    @if (string.IsNullOrEmpty(dispatchVal))
+                    { <option value="" selected>All</option> }
+                    else
+                    { <option value="">All</option> }
+                    @if (string.Equals(dispatchVal, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase))
+                    { <option value="@GoodsIssueDocument.DispatchPending" selected>Pending</option> }
+                    else
+                    { <option value="@GoodsIssueDocument.DispatchPending">Pending</option> }
+                    @if (string.Equals(dispatchVal, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase))
+                    { <option value="@GoodsIssueDocument.DispatchSent" selected>Sent</option> }
+                    else
+                    { <option value="@GoodsIssueDocument.DispatchSent">Sent</option> }
+                </select>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label mb-0 text-secondary">Source</label>
+                <select name="source" class="form-select form-select-sm">
+                    @if (string.IsNullOrEmpty(sourceVal))
+                    { <option value="" selected>All</option> }
+                    else
+                    { <option value="">All</option> }
+                    @if (string.Equals(sourceVal, StockGoodsIssueRowVm.SourceReservation, StringComparison.OrdinalIgnoreCase))
+                    { <option value="@StockGoodsIssueRowVm.SourceReservation" selected>Reservation</option> }
+                    else
+                    { <option value="@StockGoodsIssueRowVm.SourceReservation">Reservation</option> }
+                    @if (string.Equals(sourceVal, StockGoodsIssueRowVm.SourceSalesOrder, StringComparison.OrdinalIgnoreCase))
+                    { <option value="@StockGoodsIssueRowVm.SourceSalesOrder" selected>Sales order</option> }
+                    else
+                    { <option value="@StockGoodsIssueRowVm.SourceSalesOrder">Sales order</option> }
+                </select>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label mb-0 text-secondary">Date from</label>
+                <input type="date" name="dateFrom" class="form-control form-control-sm" value="@df" />
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <label class="form-label mb-0 text-secondary">Date to</label>
+                <input type="date" name="dateTo" class="form-control form-control-sm" value="@dt" />
+            </div>
+            <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                <a class="btn btn-sm btn-outline-secondary" asp-action="Index" asp-route-productionOrderId="@Model.FocusProductionOrderId" asp-route-salesOrderId="@Model.FocusSalesOrderId">Clear</a>
+            </div>
+        </form>
+    </div>
 
     <div class="sgi-hub-card">
         <h2 class="h6 mb-3">Goods issue documents (@total)</h2>
@@ -91,6 +160,11 @@
                                     {
                                         <form asp-controller="StockGoodsIssue" asp-action="SendReservation" asp-route-id="@r.DocumentId" method="post" class="d-inline">
                                             @Html.AntiForgeryToken()
+                                            <input type="hidden" name="q" value="@qVal" />
+                                            <input type="hidden" name="dispatch" value="@dispatchVal" />
+                                            <input type="hidden" name="source" value="@sourceVal" />
+                                            <input type="hidden" name="dateFrom" value="@df" />
+                                            <input type="hidden" name="dateTo" value="@dt" />
                                             <button type="submit" class="btn btn-primary btn-sm">Send Goods</button>
                                         </form>
                                     }
@@ -99,6 +173,11 @@
                                     {
                                         <form asp-controller="StockGoodsIssue" asp-action="SendSales" asp-route-id="@r.DocumentId" method="post" class="d-inline">
                                             @Html.AntiForgeryToken()
+                                            <input type="hidden" name="q" value="@qVal" />
+                                            <input type="hidden" name="dispatch" value="@dispatchVal" />
+                                            <input type="hidden" name="source" value="@sourceVal" />
+                                            <input type="hidden" name="dateFrom" value="@df" />
+                                            <input type="hidden" name="dateTo" value="@dt" />
                                             <button type="submit" class="btn btn-primary btn-sm">Send Goods</button>
                                         </form>
                                     }

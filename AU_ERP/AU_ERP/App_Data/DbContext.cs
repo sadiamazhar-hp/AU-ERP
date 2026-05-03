@@ -67,6 +67,8 @@ namespace AU_ERP.Models
         public DbSet<SalesReturnCreditMemo> SalesReturnCreditMemos { get; set; }
         public DbSet<SalesReturnCreditMemoLine> SalesReturnCreditMemoLines { get; set; }
         public DbSet<CompanyInfo> CompanyInfos { get; set; }
+        public DbSet<Driver> Drivers { get; set; }
+        public DbSet<Vehicle> Vehicles { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -273,8 +275,7 @@ namespace AU_ERP.Models
             modelBuilder.Entity<BPRole>().HasData(
                 new BPRole { Id = 1, RoleCode = "FLCU00", RoleName = "Basic" },
                 new BPRole { Id = 2, RoleCode = "FLCU01", RoleName = "Customer (Sales)" },
-                new BPRole { Id = 3, RoleCode = "FLVN01", RoleName = "Vendor" },
-                new BPRole { Id = 4, RoleCode = "FLDR01", RoleName = "Driver" });
+                new BPRole { Id = 3, RoleCode = "FLVN01", RoleName = "Vendor" });
 
             modelBuilder.Entity<BPTypeSample>()
                 .Property(e => e.Id)
@@ -282,8 +283,7 @@ namespace AU_ERP.Models
 
             modelBuilder.Entity<BPTypeSample>().HasData(
                 new BPTypeSample { Id = 1, TypeName = "Customer", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
-                new BPTypeSample { Id = 2, TypeName = "Vendor", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
-                new BPTypeSample { Id = 3, TypeName = "Driver", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
+                new BPTypeSample { Id = 2, TypeName = "Vendor", IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
             );
 
             modelBuilder.Entity<BusinessPartnerMasterSample>()
@@ -1602,6 +1602,10 @@ namespace AU_ERP.Models
                 .WithMany()
                 .HasForeignKey(l => l.QuantityUomId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Vehicle>()
+                .HasIndex(v => v.NumberPlate)
+                .IsUnique();
 
             modelBuilder.Entity<CompanyInfo>()
                 .Property(e => e.Id)

@@ -18,17 +18,20 @@ public class SalesQuotationController : Controller
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
     private readonly DocumentNumberAllocator _documentNumbers;
+    private readonly CompanyInfoService _companyInfo;
 
     public SalesQuotationController(
         AppDbContext db,
         IEmailService emailService,
         IConfiguration configuration,
-        DocumentNumberAllocator documentNumbers)
+        DocumentNumberAllocator documentNumbers,
+        CompanyInfoService companyInfo)
     {
         _db = db;
         _emailService = emailService;
         _configuration = configuration;
         _documentNumbers = documentNumbers;
+        _companyInfo = companyInfo;
     }
 
     /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
@@ -753,7 +756,8 @@ public class SalesQuotationController : Controller
         var q = await LoadQuotationForPdfAsync(id, ct).ConfigureAwait(false);
         if (q == null)
             return NotFound();
-        var bytes = SalesQuotationPdfService.BuildPdf(q, q.Items.ToList());
+        var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
+        var bytes = SalesQuotationPdfService.BuildPdf(q, q.Items.ToList(), companyHeader);
         var fileName = SafePdfFileName(q.QuotationNumber);
         return File(bytes, "application/pdf", fileName);
     }
@@ -872,7 +876,8 @@ public class SalesQuotationController : Controller
         var q = await LoadQuotationForPdfAsync(quotationId, ct).ConfigureAwait(false);
         if (q == null)
             return (false, "Quotation not found.");
-        var pdf = SalesQuotationPdfService.BuildPdf(q, q.Items.ToList());
+        var companyPdfHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
+        var pdf = SalesQuotationPdfService.BuildPdf(q, q.Items.ToList(), companyPdfHeader);
         var fileName = SafePdfFileName(q.QuotationNumber);
         var subjectFormat = _configuration["SalesQuotation:EmailSubjectFormat"] ?? "Sales quotation {0}";
         var subject = string.Format(CultureInfo.InvariantCulture, subjectFormat, q.QuotationNumber);

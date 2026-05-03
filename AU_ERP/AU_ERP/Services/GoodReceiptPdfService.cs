@@ -8,9 +8,14 @@ namespace AU_ERP.Services;
 
 public sealed class GoodReceiptPdfService
 {
-    public Task<byte[]> BuildPdfAsync(GoodReceiptDocument doc, CancellationToken ct = default)
+    private readonly CompanyInfoService _companyInfo;
+
+    public GoodReceiptPdfService(CompanyInfoService companyInfo) => _companyInfo = companyInfo;
+
+    public async Task<byte[]> BuildPdfAsync(GoodReceiptDocument doc, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
 
         var inv = CultureInfo.InvariantCulture;
         var po = doc.ProductionOrder;
@@ -28,6 +33,7 @@ public sealed class GoodReceiptPdfService
                 {
                     row.RelativeItem().Column(c =>
                     {
+                        DocumentPdfCompanyHeader.Compose(c, companyHeader);
                         c.Item().Text("GOOD RECEIPT").FontSize(18).SemiBold().FontColor(Colors.Blue.Darken3);
                         c.Item().PaddingTop(4).Text(text =>
                         {
@@ -100,7 +106,7 @@ public sealed class GoodReceiptPdfService
             });
         }).GeneratePdf();
 
-        return Task.FromResult(bytes);
+        return bytes;
     }
 }
 

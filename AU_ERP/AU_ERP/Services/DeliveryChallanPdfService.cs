@@ -8,7 +8,7 @@ namespace AU_ERP.Services;
 
 public static class DeliveryChallanPdfService
 {
-    public static byte[] BuildPdf(DeliveryChallan d, IReadOnlyList<DeliveryChallanItem> items)
+    public static byte[] BuildPdf(DeliveryChallan d, IReadOnlyList<DeliveryChallanItem> items, CompanyPdfHeader companyHeader = default)
     {
         var inv = CultureInfo.InvariantCulture;
         var lines = (items ?? Array.Empty<DeliveryChallanItem>()).OrderBy(x => x.Id).ToList();
@@ -24,6 +24,7 @@ public static class DeliveryChallanPdfService
                 {
                     row.RelativeItem().Column(c =>
                     {
+                        DocumentPdfCompanyHeader.Compose(c, companyHeader);
                         c.Item().Text("DELIVERY CHALLAN").FontSize(18).SemiBold().FontColor(Colors.Blue.Darken3);
                         c.Item().PaddingTop(4).Text(text =>
                         {

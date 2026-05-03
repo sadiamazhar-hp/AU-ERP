@@ -4,6 +4,19 @@ public class StockGoodsIssueIndexVm
 {
     public int? FocusProductionOrderId { get; set; }
     public int? FocusSalesOrderId { get; set; }
+
+    /// <summary>Search GI number, linked document label, or detail hint.</summary>
+    public string? Q { get; set; }
+
+    /// <summary>Empty = all; <see cref="GoodsIssueDocument.DispatchPending"/> or <see cref="GoodsIssueDocument.DispatchSent"/>.</summary>
+    public string? Dispatch { get; set; }
+
+    /// <summary>Empty = all; <see cref="StockGoodsIssueRowVm.SourceReservation"/> or <see cref="StockGoodsIssueRowVm.SourceSalesOrder"/>.</summary>
+    public string? Source { get; set; }
+
+    public DateTime? DateFrom { get; set; }
+    public DateTime? DateTo { get; set; }
+
     public List<StockGoodsIssueRowVm> Rows { get; set; } = new();
 }
 

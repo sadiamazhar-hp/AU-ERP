@@ -13,19 +13,30 @@ public class StockGoodsIssueController : Controller
     private readonly AppDbContext _db;
     private readonly GoodsIssueService _reservationGi;
     private readonly SalesGoodsIssueService _salesGi;
+    private readonly CompanyInfoService _companyInfo;
 
     public StockGoodsIssueController(
         AppDbContext db,
         GoodsIssueService reservationGi,
-        SalesGoodsIssueService salesGi)
+        SalesGoodsIssueService salesGi,
+        CompanyInfoService companyInfo)
     {
         _db = db;
         _reservationGi = reservationGi;
         _salesGi = salesGi;
+        _companyInfo = companyInfo;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(int? productionOrderId, int? salesOrderId, CancellationToken ct = default)
+    public async Task<IActionResult> Index(
+        int? productionOrderId,
+        int? salesOrderId,
+        string? q,
+        string? dispatch,
+        string? source,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        CancellationToken ct = default)
     {
         var reservation = await _db.GoodsIssueDocuments.AsNoTracking()
             .Include(d => d.ProductionOrder!)
@@ -84,18 +95,78 @@ public class StockGoodsIssueController : Controller
 
         rows = rows.OrderByDescending(r => r.DocumentDate).ThenByDescending(r => r.DocumentId).ToList();
 
+        rows = ApplyStockGoodsIssueFilters(rows, q, dispatch, source, dateFrom, dateTo).ToList();
+
         var vm = new StockGoodsIssueIndexVm
         {
             FocusProductionOrderId = productionOrderId,
             FocusSalesOrderId = salesOrderId,
+            Q = q,
+            Dispatch = dispatch,
+            Source = source,
+            DateFrom = dateFrom,
+            DateTo = dateTo,
             Rows = rows
         };
         return View(vm);
     }
 
+    private static IEnumerable<StockGoodsIssueRowVm> ApplyStockGoodsIssueFilters(
+        IEnumerable<StockGoodsIssueRowVm> rows,
+        string? q,
+        string? dispatch,
+        string? source,
+        DateTime? dateFrom,
+        DateTime? dateTo)
+    {
+        var list = rows;
+        var src = (source ?? "").Trim();
+        if (string.Equals(src, StockGoodsIssueRowVm.SourceReservation, StringComparison.OrdinalIgnoreCase))
+            list = list.Where(r => r.SourceKind == StockGoodsIssueRowVm.SourceReservation);
+        else if (string.Equals(src, StockGoodsIssueRowVm.SourceSalesOrder, StringComparison.OrdinalIgnoreCase))
+            list = list.Where(r => r.SourceKind == StockGoodsIssueRowVm.SourceSalesOrder);
+
+        var disp = (dispatch ?? "").Trim();
+        if (string.Equals(disp, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase))
+            list = list.Where(r => string.Equals(r.DispatchStatus, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(r.DispatchStatus, SalesGoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase));
+        else if (string.Equals(disp, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase))
+            list = list.Where(r => string.Equals(r.DispatchStatus, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(r.DispatchStatus, SalesGoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase));
+
+        if (dateFrom.HasValue)
+        {
+            var from = dateFrom.Value.Date;
+            list = list.Where(r => r.DocumentDate.Date >= from);
+        }
+
+        if (dateTo.HasValue)
+        {
+            var to = dateTo.Value.Date;
+            list = list.Where(r => r.DocumentDate.Date <= to);
+        }
+
+        var search = (q ?? "").Trim();
+        if (search.Length > 0)
+        {
+            static string Hay(StockGoodsIssueRowVm r) =>
+                $"{r.DocumentNumber} {r.SourceLabel} {r.DetailHint}".Trim();
+            list = list.Where(r => Hay(r).Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return list;
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SendReservation(int id, CancellationToken ct = default)
+    public async Task<IActionResult> SendReservation(
+        int id,
+        string? q,
+        string? dispatch,
+        string? source,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        CancellationToken ct = default)
     {
         var (ok, msg) = await _reservationGi.SendGoodsAsync(
             id,
@@ -103,12 +174,19 @@ public class StockGoodsIssueController : Controller
             ct);
         if (ok) TempData["SgiHubMessage"] = msg;
         else TempData["SgiHubError"] = msg;
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { q, dispatch, source, dateFrom, dateTo });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SendSales(int id, CancellationToken ct = default)
+    public async Task<IActionResult> SendSales(
+        int id,
+        string? q,
+        string? dispatch,
+        string? source,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        CancellationToken ct = default)
     {
         var (ok, msg) = await _salesGi.SendGoodsAsync(
             id,
@@ -116,7 +194,7 @@ public class StockGoodsIssueController : Controller
             ct);
         if (ok) TempData["SgiHubMessage"] = msg;
         else TempData["SgiHubError"] = msg;
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { q, dispatch, source, dateFrom, dateTo });
     }
 
     /// <summary>PDF for the linked sales order (Inventory policy so Store/Production can open from Stock GI hub).</summary>
@@ -137,7 +215,8 @@ public class StockGoodsIssueController : Controller
         if (o == null)
             return NotFound();
 
-        var bytes = SalesOrderPdfService.BuildPdf(o, o.Items.OrderBy(i => i.Id).ToList());
+        var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
+        var bytes = SalesOrderPdfService.BuildPdf(o, o.Items.OrderBy(i => i.Id).ToList(), companyHeader);
         var fileName = SafeSalesOrderPdfFileName(o.SalesOrderNumber);
         return File(bytes, "application/pdf", fileName);
     }

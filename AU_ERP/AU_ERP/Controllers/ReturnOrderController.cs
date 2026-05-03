@@ -16,15 +16,18 @@ public class ReturnOrderController : Controller
     private readonly AppDbContext _db;
     private readonly DocumentNumberAllocator _documentNumbers;
     private readonly SalesReturnCreditMemoPdfService _creditMemoPdf;
+    private readonly CompanyInfoService _companyInfo;
 
     public ReturnOrderController(
         AppDbContext db,
         DocumentNumberAllocator documentNumbers,
-        SalesReturnCreditMemoPdfService creditMemoPdf)
+        SalesReturnCreditMemoPdfService creditMemoPdf,
+        CompanyInfoService companyInfo)
     {
         _db = db;
         _documentNumbers = documentNumbers;
         _creditMemoPdf = creditMemoPdf;
+        _companyInfo = companyInfo;
     }
 
     [HttpGet]
@@ -101,6 +104,9 @@ public class ReturnOrderController : Controller
 
         ViewData["Title"] = $"Credit memo {cm.DocumentNumber}";
         ViewBag.ReturnOrderId = id;
+        var letterhead = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
+        ViewBag.CompanyPrintName = letterhead.CompanyName;
+        ViewBag.CompanyPrintPhone = letterhead.PhoneNumber;
         return View(cm);
     }
 

@@ -17,15 +17,18 @@ public class DeliveryChallanController : Controller
     private readonly AppDbContext _db;
     private readonly DocumentNumberAllocator _documentNumbers;
     private readonly SalesInvoiceFromDeliveryChallanService _invoiceFromDc;
+    private readonly CompanyInfoService _companyInfo;
 
     public DeliveryChallanController(
         AppDbContext db,
         DocumentNumberAllocator documentNumbers,
-        SalesInvoiceFromDeliveryChallanService invoiceFromDc)
+        SalesInvoiceFromDeliveryChallanService invoiceFromDc,
+        CompanyInfoService companyInfo)
     {
         _db = db;
         _documentNumbers = documentNumbers;
         _invoiceFromDc = invoiceFromDc;
+        _companyInfo = companyInfo;
     }
 
     [HttpGet]
@@ -230,7 +233,8 @@ public class DeliveryChallanController : Controller
         var d = await LoadDeliveryChallanForPdfAsync(id, ct).ConfigureAwait(false);
         if (d == null)
             return NotFound();
-        var bytes = DeliveryChallanPdfService.BuildPdf(d, d.Items.ToList());
+        var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
+        var bytes = DeliveryChallanPdfService.BuildPdf(d, d.Items.ToList(), companyHeader);
         var fileName = SafePdfName(d.DeliveryChallanNumber, "challan");
         return File(bytes, "application/pdf", fileName);
     }
