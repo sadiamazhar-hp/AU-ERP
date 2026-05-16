@@ -71,58 +71,52 @@
                 </div>
             </form>
 
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-2 pt-2 pb-1">
-                <span class="au-md-list-meta mb-0">@Model.DriverMatchCount driver@(Model.DriverMatchCount == 1 ? "" : "s")</span>
-                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddDriver">Add driver</button>
-            </div>
-
-            <div class="table-responsive px-2 pb-2">
-                <table class="table-sap mb-0">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>CNIC</th>
-                            <th>Licence</th>
-                            <th>Mobile</th>
-                            <th class="text-nowrap">Active</th>
-                            <th class="text-nowrap">Fleet status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var d in Model.Drivers)
-                        {
+            <div class="sap-window">
+                <div class="sap-toolbar">
+                    <span class="au-md-list-meta mb-0 me-auto">@Model.DriverMatchCount driver@(Model.DriverMatchCount == 1 ? "" : "s")</span>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddDriver">Add driver</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table-sap" id="dvDriversTable">
+                        <thead>
                             <tr>
-                                <td>@($"{d.FirstName} {d.LastName}".Trim())</td>
-                                <td>@(d.CNIC ?? "")</td>
-                                <td>@(d.LicenceNo ?? "")</td>
-                                <td>@(d.Mobile ?? "")</td>
-                                <td>@(d.IsActive ? "Active" : "Inactive")</td>
-                                <td>
-                                    @if (!d.IsActive)
-                                    {
-                                        <span class="text-muted">—</span>
-                                    }
-                                    else if (driversBusySet.Contains(d.Id))
-                                    {
-                                        <div><span class="badge rounded-pill text-bg-warning">Busy</span></div>
-                                        <div class="small text-muted mt-1">
-                                            @(Model.BusyDriverDeliveryRefById.TryGetValue(d.Id, out var dr) ? dr : "—")
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge rounded-pill text-bg-success">Available</span>
-                                    }
-                                </td>
+                                <th class="col-no">No</th>
+                                <th>Name</th>
+                                <th>CNIC</th>
+                                <th>Licence</th>
+                                <th>Mobile</th>
+                                <th class="text-nowrap">Active</th>
+                                <th class="text-nowrap">Fleet status</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @{ var drvIdx = 0; }
+                            @foreach (var d in Model.Drivers)
+                            {
+                                drvIdx++;
+                                var fleetLabel = !d.IsActive ? "—"
+                                    : driversBusySet.Contains(d.Id) ? "Busy"
+                                    : "Available";
+                                var busyRef = driversBusySet.Contains(d.Id) && Model.BusyDriverDeliveryRefById.TryGetValue(d.Id, out var dr) ? dr : "";
+                                var fleetDisplay = string.IsNullOrEmpty(busyRef) ? fleetLabel : $"{fleetLabel} {busyRef}";
+                                <tr>
+                                    <td class="col-no">@drvIdx</td>
+                                    <td><input class="sap-input" value="@($"{d.FirstName} {d.LastName}".Trim())" readonly /></td>
+                                    <td><input class="sap-input" value="@(d.CNIC ?? "")" readonly /></td>
+                                    <td><input class="sap-input" value="@(d.LicenceNo ?? "")" readonly /></td>
+                                    <td><input class="sap-input" value="@(d.Mobile ?? "")" readonly /></td>
+                                    <td><input class="sap-input" value="@(d.IsActive ? "Active" : "Inactive")" readonly /></td>
+                                    <td class="col-stack"><input class="sap-input" value="@fleetDisplay" readonly title="@fleetDisplay" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (Model.Drivers.Count == 0)
+                {
+                    <p class="text-secondary small px-3 pb-3 mb-0">@(hasDriverFilters ? "No drivers match your filters." : "No drivers yet. Use Add driver to create one.")</p>
+                }
             </div>
-            @if (Model.Drivers.Count == 0)
-            {
-                <p class="text-secondary small px-3 pb-3 mb-0">@(hasDriverFilters ? "No drivers match your filters." : "No drivers yet. Use Add driver to create one.")</p>
-            }
         </div>
 
         <div class="tab-pane fade @(!driversTabActive ? "show active" : null)" id="dvPaneVehicles" role="tabpanel">
@@ -167,54 +161,48 @@
                 </div>
             </form>
 
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-2 pt-2 pb-1">
-                <span class="au-md-list-meta mb-0">@Model.VehicleMatchCount vehicle@(Model.VehicleMatchCount == 1 ? "" : "s")</span>
-                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddVehicle">Add vehicle</button>
-            </div>
-
-            <div class="table-responsive px-2 pb-2">
-                <table class="table-sap mb-0">
-                    <thead>
-                        <tr>
-                            <th>Number plate</th>
-                            <th>Car type</th>
-                            <th class="text-nowrap">Active</th>
-                            <th class="text-nowrap">Fleet status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var v in Model.Vehicles)
-                        {
+            <div class="sap-window">
+                <div class="sap-toolbar">
+                    <span class="au-md-list-meta mb-0 me-auto">@Model.VehicleMatchCount vehicle@(Model.VehicleMatchCount == 1 ? "" : "s")</span>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddVehicle">Add vehicle</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table-sap" id="dvVehiclesTable">
+                        <thead>
                             <tr>
-                                <td>@v.NumberPlate</td>
-                                <td>@v.CarType</td>
-                                <td>@(v.IsActive ? "Active" : "Inactive")</td>
-                                <td>
-                                    @if (!v.IsActive)
-                                    {
-                                        <span class="text-muted">—</span>
-                                    }
-                                    else if (vehiclesBusySet.Contains(v.Id))
-                                    {
-                                        <div><span class="badge rounded-pill text-bg-warning">Busy</span></div>
-                                        <div class="small text-muted mt-1">
-                                            @(Model.BusyVehicleDeliveryRefById.TryGetValue(v.Id, out var vr) ? vr : "—")
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge rounded-pill text-bg-success">Available</span>
-                                    }
-                                </td>
+                                <th class="col-no">No</th>
+                                <th>Number plate</th>
+                                <th>Car type</th>
+                                <th class="text-nowrap">Active</th>
+                                <th class="text-nowrap">Fleet status</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @{ var vehIdx = 0; }
+                            @foreach (var v in Model.Vehicles)
+                            {
+                                vehIdx++;
+                                var fleetLabel = !v.IsActive ? "—"
+                                    : vehiclesBusySet.Contains(v.Id) ? "Busy"
+                                    : "Available";
+                                var busyRef = vehiclesBusySet.Contains(v.Id) && Model.BusyVehicleDeliveryRefById.TryGetValue(v.Id, out var vr) ? vr : "";
+                                var fleetDisplay = string.IsNullOrEmpty(busyRef) ? fleetLabel : $"{fleetLabel} {busyRef}";
+                                <tr>
+                                    <td class="col-no">@vehIdx</td>
+                                    <td><input class="sap-input" value="@v.NumberPlate" readonly /></td>
+                                    <td><input class="sap-input" value="@v.CarType" readonly /></td>
+                                    <td><input class="sap-input" value="@(v.IsActive ? "Active" : "Inactive")" readonly /></td>
+                                    <td class="col-stack"><input class="sap-input" value="@fleetDisplay" readonly title="@fleetDisplay" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (Model.Vehicles.Count == 0)
+                {
+                    <p class="text-secondary small px-3 pb-3 mb-0">@(hasVehicleFilters ? "No vehicles match your filters." : "No vehicles yet. Use Add vehicle to create one.")</p>
+                }
             </div>
-            @if (Model.Vehicles.Count == 0)
-            {
-                <p class="text-secondary small px-3 pb-3 mb-0">@(hasVehicleFilters ? "No vehicles match your filters." : "No vehicles yet. Use Add vehicle to create one.")</p>
-            }
         </div>
     </div>
 </div>

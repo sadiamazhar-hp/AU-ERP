@@ -17,19 +17,6 @@
         --sap-readonly: #f4f4f4;
     }
 
-    .rt-module .table-sap { width: 100%; border-collapse: collapse; }
-    .rt-module .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; }
-    .rt-module .table-sap td { border: 1px solid #ccc; padding: 0; height: 32px; }
-    .rt-module .sap-input { width: 100%; height: 100%; border: none; padding: 0 10px; background: var(--sap-readonly); outline: none; box-sizing: border-box; }
-    .rt-module .table-sap th.col-no, .rt-module .table-sap td.col-no { padding-left: 14px; padding-right: 8px; }
-    .rt-module .table-sap td.col-action { padding: 4px 8px; vertical-align: middle; text-align: center; }
-
-    .rt-module-tabstrip { border-bottom: 1px solid var(--sap-border); padding: 0 0.25rem; background: #fff; }
-    .rt-module-tabstrip .nav-link { color: var(--au-primary-dark, #388087); font-weight: 500; border: 1px solid transparent; border-radius: 0.35rem 0.35rem 0 0; }
-    .rt-module-tabstrip .nav-link:hover { border-color: rgba(56, 128, 135, 0.25); }
-    .rt-module-tabstrip .nav-link.active { color: var(--au-black, #171717); background: #fff; border-color: var(--sap-border); border-bottom-color: #fff; margin-bottom: -1px; }
-    .rt-module-tab-content { border: 1px solid var(--sap-border); border-top: none; background: #fff; }
-
     .rt-create-form .v2-frame { border: 1px solid #c4c4c4; border-radius: 4px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
     .rt-create-form .v2-frame legend { font-size: .8rem; font-weight: 600; color: #388087; width: auto; padding: 0 .35rem; float: none; margin-bottom: 0; }
     .rt-create-form .form-label { font-size: .82rem; font-weight: 500; color: #555; margin-bottom: .2rem; }
@@ -67,7 +54,7 @@
         </li>
     </ul>
 
-    <div class="tab-content rt-module-tab-content">
+    <div class="tab-content au-md-tab-content rt-module-tab-content">
         <div class="tab-pane fade p-2 p-md-3 @(rtTabList ? "" : "show active")" id="rtPaneCreate" role="tabpanel">
             <div class="rt-create-form">
                 <div class="au-validation-summary mb-2" style="display:none;" role="alert"></div>
@@ -130,6 +117,7 @@
         </div>
 
         <div class="tab-pane fade @(rtTabList ? "show active" : "")" id="rtPaneList" role="tabpanel">
+            <div class="sap-window">
             <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
             <div class="p-2 px-3">
                 <input type="search" class="form-control form-control-sm" id="rtListFilter" placeholder="Filter by material, plant, operation title…" style="max-width:22rem;" />
@@ -213,6 +201,7 @@
             {
                 <p class="text-secondary small mb-0 mt-2 px-3">No routing records yet. Use the Create tab to add one.</p>
             }
+            </div>
         </div>
     </div>
 </div>
@@ -915,17 +904,8 @@
             doDelete();
     }
 
-    (function () {
-        var inp = document.getElementById("rtListFilter");
-        if (!inp) return;
-        inp.addEventListener("input", function () {
-            var q = (inp.value || "").toLowerCase().trim();
-            document.querySelectorAll("#rtListTable tbody tr").forEach(function (tr) {
-                var hay = (tr.getAttribute("data-rt-filter") || "").toLowerCase();
-                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
-            });
-        });
-    })();
+    if (typeof window.auMdBindListFilter === "function")
+        window.auMdBindListFilter("rtListFilter", "rtListTable", "data-rt-filter");
 
     document.addEventListener("change", function (e) {
         var t = e.target;

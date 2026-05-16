@@ -14,19 +14,6 @@
         --sap-readonly: #f4f4f4;
     }
 
-    .pv-module .table-sap { width: 100%; border-collapse: collapse; }
-    .pv-module .table-sap th { background: var(--sap-header-bg); border: 1px solid #ccc; padding: 6px 10px; font-weight: normal; }
-    .pv-module .table-sap td { border: 1px solid #ccc; padding: 0; height: 32px; }
-    .pv-module .sap-input { width: 100%; height: 100%; border: none; padding: 0 10px; background: var(--sap-readonly); outline: none; box-sizing: border-box; }
-    .pv-module .table-sap th.col-no, .pv-module .table-sap td.col-no { padding-left: 14px; padding-right: 8px; }
-    .pv-module .table-sap td.col-action { padding: 4px 8px; vertical-align: middle; text-align: center; }
-
-    .pv-module-tabstrip { border-bottom: 1px solid var(--sap-border); padding: 0 0.25rem; background: #fff; }
-    .pv-module-tabstrip .nav-link { color: var(--au-primary-dark, #388087); font-weight: 500; border: 1px solid transparent; border-radius: 0.35rem 0.35rem 0 0; }
-    .pv-module-tabstrip .nav-link:hover { border-color: rgba(56, 128, 135, 0.25); }
-    .pv-module-tabstrip .nav-link.active { color: var(--au-black, #171717); background: #fff; border-color: var(--sap-border); border-bottom-color: #fff; margin-bottom: -1px; }
-    .pv-module-tab-content { border: 1px solid var(--sap-border); border-top: none; background: #fff; }
-
     .pv-create-form .v2-frame { border: 1px solid #c4c4c4; border-radius: 4px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
     .pv-create-form .v2-frame legend { font-size: .8rem; font-weight: 600; color: #388087; width: auto; padding: 0 .35rem; float: none; margin-bottom: 0; }
     .pv-create-form .form-label { font-size: .82rem; font-weight: 500; color: #555; margin-bottom: .2rem; }
@@ -44,7 +31,7 @@
         </li>
     </ul>
 
-    <div class="tab-content pv-module-tab-content">
+    <div class="tab-content au-md-tab-content pv-module-tab-content">
         <!-- ───── CREATE TAB ───── -->
         <div class="tab-pane fade p-2 p-md-3 @(pvTabList ? "" : "show active")" id="pvPaneCreate" role="tabpanel">
             <div class="pv-create-form">
@@ -122,6 +109,7 @@
 
         <!-- ───── LIST TAB ───── -->
         <div class="tab-pane fade @(pvTabList ? "show active" : "")" id="pvPaneList" role="tabpanel">
+            <div class="sap-window">
             <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
             <div class="p-2 px-3">
                 <input type="search" class="form-control form-control-sm" id="pvListFilter" placeholder="Filter by title, plant, version…" style="max-width:22rem;" />
@@ -174,6 +162,7 @@
             {
                 <p class="text-secondary small mb-0 mt-2 px-3">No production versions yet. Use the Create tab to add one.</p>
             }
+            </div>
         </div>
     </div>
 </div>
@@ -459,16 +448,7 @@
             doDelete();
     }
 
-    (function () {
-        var inp = document.getElementById("pvListFilter");
-        if (!inp) return;
-        inp.addEventListener("input", function () {
-            var q = (inp.value || "").toLowerCase().trim();
-            document.querySelectorAll("#pvListTable tbody tr").forEach(function (tr) {
-                var hay = (tr.getAttribute("data-pv-filter") || "").toLowerCase();
-                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
-            });
-        });
-    })();
+    if (typeof window.auMdBindListFilter === "function")
+        window.auMdBindListFilter("pvListFilter", "pvListTable", "data-pv-filter");
 </script>
 }

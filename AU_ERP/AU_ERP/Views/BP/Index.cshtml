@@ -7,48 +7,6 @@
 
 @Html.ValidationSummary(false, "", new { @class = "text-danger small mb-2" })
 
-<style>
-    .bp-module .table-sap {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .bp-module .table-sap th {
-        background: #dee6ef;
-        border: 1px solid #ccc;
-        padding: 6px 10px;
-        font-weight: normal;
-    }
-
-    .bp-module .table-sap td {
-        border: 1px solid #ccc;
-        padding: 0;
-        height: 32px;
-    }
-
-    .bp-module .sap-input {
-        width: 100%;
-        height: 100%;
-        border: none;
-        padding: 0 10px;
-        background: #f4f4f4;
-        outline: none;
-        box-sizing: border-box;
-    }
-
-    .bp-module .table-sap th.col-no,
-    .bp-module .table-sap td.col-no {
-        padding-left: 14px;
-        padding-right: 8px;
-    }
-
-    .bp-module .table-sap td.col-action {
-        padding: 4px 8px;
-        vertical-align: middle;
-        text-align: center;
-    }
-</style>
-
 <div class="au-md-module bp-module">
     <ul class="nav nav-tabs au-md-tabstrip bp-module-tabs mb-0 mt-1" role="tablist">
         <li class="nav-item" role="presentation">
@@ -66,7 +24,7 @@
             </div>
         </div>
         <div class="tab-pane fade @(bpTabList ? "show active" : "")" id="bpPaneList" role="tabpanel" aria-labelledby="bpTabList">
-            <div class="sap-window border-0 rounded-0">
+            <div class="sap-window">
                 <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
                 <div class="p-2 px-3">
                     <input type="search" class="form-control form-control-sm" id="bpListFilter" placeholder="Filter by ID, name, city…" style="max-width:22rem;" />
@@ -431,17 +389,8 @@
             }
         }
 
-        (function () {
-            var inp = document.getElementById("bpListFilter");
-            if (!inp) return;
-            inp.addEventListener("input", function () {
-                var q = (inp.value || "").toLowerCase().trim();
-                document.querySelectorAll("#bpListTable tbody tr").forEach(function (tr) {
-                    var hay = (tr.getAttribute("data-bp-filter") || "").toLowerCase();
-                    tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
-                });
-            });
-        })();
+        if (typeof window.auMdBindListFilter === "function")
+            window.auMdBindListFilter("bpListFilter", "bpListTable", "data-bp-filter");
 
         function bpListPaneRoot() {
             return document.getElementById("bpPaneList");

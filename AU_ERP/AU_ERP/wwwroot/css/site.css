@@ -368,6 +368,7 @@ table.table-sap tbody tr:hover {
 
 /* Editable SAP grids — light header (pages may set --sap-header-bg on :root) */
 .sap-window table.table-sap thead th,
+.au-md-module .sap-window table.table-sap thead th,
 .bom-module table.table-sap thead th {
   background: var(--sap-header-bg, #dee6ef);
   color: #333;
@@ -1444,31 +1445,89 @@ body.modal-open:has(#sqEmailConfirmModal.show) .modal-backdrop {
   padding: 0.35rem 0.75rem 0;
 }
 
-.au-md-module .table-sap {
+/* Master data list pane — Materials-style sap-window grid */
+.au-md-module {
+  --sap-border: #9fb2c5;
+  --sap-header-bg: #dee6ef;
+  --sap-readonly: #f4f4f4;
+}
+
+.au-md-module .sap-window {
+  background: #fff;
+  border: 1px solid var(--sap-border, #9fb2c5);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.au-md-module .sap-window .table-wrapper {
+  overflow-x: auto;
+}
+
+.au-md-module .sap-window .table-sap {
   width: 100%;
   border-collapse: collapse;
 }
 
-.au-md-module .table-sap th {
+.au-md-module .sap-window .table-sap th {
   background: var(--sap-header-bg, #dee6ef);
-  color: var(--text, #32363a);
   border: 1px solid #ccc;
   padding: 6px 10px;
-  font-weight: 500;
-  font-size: 0.8125rem;
+  font-weight: normal;
+  color: #333;
 }
 
-.au-md-module .table-sap td {
+.au-md-module .sap-window .table-sap td {
   border: 1px solid #ccc;
-  padding: 6px 10px;
-  font-size: 0.8125rem;
+  padding: 0;
+  height: 32px;
   vertical-align: middle;
 }
 
-.au-md-module .table-sap tbody tr:nth-child(even) {
-  background: #fafbfc;
+.au-md-module .sap-window .table-sap th.col-no,
+.au-md-module .sap-window .table-sap td.col-no {
+  padding-left: 14px;
+  padding-right: 8px;
 }
 
-.au-md-module .table-sap tbody tr:hover {
-  background: #f0f4ff;
+.au-md-module .sap-window .table-sap td.col-action {
+  padding: 4px 8px;
+  text-align: center;
+}
+
+.au-md-module .sap-window .table-sap td.col-stack,
+.au-md-module .sap-window .table-sap td.rt-ops-summary-cell {
+  padding: 4px 8px;
+  height: auto;
+  vertical-align: top;
+}
+
+.au-md-module .sap-input {
+  width: 100%;
+  height: 100%;
+  min-height: 30px;
+  border: none;
+  padding: 0 10px;
+  background: var(--sap-readonly, #f4f4f4);
+  outline: none;
+  box-sizing: border-box;
+  font-size: inherit;
+}
+
+.au-md-module .sap-window .sap-toolbar {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--sap-border, #9fb2c5);
+  background: #fff;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.au-md-module.materials-module .sap-window {
+  min-height: 500px;
+}
+
+.au-md-module .sap-window.edit-mode .sap-input:not([readonly]):not([disabled]) {
+  background: #fff;
 }

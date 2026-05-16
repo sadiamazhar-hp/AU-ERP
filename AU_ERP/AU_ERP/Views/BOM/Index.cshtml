@@ -23,77 +23,6 @@
         --sap-selected: #b3d7ff;
     }
 
-    .bom-module .table-sap {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .bom-module .table-sap th {
-        background: var(--sap-header-bg);
-        border: 1px solid #ccc;
-        padding: 6px 10px;
-        font-weight: normal;
-    }
-
-    .bom-module .table-sap td {
-        border: 1px solid #ccc;
-        padding: 0;
-        height: 32px;
-    }
-
-    .bom-module .sap-input {
-        width: 100%;
-        height: 100%;
-        border: none;
-        padding: 0 10px;
-        background: var(--sap-readonly);
-        outline: none;
-        box-sizing: border-box;
-    }
-
-    .bom-module .table-sap th.col-no,
-    .bom-module .table-sap td.col-no {
-        padding-left: 14px;
-        padding-right: 8px;
-    }
-
-    .bom-module .table-sap td.col-action {
-        padding: 4px 8px;
-        vertical-align: middle;
-        text-align: center;
-    }
-
-    .bom-module-tabstrip {
-        border-bottom: 1px solid var(--sap-border);
-        padding: 0 0.25rem;
-        background: #fff;
-    }
-
-    .bom-module-tabstrip .nav-link {
-        color: var(--au-primary-dark, #388087);
-        font-weight: 500;
-        border: 1px solid transparent;
-        border-radius: 0.35rem 0.35rem 0 0;
-    }
-
-    .bom-module-tabstrip .nav-link:hover {
-        border-color: rgba(56, 128, 135, 0.25);
-    }
-
-    .bom-module-tabstrip .nav-link.active {
-        color: var(--au-black, #171717);
-        background: #fff;
-        border-color: var(--sap-border);
-        border-bottom-color: #fff;
-        margin-bottom: -1px;
-    }
-
-    .bom-module-tab-content {
-        border: 1px solid var(--sap-border);
-        border-top: none;
-        background: #fff;
-    }
-
     .bom-create-form .v2-frame {
         border: 1px solid #c4c4c4;
         border-radius: 4px;
@@ -215,7 +144,7 @@
         </li>
     </ul>
 
-    <div class="tab-content bom-module-tab-content">
+    <div class="tab-content au-md-tab-content bom-module-tab-content">
         <!-- ───── CREATE TAB ───── -->
         <div class="tab-pane fade p-2 p-md-3 @(bomTabList ? "" : "show active")" id="bomPaneCreate" role="tabpanel" aria-labelledby="bomTabCreateBtn">
             <div class="bom-create-form">
@@ -323,6 +252,7 @@
 
         <!-- ───── LIST TAB ───── -->
         <div class="tab-pane fade @(bomTabList ? "show active" : "")" id="bomPaneList" role="tabpanel" aria-labelledby="bomTabListBtn">
+            <div class="sap-window">
             <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
             <div class="p-2 px-3">
                 <input type="search" class="form-control form-control-sm" id="bomListFilter" placeholder="Filter by BOM ID, code, title, material, level…" style="max-width:22rem;" />
@@ -384,6 +314,7 @@
             {
                 <p class="text-secondary small mb-0 mt-2 px-3">No BOM records yet. Use the Create tab to add one.</p>
             }
+            </div>
         </div>
     </div>
 </div>
@@ -1042,16 +973,7 @@
         });
     })();
 
-    (function () {
-        var inp = document.getElementById("bomListFilter");
-        if (!inp) return;
-        inp.addEventListener("input", function () {
-            var q = (inp.value || "").toLowerCase().trim();
-            document.querySelectorAll("#bomListTable tbody tr").forEach(function (tr) {
-                var hay = (tr.getAttribute("data-bom-filter") || "").toLowerCase();
-                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
-            });
-        });
-    })();
+    if (typeof window.auMdBindListFilter === "function")
+        window.auMdBindListFilter("bomListFilter", "bomListTable", "data-bom-filter");
 </script>
 }

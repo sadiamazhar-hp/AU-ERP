@@ -29,6 +29,26 @@
     };
 
     /**
+     * Client-side filter for Master Data list grids (Materials pattern).
+     * @param {string|HTMLElement} input - search input id or element
+     * @param {string|HTMLElement} table - table id or element
+     * @param {string} rowFilterAttr - e.g. "data-bp-filter"
+     */
+    window.auMdBindListFilter = function (input, table, rowFilterAttr) {
+        var inp = typeof input === "string" ? document.getElementById(input) : input;
+        var tbl = typeof table === "string" ? document.getElementById(table) : table;
+        if (!inp || !tbl || !rowFilterAttr) return;
+        var attr = rowFilterAttr.indexOf("data-") === 0 ? rowFilterAttr : "data-" + rowFilterAttr;
+        inp.addEventListener("input", function () {
+            var q = (inp.value || "").toLowerCase().trim();
+            tbl.querySelectorAll("tbody tr").forEach(function (tr) {
+                var hay = (tr.getAttribute(attr) || "").toLowerCase();
+                tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
+            });
+        });
+    };
+
+    /**
      * Shows the teal Material success modal; runs onHiddenOnce after it is fully hidden (OK or Esc).
      */
     window.materialShowSuccessModalThen = function (message, onHiddenOnce) {

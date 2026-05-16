@@ -9,168 +9,6 @@
     var materialsTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
 }
 
-<style>
-    :root {
-        --sap-bg: #e5ebf1;
-        --sap-border: #9fb2c5;
-        --sap-header-bg: #dee6ef;
-        --sap-readonly: #f4f4f4;
-        --sap-selected: #b3d7ff;
-    }
-
-    .sap-window {
-        background: white;
-        border: 1px solid var(--sap-border);
-        display: flex;
-        flex-direction: column;
-        min-height: 500px;
-    }
-
-    .sap-toolbar {
-        padding: 12px;
-        border-bottom: 2px solid var(--sap-border);
-        background: #fff;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-    }
-
-    .sap-actions .btn-add-classic {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.35rem 0.75rem;
-        font-size: 0.8125rem;
-        font-weight: 500;
-        color: #fff;
-        background: var(--au-primary, #6FB3B8);
-        border: 1px solid var(--au-primary-dark, #388087);
-        border-radius: 0.25rem;
-        text-decoration: none;
-        cursor: pointer;
-    }
-
-    .sap-actions .btn-add-classic:hover {
-        color: #fff;
-        filter: brightness(0.95);
-    }
-
-    .btn-sap {
-        border-radius: 2px;
-        font-size: 12px;
-        border: 1px solid #bbb;
-        margin-left: 5px;
-        padding: 4px 10px;
-        background: linear-gradient(to bottom, #fdfdfd, #eee);
-        cursor: pointer;
-    }
-
-        .btn-sap:disabled {
-            opacity: 0.4;
-        }
-
-    .table-sap {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-        .table-sap th {
-            background: var(--sap-header-bg);
-            border: 1px solid #ccc;
-            padding: 6px 10px;
-            font-weight: normal;
-        }
-
-        .table-sap td {
-            border: 1px solid #ccc;
-            padding: 0;
-            height: 32px;
-        }
-
-    .sap-input {
-        width: 100%;
-        height: 100%;
-        border: none;
-        padding: 0 10px;
-        background: var(--sap-readonly);
-        outline: none;
-        box-sizing: border-box;
-    }
-
-    .edit-mode .sap-input:not([readonly]):not([disabled]) {
-        background: #fff;
-    }
-
-    /* Sel column removed — keep styles commented for reference
-    .col-sel {
-        width: 35px;
-        background: #f0f0f0;
-        cursor: pointer;
-    }
-
-    .row-selected {
-        background-color: var(--sap-selected) !important;
-    }
-
-    .table-sap tr.row-selected td {
-        background-color: var(--sap-selected);
-    }
-
-    .table-sap tr.row-selected .sap-input,
-    .table-sap tr.row-selected .sap-select {
-        background-color: transparent;
-    }
-    */
-
-    .table-sap th.col-no,
-    .table-sap td.col-no {
-        padding-left: 14px;
-        padding-right: 8px;
-    }
-
-    .table-sap td.col-action {
-        padding: 4px 8px;
-        vertical-align: middle;
-        text-align: center;
-    }
-
-    .sap-select:disabled {
-        background: var(--sap-readonly);
-        color: #666;
-        cursor: not-allowed;
-    }
-
-    .materials-module-tabstrip {
-        border-bottom: 1px solid var(--sap-border);
-        padding: 0 0.25rem;
-        background: #fff;
-    }
-
-    .materials-module-tabstrip .nav-link {
-        color: var(--au-primary-dark, #388087);
-        font-weight: 500;
-        border: 1px solid transparent;
-        border-radius: 0.35rem 0.35rem 0 0;
-    }
-
-    .materials-module-tabstrip .nav-link:hover {
-        border-color: rgba(56, 128, 135, 0.25);
-    }
-
-    .materials-module-tabstrip .nav-link.active {
-        color: var(--au-black, #171717);
-        background: #fff;
-        border-color: var(--sap-border);
-        border-bottom-color: #fff;
-        margin-bottom: -1px;
-    }
-
-    .materials-module-tab-content {
-        border: 1px solid var(--sap-border);
-        border-top: none;
-        background: #fff;
-    }
-</style>
 
 <div class="au-md-module materials-module">
     <ul class="nav nav-tabs au-md-tabstrip materials-module-tabstrip" role="tablist">
@@ -181,7 +19,7 @@
             <button class="nav-link @(materialsTabList ? "active" : "")" id="materialsTabListBtn" data-bs-toggle="tab" data-bs-target="#materialsPaneList" type="button" role="tab" aria-controls="materialsPaneList" aria-selected="@(materialsTabList ? "true" : "false")">List</button>
         </li>
     </ul>
-    <div class="tab-content materials-module-tab-content">
+    <div class="tab-content au-md-tab-content materials-module-tab-content">
         <div class="tab-pane fade p-2 p-md-3 @(materialsTabList ? "" : "show active")" id="materialsPaneCreate" role="tabpanel" aria-labelledby="materialsTabCreateBtn">
             @await Html.PartialAsync("CreateV2", new AU_ERP.Models.CreateMaterialMaster(), new ViewDataDictionary(ViewData)
             {
@@ -620,17 +458,8 @@
         window.switchMaterialsModuleTab("create");
     };
      
-        (function () {
-            var inp = document.getElementById("MaterialListFilter");
-            if (!inp) return;
-            inp.addEventListener("input", function () {
-                var q = (inp.value || "").toLowerCase().trim();
-                document.querySelectorAll("#MaterialListTable tbody tr").forEach(function (tr) {
-                    var hay = (tr.getAttribute("data-material-filter") || "").toLowerCase();
-                    tr.style.display = !q || hay.indexOf(q) >= 0 ? "" : "none";
-                });
-            });
-        })();
+        if (typeof window.auMdBindListFilter === "function")
+            window.auMdBindListFilter("MaterialListFilter", "MaterialListTable", "data-material-filter");
 
     document.addEventListener("DOMContentLoaded", function () {
         setMode(false);
