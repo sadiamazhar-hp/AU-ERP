@@ -32,34 +32,11 @@ namespace AU_ERP.Migrations
                 table: "DeliveryChallans",
                 column: "VehicleId");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_DeliveryChallans_Drivers_DriverId",
-                table: "DeliveryChallans",
-                column: "DriverId",
-                principalTable: "Drivers",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_DeliveryChallans_Vehicles_VehicleId",
-                table: "DeliveryChallans",
-                column: "VehicleId",
-                principalTable: "Vehicles",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_DeliveryChallans_Drivers_DriverId",
-                table: "DeliveryChallans");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_DeliveryChallans_Vehicles_VehicleId",
-                table: "DeliveryChallans");
-
             migrationBuilder.DropIndex(
                 name: "IX_DeliveryChallans_DriverId",
                 table: "DeliveryChallans");
