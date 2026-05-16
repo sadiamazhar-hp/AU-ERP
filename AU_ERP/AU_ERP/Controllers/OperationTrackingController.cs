@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers
 {
@@ -392,6 +393,24 @@ namespace AU_ERP.Controllers
                     return Json(new { success = false, message = "Input, output, and actual hours must be non-negative." });
                 }
 
+                if (DocumentQuantityRules.ValidateNonNegativeWhole(dto.InputQuantity, "Input quantity") is { } iqMsg)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = iqMsg });
+                }
+
+                if (DocumentQuantityRules.ValidateNonNegativeWhole(dto.OutputQuantity, "Output quantity") is { } oqMsg)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = oqMsg });
+                }
+
+                if (dto.WastageQuantity.HasValue
+                    && DocumentQuantityRules.ValidateNonNegativeWhole(dto.WastageQuantity.Value, "Wastage quantity") is { } wqMsg)
+                {
+                    await tx.RollbackAsync(ct);
+                    return Json(new { success = false, message = wqMsg });
+                }
                 if (normalizedMark == ProductionOrderStageProgress.StageCompleted && dto.ActualHours <= 0)
                 {
                     await tx.RollbackAsync(ct);

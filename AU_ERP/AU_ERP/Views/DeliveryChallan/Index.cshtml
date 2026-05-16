@@ -90,6 +90,13 @@
         </button>
     </div>
 
+    @if (TempData["DcWarning"] is string warnDc)
+    {
+        <div class="alert alert-warning py-2 small mb-3 border-0 shadow-sm d-flex align-items-start gap-2" role="status">
+            <i class="bi bi-exclamation-triangle-fill text-warning-emphasis flex-shrink-0" style="margin-top: 0.15rem" aria-hidden="true"></i>
+            <span>@warnDc</span>
+        </div>
+    }
     @if (TempData["DcMessage"] is string okDc)
     {
         <div class="alert alert-success py-2 small mb-3" role="status">@okDc</div>
@@ -122,6 +129,7 @@
                         <th>Delivery type</th>
                         <th>Ship-to</th>
                         <th>Ref. sales order</th>
+                        <th>Delivery</th>
                         <th>Lines</th>
                         <th>Actions</th>
                     </tr>
@@ -129,10 +137,11 @@
                 <tbody>
                 @if (list.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-secondary">No delivery challans yet.</td></tr>
+                    <tr><td colspan="9" class="text-secondary">No delivery challans yet.</td></tr>
                 }
                 else foreach (var d in list)
                 {
+                    var canMarkFleetDone = !d.DeliveryCompletedAt.HasValue && (d.DriverId != null || d.VehicleId != null);
                     <tr>
                         <td class="text-nowrap"><strong>@d.DeliveryChallanNumber</strong></td>
                         <td class="text-nowrap">@FmtDate(d.DocumentDate)</td>
@@ -140,10 +149,28 @@
                         <td>@d.DeliveryType</td>
                         <td>@(d.ShipToDisplayName ?? d.ShipToBusinessPartner?.FullName ?? "—")</td>
                         <td class="text-nowrap">@(d.ReferenceSalesOrderNumber ?? d.SalesOrder?.SalesOrderNumber ?? "—")</td>
+                        <td class="text-nowrap">
+                            @if (d.DeliveryCompletedAt.HasValue)
+                            {
+                                <span class="badge text-bg-secondary">Completed</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-light border text-dark">Active</span>
+                            }
+                        </td>
                         <td>@(d.Items?.Count ?? 0)</td>
                         <td class="text-nowrap">
                             <button type="button" class="btn btn-sm btn-outline-secondary dc-btn-view" data-dc-id="@d.Id" title="View">View</button>
-                            <a class="btn btn-sm btn-outline-primary" asp-action="DownloadPdf" asp-route-id="@d.Id" title="Download PDF" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+                            @if (canMarkFleetDone)
+                            {
+                                <form asp-controller="DeliveryChallan" asp-action="MarkDeliveryCompleted" method="post" class="d-inline-block ms-1" onsubmit="return confirm('Mark delivery completed and free the driver / vehicle?');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@d.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Releases fleet for other challans">Delivery completed</button>
+                                </form>
+                            }
+                            <a class="btn btn-sm btn-outline-primary ms-1" asp-action="DownloadPdf" asp-route-id="@d.Id" title="Download PDF" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
                         </td>
                     </tr>
                 }
@@ -213,7 +240,7 @@
                 <h5 class="modal-title" id="addDeliveryChallanModalLabel">New delivery challan</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="dcForm" method="post" asp-controller="DeliveryChallan" asp-action="Create">
+            <form id="dcForm" method="post" asp-controller="DeliveryChallan" asp-action="Create" data-au-prevent-enter-submit>
                 @Html.AntiForgeryToken()
                 <div class="modal-body py-2">
                     <div class="row g-2 mb-2">
@@ -302,6 +329,7 @@
                             </select>
                         </div>
                     </div>
+                    <p class="text-muted small mb-2">Shows only drivers and vehicles that are <strong>Active</strong> and <strong>Available</strong>. Master data treats <strong>Busy</strong> the same way here: tied to another challan with an Open / Return-in-progress invoice, or no invoice yet, until someone records <strong>Delivery completed</strong> on that challan.</p>
                     <input type="hidden" name="SalesOrderId" id="dcSalesOrderId" value="" />
                     <input type="hidden" name="ReferenceSalesOrderNumber" id="dcRefSoNum" value="" />
                     <h6 class="border-bottom pb-1 mb-2 small">Line items</h6>

@@ -161,16 +161,97 @@
         }
         return false;
     };
+
+    /**
+     * Finds the UI block scope for inline validation: first ancestor whose first-level children include .au-validation-summary
+     * (covers wc-create-form, bom-create-form, sap forms, BP create, modal-body patterns).
+     */
+    function auFindInlineValidationScope(fromEl) {
+        for (var p = fromEl.parentElement; p; p = p.parentElement) {
+            for (var c = p.firstElementChild; c; c = c.nextElementSibling) {
+                if (c.classList && c.classList.contains("au-validation-summary")) return p;
+            }
+        }
+        return null;
+    }
+
+    function auOnFieldMaybeClearInlineValidation(ev) {
+        var target = ev.target;
+        if (!target || target.nodeType !== 1) return;
+        var tag = target.tagName;
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") return;
+        if (tag === "INPUT") {
+            var tp = target.type || "";
+            if (
+                tp === "hidden" ||
+                tp === "button" ||
+                tp === "submit" ||
+                tp === "reset" ||
+                tp === "file"
+            )
+                return;
+        }
+        var root = auFindInlineValidationScope(target);
+        if (!root) return;
+        if (target.classList && target.classList.contains("au-field-invalid"))
+            target.classList.remove("au-field-invalid");
+        if (!root.querySelector(".au-field-invalid")) window.auClearInlineValidation(root);
+    }
+
+    document.addEventListener("input", auOnFieldMaybeClearInlineValidation, true);
+    document.addEventListener("change", auOnFieldMaybeClearInlineValidation, true);
 })();
 
 /**
  * Enforces non-negative values on number inputs app-wide.
  * Opt out per field with attribute data-allow-negative="true" (e.g. temperature deltas).
  */
+/**
+ * Operational document quantities: whole numbers only, optional minimum (default 1).
+ * Use data-au-qty-min="0" for fields that allow zero (e.g. scrap bucket splits).
+ * Do not add this class to money fields, tax rates, or time-in-hours inputs.
+ */
+(function () {
+    function auDocQtyMin(el) {
+        var a = el.getAttribute("data-au-qty-min");
+        if (a === "0") return 0;
+        return 1;
+    }
+    function isAuDocQty(el) {
+        return el && el.tagName === "INPUT" && el.type === "number" && el.classList && el.classList.contains("au-doc-qty");
+    }
+    function coerceAuDocQty(el) {
+        if (!isAuDocQty(el)) return;
+        var minV = auDocQtyMin(el);
+        var raw = String(el.value || "").trim();
+        if (raw === "" || raw === "-") return;
+        var digits = raw.replace(/\D/g, "");
+        if (digits === "") {
+            el.value = "";
+            return;
+        }
+        var n = parseInt(digits, 10);
+        if (isNaN(n)) {
+            el.value = "";
+            return;
+        }
+        if (n < minV) n = minV;
+        el.value = String(n);
+    }
+    document.addEventListener(
+        "input",
+        function (e) {
+            coerceAuDocQty(e.target);
+        },
+        true
+    );
+})();
+
 (function () {
     function skip(el) {
         if (!el || el.tagName !== "INPUT" || el.type !== "number") return true;
         if (el.hasAttribute("data-allow-negative")) return true;
+        if (el.classList && el.classList.contains("au-doc-qty")) return true;
         return false;
     }
     function clampNonNegative(el) {
@@ -195,6 +276,88 @@
     }, true);
 })();
 
+(function () {
+    /** Sales-grade money fields / line unit price: disallow negative values while typing */
+    function auClampSalesMoneyInput(el) {
+        if (!el || el.tagName !== "INPUT" || el.type !== "number") return;
+        var c = el.classList;
+        if (
+            !c ||
+            (!c.contains("mat-sale-pkr") &&
+                !c.contains("v2-mat-sale-pkr") &&
+                !c.contains("sq-unit") &&
+                !c.contains("so-unit"))
+        )
+            return;
+        var raw = el.value;
+        if (raw === "" || raw === "-" || raw === ".") return;
+        var n = parseFloat(raw);
+        if (!isNaN(n) && n < 0) {
+            el.value = "0";
+            try {
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+            } catch (err) {
+                /* ignore */
+            }
+        }
+    }
+
+    document.addEventListener(
+        "input",
+        function (e) {
+            auClampSalesMoneyInput(e.target);
+        },
+        true
+    );
+})();
+
+(function () {
+    /** Strip leading "-" from barcode-style text (EAN cannot be entered as negative) */
+    function auStripLeadingMinusText(el) {
+        if (
+            !el ||
+            el.tagName !== "INPUT" ||
+            (el.type !== "text" && el.type !== "tel" && el.type !== "search")
+        )
+            return;
+        if (!el.classList || !el.classList.contains("au-ean-upc")) return;
+        var v = el.value;
+        if (!v.startsWith("-")) return;
+        el.value = v.replace(/^-+/, "");
+    }
+
+    document.addEventListener(
+        "input",
+        function (e) {
+            auStripLeadingMinusText(e.target);
+        },
+        true
+    );
+})();
+
+(function () {
+    /** Licence / plates: reject a bare negative number; drop a leading '-' if user mis-clicks. */
+    function auFleetTextNoBareNegative(el, cls) {
+        if (!el || el.tagName !== "INPUT" || !el.classList || !el.classList.contains(cls)) return;
+        var raw = el.value;
+        if (/^-\d+$/.test(raw.trim())) {
+            el.value = "";
+            return;
+        }
+        if (raw.startsWith("-")) el.value = raw.replace(/^-+/, "");
+    }
+
+    document.addEventListener(
+        "input",
+        function (e) {
+            auFleetTextNoBareNegative(e.target, "au-driver-licence-nneg");
+            auFleetTextNoBareNegative(e.target, "au-vehicle-plate-nneg");
+        },
+        true
+    );
+})();
+
 /**
  * After navigation, the window scrolls to top. Scroll the fixed sidebar so the active link remains in view.
  */
@@ -213,4 +376,39 @@
         document.addEventListener("DOMContentLoaded", auScrollSidebarToActive);
     else
         auScrollSidebarToActive();
+})();
+
+/**
+ * In long document modals, Enter in inputs often triggers implicit form submit (first submit button) and navigates away.
+ * Opt in per form with attribute data-au-prevent-enter-submit. Textareas remain unchanged so users can add line breaks intentionally.
+ */
+(function () {
+    function shouldAllowEnterDefault(target) {
+        if (!target) return false;
+        var tag = (target.tagName || "").toUpperCase();
+        if (tag === "TEXTAREA") return true;
+        if (tag === "BUTTON" || tag === "A") return true;
+        if (tag === "INPUT") {
+            var ty = String(target.type || "").toLowerCase();
+            if (ty === "submit" || ty === "button") return true;
+            if (ty === "checkbox" || ty === "radio" || ty === "file") return true;
+        }
+        if (target.isContentEditable) return true;
+        return false;
+    }
+    document.addEventListener(
+        "keydown",
+        function (e) {
+            if (e.key !== "Enter" || e.defaultPrevented || e.repeat) return;
+            if (typeof e.isComposing === "boolean" && e.isComposing) return;
+            var t = e.target;
+            if (!t || typeof t.closest !== "function") return;
+            var form = t.closest("form[data-au-prevent-enter-submit]");
+            if (!form) return;
+            if (shouldAllowEnterDefault(t)) return;
+            e.preventDefault();
+            e.stopPropagation();
+        },
+        true
+    );
 })();

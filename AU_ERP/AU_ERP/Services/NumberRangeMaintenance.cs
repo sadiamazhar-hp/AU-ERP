@@ -55,14 +55,48 @@ namespace AU_ERP.Services
             return true;
         }
 
-        public static bool TryValidateDocumentRange(int? fromNumber, int? toNumber, out string? error)
+        /// <summary>Largest value allowed for document from/to (10 decimal digits).</summary>
+        public const long MaxDocumentRangeNumber = 9_999_999_999L;
+
+        public static bool TryValidateDocumentRange(long? fromNumber, long? toNumber, out string? error)
         {
             error = null;
+            if (fromNumber.HasValue)
+            {
+                if (fromNumber.Value < 0)
+                {
+                    error = "Document range 'From number' cannot be negative.";
+                    return false;
+                }
+
+                if (fromNumber.Value > MaxDocumentRangeNumber)
+                {
+                    error = $"Document range 'From number' cannot exceed {MaxDocumentRangeNumber} (10 digits).";
+                    return false;
+                }
+            }
+
+            if (toNumber.HasValue)
+            {
+                if (toNumber.Value < 0)
+                {
+                    error = "Document range 'To number' cannot be negative.";
+                    return false;
+                }
+
+                if (toNumber.Value > MaxDocumentRangeNumber)
+                {
+                    error = $"Document range 'To number' cannot exceed {MaxDocumentRangeNumber} (10 digits).";
+                    return false;
+                }
+            }
+
             if (fromNumber.HasValue && toNumber.HasValue && toNumber.Value < fromNumber.Value)
             {
                 error = "Document range 'To number' cannot be smaller than 'From number'.";
                 return false;
             }
+
             return true;
         }
 
@@ -118,15 +152,15 @@ namespace AU_ERP.Services
             return last ?? 0;
         }
 
-        public static int? NormalizeDocumentLastIssued(int? fromNumber, int? toNumber, int? currentNumber)
+        public static long? NormalizeDocumentLastIssued(long? fromNumber, long? toNumber, long? currentNumber)
         {
             if (!fromNumber.HasValue)
                 return currentNumber is null or 0 ? null : currentNumber;
 
             var from = fromNumber.Value;
-            int? to = toNumber;
-            var last = currentNumber is null or 0 ? (int?)null : currentNumber;
-            last = ClampLastIssuedInt(from, to, last);
+            long? to = toNumber;
+            var last = currentNumber is null or 0 ? (long?)null : currentNumber;
+            last = ClampLastIssued(from, to, last);
             return last;
         }
 

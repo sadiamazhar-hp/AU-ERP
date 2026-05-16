@@ -3,6 +3,7 @@ using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -363,6 +364,11 @@ public class ReturnOrderController : Controller
         foreach (var il in inv.Lines)
         {
             var q = qtyByLineId.TryGetValue(il.Id, out var v) ? v : 0m;
+            if (DocumentQuantityRules.ValidateNonNegativeWhole(q, $"Return quantity (line {il.LineNo})") is { } rqErr)
+            {
+                TempData["RoError"] = rqErr;
+                return RedirectToAction(nameof(Create), new { invoiceId = model.InvoiceId });
+            }
             if (q < 0 || q > il.Quantity)
             {
                 TempData["RoError"] = $"Return quantity must be between 0 and invoiced quantity for line {il.LineNo} ({il.MaterialNumber}).";

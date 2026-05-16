@@ -1,0 +1,43 @@
+@model AU_ERP.Models.ViewModels.InvoiceReturnOrdersListVm
+@using System.Globalization
+
+<div class="inv-ro-list-shell">
+    <p class="small text-secondary mb-2 mb-md-3">
+        Invoice <strong class="text-dark">@(Model.InvoiceDocumentNumber ?? ("#" + Model.InvoiceId.ToString(CultureInfo.InvariantCulture)))</strong>
+    </p>
+
+    @if (Model.Orders.Count == 0)
+    {
+        <p class="text-secondary mb-0">No return orders are linked to this invoice.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Return doc no.</th>
+                        <th>Date</th>
+                        <th class="text-end">Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var o in Model.Orders)
+                {
+                    <tr>
+                        <td><strong>@o.DocumentNumber</strong></td>
+                        <td class="text-nowrap">@o.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
+                        <td class="text-end">
+                            <button type="button"
+                                    class="btn btn-link btn-sm p-0 inv-ro-detail-row-open"
+                                    data-inv-ro-detail-id="@o.Id">
+                                View in panel below
+                            </button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

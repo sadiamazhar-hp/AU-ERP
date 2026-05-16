@@ -1,0 +1,172 @@
+@model AU_ERP.Models.ViewModels.CreditMemoIndexVm
+@using System.Globalization
+@{
+    ViewData["Title"] = "Credit memo";
+    var cmUrlPlaceholderId = 908071625;
+    var cmPartialTpl = Url.Action("CreditMemoPartial", "ReturnOrder", new { id = cmUrlPlaceholderId })!;
+}
+
+@section Styles {
+    <style>
+        .cm-page { color: var(--bs-body-color, #212529); }
+        .cm-card { background: #fff; border: 1px solid var(--bs-border-color, #dee2e6); border-radius: .375rem; padding: 1rem 1.1rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+        .cm-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+        .cm-table thead th { background: #354a5e; color: #fff; font-weight: 500; padding: .55rem .65rem; text-align: left; white-space: nowrap; border: none; }
+        .cm-table tbody td { border: 1px solid #e9ecef; padding: .5rem .65rem; vertical-align: middle; }
+        .cm-table tbody tr:nth-child(even) { background: #f8f9fa; }
+        #cmScreenModal .modal-content { box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.2); border: 1px solid rgba(0,0,0,.12); }
+        .cm-view-loading { padding: 2rem; text-align: center; color: #6c757d; }
+    </style>
+}
+
+<div class="cm-page py-3">
+    @if (TempData["CmError"] is string xe && !string.IsNullOrWhiteSpace(xe))
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="alert">@xe</div>
+    }
+
+    <h1 class="h4 mb-3">Credit memo</h1>
+    <p class="small text-secondary mb-3">Credits issued automatically when return orders are saved. Search by credit memo number, return order, invoice, or dealer.</p>
+
+    <div class="cm-card mb-3">
+        <h2 class="h6 mb-3">Filters</h2>
+        <form asp-action="Index" method="get" class="row g-2 gy-3 align-items-end">
+            <div class="col-12 col-md-4">
+                <label class="form-label mb-1 small text-secondary">Search</label>
+                <input type="search" name="q" value="@Model.SearchQuery" class="form-control form-control-sm" maxlength="160" autocomplete="off" placeholder="CM #, return #, invoice #, dealer…" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label mb-1 small text-secondary">Date from</label>
+                <input type="date" name="docFrom" class="form-control form-control-sm" value="@(Model.DocumentDateFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label mb-1 small text-secondary">Date to</label>
+                <input type="date" name="docTo" class="form-control form-control-sm" value="@(Model.DocumentDateTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+            </div>
+            <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="cm-card">
+        <h2 class="h6 mb-3">Credit memos (@Model.Items.Count)</h2>
+        <div class="table-responsive">
+            <table class="cm-table">
+                <thead>
+                    <tr>
+                        <th>Credit memo no.</th>
+                        <th>Date</th>
+                        <th>Return order</th>
+                        <th>Invoice no.</th>
+                        <th>Dealer</th>
+                        <th class="text-end">Total credit</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        var anyFilter = Model.DocumentDateFrom != null || Model.DocumentDateTo != null || !string.IsNullOrEmpty(Model.SearchQuery);
+                        var emptyMsg = anyFilter ? "No credit memos match the current filters." : "No credit memos yet.";
+                        <tr><td colspan="7" class="text-secondary p-4 text-center">@emptyMsg</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var row in Model.Items)
+                        {
+                            var dealer = row.DealerDisplayName ?? "—";
+                            var cmPartialUrl = Url.Action("CreditMemoPartial", "ReturnOrder", new { id = row.SalesReturnOrderId })!;
+                            var pdfUrl = Url.Action("CreditMemoPdf", "ReturnOrder", new { id = row.SalesReturnOrderId })!;
+                            <tr>
+                                <td><strong>@row.DocumentNumber</strong></td>
+                                <td class="text-nowrap">@row.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
+                                <td>@row.ReturnOrderDocumentNumber</td>
+                                <td>@row.InvoiceDocumentNumber</td>
+                                <td>@dealer</td>
+                                <td class="text-end">@row.GrandTotalCredit.ToString("N2", CultureInfo.CurrentCulture)</td>
+                                <td class="text-end">
+                                    <div class="d-flex flex-wrap gap-1 justify-content-end">
+                                        <button type="button" class="btn btn-sm btn-outline-primary cm-btn-modal"
+                                                data-cm-url="@cmPartialUrl" data-cm-doc="@row.DocumentNumber">View</button>
+                                        <a class="btn btn-sm btn-outline-secondary" href="@pdfUrl" target="_blank" rel="noopener">Print PDF</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="cmScreenModal" tabindex="-1" aria-labelledby="cmScreenModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="cmScreenModalTitle">Credit memo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="cmScreenModalBody"><div class="cm-view-loading">Loading…</div></div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            function esc(t) {
+                var d = document.createElement('div');
+                d.textContent = t || '';
+                return d.innerHTML;
+            }
+            var modalEl = document.getElementById('cmScreenModal');
+            var bodyEl = document.getElementById('cmScreenModalBody');
+            var titleEl = document.getElementById('cmScreenModalTitle');
+            var inst = null;
+
+            function getModal() {
+                if (!modalEl || !window.bootstrap) return null;
+                if (!inst) inst = new bootstrap.Modal(modalEl);
+                return inst;
+            }
+
+            function loadCmPartial(url, titleDoc) {
+                if (!url || !bodyEl) return;
+                if (titleEl) titleEl.textContent = titleDoc ? ('Credit memo — ' + titleDoc) : 'Credit memo';
+                bodyEl.innerHTML = '<div class="cm-view-loading">Loading…</div>';
+                getModal()?.show();
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' } })
+                    .then(function (r) {
+                        if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
+                        return r.text();
+                    })
+                    .then(function (html) { bodyEl.innerHTML = html; })
+                    .catch(function (e) {
+                        bodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">' +
+                            esc(e && e.message ? e.message : 'Could not load credit memo.') + '</div>';
+                    });
+            }
+
+            document.querySelectorAll('.cm-btn-modal').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    loadCmPartial(btn.getAttribute('data-cm-url'), btn.getAttribute('data-cm-doc') || '');
+                });
+            });
+
+            var autoRoStr = '@(Model.OpenReturnOrderId?.ToString(CultureInfo.InvariantCulture) ?? "")';
+            var autoUrlTpl = @System.Text.Json.JsonSerializer.Serialize(cmPartialTpl);
+            var autoPh = @(cmUrlPlaceholderId);
+            var autoParsed = parseInt(autoRoStr, 10);
+            if (!isNaN(autoParsed) && autoParsed > 0 && autoUrlTpl && bodyEl) {
+                var au = autoUrlTpl.split(String(autoPh)).join(String(autoParsed));
+                loadCmPartial(au, '');
+            }
+        })();
+    </script>
+}

@@ -16,6 +16,19 @@
 {
     <div class="alert alert-danger py-2 mb-3" role="alert">@te</div>
 }
+@if (ViewBag.IntegrationWarnings is System.Collections.Generic.IReadOnlyList<string> iwarnings && iwarnings.Count > 0)
+{
+    <div class="alert alert-warning py-2 mb-3" role="status">
+        <div class="fw-semibold mb-1">Integration setup incomplete</div>
+        <ul class="mb-0 ps-3 small">
+            @foreach (var line in iwarnings)
+            {
+                <li>@line</li>
+            }
+        </ul>
+        <p class="mb-0 small mt-2">Operations that allocate document numbers validate this configuration and stop with an explicit message instead of failing abruptly.</p>
+    </div>
+}
 
 <div class="sap-window" id="app">
     <form id="docIntegrationForm" method="post" action="@Url.Action("Integration", "Document")">
@@ -46,10 +59,10 @@
                     {
                         <tr>
                             <td class="col-sel" onclick="selectRow(this)">
-                                <input type="hidden" name="[@i].DocumentIntegrationID" value="@safeModel[i].DocumentIntegrationID" class="row-id" />
+                                <input type="hidden" name="integrations[@i].DocumentIntegrationID" value="@safeModel[i].DocumentIntegrationID" class="row-id" />
                             </td>
                             <td>
-                                <select name="[@i].ModuleKey" class="sap-input" disabled data-required="true">
+                                <select name="integrations[@i].ModuleKey" class="sap-input" disabled data-required="true">
                                     <option value="">Select module</option>
                                     @foreach (var opt in moduleKeys)
                                     {
@@ -65,7 +78,7 @@
                                 </select>
                             </td>
                             <td>
-                                <select name="[@i].DocumentTypeID" class="sap-input" disabled data-required="true">
+                                <select name="integrations[@i].DocumentTypeID" class="sap-input" disabled data-required="true">
                                     <option value="">Select document type</option>
                                     @foreach (var opt in docTypes)
                                     {
@@ -81,7 +94,7 @@
                                 </select>
                             </td>
                             <td>
-                                <select name="[@i].IsActive" class="sap-input" disabled>
+                                <select name="integrations[@i].IsActive" class="sap-input" disabled>
                                     @if (safeModel[i].IsActive)
                                     {
                                         <option value="true" selected>Active</option>
@@ -169,11 +182,11 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="col-sel" onclick="selectRow(this)">
-                <input type="hidden" name="[${rowCount}].DocumentIntegrationID" value="0" class="row-id" />
+                <input type="hidden" name="integrations[${rowCount}].DocumentIntegrationID" value="0" class="row-id" />
             </td>
-            <td><select name="[${rowCount}].ModuleKey" class="sap-input" data-required="true">${modOpts}</select></td>
-            <td><select name="[${rowCount}].DocumentTypeID" class="sap-input" data-required="true">${docOpts}</select></td>
-            <td><select name="[${rowCount}].IsActive" class="sap-input"><option value="true" selected>Active</option><option value="false">Inactive</option></select></td>`;
+            <td><select name="integrations[${rowCount}].ModuleKey" class="sap-input" data-required="true">${modOpts}</select></td>
+            <td><select name="integrations[${rowCount}].DocumentTypeID" class="sap-input" data-required="true">${docOpts}</select></td>
+            <td><select name="integrations[${rowCount}].IsActive" class="sap-input"><option value="true" selected>Active</option><option value="false">Inactive</option></select></td>`;
         body.appendChild(tr);
         rowCount++;
         tr.querySelector('select[name$=".ModuleKey"]')?.focus();
@@ -285,10 +298,9 @@
         rows.forEach((row, idx) => {
             row.querySelectorAll('[name]').forEach(el => {
                 const name = el.name;
-                if (name.includes('.')) {
-                    const property = name.split('.').slice(1).join('.');
-                    el.name = `[${idx}].${property}`;
-                }
+                var m = /^integrations\[\d+\]\.(.+)$/.exec(name);
+                if (!m) return;
+                el.name = 'integrations[' + idx + '].' + m[1];
             });
         });
         rowCount = rows.length;

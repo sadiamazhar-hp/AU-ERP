@@ -26,8 +26,8 @@
         .ro-table tbody td { border: 1px solid #e9ecef; padding: .5rem .75rem; vertical-align: middle; }
         .ro-table tbody tr:nth-child(even) { background: #f8f9fa; }
         .ro-actions { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: flex-end; }
-        #roViewModal .modal-content, #roCmModal .modal-content { box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.2); border: 1px solid rgba(0,0,0,.12); }
-        #roViewModal.ro-modal-no-bd, #roCmModal.ro-modal-no-bd { z-index: 1060; }
+        #roViewModal .modal-content { box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.2); border: 1px solid rgba(0,0,0,.12); }
+        #roViewModal.ro-modal-no-bd { z-index: 1060; }
         .ro-view-loading { padding: 2rem; text-align: center; color: #6c757d; }
     </style>
 }
@@ -96,15 +96,13 @@
                                     <div class="ro-actions">
                                         <button type="button" class="btn btn-sm btn-outline-primary ro-btn-view"
                                                 data-ro-read-url="@Url.Action("ReadOnlyPartial", "ReturnOrder", new { id = o.Id })"
-                                                data-ro-details-url="@Url.Action("Details", "ReturnOrder", new { id = o.Id })"
                                                 data-ro-doc="@o.DocumentNumber"
                                                 title="View summary in a popup">View</button>
                                         @if (o.HasCreditMemo)
                                         {
-                                            <button type="button" class="btn btn-sm btn-outline-success ro-btn-cm"
-                                                    data-ro-cm-url="@Url.Action("CreditMemoPartial", "ReturnOrder", new { id = o.Id })"
-                                                    data-ro-cm-doc="@(o.CreditMemoDocumentNumber ?? "")"
-                                                    title="Credit memo in a popup">Credit memo</button>
+                                            <a class="btn btn-sm btn-outline-success"
+                                               asp-controller="CreditMemo" asp-action="Index" asp-route-openRo="@o.Id"
+                                               title="Open credit memo list and preview">Credit memo</a>
                                         }
                                         else
                                         {
@@ -131,22 +129,6 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="roViewModalBody"><div class="ro-view-loading">Loading…</div></div>
-            <div class="modal-footer py-2">
-                <a class="btn btn-sm btn-outline-primary d-none" id="roViewOpenFull" href="#">Open full page</a>
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade ro-modal-no-bd" id="roCmModal" tabindex="-1" aria-labelledby="roCmModalTitle" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
-    <div class="modal-dialog modal-dialog-scrollable modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header py-2">
-                <h5 class="modal-title" id="roCmModalTitle">Credit memo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="roCmModalBody"><div class="ro-view-loading">Loading…</div></div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
@@ -188,20 +170,14 @@
                 return { modalEl: modalEl, bodyEl: bodyEl, titleEl: titleEl, fullLink: fullLink, getInst: getInst };
             }
 
-            var v = wireModal('roViewModal', 'roViewModalBody', 'roViewModalTitle', 'roViewOpenFull');
-            var c = wireModal('roCmModal', 'roCmModalBody', 'roCmModalTitle', null);
+            var v = wireModal('roViewModal', 'roViewModalBody', 'roViewModalTitle', null);
 
             document.querySelectorAll('.ro-btn-view').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     var url = btn.getAttribute('data-ro-read-url');
-                    var detailsUrl = btn.getAttribute('data-ro-details-url');
                     var doc = btn.getAttribute('data-ro-doc') || '';
                     if (!url || !v.bodyEl) return;
                     if (v.titleEl) v.titleEl.textContent = doc ? ('View — ' + doc) : 'Return order';
-                    if (v.fullLink && detailsUrl) {
-                        v.fullLink.href = detailsUrl;
-                        v.fullLink.classList.remove('d-none');
-                    }
                     v.bodyEl.innerHTML = '<div class="ro-view-loading">Loading…</div>';
                     v.getInst().show();
                     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -213,27 +189,6 @@
                         .catch(function (e) {
                             v.bodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">' +
                                 (e && e.message ? e.message.replace(/</g, '&lt;') : 'Could not load return order.') + '</div>';
-                        });
-                });
-            });
-
-            document.querySelectorAll('.ro-btn-cm').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    var url = btn.getAttribute('data-ro-cm-url');
-                    var doc = btn.getAttribute('data-ro-cm-doc') || '';
-                    if (!url || !c.bodyEl) return;
-                    if (c.titleEl) c.titleEl.textContent = doc ? ('Credit memo — ' + doc) : 'Credit memo';
-                    c.bodyEl.innerHTML = '<div class="ro-view-loading">Loading…</div>';
-                    c.getInst().show();
-                    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                        .then(function (r) {
-                            if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
-                            return r.text();
-                        })
-                        .then(function (html) { c.bodyEl.innerHTML = html; })
-                        .catch(function (e) {
-                            c.bodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">' +
-                                (e && e.message ? e.message.replace(/</g, '&lt;') : 'Could not load credit memo.') + '</div>';
                         });
                 });
             });

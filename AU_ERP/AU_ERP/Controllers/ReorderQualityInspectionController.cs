@@ -1,6 +1,7 @@
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -160,7 +161,25 @@ public class ReorderQualityInspectionController : Controller
             return RedirectToAction(nameof(Details), new { id = model.QiId });
         }
 
-        var inputs = (model.Lines ?? new List<QiLineDispositionFormRow>())
+        var inputsRaw = model.Lines ?? new List<QiLineDispositionFormRow>();
+        foreach (var l in inputsRaw)
+        {
+            foreach (var (label, qty) in new (string Label, decimal Qty)[]
+            {
+                ("Quantity back to stock", l.QtyBackToStock),
+                ("Quantity to convert to raw", l.QtyConvertToRaw),
+                ("Scrap quantity", l.QtyScrap)
+            })
+            {
+                if (DocumentQuantityRules.ValidateNonNegativeWhole(qty, $"{label} (line id {l.LineId})") is { } qiErr)
+                {
+                    TempData["RqiError"] = qiErr;
+                    return RedirectToAction(nameof(Details), new { id = model.QiId });
+                }
+            }
+        }
+
+        var inputs = inputsRaw
             .Select(l => new SalesReturnQiPostingService.QiDispositionInput(
                 l.LineId,
                 l.QtyBackToStock,

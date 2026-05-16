@@ -7,11 +7,11 @@ namespace AU_ERP.Models
         [Key]
         public int RangeID { get; set; }
         public int? DocumentTypeID { get; set; }
-        public int? FromNumber { get; set; }
-        public int? ToNumber { get; set; }
+        public long? FromNumber { get; set; }
+        public long? ToNumber { get; set; }
 
         /// <summary>Last issued number; null or 0 means next issue will be <see cref="FromNumber"/>.</summary>
-        public int? CurrentNumber { get; set; }
+        public long? CurrentNumber { get; set; }
 
         public virtual DocumentType? DocumentType { get; set; }
     }

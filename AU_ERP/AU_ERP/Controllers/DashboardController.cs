@@ -13,10 +13,10 @@ public class DashboardController : Controller
         _dashboardData = dashboardData;
     }
 
-    public async Task<IActionResult> Index(CancellationToken ct = default)
+    public async Task<IActionResult> Index(string? period, CancellationToken ct = default)
     {
         ViewData["Title"] = "Dashboard";
-        DashboardPageVm vm = await _dashboardData.BuildAsync(User, ct).ConfigureAwait(false);
+        DashboardPageVm vm = await _dashboardData.BuildAsync(User, period, ct).ConfigureAwait(false);
         return View(vm);
     }
 }

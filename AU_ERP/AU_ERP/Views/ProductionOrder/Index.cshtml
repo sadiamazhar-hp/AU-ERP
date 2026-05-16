@@ -63,8 +63,10 @@
         .po-badge-pri-med { background: #fff3cd; color: #664d03; }
         .po-badge-pri-low { background: #e2e3e5; color: #41464b; }
         .po-badge-muted { background: #eee; color: #555; }
-        .po-actions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
-        .po-actions .btn { font-size: .75rem; padding: .2rem .5rem; }
+        .po-actions { display: inline-flex; flex-wrap: nowrap; gap: .35rem; align-items: center; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; }
+        .po-actions .btn { font-size: .75rem; padding: .2rem .5rem; flex: 0 0 auto; }
+        .po-actions form { display: inline-flex; flex: 0 0 auto; margin: 0; }
+        .po-actions .po-act-meta { flex: 0 0 auto; font-size: .7rem; color: #6c757d; padding-left: .25rem; white-space: nowrap; }
         #poOperationModal .modal-content { border: none; border-radius: .55rem; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.18); }
         #poOperationModal .po-op-modal-header { background: #2c3e42; color: #fff; border-bottom: none; }
         #poOperationModal .po-op-modal-header .btn-close { filter: invert(1); opacity: .85; }
@@ -109,6 +111,15 @@
             <div class="po-stat-val">@Model.CountCompleted</div>
         </div>
     </div>
+
+    @if (TempData["PoMessage"] is string poOk && !string.IsNullOrWhiteSpace(poOk))
+    {
+        <div class="alert alert-success py-2 small mb-3" role="status">@poOk</div>
+    }
+    @if (TempData["PoError"] is string poErr && !string.IsNullOrWhiteSpace(poErr))
+    {
+        <div class="alert alert-danger py-2 small mb-3" role="status">@poErr</div>
+    }
 
     <div class="po-table-card">
         <div class="po-table-head">
@@ -175,15 +186,78 @@
                                         <button type="button" class="btn btn-outline-secondary btn-sm" title="BOM" onclick="poOpenBom(@p.Id)"><i class="bi bi-list-nested"></i> BOM</button>
                                         @if (p.Status == ProductionOrder.StatusPlanned)
                                         {
-                                            var giPoNum = Model.GoodsIssueDocumentNumberByProductionOrderId.TryGetValue(p.Id, out var gin) ? gin : null;
-                                            var giPoDisp = Model.GoodsIssueDispatchStatusByProductionOrderId.TryGetValue(p.Id, out var gidsp) ? gidsp : "";
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="poOpenEdit(@p.Id)"><i class="bi bi-pencil"></i></button>
-                                            <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
-                                            @if (!string.IsNullOrEmpty(giPoNum))
+                                            var plannedGiHasDoc = Model.GoodsIssueIdByProductionOrderId.ContainsKey(p.Id);
+                                            var plannedGiNum = Model.GoodsIssueDocumentNumberByProductionOrderId.TryGetValue(p.Id, out var plannedGin) ? plannedGin : null;
+                                            var plannedGiDisp = Model.GoodsIssueDispatchStatusByProductionOrderId.TryGetValue(p.Id, out var plannedGidsp) ? plannedGidsp : "";
+                                            var plannedGiSt = Model.GoodsIssueStatusByProductionOrderId.TryGetValue(p.Id, out var plannedGst) ? (plannedGst ?? "") : "";
+                                            var plannedGiPending = string.Equals(plannedGiSt, GoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase);
+                                            var plannedGiReceived = string.Equals(plannedGiSt, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase);
+                                            var plannedGiDispatchSent = string.Equals(plannedGiDisp, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase);
+                                            var plannedGiDraftOrEmpty = string.Equals(plannedGiSt, GoodsIssueDocument.StatusDraft, StringComparison.OrdinalIgnoreCase)
+                                                || string.IsNullOrWhiteSpace(plannedGiSt);
+                                            var plannedStockGiSendPhase = plannedGiHasDoc && !plannedGiDispatchSent && !plannedGiReceived
+                                                && (plannedGiDraftOrEmpty || plannedGiPending);
+                                            var plannedAwaitGoodsReceive = plannedGiHasDoc && plannedGiPending && plannedGiDispatchSent;
+                                            var plannedAwaitRelease = plannedGiHasDoc && plannedGiReceived;
+                                            if (!plannedGiHasDoc)
                                             {
-                                                <div class="w-100 small text-secondary mb-1">GI @giPoNum <span class="text-muted">(@giPoDisp)</span></div>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="poOpenEdit(@p.Id)"><i class="bi bi-pencil"></i></button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
+                                                <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Stock goods issue hub" onclick="poOpenGiHub(@p.Id)"><i class="bi bi-send"></i> GI</button>
+                                                <span class="po-act-meta" title="Use GI to create the reservation goods issue document">No GI doc</span>
                                             }
-                                            <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Stock goods issue (send / receive)" onclick="poOpenGiHub(@p.Id)"><i class="bi bi-send"></i> GI</button>
+                                            else if (plannedStockGiSendPhase)
+                                            {
+                                                @* Stock GI before dispatch: BOM + GI + Delete on one row; no Open GI link, no Goods Receive. *@
+                                                <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Stock goods issue — send goods" onclick="poOpenGiHub(@p.Id)"><i class="bi bi-send"></i> GI</button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm" title="Delete order and linked reservation GI" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
+                                                @if (!string.IsNullOrEmpty(plannedGiNum))
+                                                {
+                                                    <span class="po-act-meta">@plannedGiNum · @plannedGiDisp</span>
+                                                }
+                                            }
+                                            else if (plannedAwaitGoodsReceive)
+                                            {
+                                                @* Dispatch locked: BOM + Goods Receive + Delete; no GI / no Edit. *@
+                                                <form asp-action="ReservationGoodsReceive" asp-route-id="@p.Id" method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="returnQ" value="@Model.Q" />
+                                                    <input type="hidden" name="returnStatus" value="@stSel" />
+                                                    <input type="hidden" name="returnPriority" value="@prSel" />
+                                                    <button type="submit" class="btn btn-outline-warning btn-sm" title="Post BOM consumption from stock (after dispatch locked)"><i class="bi bi-box-seam"></i> Goods Receive</button>
+                                                </form>
+                                                <button type="button" class="btn btn-outline-danger btn-sm" title="Delete order and linked reservation GI" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
+                                                @if (!string.IsNullOrEmpty(plannedGiNum))
+                                                {
+                                                    <span class="po-act-meta">@plannedGiNum · @plannedGiDisp</span>
+                                                }
+                                            }
+                                            else if (plannedAwaitRelease)
+                                            {
+                                                @* After reservation GR: BOM + Release only (inventory already posted — delete not offered). *@
+                                                <form asp-action="ReservationReleaseToOperations" asp-route-id="@p.Id" method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="returnQ" value="@Model.Q" />
+                                                    <input type="hidden" name="returnStatus" value="@stSel" />
+                                                    <input type="hidden" name="returnPriority" value="@prSel" />
+                                                    <button type="submit" class="btn btn-outline-primary btn-sm" title="Create operation tracking and start production"><i class="bi bi-play-circle"></i> Release</button>
+                                                </form>
+                                                @if (!string.IsNullOrEmpty(plannedGiNum))
+                                                {
+                                                    <span class="po-act-meta">@plannedGiNum · received</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                @* Rare GI statuses: keep workable actions *@
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" title="Edit" onclick="poOpenEdit(@p.Id)"><i class="bi bi-pencil"></i></button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm" title="Delete" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
+                                                <button type="button" class="btn btn-sm text-white" style="background:#0d6efd;" title="Stock goods issue hub" onclick="poOpenGiHub(@p.Id)"><i class="bi bi-send"></i> GI</button>
+                                                @if (!string.IsNullOrEmpty(plannedGiNum))
+                                                {
+                                                    <span class="po-act-meta">@plannedGiNum · @plannedGiDisp · @plannedGiSt</span>
+                                                }
+                                            }
                                         }
                                         else if (p.ReleasedRoutingId != null && (p.Status == ProductionOrder.StatusReleased || p.Status == ProductionOrder.StatusInProgress || p.Status == ProductionOrder.StatusCompleted))
                                         {
@@ -227,7 +301,7 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">Target quantity</label>
-                    <input type="number" id="poCreateQty" class="form-control form-control-sm" min="1" step="1" />
+                    <input type="number" id="poCreateQty" class="form-control form-control-sm au-doc-qty" min="1" step="1" inputmode="numeric" />
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">UOM</label>
@@ -281,7 +355,7 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">Target quantity</label>
-                    <input type="number" id="poEditQty" class="form-control form-control-sm" min="1" step="1" />
+                    <input type="number" id="poEditQty" class="form-control form-control-sm au-doc-qty" min="1" step="1" inputmode="numeric" />
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">UOM</label>
@@ -370,15 +444,15 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label small">Input quantity (pieces) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" id="poOpInQty" />
+                        <input type="number" step="1" min="0" data-au-qty-min="0" class="form-control form-control-sm au-doc-qty" id="poOpInQty" inputmode="numeric" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small">Output quantity (pieces) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" id="poOpOutQty" />
+                        <input type="number" step="1" min="0" data-au-qty-min="0" class="form-control form-control-sm au-doc-qty" id="poOpOutQty" inputmode="numeric" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small">Wastage quantity <span class="text-danger">*</span></label>
-                        <input type="number" step="0.0001" min="0" class="form-control form-control-sm" id="poOpWastQty" />
+                        <input type="number" step="1" min="0" data-au-qty-min="0" class="form-control form-control-sm au-doc-qty" id="poOpWastQty" inputmode="numeric" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small">Actual hours <span class="text-danger">*</span></label>

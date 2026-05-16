@@ -1,4 +1,5 @@
 using AU_ERP.Models;
+using AU_ERP.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Services;
@@ -26,6 +27,40 @@ public sealed class GoodsReceiptPostingService
         if (dto.ProducedQty < 0 || dto.QtyFirstQuality < 0 || dto.QtySecondQuality < 0
             || dto.QtyThirdQuality < 0 || dto.RejectedScrapQty < 0)
             return new(false, "Quantities cannot be negative.");
+
+        foreach (var (label, qty) in new (string Label, decimal Qty)[]
+        {
+            ("Produced quantity", dto.ProducedQty),
+            ("First-quality quantity", dto.QtyFirstQuality),
+            ("Second-quality quantity", dto.QtySecondQuality),
+            ("Third-quality quantity", dto.QtyThirdQuality),
+            ("Rejected/scrap quantity", dto.RejectedScrapQty)
+        })
+        {
+            var frac = DocumentQuantityRules.ValidateNonNegativeWhole(qty, label);
+            if (frac != null)
+                return new(false, frac);
+        }
+
+        if (dto.Lines != null && dto.Lines.Count > 0)
+        {
+            foreach (var ln in dto.Lines)
+            {
+                foreach (var (label, qty) in new (string Label, decimal Qty)[]
+                {
+                    ("Line produced quantity", ln.ProducedQty),
+                    ("Line first-quality quantity", ln.QtyFirstQuality),
+                    ("Line second-quality quantity", ln.QtySecondQuality),
+                    ("Line third-quality quantity", ln.QtyThirdQuality),
+                    ("Line rejected/scrap quantity", ln.RejectedScrapQty)
+                })
+                {
+                    var fracLn = DocumentQuantityRules.ValidateNonNegativeWhole(qty, label);
+                    if (fracLn != null)
+                        return new(false, fracLn);
+                }
+            }
+        }
 
         var sum = dto.QtyFirstQuality + dto.QtySecondQuality + dto.QtyThirdQuality + dto.RejectedScrapQty;
         if (Math.Abs(dto.ProducedQty - sum) > 0.0001m)

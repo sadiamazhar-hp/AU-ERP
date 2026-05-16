@@ -4,6 +4,10 @@ namespace AU_ERP.Services;
 
 public static class UserPlantResolution
 {
+    /// <summary>Users in the Admin department can use all plants for delivery challan flows.</summary>
+    public static bool IsAdminDepartment(ClaimsPrincipal? user) =>
+        user?.HasClaim(AuClaimTypes.Department, "Admin") == true;
+
     /// <summary><see cref="PlantsSample.PlantID"/> for Emporium (walk-in retail).</summary>
     public const string EmporiumPlantId = "Emp101";
 
@@ -48,6 +52,8 @@ public static class UserPlantResolution
             .Where(id => id.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        if (IsAdminDepartment(user))
+            return all;
         var assigned = GetStorePlantIds(user);
         if (assigned.Count == 0)
             return all;

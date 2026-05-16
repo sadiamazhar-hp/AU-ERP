@@ -45,6 +45,10 @@ builder.Services.AddAuthorization(options =>
     // Quotation, sales order, delivery challan: users with Sales department claim only.
     options.AddPolicy("SalesDepartment", policy =>
         policy.RequireClaim(AuClaimTypes.Department, "Sales"));
+    options.AddPolicy("SalesOrAdminDepartment", policy =>
+        policy.RequireAssertion(ctx =>
+            ctx.User.HasClaim(AuClaimTypes.Department, "Sales")
+            || ctx.User.HasClaim(AuClaimTypes.Department, "Admin")));
     // Stock overview: users with Store department claim (seed data).
     options.AddPolicy("StoreDepartment", policy =>
         policy.RequireClaim(AuClaimTypes.Department, "Store"));
@@ -81,6 +85,11 @@ builder.Services.AddControllersWithViews(options =>
 });
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
 
 // Ensure runtime database schema is aligned with EF migrations for the active
 // connection string (prevents missing-table errors when environment DB differs).

@@ -40,7 +40,7 @@
 
     @if (isPending)
     {
-        <form asp-action="Complete" method="post" id="rqiCompleteForm" class="card mb-3">
+        <form asp-action="Complete" method="post" id="rqiCompleteForm" class="card mb-3" data-au-prevent-enter-submit>
             @Html.AntiForgeryToken()
             <input type="hidden" name="QiId" value="@Model.QiId" />
             <div class="card-header fw-semibold">Line disposition (must sum to returned quantity per line)</div>
@@ -73,20 +73,20 @@
                                     <td class="text-end">@ln.QuantityReturned.ToString("N4", CultureInfo.InvariantCulture)</td>
                                     <td>@(ln.UomCode ?? "—")</td>
                                     <td class="text-end" style="max-width:7rem;">
-                                        <input class="form-control form-control-sm text-end rqi-qty" type="number" step="0.0001" min="0"
-                                               name="Lines[@i].QtyBackToStock" value="@ln.QtyBackToStock.ToString(CultureInfo.InvariantCulture)" />
+                                        <input class="form-control form-control-sm text-end rqi-qty au-doc-qty" type="number" step="1" min="0" data-au-qty-min="0"
+                                               name="Lines[@i].QtyBackToStock" value="@ln.QtyBackToStock.ToString(CultureInfo.InvariantCulture)" inputmode="numeric" />
                                     </td>
                                     <td class="text-end" style="max-width:7rem;">
-                                        <input class="form-control form-control-sm text-end rqi-qty" type="number" step="0.0001" min="0"
-                                               name="Lines[@i].QtyConvertToRaw" value="@ln.QtyConvertToRaw.ToString(CultureInfo.InvariantCulture)" />
+                                        <input class="form-control form-control-sm text-end rqi-qty au-doc-qty" type="number" step="1" min="0" data-au-qty-min="0"
+                                               name="Lines[@i].QtyConvertToRaw" value="@ln.QtyConvertToRaw.ToString(CultureInfo.InvariantCulture)" inputmode="numeric" />
                                         @if (!ln.HasBomRoh && ln.QtyConvertToRaw > 0)
                                         {
                                             <div class="text-danger small mt-1">No active BOM with ROH for convert.</div>
                                         }
                                     </td>
                                     <td class="text-end" style="max-width:7rem;">
-                                        <input class="form-control form-control-sm text-end rqi-qty" type="number" step="0.0001" min="0"
-                                               name="Lines[@i].QtyScrap" value="@ln.QtyScrap.ToString(CultureInfo.InvariantCulture)" />
+                                        <input class="form-control form-control-sm text-end rqi-qty au-doc-qty" type="number" step="1" min="0" data-au-qty-min="0"
+                                               name="Lines[@i].QtyScrap" value="@ln.QtyScrap.ToString(CultureInfo.InvariantCulture)" inputmode="numeric" />
                                     </td>
                                 </tr>
                             }

@@ -71,6 +71,8 @@
     .so-customer-combo .so-customer-dropdown { font-size: .82rem; }
     .so-customer-item { cursor: pointer; }
     .so-customer-item:hover, .so-customer-item:focus { background: var(--sap-selected, #b3d7ff); outline: none; }
+    .so-quot-combo .so-customer-dropdown { font-size: .82rem; }
+    .so-quot-combo .so-customer-dropdown { font-size: .82rem; }
     .so-line-charges { display: flex; flex-wrap: wrap; gap: 0.35rem; max-width: 14rem; font-size: .68rem; line-height: 1.2; }
     .so-line-charges label { margin: 0; white-space: nowrap; }
     .so-doc-charges { display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: .75rem; }
@@ -318,7 +320,7 @@
 <div class="modal fade" id="addSalesOrderModal" tabindex="-1" aria-labelledby="soModalTitle" aria-hidden="true" data-so-action-create="@Url.Action("Create", "SalesOrder")" data-so-action-update-tpl="@Url.Action("Update", "SalesOrder", new { id = 0 })">
     <div class="modal-dialog modal-xl so-order-modal">
         <div class="modal-content">
-            <form asp-action="Create" asp-controller="SalesOrder" method="post" id="soForm" data-so-form-mode="create">
+            <form asp-action="Create" asp-controller="SalesOrder" method="post" id="soForm" data-so-form-mode="create" data-au-prevent-enter-submit>
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="ReturnQ" id="soReturnQ" value="@listQ" />
                 <input type="hidden" name="ReturnStatus" id="soReturnStatus" value="@listStatus" />
@@ -362,10 +364,12 @@
                     </div>
                     <div class="row g-2 mb-2">
                         <div class="col-md-6">
-                            <label class="form-label small mb-0" for="soSalesQuotationId">Sales quotation (optional)</label>
-                            <select class="form-select form-select-sm" name="SalesQuotationId" id="soSalesQuotationId">
-                                <option value="">— Select —</option>
-                            </select>
+                            <label class="form-label small mb-0" for="soSalesQuotationSearch">Sales quotation (optional)</label>
+                            <input type="hidden" name="SalesQuotationId" id="soSalesQuotationIdHidden" value="" autocomplete="off" />
+                            <div class="so-quot-combo position-relative mt-1">
+                                <input type="text" class="form-control form-control-sm" id="soSalesQuotationSearch" placeholder="Type quotation # or customer — pick from list…" autocomplete="off" />
+                                <div id="soQuotationDropdown" class="so-customer-dropdown border rounded bg-white shadow-sm" style="display: none;" role="listbox"></div>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small mb-0" for="soCustomerSearch">Customer (Sold to party) <span class="text-danger">*</span></label>
@@ -640,6 +644,11 @@
         const soCreateFormAction = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Url.Action("Create", "SalesOrder") ?? ""));
         let schemaCharges = [];
         let _soSkipFormReset = false;
+        var _soQuotationCatalog = [];
+        function soQuotationDisplayLabel(q) {
+            if (!q) return "";
+            return (q.quotationNumber || ("SQ-" + q.id)) + (q.customerName ? (" — " + q.customerName) : "");
+        }
         function orderDataFor(quotationId) {
             if (!soOrderDataBase) return "";
             if (soOrderDataBase.indexOf("id=0") >= 0) return soOrderDataBase.replace("id=0", "id=" + quotationId);
@@ -699,7 +708,11 @@
                     if (tr.querySelector(".bom-mat-picker-search")) tr.querySelector(".bom-mat-picker-search").value = (it.materialNumber + (it.materialDescription ? " — " + it.materialDescription : ""));
                 }
                 if (tr.querySelector(".so-desc") && it.materialDescription) tr.querySelector(".so-desc").value = it.materialDescription;
-                if (tr.querySelector(".so-grade") && (it.salesPriceGrade != null && it.salesPriceGrade !== "")) tr.querySelector(".so-grade").value = String(it.salesPriceGrade);
+                if (tr.querySelector(".so-grade") && (it.salesPriceGrade != null && it.salesPriceGrade !== "")) {
+                    var gsv = String(it.salesPriceGrade);
+                    if (gsv.toLowerCase() === "scrap") gsv = "A";
+                    tr.querySelector(".so-grade").value = gsv;
+                }
                 if (tr.querySelector(".so-qty") && it.orderQuantity != null) tr.querySelector(".so-qty").value = String(it.orderQuantity);
                 if (tr.querySelector(".so-unit") && it.unitPrice != null) tr.querySelector(".so-unit").value = String(it.unitPrice);
                 if (tr.querySelector(".so-del") && it.deliveryDate) tr.querySelector(".so-del").value = it.deliveryDate;
@@ -961,8 +974,44 @@
                 d.innerHTML = "<label class=\"small mb-0 text-nowrap flex-shrink-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\">" + label + (c.valueType === "Numeric" ? " (PKR)" : " (%)") + "</label><input type=\"number\" class=\"form-control form-control-sm so-doc-chg-val\" data-cid=\"" + cid + "\" style=\"max-width:8rem\" />";
                 v.appendChild(d);
             });
-            v.querySelectorAll(".so-doc-chg-val").forEach(function (inp) { inp.addEventListener("input", recalcFooter); inp.addEventListener("change", recalcFooter); });
         }
+        (function soWireDelegatedChargeTotals() {
+            var wrap = document.getElementById("soQuotationChargeInputs");
+            if (!wrap || wrap.dataset.auChargeTotalsDelegated === "1") return;
+            wrap.dataset.auChargeTotalsDelegated = "1";
+            function tick() {
+                try {
+                    recalcFooter();
+                } catch (_) {}
+            }
+            wrap.addEventListener("input", tick, false);
+            wrap.addEventListener("change", tick, false);
+            wrap.addEventListener("keyup", tick, false);
+            wrap.addEventListener("paste", function () {
+                window.requestAnimationFrame(tick);
+            }, false);
+        })();
+        (function soWireDelegatedLineTotals() {
+            var body = document.getElementById("soItemsBody");
+            if (!body || body.dataset.auLineTotalsDelegated === "1") return;
+            body.dataset.auLineTotalsDelegated = "1";
+            function bump(ev) {
+                var t = ev.target;
+                if (!t.classList ||
+                    !(t.classList.contains("so-qty") || t.classList.contains("so-unit") || t.classList.contains("so-ln-chg"))) {
+                    return;
+                }
+                var tr = t.closest ? t.closest("tr.so-item-row") : null;
+                if (tr) recalcLine(tr);
+            }
+            body.addEventListener("input", bump, false);
+            body.addEventListener("change", bump, false);
+            body.addEventListener("keyup", bump, false);
+            body.addEventListener("paste", function (ev) {
+                bump(ev);
+                window.requestAnimationFrame(function () { bump(ev); });
+            }, false);
+        })();
         function rowHtml() {
             return "<tr class=\"so-item-row\">" +
                 "<td class=\"text-muted so-idx\">1</td>" +
@@ -977,8 +1026,8 @@
                 "<td><input class=\"form-control form-control-sm so-desc\" name=\"Items[0].MaterialDescription\" readonly style=\"min-width:8rem\" /></td>" +
                 "<td><select class=\"form-select form-select-sm so-uom\" name=\"Items[0].QuantityUomId\"><option value=\"\">—</option></select></td>" +
                 "<td><select class=\"form-select form-select-sm so-grade\" name=\"Items[0].SalesPriceGrade\" title=\"Price tier from material master (per base UOM)\">" +
-                "<option value=\"A\" selected>Grade A</option><option value=\"B\">Grade B</option><option value=\"C\">Grade C</option><option value=\"Scrap\">Scrap</option></select></td>" +
-                "<td><input class=\"form-control form-control-sm so-qty\" name=\"Items[0].OrderQuantity\" type=\"number\" step=\"0.0001\" min=\"0\" value=\"1\" style=\"max-width:5rem\" /></td>" +
+                "<option value=\"A\" selected>Grade A</option><option value=\"B\">Grade B</option><option value=\"C\">Grade C</option></select></td>" +
+                "<td><input class=\"form-control form-control-sm so-qty au-doc-qty\" name=\"Items[0].OrderQuantity\" type=\"number\" step=\"1\" min=\"0\" data-au-qty-min=\"0\" value=\"1\" style=\"max-width:5rem\" inputmode=\"numeric\" /></td>" +
                 "<td><input class=\"form-control form-control-sm so-unit\" name=\"Items[0].UnitPrice\" type=\"number\" step=\"0.0001\" min=\"0\" value=\"0\" style=\"max-width:6rem\" /></td>" +
                 "<td class=\"so-td-afterdisc\"><input class=\"form-control form-control-sm so-net text-end\" type=\"text\" readonly value=\"0\" style=\"min-width:5rem;background:#f8f8f8\" /></td>" +
                 "<td class=\"so-td-linetot\"><input type=\"hidden\" class=\"so-line-chg-json\" name=\"Items[0].ItemChargeValuesJson\" value=\"{}\" /><input class=\"form-control form-control-sm so-line-tot text-end\" type=\"text\" readonly value=\"0\" style=\"min-width:5.5rem;background:#f0f6ff\" /></td>" +
@@ -991,8 +1040,6 @@
             return t.content.querySelector("tr.so-item-row");
         }
         function wireRow(tr) {
-            tr.querySelectorAll(".so-qty, .so-unit").forEach(function (x) { x.addEventListener("input", function () { recalcLine(tr); }); x.addEventListener("change", function () { recalcLine(tr); }); });
-            tr.querySelectorAll(".so-ln-chg").forEach(function (x) { x.addEventListener("input", function () { recalcLine(tr); }); x.addEventListener("change", function () { recalcLine(tr); }); });
             var u = tr.querySelector(".so-uom");
             if (u) u.addEventListener("change", function () {
                 var mat = (tr.querySelector(".so-matno") && tr.querySelector(".so-matno").value || "").trim();
@@ -1187,6 +1234,7 @@
             setSoFormToCreate();
             var f = document.getElementById("soForm"); if (f) f.reset();
             if (typeof soHideCustomerDropdown === "function") soHideCustomerDropdown();
+            if (typeof soHideQuotationDropdown === "function") soHideQuotationDropdown();
             document.getElementById("soQd") && (document.getElementById("soQd").value = defaults.today);
             document.getElementById("soVd") && (document.getElementById("soVd").value = defaults.twoW);
             document.getElementById("soPlant") && (document.getElementById("soPlant").value = "");
@@ -1398,6 +1446,131 @@
                 })
                 .catch(function () { if (err) { err.textContent = "Request failed."; err.style.display = "inline"; } });
         });
+        function soHideQuotationDropdown() {
+            var dd = document.getElementById("soQuotationDropdown");
+            if (!dd) return;
+            dd.style.display = "none";
+            dd.classList.remove("show");
+            dd.innerHTML = "";
+            ["top", "left", "width", "maxHeight"].forEach(function (k) { dd.style.removeProperty(k); });
+        }
+        function soPositionQuotationDropdown() {
+            var search = document.getElementById("soSalesQuotationSearch");
+            var dd = document.getElementById("soQuotationDropdown");
+            if (!search || !dd || dd.style.display === "none") return;
+            var r = search.getBoundingClientRect();
+            var gap = 4;
+            var maxH = Math.max(120, Math.min(280, window.innerHeight - r.bottom - gap - 12));
+            dd.style.top = (r.bottom + gap) + "px";
+            dd.style.left = r.left + "px";
+            dd.style.width = r.width + "px";
+            dd.style.maxHeight = maxH + "px";
+            dd.classList.add("show");
+        }
+        function soRenderQuotationDropdown(filterText) {
+            var dd = document.getElementById("soQuotationDropdown");
+            if (!dd) return;
+            var q = (filterText || "").trim().toLowerCase();
+            var parts = ["<div class=\"so-customer-item px-2 py-1 border-bottom text-muted small\" role=\"option\" tabindex=\"0\" data-id=\"\">— Clear quotation link —</div>"];
+            var nShown = 0;
+            for (var i = 0; i < _soQuotationCatalog.length; i++) {
+                var item = _soQuotationCatalog[i];
+                var label = soQuotationDisplayLabel(item);
+                var num = (item.quotationNumber || "").toLowerCase();
+                var cust = (item.customerName || "").toLowerCase();
+                var idStr = String(item.id || "");
+                if (q && num.indexOf(q) < 0 && cust.indexOf(q) < 0 && idStr.indexOf(q) < 0) continue;
+                parts.push("<div class=\"so-customer-item px-2 py-1 border-bottom small\" role=\"option\" tabindex=\"0\" data-id=\"" + item.id + "\">" + esc(label) + "</div>");
+                nShown++;
+                if (nShown >= 80) break;
+            }
+            if (!nShown && q) dd.innerHTML = "<div class=\"px-2 py-2 text-muted small\">No matching sent quotations.</div>";
+            else dd.innerHTML = parts.join("");
+            dd.style.display = "block";
+            soPositionQuotationDropdown();
+        }
+        function soSyncQuotationSearchFromHidden() {
+            var hid = document.getElementById("soSalesQuotationIdHidden");
+            var search = document.getElementById("soSalesQuotationSearch");
+            if (!hid || !search) return;
+            var id = (hid.value || "").trim();
+            if (!id) { search.value = ""; return; }
+            var row = null;
+            for (var i = 0; i < _soQuotationCatalog.length; i++) {
+                if (String(_soQuotationCatalog[i].id) === String(id)) {
+                    row = _soQuotationCatalog[i];
+                    break;
+                }
+            }
+            search.value = row ? soQuotationDisplayLabel(row) : "";
+        }
+        function soActivateQuotationChoice(qid) {
+            if (!qid || !soQuotationItemsUrl) return;
+            if (soGridHasAnyItems() && !window.confirm("Replace current sales order items with selected quotation items?")) {
+                document.getElementById("soSalesQuotationIdHidden").value = "";
+                document.getElementById("soSalesQuotationSearch").value = "";
+                return;
+            }
+            fetch(soQuotationItemsUrl + (soQuotationItemsUrl.indexOf("?") >= 0 ? "&" : "?") + "quotationId=" + encodeURIComponent(qid))
+                .then(function (r) { return r.json(); })
+                .then(soApplyQuotationData);
+        }
+        function soCommitQuotationSelection(idStr) {
+            var hid = document.getElementById("soSalesQuotationIdHidden");
+            var search = document.getElementById("soSalesQuotationSearch");
+            soHideQuotationDropdown();
+            if (!hid || !search) return;
+            if (!idStr) {
+                hid.value = "";
+                search.value = "";
+                return;
+            }
+            hid.value = String(idStr);
+            soSyncQuotationSearchFromHidden();
+            soActivateQuotationChoice(String(idStr));
+        }
+        function soTryResolveQuotationFromTypedSearch() {
+            var hid = document.getElementById("soSalesQuotationIdHidden");
+            var search = document.getElementById("soSalesQuotationSearch");
+            if (!hid || !search) return;
+            var raw = (search.value || "").trim();
+            if (!raw) {
+                hid.value = "";
+                return;
+            }
+            if (hid.value) {
+                for (var z = 0; z < _soQuotationCatalog.length; z++) {
+                    var q = _soQuotationCatalog[z];
+                    if (String(q.id) === String(hid.value) && soQuotationDisplayLabel(q).trim() === raw)
+                        return;
+                }
+            }
+            var rawLower = raw.toLowerCase();
+            var cand = [];
+            for (var e = 0; e < _soQuotationCatalog.length; e++) {
+                var it = _soQuotationCatalog[e];
+                var num = (it.quotationNumber || "").trim().toLowerCase();
+                if (num === rawLower || String(it.id) === raw)
+                    cand.push(it);
+            }
+            if (cand.length !== 1) {
+                cand = [];
+                var qCompact = rawLower.replace(/\s/g, "");
+                for (var f = 0; f < _soQuotationCatalog.length; f++) {
+                    var it2 = _soQuotationCatalog[f];
+                    var num2 = (it2.quotationNumber || "").toLowerCase();
+                    var cust2 = (it2.customerName || "").toLowerCase();
+                    var numCompact = num2.replace(/\s/g, "");
+                    if ((qCompact.length >= 2 && numCompact.indexOf(qCompact) >= 0)
+                        || (qCompact.length >= 2 && cust2.indexOf(rawLower) >= 0))
+                        cand.push(it2);
+                }
+            }
+            if (cand.length === 1)
+                soCommitQuotationSelection(String(cand[0].id));
+            else
+                hid.value = "";
+        }
         function soGridHasAnyItems() {
             var rows = Array.prototype.slice.call(document.querySelectorAll("#soItemsBody tr.so-item-row"));
             return rows.some(function (tr) {
@@ -1409,14 +1582,11 @@
             if (!soQuotationListUrl) return;
             var url = soQuotationListUrl + (soQuotationListUrl.indexOf("?") >= 0 ? "&" : "?") + "currentOrderId=" + encodeURIComponent(currentOrderId || "");
             fetch(url).then(function (r) { return r.json(); }).then(function (d) {
-                var sel = document.getElementById("soSalesQuotationId");
-                if (!sel || !d || !d.success) return;
-                var html = "<option value=\"\">— Select —</option>";
-                (d.items || []).forEach(function (q) {
-                    html += "<option value=\"" + q.id + "\">" + (q.quotationNumber || ("SQ-" + q.id)) + (q.customerName ? (" — " + q.customerName) : "") + "</option>";
-                });
-                sel.innerHTML = html;
-                if (selectedQuoteId) sel.value = String(selectedQuoteId);
+                if (!d || !d.success) return;
+                _soQuotationCatalog = d.items || [];
+                var hid = document.getElementById("soSalesQuotationIdHidden");
+                if (hid) hid.value = selectedQuoteId ? String(selectedQuoteId) : "";
+                soSyncQuotationSearchFromHidden();
             });
         }
         function soPopulateItemsFromQuotationRows(items) {
@@ -1430,7 +1600,11 @@
                 if (tr.querySelector(".so-matno")) tr.querySelector(".so-matno").value = it.materialNumber || "";
                 if (tr.querySelector(".bom-mat-picker-search")) tr.querySelector(".bom-mat-picker-search").value = (it.materialNumber || "") + (it.materialDescription ? (" — " + it.materialDescription) : "");
                 if (tr.querySelector(".so-desc")) tr.querySelector(".so-desc").value = it.materialDescription || "";
-                if (tr.querySelector(".so-grade") && it.salesPriceGrade) tr.querySelector(".so-grade").value = String(it.salesPriceGrade);
+                if (tr.querySelector(".so-grade") && it.salesPriceGrade) {
+                    var gsv2 = String(it.salesPriceGrade);
+                    if (gsv2.toLowerCase() === "scrap") gsv2 = "A";
+                    tr.querySelector(".so-grade").value = gsv2;
+                }
                 if (tr.querySelector(".so-qty") && it.orderQuantity != null) tr.querySelector(".so-qty").value = String(it.orderQuantity);
                 if (tr.querySelector(".so-unit") && it.unitPrice != null) tr.querySelector(".so-unit").value = String(it.unitPrice);
                 if (tr.querySelector(".so-del") && it.deliveryDate) tr.querySelector(".so-del").value = it.deliveryDate;
@@ -1488,7 +1662,8 @@
         function soApplyQuotationData(d) {
             if (!d || !d.success) return;
             var h = d.header || {};
-            if (document.getElementById("soSalesQuotationId")) document.getElementById("soSalesQuotationId").value = h.id ? String(h.id) : "";
+            if (document.getElementById("soSalesQuotationIdHidden")) document.getElementById("soSalesQuotationIdHidden").value = h.id ? String(h.id) : "";
+            soSyncQuotationSearchFromHidden();
             if (document.getElementById("soCustomer") && h.customerBusinessPartnerId) document.getElementById("soCustomer").value = h.customerBusinessPartnerId;
             soSyncCustomerSearchFromValue();
             soUpdateWalkInCustomerSummary();
@@ -1509,17 +1684,43 @@
                 soPopulateItemsFromQuotationRows(rows);
             }
         }
-        document.getElementById("soSalesQuotationId") && document.getElementById("soSalesQuotationId").addEventListener("change", function () {
-            var qid = this.value || "";
-            if (!qid || !soQuotationItemsUrl) return;
-            if (soGridHasAnyItems() && !window.confirm("Replace current sales order items with selected quotation items?")) {
-                this.value = "";
-                return;
+        (function initSoQuotationCombo() {
+            var search = document.getElementById("soSalesQuotationSearch");
+            var dd = document.getElementById("soQuotationDropdown");
+            if (!search || !dd) return;
+            var tOpen = 0;
+            search.addEventListener("focus", function () { soRenderQuotationDropdown(search.value); });
+            search.addEventListener("input", function () {
+                clearTimeout(tOpen);
+                tOpen = setTimeout(function () { soRenderQuotationDropdown(search.value); }, 120);
+            });
+            search.addEventListener("keydown", function (e) { if (e.key === "Escape") soHideQuotationDropdown(); });
+            search.addEventListener("blur", function () {
+                window.setTimeout(function () {
+                    soTryResolveQuotationFromTypedSearch();
+                    var hidEl = document.getElementById("soSalesQuotationIdHidden");
+                    if (hidEl && hidEl.value) soSyncQuotationSearchFromHidden();
+                }, 180);
+            });
+            dd.addEventListener("mousedown", function (e) { e.preventDefault(); });
+            dd.addEventListener("click", function (e) {
+                var item = e.target.closest(".so-customer-item");
+                if (!item) return;
+                soCommitQuotationSelection(item.getAttribute("data-id") || "");
+            });
+            document.addEventListener("mousedown", function (e) {
+                if (!e.target.closest(".so-quot-combo")) soHideQuotationDropdown();
+            });
+            var soModalEl = document.getElementById("addSalesOrderModal");
+            if (soModalEl) {
+                function refitQuotDd() {
+                    if (dd.style.display !== "none") soPositionQuotationDropdown();
+                }
+                var mbody = soModalEl.querySelector(".modal-body");
+                if (mbody) mbody.addEventListener("scroll", refitQuotDd, true);
+                window.addEventListener("resize", refitQuotDd);
             }
-            fetch(soQuotationItemsUrl + (soQuotationItemsUrl.indexOf("?") >= 0 ? "&" : "?") + "quotationId=" + encodeURIComponent(qid))
-                .then(function (r) { return r.json(); })
-                .then(soApplyQuotationData);
-        });
+        })();
         function soSyncReturnFields() {
             var q = document.getElementById("soListQ"), st = document.getElementById("soListStatus"), pl = document.getElementById("soListPlant"), dc = document.getElementById("soListDc");
             if (document.getElementById("soReturnQ")) document.getElementById("soReturnQ").value = q ? q.value : "";

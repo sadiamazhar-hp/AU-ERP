@@ -27,7 +27,7 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label fw-semibold mb-1" for="otGrProduced">Total produced quantity (pieces) <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control form-control-lg" id="otGrProduced" min="0" step="0.0001" inputmode="decimal" />
+                        <input type="number" class="form-control form-control-lg au-doc-qty" id="otGrProduced" min="0" step="1" data-au-qty-min="0" inputmode="numeric" />
                     </div>
                 </div>
 
@@ -36,19 +36,19 @@
                     <div class="row g-2 g-md-3">
                         <div class="col-md-6">
                             <label class="form-label small mb-1" for="otGrFirst">Grade A — first quality (premium)</label>
-                            <input type="number" class="form-control otl-gr-qty" id="otGrFirst" min="0" step="0.0001" inputmode="decimal" value="0" />
+                            <input type="number" class="form-control otl-gr-qty au-doc-qty" id="otGrFirst" min="0" step="1" data-au-qty-min="0" inputmode="numeric" value="0" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small mb-1" for="otGrSecond">Grade B — second quality</label>
-                            <input type="number" class="form-control otl-gr-qty" id="otGrSecond" min="0" step="0.0001" inputmode="decimal" value="0" />
+                            <input type="number" class="form-control otl-gr-qty au-doc-qty" id="otGrSecond" min="0" step="1" data-au-qty-min="0" inputmode="numeric" value="0" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small mb-1" for="otGrThird">Grade C — third quality / downgrade</label>
-                            <input type="number" class="form-control otl-gr-qty" id="otGrThird" min="0" step="0.0001" inputmode="decimal" value="0" />
+                            <input type="number" class="form-control otl-gr-qty au-doc-qty" id="otGrThird" min="0" step="1" data-au-qty-min="0" inputmode="numeric" value="0" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small mb-1" for="otGrScrap">Scrap / rejected (not sellable FGI)</label>
-                            <input type="number" class="form-control otl-gr-qty" id="otGrScrap" min="0" step="0.0001" inputmode="decimal" value="0" />
+                            <input type="number" class="form-control otl-gr-qty au-doc-qty" id="otGrScrap" min="0" step="1" data-au-qty-min="0" inputmode="numeric" value="0" />
                         </div>
                     </div>
                     <p class="small text-muted mt-2 mb-0">For FERT/HALB finished material, these buckets post to <strong>Stock Overview</strong> as grades A, B, C, and Scrap (same grade adds to an existing line).</p>

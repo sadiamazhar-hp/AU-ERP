@@ -5,41 +5,155 @@
 @{
     ViewData["Title"] = "Dashboard";
     string FmtMoney(decimal v) => UiNumberFormat.D2(v);
+    string DeltaHtml(decimal current, decimal previous)
+    {
+        if (previous == 0m && current == 0m) return "<span class=\"db-delta db-delta-neutral\">—</span>";
+        if (previous == 0m) return "<span class=\"db-delta db-delta-up\">New</span>";
+        var pct = (current - previous) / previous * 100m;
+        var cls = pct >= 0 ? "db-delta-up" : "db-delta-down";
+        var arrow = pct >= 0 ? "↑" : "↓";
+        return $"<span class=\"db-delta {cls}\">{arrow} {Math.Abs(pct):0.#}% vs prev</span>";
+    }
+    var sectionCount = (Model.ShowAdmin ? 1 : 0) + (Model.ShowStore ? 1 : 0) + (Model.ShowSales ? 1 : 0) + (Model.ShowProduction ? 1 : 0);
 }
 
 @section Styles {
     <style>
-        .db-page { color: var(--text, #32363a); }
-        .db-hero { margin-bottom: 1.25rem; }
-        .db-hero h1 { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .35rem 0; }
-        .db-hero .db-sub { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
-        .db-hero .db-depts { margin: .5rem 0 0 0; font-size: .8rem; color: var(--subtle, #6a7c8e); }
-        .db-hero .db-depts strong { color: var(--dark, #354a5e); font-weight: 500; }
-        .db-section { margin-top: 1.5rem; }
-        .db-section-title { font-size: 1.05rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .75rem 0; display: flex; align-items: center; gap: .5rem; }
+        .db-page { color: var(--text, #32363a); max-width: 1400px; }
+        .db-hero {
+            background: linear-gradient(135deg, rgba(0, 112, 242, 0.08) 0%, #fff 55%);
+            border: 1px solid var(--border, #d9d9d9);
+            border-radius: 8px;
+            padding: 1.1rem 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.06));
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .db-hero-main h1 { font-size: 1.4rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .25rem 0; }
+        .db-hero-main .db-sub { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
+        .db-hero-main .db-depts { margin: .45rem 0 0 0; font-size: .8rem; color: var(--subtle, #6a7c8e); }
+        .db-hero-main .db-depts strong { color: var(--dark, #354a5e); font-weight: 500; }
+        .db-period-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--subtle, #6a7c8e); margin: 0 0 .35rem 0; }
+        .db-period-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+        .db-period-chips a {
+            font-size: .78rem; padding: .3rem .65rem; border-radius: 999px;
+            border: 1px solid var(--border, #d9d9d9); color: var(--dark, #354a5e);
+            text-decoration: none; background: #fff;
+        }
+        .db-period-chips a:hover { border-color: var(--blue, #0070f2); color: var(--blue, #0070f2); }
+        .db-period-chips a.is-active {
+            background: var(--blue, #0070f2); border-color: var(--blue, #0070f2); color: #fff;
+        }
+        .db-headline-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: .75rem;
+            margin-bottom: 1rem;
+        }
+        .db-headline-card {
+            background: #fff;
+            border: 1px solid var(--border, #d9d9d9);
+            border-radius: 8px;
+            padding: .85rem 1rem;
+            box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.06));
+            display: flex;
+            flex-direction: column;
+            gap: .25rem;
+            min-height: 100px;
+        }
+        .db-headline-card .db-hl-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--subtle, #6a7c8e); }
+        .db-headline-card .db-hl-val { font-size: 1.35rem; font-weight: 600; color: var(--dark, #354a5e); font-family: "IBM Plex Mono", monospace; line-height: 1.2; }
+        .db-headline-card .db-hl-sub { font-size: .75rem; color: var(--subtle, #6a7c8e); }
+        .db-headline-card .db-spark-wrap { height: 36px; margin-top: auto; }
+        .db-delta { font-size: .72rem; font-weight: 500; }
+        .db-delta-up { color: #27ae60; }
+        .db-delta-down { color: #e74c3c; }
+        .db-delta-neutral { color: var(--subtle, #6a7c8e); }
+        .db-jump {
+            display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.25rem;
+            padding: .5rem .65rem; background: #f8fafc; border-radius: 6px;
+            border: 1px solid var(--border, #d9d9d9);
+        }
+        .db-jump a { font-size: .8rem; color: var(--blue, #0070f2); text-decoration: none; padding: .2rem .45rem; border-radius: 4px; }
+        .db-jump a:hover { background: #f0f7ff; }
+        .db-section { margin-top: 1.75rem; scroll-margin-top: 1rem; }
+        .db-section-header {
+            display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+            gap: .5rem; margin-bottom: .85rem;
+        }
+        .db-section-title { font-size: 1.1rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0; display: flex; align-items: center; gap: .5rem; }
         .db-section-title i { color: var(--blue, #0070f2); }
-        .db-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .65rem; margin-bottom: 1rem; }
-        .db-kpi { background: #f8fafc; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .65rem .75rem; }
-        .db-kpi .db-kpi-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .02em; color: var(--subtle, #6a7c8e); margin: 0 0 .2rem 0; }
-        .db-kpi .db-kpi-val { font-size: 1.15rem; font-weight: 600; color: var(--dark, #354a5e); font-family: "IBM Plex Mono", monospace; }
-        .db-chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; align-items: start; }
-        .db-chart-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .75rem 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.08)); }
+        .db-subgroup { margin-top: 1.1rem; }
+        .db-subgroup-title {
+            font-size: .88rem; font-weight: 600; color: var(--subtle, #6a7c8e);
+            text-transform: uppercase; letter-spacing: .04em; margin: 0 0 .6rem 0;
+            padding-bottom: .35rem; border-bottom: 1px solid var(--border, #d9d9d9);
+        }
+        .db-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .6rem; margin-bottom: .85rem; }
+        .db-kpi {
+            background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 6px;
+            padding: .6rem .7rem; transition: box-shadow .15s, border-color .15s;
+        }
+        .db-kpi:hover { box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.08)); border-color: rgba(0, 112, 242, 0.35); }
+        .db-kpi .db-kpi-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .02em; color: var(--subtle, #6a7c8e); margin: 0 0 .15rem 0; line-height: 1.25; }
+        .db-kpi .db-kpi-val { font-size: 1.1rem; font-weight: 600; color: var(--dark, #354a5e); font-family: "IBM Plex Mono", monospace; }
+        .db-kpi .db-kpi-foot { font-size: .68rem; color: var(--subtle, #6a7c8e); margin-top: .15rem; }
+        .db-chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; align-items: start; margin-bottom: .85rem; }
+        .db-chart-card {
+            background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 8px;
+            padding: .85rem 1rem; box-shadow: var(--sh, 0 2px 8px rgba(0,0,0,.06));
+        }
         .db-chart-card h3 { font-size: .88rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .5rem 0; }
         .db-chart-wrap { position: relative; height: 220px; max-width: 100%; }
         .db-chart-wrap.db-chart-tall { height: 280px; }
+        .db-chart-wrap.db-chart-wide { height: 260px; }
         .db-quick { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
-        .db-quick a { font-size: .8rem; padding: .25rem .55rem; border-radius: 4px; border: 1px solid var(--border, #d9d9d9); color: var(--blue, #0070f2); text-decoration: none; }
+        .db-quick a {
+            font-size: .78rem; padding: .28rem .55rem; border-radius: 4px;
+            border: 1px solid var(--border, #d9d9d9); color: var(--blue, #0070f2); text-decoration: none;
+        }
         .db-quick a:hover { background: #f0f7ff; }
+        .db-table-card {
+            background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 8px;
+            padding: .75rem 1rem; margin-bottom: .85rem; overflow-x: auto;
+        }
+        .db-table-card h3 { font-size: .88rem; font-weight: 600; color: var(--dark, #354a5e); margin: 0 0 .5rem 0; }
+        .db-table { width: 100%; font-size: .82rem; margin: 0; }
+        .db-table th { font-weight: 500; color: var(--subtle, #6a7c8e); border-bottom: 1px solid var(--border, #d9d9d9); padding: .35rem .5rem; }
+        .db-table td { padding: .4rem .5rem; border-bottom: 1px solid #f0f0f0; }
+        .db-table tbody tr:hover { background: #f8fafc; }
+        .db-table .mono { font-family: "IBM Plex Mono", monospace; }
     </style>
 }
 
 <div class="db-page">
     <div class="db-hero">
-        <h1>Welcome, @Model.UserDisplayName</h1>
-        <p class="db-sub">@Model.TodayLabel</p>
-        @if (Model.DepartmentNames.Count > 0)
+        <div class="db-hero-main">
+            <h1>Welcome, @Model.UserDisplayName</h1>
+            <p class="db-sub">@Model.TodayLabel · <span class="text-secondary">@Model.PeriodLabel</span></p>
+            @if (Model.DepartmentNames.Count > 0)
+            {
+                <p class="db-depts"><strong>Departments:</strong> @string.Join(", ", Model.DepartmentNames)</p>
+            }
+        </div>
+        @if (Model.HasAnyModule)
         {
-            <p class="db-depts"><strong>Departments:</strong> @string.Join(", ", Model.DepartmentNames)</p>
+            <div class="db-hero-period">
+                <p class="db-period-label">Period</p>
+                <div class="db-period-chips" role="group" aria-label="Dashboard period">
+                    @foreach (var opt in DashboardPeriod.Options)
+                    {
+                        var active = string.Equals(Model.Period, opt.Key, StringComparison.OrdinalIgnoreCase);
+                        <a asp-action="Index" asp-route-period="@opt.Key"
+                           class="@(active ? "is-active" : null)"
+                           aria-pressed="@(active ? "true" : "false")">@opt.Label</a>
+                    }
+                </div>
+            </div>
         }
     </div>
 
@@ -51,11 +165,75 @@
     }
     else
     {
+        var h = Model.Headline;
+        var hasHeadline = h.ShowRevenue || h.ShowOutstandingAr || h.ShowOrdersFulfillment || h.ShowLowStock || h.ShowProductionWip;
+        @if (hasHeadline)
+        {
+            <div class="db-headline-row">
+                @if (h.ShowRevenue)
+                {
+                    <div class="db-headline-card">
+                        <div class="db-hl-label">Revenue (@Model.PeriodLabel)</div>
+                        <div class="db-hl-val">@FmtMoney(h.RevenueInPeriod)</div>
+                        @Html.Raw(DeltaHtml(h.RevenueInPeriod, h.RevenuePreviousPeriod))
+                        @if (h.RevenueSparkline.Count > 0)
+                        {
+                            <div class="db-spark-wrap"><canvas id="dbSparkRevenue" aria-hidden="true"></canvas></div>
+                        }
+                    </div>
+                }
+                @if (h.ShowOutstandingAr)
+                {
+                    <div class="db-headline-card">
+                        <div class="db-hl-label">Outstanding AR</div>
+                        <div class="db-hl-val">@FmtMoney(h.OutstandingAR)</div>
+                        <div class="db-hl-sub">@h.OpenInvoiceCount open invoice(s)</div>
+                    </div>
+                }
+                @if (h.ShowOrdersFulfillment)
+                {
+                    <div class="db-headline-card">
+                        <div class="db-hl-label">Orders open</div>
+                        <div class="db-hl-val">@h.OrdersOpen</div>
+                        <div class="db-hl-sub">@h.DCsInTransit DC(s) in transit</div>
+                    </div>
+                }
+                @if (h.ShowLowStock)
+                {
+                    <div class="db-headline-card">
+                        <div class="db-hl-label">Low-stock materials</div>
+                        <div class="db-hl-val">@h.LowStockCount</div>
+                        <div class="db-hl-sub">At or below reorder point</div>
+                    </div>
+                }
+                @if (h.ShowProductionWip)
+                {
+                    <div class="db-headline-card">
+                        <div class="db-hl-label">Production WIP</div>
+                        <div class="db-hl-val">@h.ProductionWip</div>
+                        <div class="db-hl-sub">Released or in progress</div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (sectionCount >= 2)
+        {
+            <nav class="db-jump" aria-label="Dashboard sections">
+                @if (Model.ShowAdmin) { <a href="#db-admin">Master data</a> }
+                @if (Model.ShowStore) { <a href="#db-store">Inventory</a> }
+                @if (Model.ShowSales) { <a href="#db-sales">Sales</a> }
+                @if (Model.ShowProduction) { <a href="#db-production">Production</a> }
+            </nav>
+        }
+
         @if (Model.ShowAdmin && Model.Admin != null)
         {
             var a = Model.Admin;
-            <section class="db-section" aria-labelledby="db-admin-title">
-                <h2 class="db-section-title" id="db-admin-title"><i class="bi bi-database"></i> Master data &amp; admin</h2>
+            <section class="db-section" id="db-admin" aria-labelledby="db-admin-title">
+                <div class="db-section-header">
+                    <h2 class="db-section-title" id="db-admin-title"><i class="bi bi-database"></i> Master data &amp; admin</h2>
+                </div>
                 <div class="db-kpi-grid">
                     <div class="db-kpi"><div class="db-kpi-label">Materials</div><div class="db-kpi-val">@a.MaterialCount</div></div>
                     <div class="db-kpi"><div class="db-kpi-label">Business partners</div><div class="db-kpi-val">@a.BusinessPartnerCount</div></div>
@@ -63,6 +241,10 @@
                     <div class="db-kpi"><div class="db-kpi-label">Work centres</div><div class="db-kpi-val">@a.WorkCentreCount</div></div>
                     <div class="db-kpi"><div class="db-kpi-label">Routings</div><div class="db-kpi-val">@a.RoutingCount</div></div>
                     <div class="db-kpi"><div class="db-kpi-label">Users</div><div class="db-kpi-val">@a.UserCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Drivers</div><div class="db-kpi-val">@a.DriverCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Vehicles</div><div class="db-kpi-val">@a.VehicleCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Doc. ranges</div><div class="db-kpi-val">@a.DocumentRangeCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Doc. integrations</div><div class="db-kpi-val">@a.DocumentIntegrationCount</div></div>
                 </div>
                 <div class="db-chart-row">
                     <div class="db-chart-card">
@@ -88,6 +270,9 @@
                     <a asp-controller="WorkCentre" asp-action="Index">Work centres</a>
                     <a asp-controller="Routing" asp-action="Index">Routings</a>
                     <a asp-controller="Users" asp-action="Index">Users</a>
+                    <a asp-controller="DriversAndVehicles" asp-action="Index">Drivers &amp; vehicles</a>
+                    <a asp-controller="Document" asp-action="DocumentRanges">Document ranges</a>
+                    <a asp-controller="Document" asp-action="Integration">Integrations</a>
                 </div>
             </section>
         }
@@ -95,12 +280,24 @@
         @if (Model.ShowStore && Model.Store != null)
         {
             var s = Model.Store;
-            <section class="db-section" aria-labelledby="db-store-title">
-                <h2 class="db-section-title" id="db-store-title"><i class="bi bi-box-seam"></i> Inventory &amp; store</h2>
+            <section class="db-section" id="db-store" aria-labelledby="db-store-title">
+                <div class="db-section-header">
+                    <h2 class="db-section-title" id="db-store-title"><i class="bi bi-box-seam"></i> Inventory &amp; store</h2>
+                    <div class="db-quick mb-0">
+                        <a asp-controller="StockOverview" asp-action="Index">Stock overview</a>
+                        <a asp-controller="StockMovement" asp-action="Index">Stock movement</a>
+                        <a asp-controller="GoodReceipt" asp-action="Index">Goods receipt</a>
+                        <a asp-controller="StockGoodsIssue" asp-action="Index">Goods issue</a>
+                    </div>
+                </div>
                 <div class="db-kpi-grid">
                     <div class="db-kpi"><div class="db-kpi-label">Active stock lines</div><div class="db-kpi-val">@s.ActiveStockLineCount</div></div>
                     <div class="db-kpi"><div class="db-kpi-label">Distinct materials</div><div class="db-kpi-val">@s.DistinctMaterialCount</div></div>
-                    <div class="db-kpi"><div class="db-kpi-label">Total stock value (PKR)</div><div class="db-kpi-val">@FmtMoney(s.TotalStockValue)</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Total stock value</div><div class="db-kpi-val">@FmtMoney(s.TotalStockValue)</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Low-stock items</div><div class="db-kpi-val">@s.LowStockCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Movements</div><div class="db-kpi-val">@s.StockMovementsInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Goods receipts</div><div class="db-kpi-val">@s.GoodsReceiptDocsInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Goods issues</div><div class="db-kpi-val">@s.GoodsIssueDocsInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
                 </div>
                 <div class="db-chart-row">
                     <div class="db-chart-card">
@@ -114,35 +311,164 @@
                             <div class="db-chart-wrap db-chart-tall"><canvas id="dbChartStoreGrade"></canvas></div>
                         }
                     </div>
+                    @if (s.MovementsByDay.Count > 0)
+                    {
+                        <div class="db-chart-card">
+                            <h3>Stock movements per day</h3>
+                            <div class="db-chart-wrap db-chart-tall"><canvas id="dbChartStoreMovements"></canvas></div>
+                        </div>
+                    }
                 </div>
-                <div class="db-quick">
-                    <a asp-controller="StockOverview" asp-action="Index">Stock overview</a>
-                </div>
+                @if (s.TopStockByValue.Count > 0)
+                {
+                    <div class="db-table-card">
+                        <h3>Top stock value items</h3>
+                        <table class="db-table">
+                            <thead><tr><th>Material</th><th>Grade</th><th class="text-end">Qty</th><th class="text-end">Value (PKR)</th></tr></thead>
+                            <tbody>
+                            @foreach (var row in s.TopStockByValue)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="mono">@row.MaterialNumber</span>
+                                        @if (!string.IsNullOrWhiteSpace(row.MaterialDescription))
+                                        {
+                                            <br /><span class="text-secondary">@row.MaterialDescription</span>
+                                        }
+                                    </td>
+                                    <td>@row.Grade</td>
+                                    <td class="text-end mono">@row.Quantity.ToString("N2", CultureInfo.InvariantCulture)</td>
+                                    <td class="text-end mono">@FmtMoney(row.StockValue)</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </section>
         }
 
         @if (Model.ShowSales && Model.Sales != null)
         {
             var sa = Model.Sales;
-            <section class="db-section" aria-labelledby="db-sales-title">
-                <h2 class="db-section-title" id="db-sales-title"><i class="bi bi-receipt"></i> Sales</h2>
-                <div class="db-kpi-grid">
-                    <div class="db-kpi"><div class="db-kpi-label">Quotations (draft)</div><div class="db-kpi-val">@sa.QuotationDraft</div></div>
-                    <div class="db-kpi"><div class="db-kpi-label">Quotations (sent)</div><div class="db-kpi-val">@sa.QuotationSent</div></div>
-                    <div class="db-kpi"><div class="db-kpi-label">Orders (open)</div><div class="db-kpi-val">@sa.OrderOpen</div></div>
-                    <div class="db-kpi"><div class="db-kpi-label">Orders (confirmed)</div><div class="db-kpi-val">@sa.OrderConfirmed</div></div>
-                    <div class="db-kpi"><div class="db-kpi-label">Delivery challans</div><div class="db-kpi-val">@sa.DeliveryChallanCount</div></div>
+            <section class="db-section" id="db-sales" aria-labelledby="db-sales-title">
+                <div class="db-section-header">
+                    <h2 class="db-section-title" id="db-sales-title"><i class="bi bi-receipt"></i> Sales</h2>
                 </div>
-                <div class="db-chart-row">
-                    <div class="db-chart-card" style="grid-column: 1 / -1;">
-                        <h3>Quotations &amp; sales orders (last 6 months)</h3>
-                        <div class="db-chart-wrap db-chart-tall"><canvas id="dbChartSalesTrend"></canvas></div>
+
+                <div class="db-subgroup">
+                    <h3 class="db-subgroup-title">Pre-Sales</h3>
+                    <div class="db-kpi-grid">
+                        <div class="db-kpi"><div class="db-kpi-label">Quotations (draft)</div><div class="db-kpi-val">@sa.QuotationDraft</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Quotations (sent)</div><div class="db-kpi-val">@sa.QuotationSent</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Created</div><div class="db-kpi-val">@sa.QuotationsCreatedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                        @if (sa.QuotationToOrderConversionPercent.HasValue)
+                        {
+                            <div class="db-kpi"><div class="db-kpi-label">Quote → SO</div><div class="db-kpi-val">@sa.QuotationToOrderConversionPercent.Value.ToString("0.#", CultureInfo.InvariantCulture)%</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                        }
+                    </div>
+                    <div class="db-chart-row">
+                        <div class="db-chart-card" style="grid-column: 1 / -1;">
+                            <h3>Quotations &amp; sales orders (last 6 months)</h3>
+                            <div class="db-chart-wrap db-chart-wide"><canvas id="dbChartSalesTrend"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="db-quick">
+                        <a asp-controller="SalesQuotation" asp-action="Index">Sales quotation</a>
                     </div>
                 </div>
-                <div class="db-quick">
-                    <a asp-controller="SalesQuotation" asp-action="Index">Sales quotation</a>
-                    <a asp-controller="SalesOrder" asp-action="Index">Sales order</a>
-                    <a asp-controller="DeliveryChallan" asp-action="Index">Delivery challan</a>
+
+                <div class="db-subgroup">
+                    <h3 class="db-subgroup-title">Order &amp; Fulfillment</h3>
+                    <div class="db-kpi-grid">
+                        <div class="db-kpi"><div class="db-kpi-label">Orders (open)</div><div class="db-kpi-val">@sa.OrderOpen</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Orders (confirmed)</div><div class="db-kpi-val">@sa.OrderConfirmed</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Delivery challans</div><div class="db-kpi-val">@sa.DeliveryChallanCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">DCs created</div><div class="db-kpi-val">@sa.DeliveryChallansCreatedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">DCs delivered</div><div class="db-kpi-val">@sa.DeliveryChallansDelivered</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">DCs in transit</div><div class="db-kpi-val">@sa.DeliveryChallansInTransit</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">SGI pending</div><div class="db-kpi-val">@sa.SalesGoodsIssuePendingInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">SGI received</div><div class="db-kpi-val">@sa.SalesGoodsIssueReceivedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    </div>
+                    @if (sa.RecentDeliveryChallans.Count > 0)
+                    {
+                        <div class="db-table-card">
+                            <h3>Recent delivery challans</h3>
+                            <table class="db-table">
+                                <thead><tr><th>Document</th><th>Ship-to</th><th>Status</th><th>Date</th></tr></thead>
+                                <tbody>
+                                @foreach (var dc in sa.RecentDeliveryChallans)
+                                {
+                                    <tr>
+                                        <td class="mono"><a asp-controller="DeliveryChallan" asp-action="Index">@dc.DocumentNumber</a></td>
+                                        <td>@(dc.DealerDisplayName ?? "—")</td>
+                                        <td>@dc.StatusLabel</td>
+                                        <td>@dc.DocumentDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    <div class="db-quick">
+                        <a asp-controller="SalesOrder" asp-action="Index">Sales order</a>
+                        <a asp-controller="DeliveryChallan" asp-action="Index">Delivery challan</a>
+                        <a asp-controller="SalesGoodsIssue" asp-action="Index">Sales goods issue</a>
+                        <a asp-controller="ReturnOrder" asp-action="Index">Return order</a>
+                        <a asp-controller="CreditMemo" asp-action="Index">Credit memo</a>
+                    </div>
+                </div>
+
+                <div class="db-subgroup">
+                    <h3 class="db-subgroup-title">Billing &amp; Payments</h3>
+                    <div class="db-kpi-grid">
+                        <div class="db-kpi"><div class="db-kpi-label">Invoices open</div><div class="db-kpi-val">@sa.InvoiceOpenCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Overdue</div><div class="db-kpi-val">@sa.InvoiceOverdueCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Collected</div><div class="db-kpi-val">@sa.InvoiceCollectedCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Return in process</div><div class="db-kpi-val">@sa.InvoiceReturnInProcessCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Returned</div><div class="db-kpi-val">@sa.InvoiceReturnedCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Open amount</div><div class="db-kpi-val">@FmtMoney(sa.InvoiceOpenAmount)</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Outstanding</div><div class="db-kpi-val">@FmtMoney(sa.InvoiceOutstandingAmount)</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Collected</div><div class="db-kpi-val">@FmtMoney(sa.InvoiceCollectedAmountInPeriod)</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Payments</div><div class="db-kpi-val">@sa.PaymentsInPeriod</div><div class="db-kpi-foot">@FmtMoney(sa.PaymentsAmountInPeriod)</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Credit memos</div><div class="db-kpi-val">@sa.CreditMemosInPeriod</div><div class="db-kpi-foot">@FmtMoney(sa.CreditMemosAmountInPeriod)</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Return orders open</div><div class="db-kpi-val">@sa.ReturnOrdersOpenCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">QI pending</div><div class="db-kpi-val">@sa.ReturnQiPendingCount</div></div>
+                    </div>
+                    @if (sa.InvoicedVsPaymentsByDay.Count > 0)
+                    {
+                        <div class="db-chart-row">
+                            <div class="db-chart-card" style="grid-column: 1 / -1;">
+                                <h3>Invoices billed vs payments collected (@Model.PeriodLabel)</h3>
+                                <div class="db-chart-wrap db-chart-wide"><canvas id="dbChartBillingTrend"></canvas></div>
+                            </div>
+                        </div>
+                    }
+                    @if (sa.RecentOverdueInvoices.Count > 0)
+                    {
+                        <div class="db-table-card">
+                            <h3>Overdue invoices (top 5)</h3>
+                            <table class="db-table">
+                                <thead><tr><th>Invoice</th><th>Dealer</th><th>Due</th><th class="text-end">Days</th><th class="text-end">Balance</th></tr></thead>
+                                <tbody>
+                                @foreach (var inv in sa.RecentOverdueInvoices)
+                                {
+                                    <tr>
+                                        <td class="mono"><a asp-controller="Invoice" asp-action="Index">@inv.DocumentNumber</a></td>
+                                        <td>@(inv.DealerDisplayName ?? "—")</td>
+                                        <td>@inv.DueDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)</td>
+                                        <td class="text-end">@inv.DaysOverdue</td>
+                                        <td class="text-end mono">@FmtMoney(inv.Balance)</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    <div class="db-quick">
+                        <a asp-controller="Invoice" asp-action="Index">Invoice</a>
+                        <a asp-controller="ReorderQualityInspection" asp-action="Index">Return QI</a>
+                    </div>
                 </div>
             </section>
         }
@@ -150,11 +476,20 @@
         @if (Model.ShowProduction && Model.Production != null)
         {
             var p = Model.Production;
-            <section class="db-section" aria-labelledby="db-prod-title">
-                <h2 class="db-section-title" id="db-prod-title"><i class="bi bi-gear"></i> Production</h2>
+            <section class="db-section" id="db-production" aria-labelledby="db-prod-title">
+                <div class="db-section-header">
+                    <h2 class="db-section-title" id="db-prod-title"><i class="bi bi-gear"></i> Production</h2>
+                </div>
                 <div class="db-kpi-grid">
-                    <div class="db-kpi"><div class="db-kpi-label">FERT + HALB materials (MRP scope)</div><div class="db-kpi-val">@p.MrpBomCount</div></div>
-                    <div class="db-kpi"><div class="db-kpi-label">Released / in progress (routed)</div><div class="db-kpi-val">@p.OperationTrackingOpen</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">FERT + HALB (MRP)</div><div class="db-kpi-val">@p.MrpBomCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Routed WIP</div><div class="db-kpi-val">@p.OperationTrackingOpen</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Stages started</div><div class="db-kpi-val">@p.StagesStartedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Stages completed</div><div class="db-kpi-val">@p.StagesCompletedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Produce batches</div><div class="db-kpi-val">@p.GoodsProduceBatchesInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">GR pending</div><div class="db-kpi-val">@p.ProductionGrPending</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">GR posted</div><div class="db-kpi-val">@p.ProductionGrPostedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Return QI pending</div><div class="db-kpi-val">@p.ReturnQiPending</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Return QI done</div><div class="db-kpi-val">@p.ReturnQiCompletedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
                 </div>
                 <div class="db-kpi-grid">
                     @foreach (var kv in p.ProductionOrdersByStatus.OrderBy(x => x.Key))
@@ -171,14 +506,32 @@
                         </div>
                     </div>
                 }
-                else
+                @if (p.RecentProductionOrders.Count > 0)
                 {
-                    <p class="text-muted small">No production orders in the system yet.</p>
+                    <div class="db-table-card">
+                        <h3>Recent production orders</h3>
+                        <table class="db-table">
+                            <thead><tr><th>Document</th><th>Material</th><th>Status</th><th class="text-end">Qty</th><th>Planned start</th></tr></thead>
+                            <tbody>
+                            @foreach (var po in p.RecentProductionOrders)
+                            {
+                                <tr>
+                                    <td class="mono"><a asp-controller="ProductionOrder" asp-action="Index">@po.DocumentNumber</a></td>
+                                    <td class="mono">@po.MaterialNumber</td>
+                                    <td>@po.Status</td>
+                                    <td class="text-end">@po.TargetQuantity</td>
+                                    <td>@po.PlannedStartDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
                 }
                 <div class="db-quick">
                     <a asp-controller="MRP" asp-action="Index">MRP</a>
                     <a asp-controller="ProductionOrder" asp-action="Index">Production order</a>
                     <a asp-controller="OperationTracking" asp-action="Index">Operation tracking</a>
+                    <a asp-controller="GoodReceipt" asp-action="Index">Goods receipt</a>
                 </div>
             </section>
         }
@@ -191,6 +544,23 @@
         (function () {
             const grid = { color: "rgba(0,0,0,0.06)" };
             const commonOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+            const sparkOpts = {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: { x: { display: false }, y: { display: false } }
+            };
+
+            @if (Model.Headline.ShowRevenue && Model.Headline.RevenueSparkline.Count > 0)
+            {
+                <text>
+            (function () {
+                const el = document.getElementById("dbSparkRevenue");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonSparkline(Model.Headline.RevenueSparkline));
+                new Chart(el, { type: "line", data, options: sparkOpts });
+            })();
+                </text>
+            }
 
             @if (Model.ShowAdmin && Model.Admin != null)
             {
@@ -202,7 +572,7 @@
                 new Chart(el, { type: "bar", data, options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } } });
             })();
                 </text>
-                if (Model.Admin.MaterialByType.Count > 0)
+                @if (Model.Admin.MaterialByType.Count > 0)
                 {
                 <text>
             (function () {
@@ -227,6 +597,23 @@
                 </text>
             }
 
+            @if (Model.ShowStore && Model.Store != null && Model.Store.MovementsByDay.Count > 0)
+            {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartStoreMovements");
+                if (!el) return;
+                const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Store.MovementsByDay.Select(x => x.Label).ToList()));
+                const values = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Store.MovementsByDay.Select(x => x.Count).ToList()));
+                new Chart(el, {
+                    type: "line",
+                    data: { labels, datasets: [{ label: "Movements", data: values, borderColor: "rgb(0, 112, 242)", backgroundColor: "rgba(0, 112, 242, 0.12)", tension: 0.25, fill: true }] },
+                    options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } }
+                });
+            })();
+                </text>
+            }
+
             @if (Model.ShowSales && Model.Sales != null)
             {
                 <text>
@@ -237,6 +624,17 @@
                 new Chart(el, { type: "line", data, options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } } });
             })();
                 </text>
+                @if (Model.Sales.InvoicedVsPaymentsByDay.Count > 0)
+                {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartBillingTrend");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonInvoicedVsPayments(Model.Sales.InvoicedVsPaymentsByDay, Model.Sales.PaymentsCollectedByDay));
+                new Chart(el, { type: "line", data, options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } } });
+            })();
+                </text>
+                }
             }
 
             @if (Model.ShowProduction && Model.Production != null && Model.Production.ProductionOrdersByStatusChart.Count > 0)

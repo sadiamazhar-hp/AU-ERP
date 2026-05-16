@@ -49,8 +49,8 @@
     }
 </style>
 
-<div class="bp-module">
-    <ul class="nav nav-tabs bp-module-tabs mb-0 mt-1" role="tablist">
+<div class="au-md-module bp-module">
+    <ul class="nav nav-tabs au-md-tabstrip bp-module-tabs mb-0 mt-1" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link @(bpTabList ? "" : "active")" id="bpTabCreate" data-bs-toggle="tab" data-bs-target="#bpPaneCreate" type="button" role="tab" aria-controls="bpPaneCreate" aria-selected="@(!bpTabList ? "true" : "false")">Create</button>
         </li>
@@ -59,7 +59,7 @@
         </li>
     </ul>
 
-    <div class="tab-content border border-top-0 rounded-bottom bg-white">
+    <div class="tab-content au-md-tab-content border border-top-0 rounded-bottom bg-white">
         <div class="tab-pane fade @(bpTabList ? "" : "show active")" id="bpPaneCreate" role="tabpanel" aria-labelledby="bpTabCreate">
             <div class="sap-window border-0 rounded-0">
                 @await Html.PartialAsync("_BPCreateForm", Model.Draft)
@@ -161,7 +161,7 @@
                             <button class="nav-link" id="bpEditTab-company" data-bs-toggle="tab" data-bs-target="#bpEditPane-company" type="button" role="tab">Company Code</button>
                         </li>
                         <li class="nav-item" role="presentation" id="bpEditNavSales">
-                            <button class="nav-link" id="bpEditTab-sales" data-bs-toggle="tab" data-bs-target="#bpEditPane-sales" type="button" role="tab">Sales</button>
+                            <button class="nav-link" id="bpEditTab-sales" data-bs-toggle="tab" data-bs-target="#bpEditPane-sales" type="button" role="tab">Sales area</button>
                         </li>
                         <li class="nav-item" role="presentation" id="bpEditNavPurch">
                             <button class="nav-link" id="bpEditTab-purch" data-bs-toggle="tab" data-bs-target="#bpEditPane-purch" type="button" role="tab">Purchasing</button>
@@ -465,8 +465,11 @@
             }
             req("bpEditRole");
             var roleSel = document.getElementById("bpEditRole");
-            var opt = roleSel && roleSel.options[roleSel.selectedIndex];
-            var code = opt ? (opt.getAttribute("data-code") || "") : "";
+            function bpEditSelRoleUpper() {
+                var o = roleSel && roleSel.options[roleSel.selectedIndex];
+                return o ? String(o.getAttribute("data-code") || "").trim().toUpperCase() : "";
+            }
+            var code = bpEditSelRoleUpper();
             if (code !== "FLCU00")
                 req("bpEditType");
             if (code !== "FLCU00" && code !== "FLVN01")
@@ -478,8 +481,6 @@
             req("bpEditPostalCode");
             req("bpEditRegion");
             req("bpEditReconAccount");
-            opt = roleSel && roleSel.options[roleSel.selectedIndex];
-            code = opt ? (opt.getAttribute("data-code") || "") : "";
             if (code === "FLCU01" || code === "FLCU00") {
                 req("bpEditDistChannel");
                 req("bpEditSalesSchema");
@@ -555,22 +556,37 @@
         })();
 
         /* ---- Edit modal helpers ---- */
+        function bpEditNormRoleCode(sel) {
+            var opt = sel && sel.options[sel.selectedIndex];
+            return opt ? String(opt.getAttribute("data-code") || "").trim().toUpperCase() : "";
+        }
+
+        function bpEditEnsureActiveTabVisible() {
+            var tabsRoot = document.getElementById("bpEditTabs");
+            if (!tabsRoot || typeof bootstrap === "undefined" || !bootstrap.Tab) return;
+            var activeBtn = tabsRoot.querySelector(".nav-link.active");
+            var li = activeBtn ? activeBtn.closest("li.nav-item") : null;
+            var liHidden = li && window.getComputedStyle(li).display === "none";
+            if (!liHidden && activeBtn) return;
+            var fallback = document.getElementById("bpEditTab-address") || document.getElementById("bpEditTab-info");
+            if (fallback) bootstrap.Tab.getOrCreateInstance(fallback).show();
+        }
+
         function bpEditHandleRoleUI() {
             var sel = document.getElementById("bpEditRole");
             if (!sel) return;
-            var opt = sel.options[sel.selectedIndex];
-            var code = opt ? (opt.getAttribute("data-code") || "") : "";
+            var code = bpEditNormRoleCode(sel);
             var salesNav = document.getElementById("bpEditNavSales");
             var purchNav = document.getElementById("bpEditNavPurch");
             var typeWrap = document.getElementById("bpEditTypeWrap");
             var groupWrap = document.getElementById("bpEditGroupWrap");
             var typeSel = document.getElementById("bpEditType");
             var groupSel = document.getElementById("bpEditGroup");
-            if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
-            if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
+            if (salesNav) salesNav.style.display = code === "FLCU01" || code === "FLCU00" ? "" : "none";
+            if (purchNav) purchNav.style.display = code === "FLVN01" || code === "FLCU00" ? "" : "none";
 
-            if (typeWrap) typeWrap.style.display = (code === "FLCU00") ? "none" : "";
-            if (groupWrap) groupWrap.style.display = (code === "FLCU00" || code === "FLVN01") ? "none" : "";
+            if (typeWrap) typeWrap.style.display = code === "FLCU00" ? "none" : "";
+            if (groupWrap) groupWrap.style.display = code === "FLCU00" || code === "FLVN01" ? "none" : "";
 
             if (code === "FLCU01") {
                 var customerTypeId = @editTypeCustomerId;
@@ -585,13 +601,7 @@
             if (code === "FLVN01" && groupSel) {
                 groupSel.value = "";
             }
-            ["bpEditTab-address", "bpEditTab-comm", "bpEditTab-company"].forEach(function (id) {
-                var el = document.getElementById(id);
-                if (!el) return;
-                el.style.display = "";
-            });
-            if (salesNav) salesNav.style.display = (code === "FLCU01" || code === "FLCU00") ? "" : "none";
-            if (purchNav) purchNav.style.display = (code === "FLVN01" || code === "FLCU00") ? "" : "none";
+            bpEditEnsureActiveTabVisible();
         }
 
         function setEditField(id, val) {

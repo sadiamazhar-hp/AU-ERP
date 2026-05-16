@@ -204,7 +204,7 @@
                             }
                             @Html.DropDownListFor(m => m.MaterialGroupCode, materialGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm", id = "MaterialGroupCodeV2" + V2IdAffix })
                             <label class="form-label mt-2">EAN/UPC</label>
-                            @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control" } })
+                            @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control au-ean-upc", maxlength = "32", placeholder = "Digits/barcode — not negative", inputmode = "numeric" } })
                         </div>
                     </div>
                 </div>
@@ -298,13 +298,13 @@
                     <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label">MRP Type</label>
-                            @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsV2, "-- Select --", new { @class = "form-select form-select-sm", id = "MrpTypeCodeV2" + V2IdAffix })
                             <label class="form-label mt-2">Procurement Type</label>
-                            @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsV2, "-- Select --", new { @class = "form-select form-select-sm", id = "ProcurementTypeCodeV2" + V2IdAffix })
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Strategy Group</label>
-                            @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm" })
+                            @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsV2, "-- Select --", new { @class = "form-select form-select-sm", id = "StrategyGroupV2" + V2IdAffix })
                         </div>
                     </div>
                 </div>
@@ -596,8 +596,11 @@
                             var oid = opt.id != null ? opt.id : opt.Id;
                             var title = (opt.title != null ? opt.title : opt.Title) || "";
                             var qty = opt.quantity != null ? opt.quantity : opt.Quantity;
+                            var rawChoice = opt.choiceLabel != null ? opt.choiceLabel : opt.ChoiceLabel;
                             var gidi = parseInt(oid, 10);
-                            var label = String(title) + " (1 base = " + String(qty) + " " + String(code) + ")";
+                            var label = (rawChoice !== undefined && rawChoice !== null && String(rawChoice).trim().length > 0)
+                                ? String(rawChoice)
+                                : String(title) + " (1 base = " + String(qty) + " " + String(code) + ")";
                             var inPreset = !isNaN(gidi) && preset.has(gidi);
                             var autoOne = !hasPreset && onlyOne;
                             var isChecked = (inPreset || autoOne) ? " checked" : "";
@@ -617,6 +620,22 @@
                 .catch(function () {
                     menu.innerHTML = '<li class="small text-danger px-2 py-1">Request failed.</li>';
                 });
+        }
+
+        function syncMrpPlanningFieldsV2() {
+            const typeEl = document.getElementById(v2id("MrpTypeCodeV2"));
+            const procEl = document.getElementById(v2id("ProcurementTypeCodeV2"));
+            const stratEl = document.getElementById(v2id("StrategyGroupV2"));
+            if (!typeEl || !procEl || !stratEl) return;
+            const noPlan = String(typeEl.value || "") === "NO_PLANNING";
+            procEl.disabled = noPlan;
+            stratEl.disabled = noPlan;
+            procEl.classList.toggle("bg-light", noPlan);
+            stratEl.classList.toggle("bg-light", noPlan);
+            if (noPlan) {
+                procEl.selectedIndex = 0;
+                stratEl.selectedIndex = 0;
+            }
         }
 
         function updateV2MatSalesState() {
@@ -725,6 +744,7 @@
             setVal("MrpTypeCode", pick(m, "mrpTypeCode", "MrpTypeCode"));
             setVal("ProcurementTypeCode", pick(m, "procurementTypeCode", "ProcurementTypeCode"));
             setVal("StrategyGroup", pick(m, "strategyGroup", "StrategyGroup"));
+            syncMrpPlanningFieldsV2();
             var lt = pick(m, "leadTimeDays", "LeadTimeDays");
             setVal("LeadTimeDays", lt !== "" && lt != null ? lt : "");
             setVal("ValuationClassCode", pick(m, "valuationClassCode", "ValuationClassCode"));
@@ -772,6 +792,7 @@
             if (sb) sb.innerText = "Select material type to load tabs.";
             clearTabsUntilTypeV2("Select material type to load tabs.");
             syncMrpQtyFieldsV2();
+            syncMrpPlanningFieldsV2();
             updateV2MatSalesState();
             applyDeliveringPlantFromValueV2("");
         }
@@ -798,6 +819,9 @@
             applyDeliveringPlantFromValueV2((document.getElementById(v2id("DeliveringPlantCodeV2")) || {}).value || "");
             var initialType = document.getElementById(v2id("matTypeV2"))?.value || "";
             if (initialType) loadEnabledTabsForTypeV2(initialType);
+            const mrpTypeV2Sel = document.getElementById(v2id("MrpTypeCodeV2"));
+            if (mrpTypeV2Sel) mrpTypeV2Sel.addEventListener("change", syncMrpPlanningFieldsV2);
+            syncMrpPlanningFieldsV2();
             const saveBtn = document.getElementById(v2id("btnCreateV2Save"));
             if (saveBtn) {
                 saveBtn.addEventListener("click", function () {
@@ -812,6 +836,11 @@
                         return;
                     }
                     const fd = new FormData(form);
+                    const mrpTypeEl = document.getElementById(v2id("MrpTypeCodeV2"));
+                    if (mrpTypeEl && String(mrpTypeEl.value || "") === "NO_PLANNING") {
+                        fd.set("ProcurementTypeCode", "");
+                        fd.set("StrategyGroup", "");
+                    }
                     const origH = document.getElementById(v2id("createV2OriginalMaterialNumber"));
                     const hasOriginal = !!(origH && origH.value);
                     const url = (createV2IsEdit || hasOriginal)

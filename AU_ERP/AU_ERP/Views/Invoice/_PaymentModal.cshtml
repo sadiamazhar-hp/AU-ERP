@@ -8,7 +8,7 @@
             </div>
             <div class="modal-body">
                 <div class="au-validation-summary mb-2 text-danger small" id="invPayModalError" style="display:none;" role="alert"></div>
-                <form id="invPayForm">
+                <form id="invPayForm" data-au-prevent-enter-submit>
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="InvoiceId" id="invPayInvoiceId" value="" />
                     <div class="mb-2">

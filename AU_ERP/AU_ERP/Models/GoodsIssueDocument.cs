@@ -7,6 +7,8 @@ public class GoodsIssueDocument
 {
     public const string StatusDraft = "Draft";
     public const string StatusPending = "Pending";
+    /// <summary>BOM/issue quantities fully posted from stock after dispatch sent; routing not yet released on the PO.</summary>
+    public const string StatusReceived = "Received";
     public const string StatusCompleted = "Completed";
 
     /// <summary>Dispatch gate: receipt / stock movement only after <see cref="DispatchSent"/>.</summary>

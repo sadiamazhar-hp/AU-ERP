@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers
 {
@@ -105,18 +106,80 @@ namespace AU_ERP.Controllers
             {
                 var gis = await _db.GoodsIssueDocuments.AsNoTracking()
                     .Where(g => poIds.Contains(g.ProductionOrderId))
-                    .Select(g => new { g.ProductionOrderId, g.Id, g.DocumentNumber, g.DispatchStatus })
+                    .Select(g => new { g.ProductionOrderId, g.Id, g.DocumentNumber, g.DispatchStatus, g.Status })
                     .ToListAsync(ct);
                 foreach (var g in gis)
                 {
                     vm.GoodsIssueIdByProductionOrderId[g.ProductionOrderId] = g.Id;
                     vm.GoodsIssueDocumentNumberByProductionOrderId[g.ProductionOrderId] = g.DocumentNumber;
                     vm.GoodsIssueDispatchStatusByProductionOrderId[g.ProductionOrderId] = g.DispatchStatus;
+                    vm.GoodsIssueStatusByProductionOrderId[g.ProductionOrderId] = g.Status ?? GoodsIssueDocument.StatusPending;
                 }
             }
 
             return View(vm);
         }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ReservationGoodsReceive(
+            int id,
+            [FromForm] string? returnQ,
+            [FromForm] string? returnStatus,
+            [FromForm] string? returnPriority,
+            CancellationToken ct = default)
+        {
+            var gi = await _db.GoodsIssueDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(g => g.ProductionOrderId == id, ct);
+            if (gi == null)
+            {
+                TempData["PoError"] = "No reservation goods issue exists for this production order.";
+                return RedirectToPoList(returnQ, returnStatus, returnPriority);
+            }
+
+            var (ok, msg) = await _goodsIssueService.ReceiveGoodsAsync(
+                gi.Id,
+                User.FindFirstValue(ClaimTypes.NameIdentifier),
+                null,
+                ct);
+            if (ok) TempData["PoMessage"] = msg;
+            else TempData["PoError"] = msg;
+            return RedirectToPoList(returnQ, returnStatus, returnPriority);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ReservationReleaseToOperations(
+            int id,
+            [FromForm] string? returnQ,
+            [FromForm] string? returnStatus,
+            [FromForm] string? returnPriority,
+            CancellationToken ct = default)
+        {
+            var gi = await _db.GoodsIssueDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(g => g.ProductionOrderId == id, ct);
+            if (gi == null)
+            {
+                TempData["PoError"] = "No reservation goods issue exists for this production order.";
+                return RedirectToPoList(returnQ, returnStatus, returnPriority);
+            }
+
+            var (ok, msg) = await _goodsIssueService.ReleaseReservationToOperationsAsync(
+                gi.Id,
+                User.FindFirstValue(ClaimTypes.NameIdentifier),
+                ct);
+            if (ok) TempData["PoMessage"] = msg;
+            else TempData["PoError"] = msg;
+            return RedirectToPoList(returnQ, returnStatus, returnPriority);
+        }
+
+        private IActionResult RedirectToPoList(string? returnQ, string? returnStatus, string? returnPriority) =>
+            RedirectToAction(nameof(Index), new
+            {
+                q = string.IsNullOrWhiteSpace(returnQ) ? null : returnQ.Trim(),
+                status = returnStatus,
+                priority = returnPriority
+            });
 
         [HttpGet]
         public async Task<JsonResult> FinishedItems(CancellationToken ct = default)
@@ -462,16 +525,38 @@ namespace AU_ERP.Controllers
                 if (entity.Status != ProductionOrder.StatusPlanned)
                     return Json(new { success = false, message = "Only planned orders can be deleted." });
 
-                var hasGi = await _db.GoodsIssueDocuments.AsNoTracking()
-                    .AnyAsync(x => x.ProductionOrderId == id, ct);
-                if (hasGi)
+                var reservationGis = await _db.GoodsIssueDocuments
+                    .Include(g => g.Lines)
+                    .Where(x => x.ProductionOrderId == id)
+                    .ToListAsync(ct);
+
+                foreach (var g in reservationGis)
                 {
-                    return Json(new
+                    if (string.Equals(g.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(g.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
                     {
-                        success = false,
-                        message = "This production order cannot be deleted because a Reservation Issue document exists for it. Delete/cancel the linked Reservation Issue first."
-                    });
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "This planned order cannot be deleted because reservation goods have already been received from inventory. Remove or revert those postings before deleting."
+                        });
+                    }
+
+                    if (g.Lines != null
+                        && g.Lines.Any(l => l.IssuedQty > InventoryEpsilon))
+                    {
+                        return Json(new
+                        {
+                            success = false,
+                            message =
+                                "This planned order cannot be deleted because material has already been issued from stock on the linked reservation GI. Clear or reverse that issue first."
+                        });
+                    }
                 }
+
+                foreach (var g in reservationGis)
+                    _db.GoodsIssueDocuments.Remove(g);
 
                 var hasGrDoc = await _db.GoodReceiptDocuments.AsNoTracking()
                     .AnyAsync(x => x.ProductionOrderId == id, ct);
@@ -497,7 +582,10 @@ namespace AU_ERP.Controllers
 
                 _db.ProductionOrders.Remove(entity);
                 await _db.SaveChangesAsync(ct);
-                return Json(new { success = true, message = "Production order deleted." });
+                var deletedMsg = reservationGis.Count > 0
+                    ? "Production order and linked reservation goods issue were deleted."
+                    : "Production order deleted.";
+                return Json(new { success = true, message = deletedMsg });
             }
             catch (Exception ex)
             {
@@ -700,6 +788,8 @@ namespace AU_ERP.Controllers
                     return $"Line {l.LineNo}: material is required.";
                 if (l.PlannedQuantity <= 0)
                     return $"Line {l.LineNo}: planned quantity must be greater than zero.";
+                if (DocumentQuantityRules.ValidatePositiveWhole(l.PlannedQuantity, $"Line {l.LineNo} planned quantity") is { } pqWhole)
+                    return pqWhole;
                 if (l.UomId <= 0)
                     return $"Line {l.LineNo}: UOM is required.";
                 if (!await FinishedItemValidAsync(l.MaterialNumber, ct))

@@ -88,7 +88,7 @@ public sealed class DocumentNumberAllocator
             .FirstOrDefault();
     }
 
-    private static int NextSerial(DocumentRange range)
+    private static long NextSerial(DocumentRange range)
     {
         var from = range.FromNumber!.Value;
         var last = range.CurrentNumber ?? (from - 1);

@@ -279,7 +279,7 @@
 <div class="modal fade" id="addQuotationModal" tabindex="-1" aria-labelledby="sqModalTitle" aria-hidden="true" data-sq-action-create="@Url.Action("Create", "SalesQuotation")" data-sq-action-update-tpl="@Url.Action("Update", "SalesQuotation", new { id = 0 })">
     <div class="modal-dialog modal-xl sq-quotation-modal">
         <div class="modal-content">
-            <form asp-action="Create" asp-controller="SalesQuotation" method="post" id="sqForm" data-sq-form-mode="create">
+            <form asp-action="Create" asp-controller="SalesQuotation" method="post" id="sqForm" data-sq-form-mode="create" data-au-prevent-enter-submit>
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="ReturnQ" id="sqReturnQ" value="@listQ" />
                 <input type="hidden" name="ReturnStatus" id="sqReturnStatus" value="@listStatus" />
@@ -712,7 +712,11 @@
                     if (tr.querySelector(".bom-mat-picker-search")) tr.querySelector(".bom-mat-picker-search").value = (it.materialNumber + (it.materialDescription ? " — " + it.materialDescription : ""));
                 }
                 if (tr.querySelector(".sq-desc") && it.materialDescription) tr.querySelector(".sq-desc").value = it.materialDescription;
-                if (tr.querySelector(".sq-grade") && (it.salesPriceGrade != null && it.salesPriceGrade !== "")) tr.querySelector(".sq-grade").value = String(it.salesPriceGrade);
+                if (tr.querySelector(".sq-grade") && (it.salesPriceGrade != null && it.salesPriceGrade !== "")) {
+                    var gsv = String(it.salesPriceGrade);
+                    if (gsv.toLowerCase() === "scrap") gsv = "A";
+                    tr.querySelector(".sq-grade").value = gsv;
+                }
                 if (tr.querySelector(".sq-qty") && it.orderQuantity != null) tr.querySelector(".sq-qty").value = String(it.orderQuantity);
                 if (tr.querySelector(".sq-unit") && it.unitPrice != null) tr.querySelector(".sq-unit").value = String(it.unitPrice);
                 if (tr.querySelector(".sq-del") && it.deliveryDate) tr.querySelector(".sq-del").value = it.deliveryDate;
@@ -974,8 +978,44 @@
                 d.innerHTML = "<label class=\"small mb-0 text-nowrap flex-shrink-0\" title=\"" + esc((c.symbol || '') + (c.description ? (' — ' + c.description) : '')) + "\">" + label + (c.valueType === "Numeric" ? " (PKR)" : " (%)") + "</label><input type=\"number\" class=\"form-control form-control-sm sq-doc-chg-val\" data-cid=\"" + cid + "\" style=\"max-width:8rem\" />";
                 v.appendChild(d);
             });
-            v.querySelectorAll(".sq-doc-chg-val").forEach(function (inp) { inp.addEventListener("input", recalcFooter); inp.addEventListener("change", recalcFooter); });
         }
+        (function sqWireDelegatedChargeTotals() {
+            var wrap = document.getElementById("sqQuotationChargeInputs");
+            if (!wrap || wrap.dataset.auChargeTotalsDelegated === "1") return;
+            wrap.dataset.auChargeTotalsDelegated = "1";
+            function tick() {
+                try {
+                    recalcFooter();
+                } catch (_) {}
+            }
+            wrap.addEventListener("input", tick, false);
+            wrap.addEventListener("change", tick, false);
+            wrap.addEventListener("keyup", tick, false);
+            wrap.addEventListener("paste", function () {
+                window.requestAnimationFrame(tick);
+            }, false);
+        })();
+        (function sqWireDelegatedLineTotals() {
+            var body = document.getElementById("sqItemsBody");
+            if (!body || body.dataset.auLineTotalsDelegated === "1") return;
+            body.dataset.auLineTotalsDelegated = "1";
+            function bump(ev) {
+                var t = ev.target;
+                if (!t.classList ||
+                    !(t.classList.contains("sq-qty") || t.classList.contains("sq-unit") || t.classList.contains("sq-ln-chg"))) {
+                    return;
+                }
+                var tr = t.closest ? t.closest("tr.sq-item-row") : null;
+                if (tr) recalcLine(tr);
+            }
+            body.addEventListener("input", bump, false);
+            body.addEventListener("change", bump, false);
+            body.addEventListener("keyup", bump, false);
+            body.addEventListener("paste", function (ev) {
+                bump(ev);
+                window.requestAnimationFrame(function () { bump(ev); });
+            }, false);
+        })();
         function rowHtml() {
             return "<tr class=\"sq-item-row\">" +
                 "<td class=\"text-muted sq-idx\">1</td>" +
@@ -990,8 +1030,8 @@
                 "<td><input class=\"form-control form-control-sm sq-desc\" name=\"Items[0].MaterialDescription\" readonly style=\"min-width:8rem\" /></td>" +
                 "<td><select class=\"form-select form-select-sm sq-uom\" name=\"Items[0].QuantityUomId\"><option value=\"\">—</option></select></td>" +
                 "<td><select class=\"form-select form-select-sm sq-grade\" name=\"Items[0].SalesPriceGrade\" title=\"Price tier from material master (per base UOM)\">" +
-                "<option value=\"A\" selected>Grade A</option><option value=\"B\">Grade B</option><option value=\"C\">Grade C</option><option value=\"Scrap\">Scrap</option></select></td>" +
-                "<td><input class=\"form-control form-control-sm sq-qty\" name=\"Items[0].OrderQuantity\" type=\"number\" step=\"0.0001\" min=\"0\" value=\"1\" style=\"max-width:5rem\" /></td>" +
+                "<option value=\"A\" selected>Grade A</option><option value=\"B\">Grade B</option><option value=\"C\">Grade C</option></select></td>" +
+                "<td><input class=\"form-control form-control-sm sq-qty au-doc-qty\" name=\"Items[0].OrderQuantity\" type=\"number\" step=\"1\" min=\"0\" data-au-qty-min=\"0\" value=\"1\" style=\"max-width:5rem\" inputmode=\"numeric\" /></td>" +
                 "<td><input class=\"form-control form-control-sm sq-unit\" name=\"Items[0].UnitPrice\" type=\"number\" step=\"0.0001\" min=\"0\" value=\"0\" style=\"max-width:6rem\" /></td>" +
                 "<td class=\"sq-td-afterdisc\"><input class=\"form-control form-control-sm sq-net text-end\" type=\"text\" readonly value=\"0\" style=\"min-width:5rem;background:#f8f8f8\" /></td>" +
                 "<td class=\"sq-td-linetot\"><input type=\"hidden\" class=\"sq-line-chg-json\" name=\"Items[0].ItemChargeValuesJson\" value=\"{}\" /><input class=\"form-control form-control-sm sq-line-tot text-end\" type=\"text\" readonly value=\"0\" style=\"min-width:5.5rem;background:#f0f6ff\" /></td>" +
@@ -1004,8 +1044,6 @@
             return t.content.querySelector("tr.sq-item-row");
         }
         function wireRow(tr) {
-            tr.querySelectorAll(".sq-qty, .sq-unit").forEach(function (x) { x.addEventListener("input", function () { recalcLine(tr); }); x.addEventListener("change", function () { recalcLine(tr); }); });
-            tr.querySelectorAll(".sq-ln-chg").forEach(function (x) { x.addEventListener("input", function () { recalcLine(tr); }); x.addEventListener("change", function () { recalcLine(tr); }); });
             var u = tr.querySelector(".sq-uom");
             if (u) u.addEventListener("change", function () {
                 var mat = (tr.querySelector(".sq-matno") && tr.querySelector(".sq-matno").value || "").trim();

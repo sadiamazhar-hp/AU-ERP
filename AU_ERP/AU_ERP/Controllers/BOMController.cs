@@ -26,14 +26,16 @@ namespace AU_ERP.Controllers
             return AllowedBomStatuses.Contains(v) ? AllowedBomStatuses.First(x => x.Equals(v, StringComparison.OrdinalIgnoreCase)) : v;
         }
         
-        private async Task<string?> ValidateBomHeaderBusinessRulesAsync(BomCreateDto dto, int? editingBomId, CancellationToken ct)
+        /// <param name="preservedValidToWhenNoneInDto">On updates, BOM end date retained when JSON does not supply Valid To (nullable column).</param>
+        private async Task<string?> ValidateBomHeaderBusinessRulesAsync(BomCreateDto dto, DateTime? preservedValidToWhenNoneInDto, CancellationToken ct)
         {
             var status = NormalizeBomStatus(dto.Status);
             var plant = (dto.Plant ?? "").Trim();
             var headerMat = (dto.BomMaterialNumber ?? "").Trim();
             if (!AllowedBomStatuses.Contains(status))
                 return "Invalid BOM status.";
-            if (dto.ValidFrom.HasValue && dto.ValidTo.HasValue && dto.ValidFrom.Value.Date > dto.ValidTo.Value.Date)
+            var rangeEndValidTo = dto.ValidTo.HasValue ? dto.ValidTo : preservedValidToWhenNoneInDto;
+            if (dto.ValidFrom.HasValue && rangeEndValidTo.HasValue && dto.ValidFrom.Value.Date > rangeEndValidTo.Value.Date)
                 return "Valid To date must be on or after Valid From date.";
             var headerMaterial = await _db.CreateMaterialMaster.AsNoTracking()
                 .FirstOrDefaultAsync(m => m.MaterialNumber == headerMat, ct);
@@ -391,6 +393,8 @@ namespace AU_ERP.Controllers
                 if (await _db.BomHeadersSamples.AnyAsync(h => h.BomID != dto.BomID && h.BOMCode == code, ct))
                     return Json(new { success = false, message = "This BOM code is already in use." });
 
+                var preservedValidTo = header.ValidTo;
+
                 // Header assembly (HALB/FERT + material number) is fixed after create so production orders can stay aligned with a stable assembly identity.
 
                 header.BOMCode = code;
@@ -399,13 +403,15 @@ namespace AU_ERP.Controllers
                 header.Plant = dto.Plant;
                 header.BaseQty = dto.BaseQty;
                 header.ValidFrom = dto.ValidFrom;
-                header.ValidTo = dto.ValidTo;
+                // UI no longer sends Valid To; preserve existing DB value unless a caller explicitly posts a date.
+                if (dto.ValidTo.HasValue)
+                    header.ValidTo = dto.ValidTo;
                 header.BomUsage = "Production";
                 header.AlternativeNo = header.BOMCode ?? header.AlternativeNo;
                 header.Status = NormalizeBomStatus(dto.Status);
                 header.IsDefaultBom = dto.IsDefaultBom;
                 
-                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, dto.BomID, ct);
+                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, preservedValidTo, ct);
                 if (hdrErr != null)
                     return Json(new { success = false, message = hdrErr });
 

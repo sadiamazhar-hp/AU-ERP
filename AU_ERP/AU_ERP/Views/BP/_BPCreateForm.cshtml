@@ -298,19 +298,22 @@
         if (!sel) return;
         if ([].some.call(sel.options, function (o) { return o.value === initial; })) sel.value = initial;
     }
+    function bpFindItabBtn(root, slug) {
+        return Array.prototype.find.call(root.querySelectorAll(".bp-itab-btn"), function (b) {
+            return (b.getAttribute("onclick") || "").indexOf("'" + slug + "'") >= 0;
+        });
+    }
+
     function bpHandleRoleUI(select) {
         const root = select.closest('#bpCreateRoot');
         if (!root) return;
         const opt = select.options[select.selectedIndex];
-        const roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
+        const roleCodeRaw = opt ? (opt.getAttribute('data-code') || '') : '';
+        const roleCode = String(roleCodeRaw).trim().toUpperCase();
         const customerTypeId = parseInt(root.getAttribute('data-type-customer-id') || '0', 10) || 0;
         const localGroupId = parseInt(root.getAttribute('data-group-local-id') || '0', 10) || 0;
         const sales = root.querySelector('.tab-sales-btn');
         const purch = root.querySelector('.tab-purch-btn');
-        const basicTabBtn = Array.prototype.find.call(root.querySelectorAll('.bp-itab-btn'), function (b) {
-            return (b.getAttribute('onclick') || '').indexOf("'basic'") >= 0;
-        });
-        const allTabBtns = root.querySelectorAll('.bp-itab-btn');
         const typeSel = root.querySelector('.f-type');
         const typeHidden = root.querySelector('.f-type-hidden');
         const groupSel = root.querySelector('.f-group');
@@ -320,19 +323,19 @@
         const isBasic = roleCode === 'FLCU00';
         const isCustomer = roleCode === 'FLCU01';
         const isVendor = roleCode === 'FLVN01';
-        var showSales = roleCode === 'FLCU01' || roleCode === 'FLCU00';
-        var showPurch = roleCode === 'FLVN01' || roleCode === 'FLCU00';
-        if (sales) sales.classList.toggle('d-none', !showSales);
-        if (purch) purch.classList.toggle('d-none', !showPurch);
-
+        var showSales = isCustomer || isBasic;
+        var showPurch = isVendor || isBasic;
         if (typeRow) typeRow.classList.toggle('d-none', isBasic);
         if (bpidRow) bpidRow.classList.toggle('d-none', isBasic);
         if (groupRow) groupRow.classList.toggle('d-none', isBasic || isVendor);
+        const basicTabBtn = bpFindItabBtn(root, 'basic');
         if (basicTabBtn) basicTabBtn.classList.add('d-none');
-        allTabBtns.forEach(function (b) {
-            if (b === basicTabBtn) return;
-            b.classList.remove('d-none');
+        ['address', 'comm', 'company'].forEach(function (slug) {
+            var b = bpFindItabBtn(root, slug);
+            if (b) b.classList.remove('d-none');
         });
+        if (sales) sales.classList.toggle('d-none', !showSales);
+        if (purch) purch.classList.toggle('d-none', !showPurch);
 
         ['address', 'comm', 'company', 'sales', 'purch'].forEach(function (nm) {
             var pane = root.querySelector('.tab-' + nm);
@@ -374,9 +377,7 @@
         if (isVendor && groupSel)
             groupSel.value = '';
 
-        var addrBtn = Array.prototype.find.call(root.querySelectorAll('.bp-itab-btn'), function (b) {
-            return (b.getAttribute('onclick') || '').indexOf("'address'") >= 0;
-        });
+        var addrBtn = bpFindItabBtn(root, 'address');
         if (addrBtn) bpSwitchTab(addrBtn, 'address');
     }
     function bpSwitchTab(btn, tab) {
@@ -432,7 +433,7 @@
         req('.f-country');
         req('.f-recon');
         var opt = roleSel && roleSel.options[roleSel.selectedIndex];
-        var roleCode = opt ? (opt.getAttribute('data-code') || '') : '';
+        var roleCode = opt ? String(opt.getAttribute('data-code') || '').trim().toUpperCase() : '';
         if (roleCode === 'FLCU01' || roleCode === 'FLCU00') {
             req('.f-dist');
             req('.f-sales-schema');

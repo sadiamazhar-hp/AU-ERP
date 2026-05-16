@@ -4,6 +4,7 @@
     ViewData["Title"] = "Reservation Issue";
     var total = Model.Documents.Count;
     var pending = Model.Documents.Count(d => string.Equals(d.Status, GoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase));
+    var received = Model.Documents.Count(d => string.Equals(d.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase));
     var completed = Model.Documents.Count(d => string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase));
 }
 
@@ -13,7 +14,8 @@
         .gi-hero { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; }
         .gi-hero h1 { font-size:1.35rem; font-weight:600; color:var(--dark,#354a5e); margin:0 0 .25rem 0; }
         .gi-hero p { margin:0; color:var(--subtle,#6a7c8e); font-size:.9rem; }
-        .gi-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; margin-bottom:1.25rem; }
+        .gi-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1.25rem; }
+        @@media (max-width: 900px) { .gi-stats { grid-template-columns:repeat(2,1fr); } }
         .gi-stat { background:#fff; border:1px solid var(--border,#d9d9d9); border-radius:4px; padding:.85rem 1rem; box-shadow:var(--sh,0 2px 8px rgba(0,0,0,.12)); border-top:3px solid var(--blue,#0070f2); }
         .gi-stat .label { font-size:.72rem; font-weight:600; letter-spacing:.04em; color:var(--subtle,#6a7c8e); text-transform:uppercase; }
         .gi-stat .val { font-size:1.55rem; font-weight:600; color:var(--dark,#354a5e); line-height:1.2; margin-top:.2rem; }
@@ -25,7 +27,7 @@
         .gi-badge { display:inline-block; padding:.2rem .55rem; border-radius:999px; font-size:.75rem; font-weight:500; }
         .gi-badge-pending { background:#fff3cd; color:#664d03; }
         .gi-badge-done { background:#d1e7dd; color:#0f5132; }
-        .gi-badge-draft { background:#e2e3e5; color:#41464b; }
+        .gi-badge-await { background:#cfe2ff; color:#084298; }
         .gi-actions { display:flex; flex-wrap:wrap; gap:.35rem; }
     </style>
 }
@@ -40,7 +42,8 @@
 
     <div class="gi-stats">
         <div class="gi-stat"><div class="label">Total</div><div class="val">@total</div></div>
-        <div class="gi-stat"><div class="label">Pending</div><div class="val">@pending</div></div>
+        <div class="gi-stat"><div class="label">Pending receive</div><div class="val">@pending</div></div>
+        <div class="gi-stat"><div class="label">Awaiting release</div><div class="val">@received</div></div>
         <div class="gi-stat"><div class="label">Completed</div><div class="val">@completed</div></div>
     </div>
 
@@ -73,6 +76,8 @@
                             : $"{d.FinishedMaterialNumber} — {d.FinishedMaterialName}";
                         var badgeClass = string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase)
                             ? "gi-badge gi-badge-done"
+                            : string.Equals(d.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase)
+                                ? "gi-badge gi-badge-await"
                             : string.Equals(d.Status, GoodsIssueDocument.StatusPending, StringComparison.OrdinalIgnoreCase)
                                 ? "gi-badge gi-badge-pending"
                                 : "gi-badge gi-badge-draft";
@@ -88,10 +93,15 @@
                                     @{
                                         var dispSent = string.Equals(d.DispatchStatus, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase);
                                         var dispPend = string.Equals(d.DispatchStatus, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase);
+                                        var stReceived = string.Equals(d.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase);
                                     }
                                     @if (!string.Equals(d.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
                                     {
-                                        @if (dispPend)
+                                        @if (stReceived && dispSent)
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Use Release on the production order list to create operation tracking.">Goods received</button>
+                                        }
+                                        else if (dispPend)
                                         {
                                             <button type="button" class="btn btn-primary btn-sm" onclick="giSend(@d.Id)">Send Goods</button>
                                             <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Send goods first">Receive Goods</button>
@@ -198,8 +208,8 @@
             });
         };
         if (typeof window.materialShowDeleteConfirmModalThen === "function")
-            window.materialShowDeleteConfirmModalThen("Receive goods for this RI? Inventory will be deducted and production order released to operations.", run);
-        else if (confirm("Receive goods for this RI? Inventory will be deducted and production order released to operations."))
+            window.materialShowDeleteConfirmModalThen("Receive goods on this GI? Inventory will be deducted for the quantities issued. Complete any remaining quantities if needed — then run Release on the production order list to start operations.", run);
+        else if (confirm("Receive goods on this GI? Inventory will be deducted. Then run Release on the production order."))
             run();
     }
 

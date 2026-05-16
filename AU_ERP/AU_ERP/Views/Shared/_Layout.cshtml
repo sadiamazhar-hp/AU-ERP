@@ -78,6 +78,8 @@
     var salesPaymentActive = string.Equals(ctrl, "SalesPayment", StringComparison.OrdinalIgnoreCase)
         && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
             || string.Equals(act, "Edit", StringComparison.OrdinalIgnoreCase));
+    var creditMemoActive = string.Equals(ctrl, "CreditMemo", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var returnOrderActive = string.Equals(ctrl, "ReturnOrder", StringComparison.OrdinalIgnoreCase)
         && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
             || string.Equals(act, "Create", StringComparison.OrdinalIgnoreCase)
@@ -86,7 +88,7 @@
         && (string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase)
             || string.Equals(act, "Details", StringComparison.OrdinalIgnoreCase));
     var salesPreSalesNavActive = salesQuotationActive;
-    var salesOrderFulfillmentNavActive = salesOrderActive || deliveryChallanActive || returnOrderActive || reorderQiActive;
+    var salesOrderFulfillmentNavActive = salesOrderActive || deliveryChallanActive || returnOrderActive || reorderQiActive || creditMemoActive;
     var salesBillingNavActive = invoiceActive || salesPaymentActive;
     var dashboardActive = string.Equals(ctrl, "Dashboard", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
@@ -164,7 +166,7 @@
                         <a class="au-sidebar-link @(stockMovementActive ? "active" : null)" asp-controller="StockMovement" asp-action="Index">Stock Movement</a>
                     }
                 }
-                @if (isSalesDept)
+                @if (isSalesDept || isAdminDept)
                 {
                     <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Sales</div>
                     <div class="au-sidebar-group">
@@ -177,6 +179,7 @@
                         <a class="au-sidebar-link au-sidebar-link--sub @(deliveryChallanActive ? "active" : null)" asp-controller="DeliveryChallan" asp-action="Index">Delivery challan</a>
                         <a class="au-sidebar-link au-sidebar-link--sub @(returnOrderActive ? "active" : null)" asp-controller="ReturnOrder" asp-action="Index">Return order</a>
                         <a class="au-sidebar-link au-sidebar-link--sub @(reorderQiActive ? "active" : null)" asp-controller="ReorderQualityInspection" asp-action="Index">ROD Inspection</a>
+                        <a class="au-sidebar-link au-sidebar-link--sub @(creditMemoActive ? "active" : null)" asp-controller="CreditMemo" asp-action="Index">Credit memo</a>
                     </div>
                     <div class="au-sidebar-group">
                         <div class="au-sidebar-group-title @(salesBillingNavActive ? "au-sidebar-group-title--active" : null)">Billing &amp; Payments</div>

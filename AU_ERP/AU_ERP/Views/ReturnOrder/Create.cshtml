@@ -28,7 +28,7 @@
         <div class="alert alert-danger py-2 small mb-3" role="alert">@err</div>
     }
 
-    <form asp-action="Create" method="post" class="card shadow-sm">
+    <form asp-action="Create" method="post" class="card shadow-sm" data-au-prevent-enter-submit>
         @Html.AntiForgeryToken()
         <input type="hidden" asp-for="InvoiceId" />
 
@@ -112,9 +112,10 @@
                                 <td class="text-end ro-ro">@FmtQty(line.QuantityInvoiced)</td>
                                 <td class="text-end">
                                     <input type="hidden" name="Lines[@i].SalesInvoiceLineId" value="@line.SalesInvoiceLineId" />
-                                    <input type="number" step="0.0001" min="0" max="@line.QuantityInvoiced.ToString(CultureInfo.InvariantCulture)"
+                                    <input type="number" step="1" min="0" data-au-qty-min="0"
+                                           max="@line.QuantityInvoiced.ToString(CultureInfo.InvariantCulture)"
                                            name="Lines[@i].QuantityReturned" value="@line.QuantityReturned.ToString(CultureInfo.InvariantCulture)"
-                                           class="form-control form-control-sm ro-qty text-end" />
+                                           class="form-control form-control-sm ro-qty au-doc-qty text-end" inputmode="numeric" />
                                 </td>
                             </tr>
                         }

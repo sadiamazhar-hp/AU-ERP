@@ -1,7 +1,9 @@
+@using AU_ERP.Models.ViewModels
 @model AU_ERP.Models.ViewModels.InvoiceIndexVm
 @using System.Globalization
 @using System.Text.Json
 @using AU_ERP.Models
+@using AU_ERP.Controllers
 @{
     ViewData["Title"] = "Invoice";
     string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.CurrentCulture);
@@ -50,6 +52,84 @@
     }
     <h1 class="h4 mb-3">Invoice</h1>
 
+    <div class="inv-table-card mb-3">
+        <h2 class="h6 mb-3">Filters</h2>
+        <form asp-action="Index" method="get" class="row g-2 gy-3 align-items-end">
+            <div class="col-12 col-md-4 col-lg-3">
+                <label class="form-label mb-1 small text-secondary">Search</label>
+                <input type="search" name="q" value="@Model.SearchQuery" class="form-control form-control-sm" maxlength="160" autocomplete="off" placeholder="Invoice no., DC no., dealer ID or name…" />
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label mb-1 small text-secondary">Status</label>
+                <select name="status" class="form-select form-select-sm" id="invStatusFilter">
+                    @{
+                        var cur = Model.StatusFilter ?? "";
+                    }
+                    @if (string.IsNullOrEmpty(cur))
+                    {
+                        <option value="" selected="selected">All</option>
+                    }
+                    else
+                    {
+                        <option value="">All</option>
+                    }
+                    @if (string.Equals(cur, InvoiceController.InvoiceIndexStatusFilterOpen, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <option value="@InvoiceController.InvoiceIndexStatusFilterOpen" selected="selected">Open (not overdue)</option>
+                    }
+                    else
+                    {
+                        <option value="@InvoiceController.InvoiceIndexStatusFilterOpen">Open (not overdue)</option>
+                    }
+                    @if (string.Equals(cur, InvoiceController.InvoiceIndexStatusFilterOverdue, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <option value="@InvoiceController.InvoiceIndexStatusFilterOverdue" selected="selected">Open — overdue</option>
+                    }
+                    else
+                    {
+                        <option value="@InvoiceController.InvoiceIndexStatusFilterOverdue">Open — overdue</option>
+                    }
+                    @if (string.Equals(cur, SalesInvoice.StatusCollected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <option value="@SalesInvoice.StatusCollected" selected="selected">@SalesInvoice.StatusCollected</option>
+                    }
+                    else
+                    {
+                        <option value="@SalesInvoice.StatusCollected">@SalesInvoice.StatusCollected</option>
+                    }
+                    @if (string.Equals(cur, SalesInvoice.StatusReturnInProcess, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <option value="@SalesInvoice.StatusReturnInProcess" selected="selected">@SalesInvoice.StatusReturnInProcess</option>
+                    }
+                    else
+                    {
+                        <option value="@SalesInvoice.StatusReturnInProcess">@SalesInvoice.StatusReturnInProcess</option>
+                    }
+                    @if (string.Equals(cur, SalesInvoice.StatusReturned, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <option value="@SalesInvoice.StatusReturned" selected="selected">@SalesInvoice.StatusReturned</option>
+                    }
+                    else
+                    {
+                        <option value="@SalesInvoice.StatusReturned">@SalesInvoice.StatusReturned</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2 col-lg-2">
+                <label class="form-label mb-1 small text-secondary">Doc. date from</label>
+                <input type="date" name="docFrom" class="form-control form-control-sm" value="@(Model.DocumentDateFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+            </div>
+            <div class="col-6 col-md-2 col-lg-2">
+                <label class="form-label mb-1 small text-secondary">Doc. date to</label>
+                <input type="date" name="docTo" class="form-control form-control-sm" value="@(Model.DocumentDateTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+            </div>
+            <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+
     <div class="inv-stats" style="grid-template-columns: repeat(4, 1fr);">
         <div class="inv-stat-card">
             <div class="inv-stat-label">Open</div>
@@ -93,7 +173,13 @@
                 <tbody>
                     @if (Model.Invoices.Count == 0)
                     {
-                        <tr><td colspan="9" class="text-secondary">No invoices yet. Invoices are created when you save a delivery challan.</td></tr>
+                        var anyFilter =
+                            Model.DocumentDateFrom != null ||
+                            Model.DocumentDateTo != null ||
+                            !string.IsNullOrEmpty(Model.SearchQuery) ||
+                            !string.IsNullOrEmpty(Model.StatusFilter);
+                        var emptyMsg = anyFilter ? "No invoices match the current filters." : "No invoices yet. Invoices are created when you save a delivery challan.";
+                        <tr><td colspan="9" class="text-secondary">@emptyMsg</td></tr>
                     }
                     else
                     {
@@ -103,7 +189,11 @@
                             var isReturned = string.Equals(inv.Status, SalesInvoice.StatusReturned, StringComparison.OrdinalIgnoreCase);
                             var isRip = string.Equals(inv.Status, SalesInvoice.StatusReturnInProcess, StringComparison.OrdinalIgnoreCase);
                             Model.QiByInvoiceId.TryGetValue(inv.Id, out var qiNav);
-                            var hasRo = Model.ReturnOrderIdByInvoiceId.TryGetValue(inv.Id, out var roId);
+                            Model.ReturnOrdersByInvoiceId.TryGetValue(inv.Id, out var rs);
+                            var roList = rs ?? new List<InvoiceReturnOrderSummaryVm>();
+                            var hasRo = roList.Count > 0;
+                            var focusReturnOrderId = hasRo ? roList[0].Id : (int?)null;
+                            Model.CreditMemoReturnOrderIdByInvoiceId.TryGetValue(inv.Id, out var creditMemoRoId);
                             <tr>
                                 <td><a asp-action="Details" asp-route-id="@inv.Id"><strong>@inv.DocumentNumber</strong></a></td>
                                 <td>@inv.DocumentDate.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)</td>
@@ -113,25 +203,34 @@
                                 <td class="text-end">@FmtMoney(inv.Subtotal)</td>
                                 <td class="text-end"><strong>@FmtMoney(inv.GrandTotal)</strong></td>
                                 <td>@inv.Status</td>
-                                <td>
+                                <td class="inv-actions-cell">
                                     @if (string.Equals(inv.Status, SalesInvoice.StatusOpen, StringComparison.OrdinalIgnoreCase))
                                     {
                                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="invOpenPayModal(@inv.Id)">Pay</button>
                                     }
-                                    else
-                                    {
-                                        <button type="button" class="btn btn-sm btn-outline-primary" disabled title="Only open invoices can be paid.">Pay</button>
-                                    }
                                     @if (isReturned)
                                     {
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Invoice is already returned.">Return</button>
                                         @if (hasRo)
                                         {
-                                            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@roId">View return</a>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-secondary inv-btn-view-return"
+                                                    data-inv-invoice-id="@inv.Id.ToString(CultureInfo.InvariantCulture)"
+                                                    data-inv-doc="@inv.DocumentNumber"
+                                                    data-inv-ro-focus-id="@focusReturnOrderId?.ToString(CultureInfo.InvariantCulture)">View return</button>
                                         }
-                                        @if (qiNav != null)
+                                        @if (qiNav != null && !qiNav.IsPending)
                                         {
-                                            <a class="btn btn-sm btn-outline-info" asp-controller="ReorderQualityInspection" asp-action="Details" asp-route-id="@qiNav.QiId">View QI</a>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-info inv-btn-view-qi-completed"
+                                                    data-inv-qi-id="@qiNav.QiId.ToString(CultureInfo.InvariantCulture)"
+                                                    data-inv-qi-doc="">View QI</button>
+                                        }
+                                        @if (creditMemoRoId > 0)
+                                        {
+                                            <a class="btn btn-sm btn-outline-success"
+                                               asp-controller="CreditMemo"
+                                               asp-action="Index"
+                                               asp-route-openRo="@creditMemoRoId.ToString(CultureInfo.InvariantCulture)">Credit memo</a>
                                         }
                                     }
                                     else if (isRip || (qiNav?.IsPending ?? false))
@@ -142,15 +241,22 @@
                                         }
                                         @if (hasRo)
                                         {
-                                            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@roId">View return</a>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-secondary inv-btn-view-return"
+                                                    data-inv-invoice-id="@inv.Id.ToString(CultureInfo.InvariantCulture)"
+                                                    data-inv-doc="@inv.DocumentNumber"
+                                                    data-inv-ro-focus-id="@focusReturnOrderId?.ToString(CultureInfo.InvariantCulture)">View return</button>
                                         }
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Return quality inspection must be completed first.">Return</button>
                                     }
                                     else if (hasRo)
                                     {
-                                        <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@roId">View return</a>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-secondary inv-btn-view-return"
+                                                data-inv-invoice-id="@inv.Id.ToString(CultureInfo.InvariantCulture)"
+                                                data-inv-doc="@inv.DocumentNumber"
+                                                data-inv-ro-focus-id="@focusReturnOrderId?.ToString(CultureInfo.InvariantCulture)">View return</button>
                                     }
-                                    else
+                                    else if (!string.Equals(inv.Status, SalesInvoice.StatusCollected, StringComparison.OrdinalIgnoreCase))
                                     {
                                         <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Create" asp-route-invoiceId="@inv.Id">Return</a>
                                     }
@@ -169,3 +275,4 @@
     window.invPayCreateUrl = @Html.Raw(JsonSerializer.Serialize(payCreateUrl));
 </script>
 <partial name="_PaymentModal" />
+<partial name="_InvoiceQiReturnModals" />

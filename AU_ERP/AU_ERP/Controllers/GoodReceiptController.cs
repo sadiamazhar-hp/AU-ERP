@@ -1,6 +1,7 @@
 using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -79,6 +80,20 @@ public class GoodReceiptController : Controller
 
         if (doc.IsPosted)
             return Json(new { success = false, message = "Already posted." });
+
+        foreach (var (label, qty) in new (string Label, decimal Qty)[]
+        {
+            ("Produced quantity", dto.ProducedQty),
+            ("First-quality quantity", dto.QtyFirstQuality),
+            ("Second-quality quantity", dto.QtySecondQuality),
+            ("Third-quality quantity", dto.QtyThirdQuality),
+            ("Rejected/scrap quantity", dto.RejectedScrapQty)
+        })
+        {
+            var fracErr = DocumentQuantityRules.ValidateNonNegativeWhole(qty, label);
+            if (fracErr != null)
+                return Json(new { success = false, message = fracErr });
+        }
 
         doc.DocumentDate = dto.DocumentDate.Date;
         doc.DocumentNumber = (dto.DocumentNumber ?? "").Trim();

@@ -1,6 +1,7 @@
 using System.Data;
 using System.Globalization;
 using System.IO;
+using System.Security.Claims;
 using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Controllers;
 
-[Authorize(Policy = "SalesDepartment")]
+[Authorize(Policy = "SalesOrAdminDepartment")]
 public class DeliveryChallanController : Controller
 {
+    private sealed class FleetSelectionUnavailableException(string message) : Exception(message);
+
     private readonly AppDbContext _db;
     private readonly DocumentNumberAllocator _documentNumbers;
     private readonly SalesInvoiceFromDeliveryChallanService _invoiceFromDc;
@@ -29,6 +32,28 @@ public class DeliveryChallanController : Controller
         _documentNumbers = documentNumbers;
         _invoiceFromDc = invoiceFromDc;
         _companyInfo = companyInfo;
+    }
+
+    private async Task<IReadOnlyList<string>> AllowedDeliveryChallanPlantIdsAsync(CancellationToken ct)
+    {
+        var all = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, all).ToList();
+    }
+
+    private static string ExplainSalesOrderPlantDeniedForDc(ClaimsPrincipal user, SalesOrder o)
+    {
+        var p = (o.PlantId ?? "").Trim();
+        if (string.IsNullOrEmpty(p))
+            return "This sales order has no plant. Set the order’s plant before creating a delivery challan.";
+        if (UserPlantResolution.IsAdminDepartment(user))
+            return $"Sales order plant ‘{p}’ is not recognised for delivery challan (check Plants master and the order’s plant code).";
+        var assigned = UserPlantResolution.GetStorePlantIds(user);
+        if (assigned.Count > 0)
+            return $"This order is for plant ‘{p}’, which is not in your assigned store plants ({string.Join(", ", assigned)}). An administrator can assign the matching store/plant in Users, or use an account allowed for that plant.";
+        return $"Sales order plant ‘{p}’ is not recognised for delivery challan. Check Plants configuration and that the plant on the order matches a valid plant code.";
     }
 
     [HttpGet]
@@ -104,13 +129,16 @@ public class DeliveryChallanController : Controller
         var storePlantIds = UserPlantResolution.GetStorePlantIds(User);
         var dcPlantSingleLocked = storePlantIds.Count == 1;
         var dcLockedPlantId = dcPlantSingleLocked ? storePlantIds[0] : null;
+        var driversInUse = await DeliveryFleetAvailability.GetDriverIdsBusyOnOpenInvoiceAsync(_db, ct).ConfigureAwait(false);
+        var vehiclesInUse = await DeliveryFleetAvailability.GetVehicleIdsBusyOnOpenInvoiceAsync(_db, ct).ConfigureAwait(false);
+
         var drivers = await _db.Drivers.AsNoTracking()
-            .Where(d => d.IsActive)
+            .Where(d => d.IsActive && !driversInUse.Contains(d.Id))
             .OrderBy(d => d.LastName).ThenBy(d => d.FirstName).ThenBy(d => d.Id)
             .ToListAsync(ct)
             .ConfigureAwait(false);
         var vehicles = await _db.Vehicles.AsNoTracking()
-            .Where(v => v.IsActive)
+            .Where(v => v.IsActive && !vehiclesInUse.Contains(v.Id))
             .OrderBy(v => v.NumberPlate)
             .ToListAsync(ct)
             .ConfigureAwait(false);
@@ -238,7 +266,7 @@ public class DeliveryChallanController : Controller
         var allowedLines = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsLines)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(o.PlantId) || !allowedLines.Contains(o.PlantId.Trim()))
-            return Json(new { success = false, message = "This sales order’s plant is not available for your user." });
+            return Json(new { success = false, message = ExplainSalesOrderPlantDeniedForDc(User, o) });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders are listed." });
         var giDispatchedLines = await _db.SalesGoodsIssueDocuments.AsNoTracking()
@@ -317,7 +345,7 @@ public class DeliveryChallanController : Controller
         var allowedPrep = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsPrep)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(o.PlantId) || !allowedPrep.Contains(o.PlantId.Trim()))
-            return Json(new { success = false, message = "This sales order’s plant is not available for your user." });
+            return Json(new { success = false, message = ExplainSalesOrderPlantDeniedForDc(User, o) });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders can create a delivery challan." });
         var giDispatchedPrep = await _db.SalesGoodsIssueDocuments.AsNoTracking()
@@ -526,24 +554,36 @@ public class DeliveryChallanController : Controller
                     .ConfigureAwait(false);
                 try
                 {
-                    var dcNum = await _documentNumbers.AllocateAsync(ModuleKeys.DeliveryChallan, ct).ConfigureAwait(false);
-
                     int? driverId = model.DriverId is > 0 ? model.DriverId : null;
                     int? vehicleId = model.VehicleId is > 0 ? model.VehicleId : null;
+
+                    var driversInUseTx = await DeliveryFleetAvailability.GetDriverIdsBusyOnOpenInvoiceAsync(_db, ct).ConfigureAwait(false);
+                    var vehiclesInUseTx = await DeliveryFleetAvailability.GetVehicleIdsBusyOnOpenInvoiceAsync(_db, ct).ConfigureAwait(false);
+
                     if (driverId is int did)
                     {
                         var okD = await _db.Drivers.AsNoTracking()
                             .AnyAsync(x => x.Id == did && x.IsActive, ct)
                             .ConfigureAwait(false);
-                        if (!okD) driverId = null;
+                        if (!okD)
+                            throw new FleetSelectionUnavailableException("Selected driver is invalid or inactive.");
+                        if (driversInUseTx.Contains(did))
+                            throw new FleetSelectionUnavailableException(
+                                "Selected driver is not available (already on another active delivery).");
                     }
                     if (vehicleId is int vid)
                     {
                         var okV = await _db.Vehicles.AsNoTracking()
                             .AnyAsync(x => x.Id == vid && x.IsActive, ct)
                             .ConfigureAwait(false);
-                        if (!okV) vehicleId = null;
+                        if (!okV)
+                            throw new FleetSelectionUnavailableException("Selected vehicle is invalid or inactive.");
+                        if (vehiclesInUseTx.Contains(vid))
+                            throw new FleetSelectionUnavailableException(
+                                "Selected vehicle is not available (already on another active delivery).");
                     }
+
+                    var dcNum = await _documentNumbers.AllocateAsync(ModuleKeys.DeliveryChallan, ct).ConfigureAwait(false);
 
                     var header = new DeliveryChallan
                     {
@@ -597,6 +637,11 @@ public class DeliveryChallanController : Controller
                 }
             }).ConfigureAwait(false);
         }
+        catch (FleetSelectionUnavailableException ex)
+        {
+            TempData["DcError"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
         catch (DocumentIntegrationMissingException ex)
         {
             TempData["DcError"] = ex.Message;
@@ -613,6 +658,42 @@ public class DeliveryChallanController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkDeliveryCompleted(int id, CancellationToken ct = default)
+    {
+        var dc = await _db.DeliveryChallans.FirstOrDefaultAsync(x => x.Id == id, ct).ConfigureAwait(false);
+        if (dc == null)
+            return NotFound();
+        var allowed = await AllowedDeliveryChallanPlantIdsAsync(ct).ConfigureAwait(false);
+        var pid = (dc.PlantId ?? "").Trim();
+        if (pid.Length > 0
+            && !allowed.Any(a => string.Equals(a, pid, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["DcError"] = "You cannot change this delivery challan (plant not allowed for your login).";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (dc.DeliveryCompletedAt != null)
+        {
+            TempData["DcWarning"] = $"Delivery challan {dc.DeliveryChallanNumber} is already marked completed.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (dc.DriverId == null && dc.VehicleId == null)
+        {
+            TempData["DcError"] =
+                "Assign a driver or vehicle on this delivery challan before marking delivery completed.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        dc.DeliveryCompletedAt = DateTime.UtcNow;
+        dc.DeliveryCompletedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+        TempData["DcWarning"] = $"Marked delivery completed for {dc.DeliveryChallanNumber}. Driver / vehicle are available for new challans.";
         return RedirectToAction(nameof(Index));
     }
 

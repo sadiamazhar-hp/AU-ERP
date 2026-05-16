@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using System.Text.Json;
 
 namespace AU_ERP.Main_Controller
@@ -116,6 +117,22 @@ namespace AU_ERP.Main_Controller
         {
             material.SafetyStock = null;
             material.ReorderPoint = null;
+        }
+
+        private static void HarmonizeMaterialSalesAndEanFields(CreateMaterialMaster material)
+        {
+            static decimal? NonNegative(decimal? v) => v is null ? null : (v.Value < 0 ? 0m : v.Value);
+            if (!string.IsNullOrWhiteSpace(material.EAN))
+            {
+                var e = material.EAN.Trim();
+                while (e.StartsWith('-')) e = e[1..].TrimStart();
+                material.EAN = string.IsNullOrWhiteSpace(e) ? null : e;
+            }
+
+            material.SalesPriceGradeAPerBaseUom = NonNegative(material.SalesPriceGradeAPerBaseUom);
+            material.SalesPriceGradeBPerBaseUom = NonNegative(material.SalesPriceGradeBPerBaseUom);
+            material.SalesPriceGradeCPerBaseUom = NonNegative(material.SalesPriceGradeCPerBaseUom);
+            material.ScrapCostPerBaseUom = NonNegative(material.ScrapCostPerBaseUom);
         }
 
         /// <summary>
@@ -288,6 +305,7 @@ namespace AU_ERP.Main_Controller
         public async Task<IActionResult> Create(CreateMaterialMaster material, int[]? selectedGlobalUnitConversionIds)
         {
             HarmonizeMaterialMrpFields(material);
+            HarmonizeMaterialSalesAndEanFields(material);
             if (!ModelState.IsValid)
             {
                 ModelState.Clear();
@@ -328,6 +346,7 @@ namespace AU_ERP.Main_Controller
         public async Task<IActionResult> CreateV2(CreateMaterialMaster material, int[]? selectedGlobalUnitConversionIds)
         {
             HarmonizeMaterialMrpFields(material);
+            HarmonizeMaterialSalesAndEanFields(material);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -452,44 +471,90 @@ namespace AU_ERP.Main_Controller
                     u => u.Code != null && u.Code.Trim().ToLower() == code.ToLower(), ct);
             if (baseUom == null)
                 return Json(new { success = true, altGroups = Array.Empty<object>(), baseUomId = (int?)null });
-            var flat = await _context.GlobalUnitConversions.AsNoTracking()
-                .Where(x => x.BaseUnitId == baseUom.Id || x.AltUnitId == baseUom.Id)
-                .Select(g => new
-                {
-                    g.Id,
-                    g.Title,
-                    g.Quantity,
-                    DerivedAltUnitId = g.BaseUnitId == baseUom.Id ? g.AltUnitId : g.BaseUnitId,
-                    QuantityForBase = g.BaseUnitId == baseUom.Id ? g.Quantity : (g.Quantity <= 0 ? 0 : 1m / g.Quantity)
-                })
-                .Join(_context.UnitOfMeasurements,
-                    g => g.DerivedAltUnitId,
-                    u => u.Id,
-                    (g, u) => new
-                    {
-                        g.Id,
-                        g.Title,
-                        Quantity = g.QuantityForBase,
-                        AltUnitId = g.DerivedAltUnitId,
-                        AltCode = u.Code,
-                        AltDesc = u.Description
-                    })
-                .ToListAsync(ct);
+
+            var globals = await _context.GlobalUnitConversions.AsNoTracking()
+                .Where(g => g.BaseUnitId == baseUom.Id || g.AltUnitId == baseUom.Id)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            if (globals.Count == 0)
+                return Json(new { success = true, altGroups = Array.Empty<object>(), baseUomId = baseUom.Id });
+
+            var uomIds = globals.SelectMany(g => new[] { g.BaseUnitId, g.AltUnitId }).Distinct().ToList();
+            var uomMap = await _context.UnitOfMeasurements.AsNoTracking()
+                .Where(u => uomIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, ct)
+                .ConfigureAwait(false);
+
+            var flat = new List<(
+                int Id,
+                string Title,
+                decimal QuantityForMaterialBase,
+                int DerivedAltUnitId,
+                string ChoiceLabel)>();
+            foreach (var g in globals)
+            {
+                if (!uomMap.TryGetValue(g.BaseUnitId, out var gGlobalBase) || !uomMap.TryGetValue(g.AltUnitId, out var gGlobalAlt))
+                    continue;
+                var derivedAltId = g.BaseUnitId == baseUom.Id ? g.AltUnitId : g.BaseUnitId;
+                // Same factor as before: how many "derived alt" units per one material base UOM.
+                var qtyForBase = g.BaseUnitId == baseUom.Id
+                    ? g.Quantity
+                    : (g.Quantity <= 0 ? 0 : 1m / g.Quantity);
+                var label = BuildAlternateUnitChoiceLabel(g, gGlobalBase, gGlobalAlt);
+                flat.Add((g.Id, g.Title ?? "", qtyForBase, derivedAltId, label));
+            }
+
             var altGroups = flat
-                .GroupBy(x => x.AltUnitId)
-                .Select(grp => new
+                .GroupBy(x => x.DerivedAltUnitId)
+                .Select(grp =>
                 {
-                    altUnitId = grp.Key,
-                    code = grp.First().AltCode,
-                    desc = grp.First().AltDesc,
-                    options = grp
-                        .OrderBy(x => x.Title)
-                        .Select(x => new { id = x.Id, title = x.Title, quantity = x.Quantity })
-                        .ToList()
+                    uomMap.TryGetValue(grp.Key, out var derivedUom);
+                    return new
+                    {
+                        altUnitId = grp.Key,
+                        code = derivedUom?.Code ?? "",
+                        desc = derivedUom?.Description,
+                        options = grp
+                            .OrderBy(x => x.Title)
+                            .Select(x => new { id = x.Id, title = x.Title, quantity = x.QuantityForMaterialBase, choiceLabel = x.ChoiceLabel })
+                            .ToList()
+                    };
                 })
                 .OrderBy(x => x.code)
                 .ToList();
             return Json(new { success = true, altGroups, baseUomId = baseUom.Id });
+        }
+
+        /// <summary>Human label: prefer UOM description, then code.</summary>
+        private static string MaterialUomReadableLabel(string? description, string? code)
+        {
+            var d = (description ?? "").Trim();
+            if (d.Length > 0)
+                return d;
+            var c = (code ?? "").Trim();
+            return c.Length > 0 ? c : "?";
+        }
+
+        private static string FormatDisplayedConversionQuantity(decimal q)
+        {
+            var rounded = decimal.Round(q, 6, MidpointRounding.AwayFromZero);
+            if (rounded == decimal.Truncate(rounded))
+                return decimal.ToInt64(rounded).ToString(CultureInfo.InvariantCulture);
+            return rounded.ToString("0.######", CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.');
+        }
+
+        /// <summary>
+        /// Shows the global recipe as defined in master data (1 global base = qty global alt), then (base) for the material form.
+        /// Example: "raw conversion 2 (1 Box = 8 pieces (base))".
+        /// </summary>
+        private static string BuildAlternateUnitChoiceLabel(GlobalUnitConversion g, UnitOfMeasurement globalBase, UnitOfMeasurement globalAlt)
+        {
+            var lead = MaterialUomReadableLabel(globalBase.Description, globalBase.Code);
+            var trail = MaterialUomReadableLabel(globalAlt.Description, globalAlt.Code);
+            var qty = FormatDisplayedConversionQuantity(g.Quantity);
+            var inner = $"1 {lead} = {qty} {trail} (base)";
+            var ttl = (g.Title ?? "").Trim();
+            return ttl.Length > 0 ? $"{ttl} ({inner})" : inner;
         }
 
         [HttpPost]
@@ -497,6 +562,7 @@ namespace AU_ERP.Main_Controller
         public async Task<IActionResult> UpdateMaterialV2(CreateMaterialMaster material, int[]? selectedGlobalUnitConversionIds)
         {
             HarmonizeMaterialMrpFields(material);
+            HarmonizeMaterialSalesAndEanFields(material);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)
@@ -536,6 +602,7 @@ namespace AU_ERP.Main_Controller
                 if (vPur != null)
                     return (false, vPur);
                 HarmonizeMaterialMrpFields(material);
+                HarmonizeMaterialSalesAndEanFields(material);
 
                 var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, originalMaterialNumber);
                 if (vDesc != null)
@@ -602,6 +669,7 @@ namespace AU_ERP.Main_Controller
                 if (vPur != null)
                     return (false, vPur);
                 HarmonizeMaterialMrpFields(material);
+                HarmonizeMaterialSalesAndEanFields(material);
 
                 var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, material.MaterialNumber);
                 if (vDesc != null)
@@ -682,6 +750,7 @@ namespace AU_ERP.Main_Controller
                 if (vPur != null)
                     return (false, vPur);
                 HarmonizeMaterialMrpFields(material);
+                HarmonizeMaterialSalesAndEanFields(material);
 
                 var vDesc = await ValidateMaterialDescriptionUniqueAsync(material.Description, null);
                 if (vDesc != null)

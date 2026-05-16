@@ -1,0 +1,118 @@
+using AU_ERP.Models;
+using AU_ERP.Models.ViewModels;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+
+namespace AU_ERP.Controllers;
+
+/// <summary>Lists sales return credit memos (financial documents linked to return orders).</summary>
+[Authorize(Policy = "SalesDepartment")]
+public class CreditMemoController : Controller
+{
+    private readonly AppDbContext _db;
+
+    public CreditMemoController(AppDbContext db) => _db = db;
+
+    [HttpGet]
+    public async Task<IActionResult> Index(
+        string? q,
+        DateTime? docFrom,
+        DateTime? docTo,
+        int? openRo,
+        CancellationToken ct = default)
+    {
+        ViewData["Title"] = "Credit memo";
+        var search = (q ?? "").Trim();
+
+        DateTime? dFrom = docFrom?.Date;
+        DateTime? dTo = docTo?.Date;
+        if (dFrom.HasValue && dTo.HasValue && dFrom.Value > dTo.Value)
+            (dFrom, dTo) = (dTo, dFrom);
+
+        int? validatedOpenRo = null;
+        if (openRo is > 0)
+        {
+            try
+            {
+                var cmExists = await _db.SalesReturnCreditMemos.AsNoTracking()
+                    .AnyAsync(c => c.SalesReturnOrderId == openRo.Value, ct)
+                    .ConfigureAwait(false);
+                if (cmExists)
+                    validatedOpenRo = openRo.Value;
+            }
+            catch (SqlException)
+            {
+                /* ignore → no auto modal */
+            }
+        }
+
+        List<CreditMemoIndexRowVm> rows;
+        try
+        {
+            var query = _db.SalesReturnCreditMemos.AsNoTracking();
+            query = ApplyCreditMemoFilters(query, search, dFrom, dTo);
+
+            rows = await query
+                .OrderByDescending(c => c.DocumentDate)
+                .ThenByDescending(c => c.Id)
+                .Select(c => new CreditMemoIndexRowVm
+                {
+                    Id = c.Id,
+                    SalesReturnOrderId = c.SalesReturnOrderId,
+                    DocumentNumber = c.DocumentNumber,
+                    DocumentDate = c.DocumentDate,
+                    ReturnOrderDocumentNumber = c.ReturnOrderDocumentNumber,
+                    InvoiceDocumentNumber = c.InvoiceDocumentNumber,
+                    DealerDisplayName = c.DealerDisplayName,
+                    GrandTotalCredit = c.GrandTotalCredit
+                })
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+        catch (SqlException ex) when (
+            ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) &&
+            ex.Message.Contains("SalesReturnCreditMemos", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["CmError"] = "Credit memo tables are missing. Run database migrations.";
+            rows = new List<CreditMemoIndexRowVm>();
+        }
+
+        var vm = new CreditMemoIndexVm
+        {
+            SearchQuery = string.IsNullOrEmpty(search) ? null : search,
+            DocumentDateFrom = dFrom,
+            DocumentDateTo = dTo,
+            OpenReturnOrderId = validatedOpenRo,
+            Items = rows
+        };
+
+        return View(vm);
+    }
+
+    private static IQueryable<SalesReturnCreditMemo> ApplyCreditMemoFilters(
+        IQueryable<SalesReturnCreditMemo> q,
+        string search,
+        DateTime? docFrom,
+        DateTime? docTo)
+    {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            q = q.Where(c =>
+                c.DocumentNumber.Contains(s)
+                || c.ReturnOrderDocumentNumber.Contains(s)
+                || c.InvoiceDocumentNumber.Contains(s)
+                || (c.DealerDisplayName != null && c.DealerDisplayName.Contains(s))
+                || (c.DealerBusinessPartnerId != null && c.DealerBusinessPartnerId.Contains(s)));
+        }
+
+        if (docFrom.HasValue)
+            q = q.Where(c => c.DocumentDate >= docFrom.Value);
+        if (docTo.HasValue)
+            q = q.Where(c => c.DocumentDate <= docTo.Value);
+
+        return q;
+    }
+}

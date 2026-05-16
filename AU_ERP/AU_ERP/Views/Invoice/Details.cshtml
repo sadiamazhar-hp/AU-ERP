@@ -14,6 +14,7 @@
     var qiPending = ViewBag.QiIsPending as bool? == true;
     var isReturned = string.Equals(Model.Status, SalesInvoice.StatusReturned, StringComparison.OrdinalIgnoreCase);
     var isRip = string.Equals(Model.Status, SalesInvoice.StatusReturnInProcess, StringComparison.OrdinalIgnoreCase);
+    int? creditMemoReturnOrderId = ViewBag.CreditMemoReturnOrderId is int cmRo ? cmRo : null;
     var lines = (Model.Lines ?? Array.Empty<AU_ERP.Models.SalesInvoiceLine>()).OrderBy(l => l.LineNo).ToList();
     string FmtMoney(decimal v) => v.ToString("N4", CultureInfo.CurrentCulture);
 }
@@ -86,25 +87,34 @@
     </div>
 </div>
 
-<div class="mt-3">
+<div class="mt-3 d-flex flex-wrap gap-2">
     @if (canPay)
     {
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="invOpenPayModal(@Model.Id)">Pay</button>
     }
-    else
-    {
-        <button type="button" class="btn btn-sm btn-outline-primary" disabled title="Only open invoices without a payment can use Pay.">Pay</button>
-    }
     @if (isReturned)
     {
-        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Invoice is already returned.">Return</button>
         @if (returnOrderId.HasValue)
         {
-            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@returnOrderId.Value">View return</a>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary inv-btn-view-return"
+                    data-inv-invoice-id="@Model.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    data-inv-doc="@Model.DocumentNumber"
+                    data-inv-ro-focus-id="@returnOrderId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)">View return</button>
         }
-        @if (qiId.HasValue)
+        @if (qiId.HasValue && !qiPending)
         {
-            <a class="btn btn-sm btn-outline-info" asp-controller="ReorderQualityInspection" asp-action="Details" asp-route-id="@qiId.Value">View QI</a>
+            <button type="button"
+                    class="btn btn-sm btn-outline-info inv-btn-view-qi-completed"
+                    data-inv-qi-id="@qiId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    data-inv-qi-doc="">View QI</button>
+        }
+        @if (creditMemoReturnOrderId.HasValue)
+        {
+            <a class="btn btn-sm btn-outline-success"
+               asp-controller="CreditMemo"
+               asp-action="Index"
+               asp-route-openRo="@creditMemoReturnOrderId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)">Credit memo</a>
         }
     }
     else if (isRip || qiPending)
@@ -115,21 +125,24 @@
         }
         @if (returnOrderId.HasValue)
         {
-            <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@returnOrderId.Value">View return</a>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary inv-btn-view-return"
+                    data-inv-invoice-id="@Model.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    data-inv-doc="@Model.DocumentNumber"
+                    data-inv-ro-focus-id="@returnOrderId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)">View return</button>
         }
-        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Return quality inspection must be completed first.">Return</button>
     }
     else if (returnOrderId.HasValue)
     {
-        <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Details" asp-route-id="@returnOrderId.Value">View return</a>
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary inv-btn-view-return"
+                data-inv-invoice-id="@Model.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                data-inv-doc="@Model.DocumentNumber"
+                data-inv-ro-focus-id="@returnOrderId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)">View return</button>
     }
     else if (canCreateReturn)
     {
         <a class="btn btn-sm btn-outline-secondary" asp-controller="ReturnOrder" asp-action="Create" asp-route-invoiceId="@Model.Id">Return</a>
-    }
-    else
-    {
-        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Return is not available.">Return</button>
     }
 </div>
 
@@ -138,3 +151,4 @@
     window.invPayCreateUrl = @Html.Raw(JsonSerializer.Serialize(payCreateUrl));
 </script>
 <partial name="_PaymentModal" />
+<partial name="_InvoiceQiReturnModals" />

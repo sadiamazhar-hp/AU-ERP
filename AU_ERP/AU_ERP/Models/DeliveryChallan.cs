@@ -51,5 +51,11 @@ public class DeliveryChallan
     [ForeignKey(nameof(VehicleId))]
     public Vehicle? Vehicle { get; set; }
 
+    /// <summary>When set, driver/vehicle tied to this challan are treated as available for new assignments.</summary>
+    public DateTime? DeliveryCompletedAt { get; set; }
+
+    [MaxLength(450)]
+    public string? DeliveryCompletedByUserId { get; set; }
+
     public ICollection<DeliveryChallanItem> Items { get; set; } = new List<DeliveryChallanItem>();
 }

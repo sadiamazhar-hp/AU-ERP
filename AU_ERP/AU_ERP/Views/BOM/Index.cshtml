@@ -205,8 +205,8 @@
     }
 </style>
 
-<div class="bom-module">
-    <ul class="nav nav-tabs bom-module-tabstrip" role="tablist">
+<div class="au-md-module bom-module">
+    <ul class="nav nav-tabs au-md-tabstrip bom-module-tabstrip" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link @(bomTabList ? "" : "active")" id="bomTabCreateBtn" data-bs-toggle="tab" data-bs-target="#bomPaneCreate" type="button" role="tab" aria-controls="bomPaneCreate" aria-selected="@(bomTabList ? "false" : "true")">Create</button>
         </li>
@@ -267,10 +267,6 @@
                         <div class="col-md-3">
                             <label class="form-label">Valid From</label>
                             <input type="date" id="bomCreateValidFrom" class="form-control form-control-sm" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Valid To</label>
-                            <input type="date" id="bomCreateValidTo" class="form-control form-control-sm" />
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Status</label>
@@ -449,10 +445,6 @@
                         <div class="col-md-3">
                             <label class="form-label">Valid From</label>
                             <input type="date" id="bomEditValidFrom" class="form-control form-control-sm" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Valid To</label>
-                            <input type="date" id="bomEditValidTo" class="form-control form-control-sm" />
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Status</label>
@@ -791,7 +783,6 @@
         document.getElementById("bomCreatePlant").value = "";
         document.getElementById("bomCreateBaseQty").value = "1";
         document.getElementById("bomCreateValidFrom").value = "";
-        document.getElementById("bomCreateValidTo").value = "";
         document.getElementById("bomCreateStatus").value = "Active";
         document.getElementById("bomCreateIsDefault").checked = false;
         var hm = document.getElementById("bomCreateHeaderMat");
@@ -865,7 +856,7 @@
             Plant: document.getElementById("bomCreatePlant").value || null,
             BaseQty: parseFloat(document.getElementById("bomCreateBaseQty").value) || null,
             ValidFrom: document.getElementById("bomCreateValidFrom").value || null,
-            ValidTo: document.getElementById("bomCreateValidTo").value || null,
+            ValidTo: null,
             Status: document.getElementById("bomCreateStatus").value || null,
             IsDefaultBom: !!document.getElementById("bomCreateIsDefault").checked,
             HeaderMaterialTypeCode: bomGetHeaderMaterialTypeFromLevelSel(document.getElementById("bomCreateBLevel")) || null,
@@ -913,7 +904,6 @@
                 document.getElementById("bomEditPlant").value = b.plant || b.Plant || "";
                 document.getElementById("bomEditBaseQty").value = b.baseQty != null ? b.baseQty : (b.BaseQty || "");
                 document.getElementById("bomEditValidFrom").value = b.validFrom || b.ValidFrom || "";
-                document.getElementById("bomEditValidTo").value = b.validTo || b.ValidTo || "";
                 document.getElementById("bomEditStatus").value = b.status || b.Status || "Active";
                 document.getElementById("bomEditIsDefault").checked = !!(b.isDefaultBom || b.IsDefaultBom);
                 var eht = document.getElementById("bomEditHeaderMatType");
@@ -982,7 +972,7 @@
             Plant: document.getElementById("bomEditPlant").value || null,
             BaseQty: parseFloat(document.getElementById("bomEditBaseQty").value) || null,
             ValidFrom: document.getElementById("bomEditValidFrom").value || null,
-            ValidTo: document.getElementById("bomEditValidTo").value || null,
+            ValidTo: null,
             Status: document.getElementById("bomEditStatus").value || null,
             IsDefaultBom: !!document.getElementById("bomEditIsDefault").checked,
             HeaderMaterialTypeCode: document.getElementById("bomEditHeaderMatType")?.value || null,

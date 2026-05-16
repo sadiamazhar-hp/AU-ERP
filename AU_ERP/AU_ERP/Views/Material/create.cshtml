@@ -229,7 +229,7 @@
                                 }
                                 @Html.DropDownListFor(m => m.MaterialGroupCode, materialGroupItems, "-- Select --", new { @class = "form-select form-select-sm", id = "MaterialGroupCode" })
                                 <label class="form-label">EAN/UPC</label>
-                                @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control" } })
+                                @Html.EditorFor(m => m.EAN, new { htmlAttributes = new { @class = "form-control au-ean-upc", maxlength = "32", placeholder = "Digits/barcode — not negative", inputmode = "numeric" } })
                             </div>
                         </div>
                     </div>
@@ -318,13 +318,13 @@
                         <div class="row g-2">
                             <div class="col-md-6">
                                 <label class="form-label">MRP Type</label>
-                                @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
+                                @Html.DropDownListFor(m => m.MrpTypeCode, mrpTypeItemsClassic, "-- Select --", new { @class = "form-select form-select-sm", id = "MrpTypeCodeClassic" })
                                 <label class="form-label mt-2">Procurement Type</label>
-                                @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
+                                @Html.DropDownListFor(m => m.ProcurementTypeCode, procurementItemsClassic, "-- Select --", new { @class = "form-select form-select-sm", id = "ProcurementTypeCodeClassic" })
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Strategy Group</label>
-                                @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsClassic, "-- Select --", new { @class = "form-select form-select-sm" })
+                                @Html.DropDownListFor(m => m.StrategyGroup, strategyGroupItemsClassic, "-- Select --", new { @class = "form-select form-select-sm", id = "StrategyGroupClassic" })
                             </div>
                         </div>
                     </div>
@@ -497,6 +497,22 @@
         }
     }
 
+    function syncMrpPlanningFieldsClassic() {
+        const typeEl = document.getElementById("MrpTypeCodeClassic");
+        const procEl = document.getElementById("ProcurementTypeCodeClassic");
+        const stratEl = document.getElementById("StrategyGroupClassic");
+        if (!typeEl || !procEl || !stratEl) return;
+        const noPlan = String(typeEl.value || "") === "NO_PLANNING";
+        procEl.disabled = noPlan;
+        stratEl.disabled = noPlan;
+        procEl.classList.toggle("bg-light", noPlan);
+        stratEl.classList.toggle("bg-light", noPlan);
+        if (noPlan) {
+            procEl.selectedIndex = 0;
+            stratEl.selectedIndex = 0;
+        }
+    }
+
     function syncMatSalesFromBase() {
         const baseEl = document.getElementById("BaseUnitCode");
         const code = baseEl && String(baseEl.value || "").trim();
@@ -521,6 +537,21 @@
         }
         syncMrpQtyFieldsClassic();
         syncMatSalesFromBase();
+        const mrpClassic = document.getElementById("MrpTypeCodeClassic");
+        if (mrpClassic) mrpClassic.addEventListener("change", syncMrpPlanningFieldsClassic);
+        syncMrpPlanningFieldsClassic();
+        const mm01 = document.getElementById("mm01Form");
+        if (mm01) {
+            mm01.addEventListener("submit", function () {
+                const mrp = document.getElementById("MrpTypeCodeClassic");
+                if (mrp && String(mrp.value || "") === "NO_PLANNING") {
+                    const p = document.getElementById("ProcurementTypeCodeClassic");
+                    const s = document.getElementById("StrategyGroupClassic");
+                    if (p) { p.disabled = false; p.value = ""; }
+                    if (s) { s.disabled = false; s.value = ""; }
+                }
+            });
+        }
 
         // Success (Materials/Create POST redirect)
         var message = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"] as string ?? ""));

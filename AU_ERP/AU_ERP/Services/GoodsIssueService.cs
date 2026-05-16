@@ -155,10 +155,13 @@ public sealed class GoodsIssueService
                 return (false, "Goods issue document not found.");
             }
 
-            if (string.Equals(doc.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(doc.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(doc.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase))
             {
                 await tx.RollbackAsync(ct);
-                return (false, "Goods issue is already completed.");
+                return (false, string.Equals(doc.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase)
+                    ? "Dispatch cannot be changed after reservation goods receive."
+                    : "Goods issue is already completed.");
             }
 
             if (!string.Equals(doc.DispatchStatus, GoodsIssueDocument.DispatchPending, StringComparison.OrdinalIgnoreCase))
@@ -216,10 +219,13 @@ public sealed class GoodsIssueService
                 return (false, "Goods issue document not found.");
             }
 
-            if (string.Equals(doc.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(doc.Status, GoodsIssueDocument.StatusCompleted, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(doc.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase))
             {
                 await tx.RollbackAsync(ct);
-                return (false, "Goods issue is already completed.");
+                return (false, string.Equals(doc.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase)
+                    ? "Reservation goods receive is already finished. Use Release on the production order to start operations."
+                    : "Goods issue is already completed.");
             }
 
             if (!string.Equals(doc.DispatchStatus, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase))
@@ -241,7 +247,7 @@ public sealed class GoodsIssueService
             if (po.Status != ProductionOrder.StatusPlanned || po.ReleasedRoutingId != null || hasStages)
             {
                 await tx.RollbackAsync(ct);
-                return (false, "Production order is not in a state that can be released via goods issue.");
+                return (false, "Production order is not in a state that allows reservation goods receive.");
             }
 
             if (doc.Lines == null || doc.Lines.Count == 0)
@@ -267,93 +273,12 @@ public sealed class GoodsIssueService
             }
             
             var allIssued = doc.Lines.All(l => l.RemainingQty <= InventoryEpsilon);
-            var now = DateTime.UtcNow;
             if (allIssued)
             {
-                var poLines = await _db.ProductionOrderLines
-                    .Where(l => l.ProductionOrderId == po.Id)
-                    .OrderBy(l => l.LineNo)
-                    .ToListAsync(ct);
-                if (poLines.Count == 0)
-                {
-                    poLines.Add(new ProductionOrderLine
-                    {
-                        ProductionOrderId = po.Id,
-                        LineNo = 1,
-                        MaterialNumber = po.FinishedMaterialNumber,
-                        PlannedQuantity = po.TargetQuantity,
-                        UomId = po.UomId
-                    });
-                }
-                
-                var allBomLines = new List<MrpBomLineDisplayDto>();
-                var firstRoutingId = po.ReleasedRoutingId;
-                foreach (var line in poLines)
-                {
-                    var routing = await ResolveRoutingAsync(line.MaterialNumber, ct);
-                    if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
-                    {
-                        await tx.RollbackAsync(ct);
-                        return (false, $"No routing with operations is defined for line {line.LineNo} material '{line.MaterialNumber}'.");
-                    }
-                    if (firstRoutingId == null)
-                        firstRoutingId = routing.RoutingID;
-                    var orderedHeaders = routing.OperationHeaders.OrderBy(h => h.DisplayOrder).ToList();
-                    var isFirst = true;
-                    foreach (var h in orderedHeaders)
-                    {
-                        decimal planned;
-                        try
-                        {
-                            planned = RoutingPlannedHours.SumHeaderPlannedHours(h);
-                        }
-                        catch (InvalidOperationException ex)
-                        {
-                            await tx.RollbackAsync(ct);
-                            return (false, ex.Message);
-                        }
-                        
-                        await _db.ProductionOrderStageProgresses.AddAsync(new ProductionOrderStageProgress
-                        {
-                            ProductionOrderId = po.Id,
-                            ProductionOrderLineId = line.Id > 0 ? line.Id : null,
-                            RoutingOperationHeaderId = h.OperationHeaderId,
-                            SequenceOrder = h.DisplayOrder,
-                            StageTitle = h.Title,
-                            PlannedHours = planned,
-                            StageStatus = isFirst
-                                ? ProductionOrderStageProgress.StageInProgress
-                                : ProductionOrderStageProgress.StagePending,
-                            UpdatedAt = now
-                        }, ct);
-                        isFirst = false;
-                    }
-                    
-                    var poLike = new ProductionOrder
-                    {
-                        FinishedMaterialNumber = line.MaterialNumber,
-                        TargetQuantity = (int)Math.Round(line.PlannedQuantity, MidpointRounding.AwayFromZero),
-                        UomId = line.UomId,
-                        ReleasedBomSnapshotJson = po.ReleasedBomSnapshotJson,
-                        SelectedBomId = line.SelectedBomId,
-                        SelectedBomAlternative = line.SelectedBomAlternative
-                    };
-                    var (bomOk, bomErr, bomLines) = await MrpExplosionService.GetBomLinesScaledForProductionOrderAsync(_db, poLike, ct);
-                    if (!bomOk)
-                    {
-                        await tx.RollbackAsync(ct);
-                        return (false, bomErr ?? "Could not build BOM snapshot.");
-                    }
-                    allBomLines.AddRange(bomLines);
-                }
-                
-                po.ReleasedRoutingId = firstRoutingId;
-                po.ReleasedBomSnapshotJson = MrpExplosionService.SerializeBomSnapshotLines(allBomLines);
-                po.Status = ProductionOrder.StatusInProgress;
-
-                doc.Status = GoodsIssueDocument.StatusCompleted;
-                doc.CompletedAt = now;
-                doc.CompletedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
+                doc.Status = GoodsIssueDocument.StatusReceived;
+                doc.CompletedAt = null;
+                doc.CompletedByUserId = null;
+                po.Status = ProductionOrder.StatusPlanned;
             }
             else
             {
@@ -364,7 +289,7 @@ public sealed class GoodsIssueService
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             return allIssued
-                ? (true, "Goods issue completed. Inventory deducted and production order released to operations.")
+                ? (true, "Reservation goods receive completed. Inventory deducted. Release the production order to start operations.")
                 : (true, "Partial goods issue posted. Remaining quantities are still pending.");
         }
         catch (Exception ex)
@@ -372,6 +297,164 @@ public sealed class GoodsIssueService
             await tx.RollbackAsync(ct);
             return (false, ex.InnerException?.Message ?? ex.Message);
         }
+    }
+
+    /// <summary>After full reservation goods receive, creates routing stage progress and marks the production order in progress.</summary>
+    public async Task<(bool success, string message)> ReleaseReservationToOperationsAsync(
+        int goodsIssueId,
+        string? userId,
+        CancellationToken ct = default)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var doc = await _db.GoodsIssueDocuments
+                .Include(g => g.ProductionOrder)
+                .Include(g => g.Lines)
+                .FirstOrDefaultAsync(g => g.Id == goodsIssueId, ct);
+            if (doc == null)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Goods issue document not found.");
+            }
+
+            if (!string.Equals(doc.Status, GoodsIssueDocument.StatusReceived, StringComparison.OrdinalIgnoreCase))
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Release is only available after reservation goods receive has fully posted from stock.");
+            }
+
+            if (!string.Equals(doc.DispatchStatus, GoodsIssueDocument.DispatchSent, StringComparison.OrdinalIgnoreCase))
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Dispatch must be sent from Stock Goods Issue before release.");
+            }
+
+            var po = doc.ProductionOrder;
+            if (po == null)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Linked production order not found.");
+            }
+
+            var hasStages = await _db.ProductionOrderStageProgresses
+                .AsNoTracking()
+                .AnyAsync(s => s.ProductionOrderId == po.Id, ct);
+            if (po.Status != ProductionOrder.StatusPlanned || po.ReleasedRoutingId != null || hasStages)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Production order is not in a state that can be released to operations.");
+            }
+
+            if (doc.Lines == null || doc.Lines.Count == 0
+                || !doc.Lines.All(l => l.RemainingQty <= InventoryEpsilon))
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Complete reservation goods receive before releasing to operations.");
+            }
+
+            var now = DateTime.UtcNow;
+            var releaseErr = await ApplyReleaseProductionOrderToOperationsAsync(po, now, ct);
+            if (releaseErr != null)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, releaseErr);
+            }
+
+            doc.Status = GoodsIssueDocument.StatusCompleted;
+            doc.CompletedAt = now;
+            doc.CompletedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
+
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return (true, "Production order released to operations.");
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(ct);
+            return (false, ex.InnerException?.Message ?? ex.Message);
+        }
+    }
+
+    private async Task<string?> ApplyReleaseProductionOrderToOperationsAsync(
+        ProductionOrder po,
+        DateTime now,
+        CancellationToken ct)
+    {
+        var poLines = await _db.ProductionOrderLines
+            .Where(l => l.ProductionOrderId == po.Id)
+            .OrderBy(l => l.LineNo)
+            .ToListAsync(ct);
+        if (poLines.Count == 0)
+        {
+            poLines.Add(new ProductionOrderLine
+            {
+                ProductionOrderId = po.Id,
+                LineNo = 1,
+                MaterialNumber = po.FinishedMaterialNumber,
+                PlannedQuantity = po.TargetQuantity,
+                UomId = po.UomId
+            });
+        }
+
+        var allBomLines = new List<MrpBomLineDisplayDto>();
+        int? firstRoutingId = po.ReleasedRoutingId;
+        foreach (var line in poLines)
+        {
+            var routing = await ResolveRoutingAsync(line.MaterialNumber, ct);
+            if (routing == null || routing.OperationHeaders == null || !routing.OperationHeaders.Any())
+                return $"No routing with operations is defined for line {line.LineNo} material '{line.MaterialNumber}'.";
+            if (firstRoutingId == null)
+                firstRoutingId = routing.RoutingID;
+            var orderedHeaders = routing.OperationHeaders.OrderBy(h => h.DisplayOrder).ToList();
+            var isFirst = true;
+            foreach (var h in orderedHeaders)
+            {
+                decimal planned;
+                try
+                {
+                    planned = RoutingPlannedHours.SumHeaderPlannedHours(h);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return ex.Message;
+                }
+
+                await _db.ProductionOrderStageProgresses.AddAsync(new ProductionOrderStageProgress
+                {
+                    ProductionOrderId = po.Id,
+                    ProductionOrderLineId = line.Id > 0 ? line.Id : null,
+                    RoutingOperationHeaderId = h.OperationHeaderId,
+                    SequenceOrder = h.DisplayOrder,
+                    StageTitle = h.Title,
+                    PlannedHours = planned,
+                    StageStatus = isFirst
+                        ? ProductionOrderStageProgress.StageInProgress
+                        : ProductionOrderStageProgress.StagePending,
+                    UpdatedAt = now
+                }, ct);
+                isFirst = false;
+            }
+
+            var poLike = new ProductionOrder
+            {
+                FinishedMaterialNumber = line.MaterialNumber,
+                TargetQuantity = (int)Math.Round(line.PlannedQuantity, MidpointRounding.AwayFromZero),
+                UomId = line.UomId,
+                ReleasedBomSnapshotJson = po.ReleasedBomSnapshotJson,
+                SelectedBomId = line.SelectedBomId,
+                SelectedBomAlternative = line.SelectedBomAlternative
+            };
+            var (bomOk, bomErr, bomLines) = await MrpExplosionService.GetBomLinesScaledForProductionOrderAsync(_db, poLike, ct);
+            if (!bomOk)
+                return bomErr ?? "Could not build BOM snapshot.";
+            allBomLines.AddRange(bomLines);
+        }
+
+        po.ReleasedRoutingId = firstRoutingId;
+        po.ReleasedBomSnapshotJson = MrpExplosionService.SerializeBomSnapshotLines(allBomLines);
+        po.Status = ProductionOrder.StatusInProgress;
+        return null;
     }
 
     private async Task<string?> ConsumeInventoryAsync(

@@ -1,4 +1,5 @@
 using AU_ERP.Models;
+using AU_ERP.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Services;
@@ -55,6 +56,8 @@ public sealed class StockMovementService
         if (string.Equals(fromPlant, toPlant, StringComparison.OrdinalIgnoreCase))
             return new(false, "From Plant and To Plant cannot be the same.");
         if (qty <= 0) return new(false, "Quantity moved must be greater than zero.");
+        if (DocumentQuantityRules.ValidatePositiveWhole(qty, "Quantity moved") is { } qErr)
+            return new(false, qErr);
 
         var material = await _db.CreateMaterialMaster.AsNoTracking()
             .FirstOrDefaultAsync(m => m.MaterialNumber == mat, ct)

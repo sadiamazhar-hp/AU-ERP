@@ -25,10 +25,29 @@ else
             <h6 class="mb-0" style="color: var(--dark, #354a5e);">@d.DeliveryChallanNumber</h6>
             <p class="small text-muted mb-0">@FmtDate(d.DocumentDate) · @(d.Plant?.PlantName ?? "—") · @d.DeliveryType</p>
         </div>
-        @if (!string.IsNullOrEmpty(pdfUrl))
-        {
-            <a class="btn btn-sm btn-primary" href="@pdfUrl" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
-        }
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            @if (!string.IsNullOrEmpty(pdfUrl))
+            {
+                <a class="btn btn-sm btn-primary" href="@pdfUrl" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+            }
+            @if (d.DeliveryCompletedAt.HasValue)
+            {
+                var done = d.DeliveryCompletedAt!.Value.ToString("dd-MMM-yyyy HH:mm", CultureInfo.InvariantCulture);
+                <span class="badge text-bg-secondary align-self-center" title="@done UTC">Delivered (@done&nbsp;UTC)</span>
+            }
+            else if (d.DriverId != null || d.VehicleId != null)
+            {
+                <form asp-action="MarkDeliveryCompleted" asp-controller="DeliveryChallan" method="post" class="d-inline" onsubmit="return confirm('Mark delivery completed and free this driver / vehicle?');">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@d.Id" />
+                    <button type="submit" class="btn btn-sm btn-outline-success">Delivery completed</button>
+                </form>
+            }
+            else
+            {
+                <span class="small text-muted align-self-center">No driver / vehicle on this challan.</span>
+            }
+        </div>
     </div>
     <div class="row g-2 small mb-2">
         <div class="col-6">

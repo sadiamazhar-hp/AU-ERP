@@ -23,12 +23,24 @@ public class InvoiceController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken ct = default)
+    public async Task<IActionResult> Index(
+        string? q,
+        string? status,
+        DateTime? docFrom,
+        DateTime? docTo,
+        CancellationToken ct = default)
     {
         ViewData["Title"] = "Invoice";
         var today = DateTime.Today;
+        var search = (q ?? "").Trim();
+
+        DateTime? dFrom = docFrom?.Date;
+        DateTime? dTo = docTo?.Date;
+        if (dFrom.HasValue && dTo.HasValue && dFrom.Value > dTo.Value)
+            (dFrom, dTo) = (dTo, dFrom);
 
         var baseQ = _db.SalesInvoices.AsNoTracking();
+        baseQ = ApplyInvoiceIndexFilters(baseQ, search, status, dFrom, dTo, today);
 
         var openQ = baseQ.Where(i => i.Status == SalesInvoice.StatusOpen && i.DueDate >= today);
         var overdueQ = baseQ.Where(i => i.Status == SalesInvoice.StatusOpen && i.DueDate < today);
@@ -37,6 +49,10 @@ public class InvoiceController : Controller
 
         var vm = new InvoiceIndexVm
         {
+            SearchQuery = string.IsNullOrEmpty(search) ? null : search,
+            StatusFilter = string.IsNullOrWhiteSpace(status) ? null : status.Trim(),
+            DocumentDateFrom = dFrom,
+            DocumentDateTo = dTo,
             OpenCount = await openQ.CountAsync(ct),
             OpenAmount = await SumGrandTotalAsync(openQ, ct),
             OverdueCount = await overdueQ.CountAsync(ct),
@@ -45,7 +61,7 @@ public class InvoiceController : Controller
             CollectedAmount = await SumGrandTotalAsync(collectedQ, ct),
             ReturnInProcessCount = await ripQ.CountAsync(ct),
             ReturnInProcessAmount = await SumGrandTotalAsync(ripQ, ct),
-            Invoices = await _db.SalesInvoices.AsNoTracking()
+            Invoices = await ApplyInvoiceIndexFilters(_db.SalesInvoices.AsNoTracking(), search, status, dFrom, dTo, today)
                 .Include(i => i.DeliveryChallan)
                 .OrderByDescending(i => i.DocumentDate)
                 .ThenByDescending(i => i.Id)
@@ -57,13 +73,33 @@ public class InvoiceController : Controller
         {
             try
             {
-                vm.ReturnOrderIdByInvoiceId = await _db.SalesReturnOrders.AsNoTracking()
+                var roRows = await _db.SalesReturnOrders.AsNoTracking()
                     .Where(r => invIds.Contains(r.SalesInvoiceId))
-                    .ToDictionaryAsync(r => r.SalesInvoiceId, r => r.Id, ct);
+                    .OrderByDescending(r => r.DocumentDate).ThenByDescending(r => r.Id)
+                    .Select(r => new
+                    {
+                        r.SalesInvoiceId,
+                        r.Id,
+                        r.DocumentNumber,
+                        r.DocumentDate
+                    })
+                    .ToListAsync(ct);
+
+                vm.ReturnOrdersByInvoiceId = roRows
+                    .GroupBy(x => x.SalesInvoiceId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Select(x => new InvoiceReturnOrderSummaryVm
+                            {
+                                Id = x.Id,
+                                DocumentNumber = x.DocumentNumber,
+                                DocumentDate = x.DocumentDate
+                            })
+                            .ToList());
             }
             catch (SqlException)
             {
-                vm.ReturnOrderIdByInvoiceId = new Dictionary<int, int>();
+                vm.ReturnOrdersByInvoiceId = new Dictionary<int, List<InvoiceReturnOrderSummaryVm>>();
             }
 
             try
@@ -73,21 +109,97 @@ public class InvoiceController : Controller
                     join qi in _db.SalesReturnQualityInspections.AsNoTracking() on ro.Id equals qi.SalesReturnOrderId
                     where invIds.Contains(ro.SalesInvoiceId)
                     select new { ro.SalesInvoiceId, qi.Id, qi.Status }).ToListAsync(ct);
-                vm.QiByInvoiceId = qiRows.ToDictionary(
-                    x => x.SalesInvoiceId,
-                    x => new InvoiceQiNavInfo
-                    {
-                        QiId = x.Id,
-                        IsPending = string.Equals(x.Status, SalesReturnQualityInspection.StatusPending, StringComparison.OrdinalIgnoreCase)
-                    });
+                vm.QiByInvoiceId = qiRows
+                    .GroupBy(x => x.SalesInvoiceId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g =>
+                        {
+                            var x = g.OrderByDescending(x => x.Id).First();
+                            return new InvoiceQiNavInfo
+                            {
+                                QiId = x.Id,
+                                IsPending = string.Equals(x.Status, SalesReturnQualityInspection.StatusPending,
+                                    StringComparison.OrdinalIgnoreCase)
+                            };
+                        });
             }
             catch (SqlException)
             {
                 vm.QiByInvoiceId = new Dictionary<int, InvoiceQiNavInfo>();
             }
+
+            try
+            {
+                var cmRows = await (
+                    from cm in _db.SalesReturnCreditMemos.AsNoTracking()
+                    join ro in _db.SalesReturnOrders.AsNoTracking() on cm.SalesReturnOrderId equals ro.Id
+                    where invIds.Contains(ro.SalesInvoiceId)
+                    select new { ro.SalesInvoiceId, ro.Id }).ToListAsync(ct).ConfigureAwait(false);
+                vm.CreditMemoReturnOrderIdByInvoiceId = cmRows
+                    .GroupBy(x => x.SalesInvoiceId)
+                    .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First().Id);
+            }
+            catch (SqlException)
+            {
+                vm.CreditMemoReturnOrderIdByInvoiceId = new Dictionary<int, int>();
+            }
         }
 
         return View(vm);
+    }
+
+    /// <summary>HTML table of return orders for an invoice — used inside the Invoice screen modal.</summary>
+    [HttpGet]
+    public async Task<IActionResult> ReturnOrdersModalList(int invoiceId, CancellationToken ct = default)
+    {
+        if (invoiceId <= 0)
+            return BadRequest();
+
+        string? invoiceDocNum;
+        try
+        {
+            invoiceDocNum = await _db.SalesInvoices.AsNoTracking()
+                .Where(i => i.Id == invoiceId)
+                .Select(i => i.DocumentNumber)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+        }
+        catch (SqlException)
+        {
+            return NotFound();
+        }
+
+        if (invoiceDocNum == null)
+            return NotFound();
+
+        List<InvoiceReturnOrderSummaryVm> orders;
+        try
+        {
+            orders = await _db.SalesReturnOrders.AsNoTracking()
+                .Where(r => r.SalesInvoiceId == invoiceId)
+                .OrderByDescending(r => r.DocumentDate).ThenByDescending(r => r.Id)
+                .Select(r => new InvoiceReturnOrderSummaryVm
+                {
+                    Id = r.Id,
+                    DocumentNumber = r.DocumentNumber,
+                    DocumentDate = r.DocumentDate
+                })
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+        catch (SqlException)
+        {
+            orders = new List<InvoiceReturnOrderSummaryVm>();
+        }
+
+        var vm = new InvoiceReturnOrdersListVm
+        {
+            InvoiceId = invoiceId,
+            InvoiceDocumentNumber = invoiceDocNum,
+            Orders = orders
+        };
+        return PartialView("_InvoiceReturnOrdersListPartial", vm);
     }
 
     [HttpGet]
@@ -144,6 +256,24 @@ public class InvoiceController : Controller
             && returnOrderId == null;
         ViewBag.CanOpenQi = qiId != null && qiPending;
         ViewBag.CanViewQi = qiId != null && !qiPending;
+        int? creditMemoReturnOrderId = null;
+        if (returnOrderId.HasValue)
+        {
+            try
+            {
+                var hasCm = await _db.SalesReturnCreditMemos.AsNoTracking()
+                    .AnyAsync(c => c.SalesReturnOrderId == returnOrderId.Value, ct)
+                    .ConfigureAwait(false);
+                if (hasCm)
+                    creditMemoReturnOrderId = returnOrderId;
+            }
+            catch (SqlException)
+            {
+                creditMemoReturnOrderId = null;
+            }
+        }
+
+        ViewBag.CreditMemoReturnOrderId = creditMemoReturnOrderId;
         return View(inv);
     }
 
@@ -301,4 +431,56 @@ public class InvoiceController : Controller
 
     private static async Task<decimal> SumGrandTotalAsync(IQueryable<SalesInvoice> q, CancellationToken ct) =>
         await q.Select(i => i.GrandTotal).DefaultIfEmpty().SumAsync(ct);
+
+    internal const string InvoiceIndexStatusFilterOpen = SalesInvoice.StatusOpen;
+    internal const string InvoiceIndexStatusFilterOverdue = "Overdue";
+    internal const string InvoiceIndexStatusFilterCollected = SalesInvoice.StatusCollected;
+    internal const string InvoiceIndexStatusFilterReturnInProcess = SalesInvoice.StatusReturnInProcess;
+    internal const string InvoiceIndexStatusFilterReturned = SalesInvoice.StatusReturned;
+
+    private static IQueryable<SalesInvoice> ApplyInvoiceIndexFilters(
+        IQueryable<SalesInvoice> q,
+        string search,
+        string? status,
+        DateTime? docFrom,
+        DateTime? docTo,
+        DateTime today)
+    {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            q = q.Where(i =>
+                i.DocumentNumber.Contains(s)
+                || i.DcNumber.Contains(s)
+                || (i.DealerDisplayName != null && i.DealerDisplayName.Contains(s))
+                || (i.DealerBusinessPartnerId != null && i.DealerBusinessPartnerId.Contains(s)));
+        }
+
+        if (docFrom.HasValue)
+            q = q.Where(i => i.DocumentDate >= docFrom.Value);
+        if (docTo.HasValue)
+            q = q.Where(i => i.DocumentDate <= docTo.Value);
+
+        var sf = (status ?? "").Trim();
+        if (string.IsNullOrEmpty(sf))
+            return q;
+
+        if (string.Equals(sf, InvoiceIndexStatusFilterOverdue, StringComparison.OrdinalIgnoreCase))
+            return q.Where(i => i.Status == SalesInvoice.StatusOpen && i.DueDate < today);
+
+        // "Open" = open invoices that are not yet overdue relative to DueDate (same KPI as Open bucket).
+        if (string.Equals(sf, InvoiceIndexStatusFilterOpen, StringComparison.OrdinalIgnoreCase))
+            return q.Where(i => i.Status == SalesInvoice.StatusOpen && i.DueDate >= today);
+
+        if (string.Equals(sf, InvoiceIndexStatusFilterCollected, StringComparison.OrdinalIgnoreCase))
+            return q.Where(i => i.Status == SalesInvoice.StatusCollected);
+
+        if (string.Equals(sf, InvoiceIndexStatusFilterReturnInProcess, StringComparison.OrdinalIgnoreCase))
+            return q.Where(i => i.Status == SalesInvoice.StatusReturnInProcess);
+
+        if (string.Equals(sf, InvoiceIndexStatusFilterReturned, StringComparison.OrdinalIgnoreCase))
+            return q.Where(i => i.Status == SalesInvoice.StatusReturned);
+
+        return q.Where(i => i.Status == sf);
+    }
 }

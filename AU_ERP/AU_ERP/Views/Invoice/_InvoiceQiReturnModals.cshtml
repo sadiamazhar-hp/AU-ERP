@@ -1,0 +1,250 @@
+@using System.Globalization
+@using System.Text.Json
+
+@{
+    const int tmplInvoiceForRoList = 908172634;
+    const int tmplQiId = 445566778;
+    const int tmplRoReadId = 334455661;
+    var roListTpl = Url.Action("ReturnOrdersModalList", "Invoice", new { invoiceId = tmplInvoiceForRoList }) ?? "";
+    var qiReadTpl = Url.Action("ReadOnlyPartial", "ReorderQualityInspection", new { id = tmplQiId }) ?? "";
+    var qiDetailsTpl = Url.Action("Details", "ReorderQualityInspection", new { id = tmplQiId }) ?? "";
+    var roReadTpl = Url.Action("ReadOnlyPartial", "ReturnOrder", new { id = tmplRoReadId }) ?? "";
+    var roDetailsTpl = Url.Action("Details", "ReturnOrder", new { id = tmplRoReadId }) ?? "";
+}
+
+<div class="modal fade inv-ro-modal-no-bd" id="invQiViewModal" tabindex="-1" aria-labelledby="invQiViewModalTitle" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="invQiViewModalTitle">Quality inspection</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="invQiViewModalBody">
+                <div class="text-secondary text-center py-4 small">Loading…</div>
+            </div>
+            <div class="modal-footer py-2">
+                <a class="btn btn-sm btn-outline-primary d-none" id="invQiViewOpenRod" href="#">Open full QI page</a>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade inv-ro-modal-no-bd" id="invReturnOrdersModal" tabindex="-1" aria-labelledby="invReturnOrdersModalTitle" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="invReturnOrdersModalTitle">Return orders</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="invRoListMount" class="text-secondary small">Loading…</div>
+                <div id="invRoDetailWrap" class="mt-4 border-top pt-3 d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Return order detail</h6>
+                        <a class="btn btn-sm btn-outline-secondary d-none" id="invRoOpenFullPage" href="#">Open full return page</a>
+                    </div>
+                    <div id="invRoDetailMount"></div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        window.invQiReturnTemplates = window.invQiReturnTemplates || {};
+        window.invQiReturnTemplates.roListTpl = @Html.Raw(JsonSerializer.Serialize(roListTpl));
+        window.invQiReturnTemplates.invoiceIdPlaceholder = @tmplInvoiceForRoList.ToString(CultureInfo.InvariantCulture);
+        window.invQiReturnTemplates.qiReadTpl = @Html.Raw(JsonSerializer.Serialize(qiReadTpl));
+        window.invQiReturnTemplates.qiPlaceholder = @tmplQiId.ToString(CultureInfo.InvariantCulture);
+        window.invQiReturnTemplates.qiDetailsTpl = @Html.Raw(JsonSerializer.Serialize(qiDetailsTpl));
+        window.invQiReturnTemplates.roReadTpl = @Html.Raw(JsonSerializer.Serialize(roReadTpl));
+        window.invQiReturnTemplates.roPlaceholder = @tmplRoReadId.ToString(CultureInfo.InvariantCulture);
+        window.invQiReturnTemplates.roDetailsTpl = @Html.Raw(JsonSerializer.Serialize(roDetailsTpl));
+    })();
+
+    (function () {
+        var qiModalInst = null;
+        var retModalInst = null;
+
+        /** Move dialogs to body StackingContexts on nested layout can trap default backdrops above content. */
+        function ensureInvModalOnBody(modalEl) {
+            if (modalEl && modalEl.parentElement !== document.body)
+                document.body.appendChild(modalEl);
+        }
+
+        function stripInvoiceModalBackdrops() {
+            document.querySelectorAll(".modal-backdrop").forEach(function (b) { b.remove(); });
+            document.body.classList.remove("modal-open");
+            document.body.style.removeProperty("padding-right");
+            document.body.style.removeProperty("overflow");
+        }
+
+        function wireInvoiceModalBackdropFix(modalEl) {
+            if (!modalEl) return;
+            modalEl.addEventListener("show.bs.modal", function () {
+                ensureInvModalOnBody(modalEl);
+                stripInvoiceModalBackdrops();
+            });
+            modalEl.addEventListener("hidden.bs.modal", stripInvoiceModalBackdrops);
+        }
+
+        (function attachInvoiceModalBackdropFixNow() {
+            var qEl = document.getElementById("invQiViewModal");
+            var rEl = document.getElementById("invReturnOrdersModal");
+            wireInvoiceModalBackdropFix(qEl);
+            wireInvoiceModalBackdropFix(rEl);
+            ["invQiViewModal", "invReturnOrdersModal"].forEach(function (tid) {
+                var nel = document.getElementById(tid);
+                if (!nel || !window.bootstrap || !bootstrap.Modal) return;
+                var mi = bootstrap.Modal.getInstance(nel);
+                if (mi) mi.dispose();
+            });
+            qiModalInst = null;
+            retModalInst = null;
+        })();
+
+        function getQiModal() {
+            var el = document.getElementById("invQiViewModal");
+            if (!el || !window.bootstrap) return null;
+            ensureInvModalOnBody(el);
+            if (!qiModalInst) qiModalInst = new bootstrap.Modal(el, { backdrop: false, keyboard: true, focus: true });
+            return qiModalInst;
+        }
+
+        function getReturnModal() {
+            var el = document.getElementById("invReturnOrdersModal");
+            if (!el || !window.bootstrap) return null;
+            ensureInvModalOnBody(el);
+            if (!retModalInst) retModalInst = new bootstrap.Modal(el, { backdrop: false, keyboard: true, focus: true });
+            return retModalInst;
+        }
+
+        function escapeHtml(text) {
+            var d = document.createElement("div");
+            d.textContent = text || "";
+            return d.innerHTML;
+        }
+
+        function replaceTpl(url, placeholder, id) {
+            if (!url) return "";
+            return url.split(String(placeholder)).join(String(id));
+        }
+
+        function fetchHtml(url) {
+            return fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "text/html" } }).then(function (r) {
+                if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
+                return r.text();
+            });
+        }
+
+        window.invOpenCompletedQiModal = function (qiId, documentNumberOrNull) {
+            var t = window.invQiReturnTemplates || {};
+            var url = replaceTpl(t.qiReadTpl, t.qiPlaceholder, qiId);
+            var modal = getQiModal();
+            var titleEl = document.getElementById("invQiViewModalTitle");
+            var bodyEl = document.getElementById("invQiViewModalBody");
+            var linkEl = document.getElementById("invQiViewOpenRod");
+            if (!modal || !bodyEl) return;
+
+            var doc = documentNumberOrNull || "";
+            if (titleEl) titleEl.textContent = doc ? ("QI — " + doc) : "Quality inspection";
+
+            if (linkEl) {
+                linkEl.href = replaceTpl(t.qiDetailsTpl, t.qiPlaceholder, qiId);
+                linkEl.classList.remove("d-none");
+            }
+
+            bodyEl.innerHTML = '<div class="text-secondary text-center py-4 small">Loading…</div>';
+            modal.show();
+            fetchHtml(url).then(function (html) {
+                bodyEl.innerHTML = html;
+            }).catch(function (err) {
+                bodyEl.innerHTML = '<div class="alert alert-danger py-2 small mb-0">' + escapeHtml(err && err.message ? err.message : "Could not load inspection.") + "</div>";
+            });
+        };
+
+        function loadReturnDetail(roId, showFullLink) {
+            var t = window.invQiReturnTemplates || {};
+            var url = replaceTpl(t.roReadTpl, t.roPlaceholder, roId);
+            var wrap = document.getElementById("invRoDetailWrap");
+            var mount = document.getElementById("invRoDetailMount");
+            var fp = document.getElementById("invRoOpenFullPage");
+            if (!wrap || !mount) return;
+            wrap.classList.remove("d-none");
+            mount.innerHTML = '<div class="text-secondary small py-2">Loading detail…</div>';
+            if (fp) {
+                if (showFullLink) {
+                    fp.href = replaceTpl(t.roDetailsTpl, t.roPlaceholder, roId);
+                    fp.classList.remove("d-none");
+                }
+                else {
+                    fp.classList.add("d-none");
+                }
+            }
+            fetchHtml(url).then(function (html) {
+                mount.innerHTML = html;
+            }).catch(function (err) {
+                mount.innerHTML = '<div class="alert alert-danger py-2 small mb-0">' + escapeHtml(err && err.message ? err.message : "Could not load return order.") + "</div>";
+            });
+        }
+
+        window.invOpenInvoiceReturnOrdersModal = function (invoiceId, focusReturnOrderId, invoiceDocumentNumberOrNull) {
+            var t = window.invQiReturnTemplates || {};
+            var listUrl = replaceTpl(t.roListTpl, t.invoiceIdPlaceholder, invoiceId);
+            var modal = getReturnModal();
+            var titleEl = document.getElementById("invReturnOrdersModalTitle");
+            var mount = document.getElementById("invRoListMount");
+            var detailWrap = document.getElementById("invRoDetailWrap");
+            var detailMount = document.getElementById("invRoDetailMount");
+            if (!modal || !mount) return;
+
+            var doc = invoiceDocumentNumberOrNull || "";
+            if (titleEl)
+                titleEl.textContent = doc ? ("Returns — " + doc) : "Return orders";
+
+            if (detailWrap) detailWrap.classList.add("d-none");
+            if (detailMount) detailMount.innerHTML = "";
+            mount.innerHTML = '<div class="text-secondary small">Loading…</div>';
+            modal.show();
+
+            fetchHtml(listUrl).then(function (html) {
+                mount.innerHTML = html;
+                document.querySelectorAll(".inv-ro-detail-row-open").forEach(function (btn) {
+                    btn.addEventListener("click", function () {
+                        var rid = parseInt(btn.getAttribute("data-inv-ro-detail-id") || "", 10);
+                        if (!isNaN(rid)) loadReturnDetail(rid, true);
+                    });
+                });
+                var focus = typeof focusReturnOrderId === "number" ? focusReturnOrderId : parseInt(focusReturnOrderId || "", 10);
+                if (!isNaN(focus) && focus > 0)
+                    loadReturnDetail(focus, true);
+            }).catch(function (err) {
+                mount.innerHTML = '<div class="alert alert-danger py-2 small mb-0">' + escapeHtml(err && err.message ? err.message : "Could not load return orders.") + "</div>";
+            });
+        };
+    })();
+
+    document.addEventListener("click", function (ev) {
+        var qb = ev.target.closest(".inv-btn-view-qi-completed");
+        if (qb && window.invOpenCompletedQiModal) {
+            var qid = parseInt(qb.getAttribute("data-inv-qi-id") || "", 10);
+            var qdoc = qb.getAttribute("data-inv-qi-doc") || "";
+            if (!isNaN(qid))
+                window.invOpenCompletedQiModal(qid, qdoc);
+            return;
+        }
+        var rb = ev.target.closest(".inv-btn-view-return");
+        if (rb && window.invOpenInvoiceReturnOrdersModal) {
+            var iid = parseInt(rb.getAttribute("data-inv-invoice-id") || "", 10);
+            var doc = rb.getAttribute("data-inv-doc") || "";
+            var fr = parseInt(rb.getAttribute("data-inv-ro-focus-id") || "", 10);
+            if (!isNaN(iid))
+                window.invOpenInvoiceReturnOrdersModal(iid, isNaN(fr) ? null : fr, doc);
+        }
+    });
+</script>

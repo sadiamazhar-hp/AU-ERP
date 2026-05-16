@@ -1,10 +1,17 @@
 @model AU_ERP.Models.ViewModels.DriversAndVehiclesIndexVm
+@using AU_ERP.Models
 @{
     ViewData["Title"] = "Drivers and vehicles";
-    var activeTab = ViewBag.ActiveTab as string ?? Context.Request.Query["tab"].ToString();
-    if (string.IsNullOrWhiteSpace(activeTab))
-        activeTab = "drivers";
-    var driversTabActive = string.Equals(activeTab, "drivers", StringComparison.OrdinalIgnoreCase);
+    var driversTabActive = string.Equals(Model.ActiveTab, "vehicles", StringComparison.OrdinalIgnoreCase) == false;
+    var driversBusySet = Model.DriverIdsBusyOnOpenDeliveryInvoice;
+    var vehiclesBusySet = Model.VehicleIdsBusyOnOpenDeliveryInvoice;
+    var hasDriverFilters = !string.IsNullOrEmpty(Model.DriverSearch)
+        || !string.IsNullOrEmpty(Model.DriverStatusFilter)
+        || !string.IsNullOrEmpty(Model.DriverFleetFilter);
+    var hasVehicleFilters = !string.IsNullOrEmpty(Model.VehicleSearch)
+        || !string.IsNullOrEmpty(Model.VehicleStatusFilter)
+        || !string.IsNullOrEmpty(Model.VehicleFleetFilter)
+        || !string.IsNullOrEmpty(Model.VehicleCarTypeFilter);
 }
 
 @if (TempData["DriversVehiclesMessage"] is string msg && !string.IsNullOrWhiteSpace(msg))
@@ -14,90 +21,212 @@
 
 @Html.ValidationSummary(false, "", new { @class = "text-danger small mb-3" })
 
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-    <h1 class="h5 mb-0">Drivers and vehicles</h1>
-</div>
+<div class="au-md-module dv-module">
+    <h1 class="h5 mb-1">Drivers and vehicles</h1>
+    <p class="au-md-intro mb-2">
+        Fleet status treats a driver or vehicle as <strong>Busy</strong> when they are on a delivery challan that is still active
+        (<strong>Open</strong> or <strong>Return in progress</strong> invoice, or <strong>no invoice yet</strong>), until someone uses <strong>Delivery completed</strong> on that challan.
+        When busy, the reference sales order (or DC number fallback) appears below.
+    </p>
 
-<ul class="nav nav-tabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link @(driversTabActive ? "active" : null)" id="dvTabDrivers" data-bs-toggle="tab" data-bs-target="#dvPaneDrivers" type="button" role="tab">Drivers</button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link @(!driversTabActive ? "active" : null)" id="dvTabVehicles" data-bs-toggle="tab" data-bs-target="#dvPaneVehicles" type="button" role="tab">Vehicles</button>
-    </li>
-</ul>
-<div class="tab-content border border-top-0 rounded-bottom bg-white p-3">
-    <div class="tab-pane fade @(driversTabActive ? "show active" : null)" id="dvPaneDrivers" role="tabpanel">
-        <div class="d-flex justify-content-end mb-2">
-            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddDriver">Add driver</button>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Name</th>
-                        <th>CNIC</th>
-                        <th>Licence</th>
-                        <th>Mobile</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var d in Model.Drivers)
+    <ul class="nav nav-tabs au-md-tabstrip dv-module-tabstrip" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(driversTabActive ? "active" : null)" id="dvTabDrivers" data-bs-toggle="tab" data-bs-target="#dvPaneDrivers" type="button" role="tab" aria-selected="@(driversTabActive ? "true" : "false")">Drivers</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(!driversTabActive ? "active" : null)" id="dvTabVehicles" data-bs-toggle="tab" data-bs-target="#dvPaneVehicles" type="button" role="tab" aria-selected="@(!driversTabActive ? "true" : "false")">Vehicles</button>
+        </li>
+    </ul>
+
+    <div class="tab-content au-md-tab-content dv-module-tab-content">
+        <div class="tab-pane fade @(driversTabActive ? "show active" : null)" id="dvPaneDrivers" role="tabpanel">
+            <form method="get" asp-action="Index" class="au-md-filter-bar">
+                <input type="hidden" name="tab" value="drivers" />
+                <div>
+                    <label class="form-label" for="dq">Search</label>
+                    <input type="search" class="form-control form-control-sm" id="dq" name="dq" value="@Model.DriverSearch" placeholder="Name, CNIC, licence, mobile…" style="min-width:14rem;" />
+                </div>
+                <div>
+                    <label class="form-label" for="dStatus">Status</label>
+                    <select class="form-select form-select-sm" id="dStatus" name="dStatus" style="min-width:7rem;">
+                        <option value="">All</option>
+                        <option value="Active" selected="@(Model.DriverStatusFilter == "Active")">Active</option>
+                        <option value="Inactive" selected="@(Model.DriverStatusFilter == "Inactive")">Inactive</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="dFleet">Fleet</label>
+                    <select class="form-select form-select-sm" id="dFleet" name="dFleet" style="min-width:8rem;">
+                        <option value="">All</option>
+                        <option value="Available" selected="@(Model.DriverFleetFilter == "Available")">Available</option>
+                        <option value="Busy" selected="@(Model.DriverFleetFilter == "Busy")">Busy</option>
+                    </select>
+                </div>
+                <div class="au-md-filter-actions">
+                    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                    @if (hasDriverFilters)
                     {
-                        <tr>
-                            <td>@($"{d.FirstName} {d.LastName}".Trim())</td>
-                            <td>@(d.CNIC ?? "")</td>
-                            <td>@(d.LicenceNo ?? "")</td>
-                            <td>@(d.Mobile ?? "")</td>
-                            <td>@(d.IsActive ? "Active" : "Inactive")</td>
-                        </tr>
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="Index" asp-route-tab="drivers">Clear</a>
                     }
-                </tbody>
-            </table>
+                </div>
+            </form>
+
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-2 pt-2 pb-1">
+                <span class="au-md-list-meta mb-0">@Model.DriverMatchCount driver@(Model.DriverMatchCount == 1 ? "" : "s")</span>
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddDriver">Add driver</button>
+            </div>
+
+            <div class="table-responsive px-2 pb-2">
+                <table class="table-sap mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>CNIC</th>
+                            <th>Licence</th>
+                            <th>Mobile</th>
+                            <th class="text-nowrap">Active</th>
+                            <th class="text-nowrap">Fleet status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in Model.Drivers)
+                        {
+                            <tr>
+                                <td>@($"{d.FirstName} {d.LastName}".Trim())</td>
+                                <td>@(d.CNIC ?? "")</td>
+                                <td>@(d.LicenceNo ?? "")</td>
+                                <td>@(d.Mobile ?? "")</td>
+                                <td>@(d.IsActive ? "Active" : "Inactive")</td>
+                                <td>
+                                    @if (!d.IsActive)
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                    else if (driversBusySet.Contains(d.Id))
+                                    {
+                                        <div><span class="badge rounded-pill text-bg-warning">Busy</span></div>
+                                        <div class="small text-muted mt-1">
+                                            @(Model.BusyDriverDeliveryRefById.TryGetValue(d.Id, out var dr) ? dr : "—")
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge rounded-pill text-bg-success">Available</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (Model.Drivers.Count == 0)
+            {
+                <p class="text-secondary small px-3 pb-3 mb-0">@(hasDriverFilters ? "No drivers match your filters." : "No drivers yet. Use Add driver to create one.")</p>
+            }
         </div>
-        @if (Model.Drivers.Count == 0)
-        {
-            <p class="text-secondary small mb-0">No drivers yet. Use Add driver to create one.</p>
-        }
-    </div>
-    <div class="tab-pane fade @(!driversTabActive ? "show active" : null)" id="dvPaneVehicles" role="tabpanel">
-        <div class="d-flex justify-content-end mb-2">
-            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddVehicle">Add vehicle</button>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Number plate</th>
-                        <th>Car type</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var v in Model.Vehicles)
+
+        <div class="tab-pane fade @(!driversTabActive ? "show active" : null)" id="dvPaneVehicles" role="tabpanel">
+            <form method="get" asp-action="Index" class="au-md-filter-bar">
+                <input type="hidden" name="tab" value="vehicles" />
+                <div>
+                    <label class="form-label" for="vq">Search</label>
+                    <input type="search" class="form-control form-control-sm" id="vq" name="vq" value="@Model.VehicleSearch" placeholder="Plate or car type…" style="min-width:12rem;" />
+                </div>
+                <div>
+                    <label class="form-label" for="vCarType">Car type</label>
+                    <select class="form-select form-select-sm" id="vCarType" name="vCarType" style="min-width:8rem;">
+                        <option value="">All</option>
+                        @foreach (var carTypeOption in VehicleCarTypes.All)
+                        {
+                            <option value="@carTypeOption" selected="@(string.Equals(Model.VehicleCarTypeFilter, carTypeOption, StringComparison.OrdinalIgnoreCase))">@carTypeOption</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="vStatus">Status</label>
+                    <select class="form-select form-select-sm" id="vStatus" name="vStatus" style="min-width:7rem;">
+                        <option value="">All</option>
+                        <option value="Active" selected="@(Model.VehicleStatusFilter == "Active")">Active</option>
+                        <option value="Inactive" selected="@(Model.VehicleStatusFilter == "Inactive")">Inactive</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="vFleet">Fleet</label>
+                    <select class="form-select form-select-sm" id="vFleet" name="vFleet" style="min-width:8rem;">
+                        <option value="">All</option>
+                        <option value="Available" selected="@(Model.VehicleFleetFilter == "Available")">Available</option>
+                        <option value="Busy" selected="@(Model.VehicleFleetFilter == "Busy")">Busy</option>
+                    </select>
+                </div>
+                <div class="au-md-filter-actions">
+                    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                    @if (hasVehicleFilters)
                     {
-                        <tr>
-                            <td>@v.NumberPlate</td>
-                            <td>@v.CarType</td>
-                            <td>@(v.IsActive ? "Active" : "Inactive")</td>
-                        </tr>
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="Index" asp-route-tab="vehicles">Clear</a>
                     }
-                </tbody>
-            </table>
+                </div>
+            </form>
+
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-2 pt-2 pb-1">
+                <span class="au-md-list-meta mb-0">@Model.VehicleMatchCount vehicle@(Model.VehicleMatchCount == 1 ? "" : "s")</span>
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddVehicle">Add vehicle</button>
+            </div>
+
+            <div class="table-responsive px-2 pb-2">
+                <table class="table-sap mb-0">
+                    <thead>
+                        <tr>
+                            <th>Number plate</th>
+                            <th>Car type</th>
+                            <th class="text-nowrap">Active</th>
+                            <th class="text-nowrap">Fleet status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var v in Model.Vehicles)
+                        {
+                            <tr>
+                                <td>@v.NumberPlate</td>
+                                <td>@v.CarType</td>
+                                <td>@(v.IsActive ? "Active" : "Inactive")</td>
+                                <td>
+                                    @if (!v.IsActive)
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                    else if (vehiclesBusySet.Contains(v.Id))
+                                    {
+                                        <div><span class="badge rounded-pill text-bg-warning">Busy</span></div>
+                                        <div class="small text-muted mt-1">
+                                            @(Model.BusyVehicleDeliveryRefById.TryGetValue(v.Id, out var vr) ? vr : "—")
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge rounded-pill text-bg-success">Available</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (Model.Vehicles.Count == 0)
+            {
+                <p class="text-secondary small px-3 pb-3 mb-0">@(hasVehicleFilters ? "No vehicles match your filters." : "No vehicles yet. Use Add vehicle to create one.")</p>
+            }
         </div>
-        @if (Model.Vehicles.Count == 0)
-        {
-            <p class="text-secondary small mb-0">No vehicles yet. Use Add vehicle to create one.</p>
-        }
     </div>
 </div>
 
 <div class="modal fade" id="modalAddDriver" tabindex="-1" aria-labelledby="modalAddDriverLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form asp-action="CreateDriver" method="post">
+            <form asp-action="CreateDriver" method="post" id="formAddDriver">
                 @Html.AntiForgeryToken()
+                <input type="hidden" name="dq" value="@Model.DriverSearch" />
+                <input type="hidden" name="dStatus" value="@Model.DriverStatusFilter" />
+                <input type="hidden" name="dFleet" value="@Model.DriverFleetFilter" />
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalAddDriverLabel">Add driver</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -105,23 +234,29 @@
                 <div class="modal-body">
                     <div class="mb-2">
                         <label class="form-label">First name</label>
-                        <input name="FirstName" class="form-control form-control-sm" />
+                        <input name="FirstName" class="form-control form-control-sm" maxlength="120" autocomplete="given-name" />
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Last name</label>
-                        <input name="LastName" class="form-control form-control-sm" />
+                        <input name="LastName" class="form-control form-control-sm" maxlength="120" autocomplete="family-name" />
                     </div>
                     <div class="mb-2">
                         <label class="form-label">CNIC</label>
-                        <input name="CNIC" class="form-control form-control-sm" />
+                        <input name="CNIC" id="dvCnic" class="form-control form-control-sm" maxlength="15" autocomplete="off" placeholder="35301-9876543-1" inputmode="numeric" />
+                        <div class="form-text small text-muted mb-0">13 digits formatted as #####-#######-*</div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Licence number</label>
-                        <input name="LicenceNo" class="form-control form-control-sm" />
+                        <input name="LicenceNo" class="form-control form-control-sm au-driver-licence-nneg" maxlength="120" autocomplete="off" placeholder="e.g. LHR-987654321" />
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Mobile</label>
-                        <input name="Mobile" class="form-control form-control-sm" />
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">+92</span>
+                            <input type="tel" id="dvMobilePk" class="form-control" maxlength="11" autocomplete="tel" placeholder="343-4256344" inputmode="numeric" />
+                        </div>
+                        <input type="hidden" name="Mobile" id="dvMobileHidden" value="" />
+                        <div class="form-text small text-muted mb-0">Enter 10 digits starting with 3 (local mobile without leading zero).</div>
                     </div>
                     <div class="mb-0">
                         <label class="form-label">Status</label>
@@ -145,6 +280,10 @@
         <div class="modal-content">
             <form asp-action="CreateVehicle" method="post">
                 @Html.AntiForgeryToken()
+                <input type="hidden" name="vq" value="@Model.VehicleSearch" />
+                <input type="hidden" name="vStatus" value="@Model.VehicleStatusFilter" />
+                <input type="hidden" name="vFleet" value="@Model.VehicleFleetFilter" />
+                <input type="hidden" name="vCarType" value="@Model.VehicleCarTypeFilter" />
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalAddVehicleLabel">Add vehicle</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -152,12 +291,12 @@
                 <div class="modal-body">
                     <div class="mb-2">
                         <label class="form-label">Number plate</label>
-                        <input name="NumberPlate" class="form-control form-control-sm" />
+                        <input name="NumberPlate" class="form-control form-control-sm au-vehicle-plate-nneg" maxlength="32" placeholder="e.g. LWA-3421" autocomplete="off" />
                     </div>
                     <div class="mb-0">
                         <label class="form-label">Car type</label>
                         <select name="CarType" class="form-select form-select-sm">
-                            @foreach (var carTypeOption in AU_ERP.Models.VehicleCarTypes.All)
+                            @foreach (var carTypeOption in VehicleCarTypes.All)
                             {
                                 <option value="@carTypeOption">@carTypeOption</option>
                             }
@@ -183,25 +322,27 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     @{
-        var tabScript = ViewBag.ActiveTab as string ?? Context.Request.Query["tab"].ToString();
+        var tabScript = Model.ActiveTab;
+        var showDriverModal = ViewBag.ShowDriverModal is true;
+        var showVehicleModal = ViewBag.ShowVehicleModal is true;
     }
-    @if (!string.IsNullOrWhiteSpace(tabScript) || ViewBag.ShowDriverModal is true || ViewBag.ShowVehicleModal is true)
+    @if (!driversTabActive || showDriverModal || showVehicleModal)
     {
         <script>
             (function () {
-                var tab = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(string.IsNullOrWhiteSpace(tabScript) ? "drivers" : tabScript));
+                var tab = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(tabScript));
                 if (tab === "vehicles") {
                     var el = document.getElementById("dvTabVehicles");
                     if (el && window.bootstrap && bootstrap.Tab) bootstrap.Tab.getOrCreateInstance(el).show();
                 }
-                @if (ViewBag.ShowDriverModal is bool sd && sd)
+                @if (showDriverModal)
                 {
                     <text>
                     var md = document.getElementById("modalAddDriver");
                     if (md && window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(md).show();
                     </text>
                 }
-                @if (ViewBag.ShowVehicleModal is bool sv && sv)
+                @if (showVehicleModal)
                 {
                     <text>
                     var mv = document.getElementById("modalAddVehicle");
@@ -211,4 +352,41 @@
             })();
         </script>
     }
+
+    <script>
+        (function () {
+            function dvDigits(s) {
+                return String(s || "").replace(/\D/g, "");
+            }
+            function dvFmtCnicDigits(digits) {
+                var d = digits.slice(0, 13);
+                if (d.length <= 5) return d;
+                if (d.length <= 12) return d.slice(0, 5) + "-" + d.slice(5);
+                return d.slice(0, 5) + "-" + d.slice(5, 12) + "-" + d.slice(12);
+            }
+            function dvFmtMobileLocalDigits(digits) {
+                var d = digits.slice(0, 10);
+                if (d.length <= 3) return d;
+                return d.slice(0, 3) + "-" + d.slice(3);
+            }
+            var cnicEl = document.getElementById("dvCnic");
+            if (cnicEl)
+                cnicEl.addEventListener("input", function () {
+                    this.value = dvFmtCnicDigits(dvDigits(this.value));
+                });
+            var mobEl = document.getElementById("dvMobilePk");
+            if (mobEl)
+                mobEl.addEventListener("input", function () {
+                    this.value = dvFmtMobileLocalDigits(dvDigits(this.value));
+                });
+            var form = document.getElementById("formAddDriver");
+            if (form) {
+                form.addEventListener("submit", function () {
+                    var d = dvDigits(mobEl && mobEl.value);
+                    var h = document.getElementById("dvMobileHidden");
+                    if (h) h.value = d.length === 10 && d[0] === "3" ? "+92" + d : "";
+                });
+            }
+        })();
+    </script>
 }

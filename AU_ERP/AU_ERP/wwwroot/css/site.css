@@ -175,10 +175,11 @@ a.au-icon-btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 16px;
+  padding: 8px 16px;
   margin: 0;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 1.35;
   color: var(--text);
   text-decoration: none;
   border-left: 3px solid transparent;
@@ -209,10 +210,10 @@ a.au-icon-btn {
 .au-sidebar-section-title {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--subtle);
-  padding: 12px 16px 4px;
+  padding: 14px 16px 6px;
   margin: 0;
 }
 
@@ -231,9 +232,10 @@ a.au-icon-btn {
 .au-sidebar-group-title {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--subtle);
-  padding: 8px 16px 2px 16px;
+  padding: 10px 16px 4px 20px;
   margin: 0;
   user-select: none;
 }
@@ -243,10 +245,10 @@ a.au-icon-btn {
 }
 
 .au-sidebar-link.au-sidebar-link--sub {
-  padding: 6px 16px 6px 28px;
-  font-size: 12.5px;
+  padding: 7px 16px 7px 28px;
+  font-size: 13px;
   font-weight: 400;
-  border-left-width: 2px;
+  border-left-width: 3px;
 }
 
 .au-sidebar-link.au-sidebar-link--sub:hover {
@@ -483,16 +485,19 @@ body.modal-open:has(#grViewModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
-/* Goods issue view modal stacking (keep backdrop below modal). */
-#giViewModal.modal {
+/* Goods issue view modal stacking (reserve GI list + Stock Goods Issue hub embed the same patterns). */
+#giViewModal.modal,
+#sgiHubViewModal.modal {
   z-index: 100050 !important;
 }
 
-#giViewModal.modal ~ .modal-backdrop {
+#giViewModal.modal ~ .modal-backdrop,
+#sgiHubViewModal.modal ~ .modal-backdrop {
   z-index: 100040 !important;
 }
 
-body.modal-open:has(#giViewModal.show) .modal-backdrop {
+body.modal-open:has(#giViewModal.show) .modal-backdrop,
+body.modal-open:has(#sgiHubViewModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
@@ -1025,13 +1030,14 @@ body.modal-open:has(#otGoodsReceiptModal.show) .modal-backdrop {
   outline-offset: 2px;
 }
 
-/* Material delete confirmation — maroon WARNING dialog */
+/* Material delete confirmation — maroon WARNING dialog (#grEditModal and others use z-index 100050; keep this modal above nested editors). */
 /* Shared with Sales Quotation “send email” confirm (#sqEmailConfirmModal). */
 #materialDeleteConfirmModal.modal,
 #sqEmailConfirmModal.modal {
-  z-index: 100050 !important;
+  z-index: 100100 !important;
 }
 
+/* Backdrops stay below 100050 “shell” modals; the confirm modal at 100100 still paints above them. */
 #materialDeleteConfirmModal.modal ~ .modal-backdrop,
 #sqEmailConfirmModal.modal ~ .modal-backdrop {
   z-index: 100040 !important;
@@ -1329,4 +1335,140 @@ body.modal-open:has(#sqEmailConfirmModal.show) .modal-backdrop {
 .au-create-v2-modal .modal-footer {
     border-top: 1px solid rgba(56, 128, 135, 0.25);
     background: var(--au-white, #f6f6f2);
+}
+
+/* Master data — shared module shell (Create/List tabs + list chrome) */
+.au-md-module .au-md-intro {
+  font-size: 0.8125rem;
+  color: var(--subtle, #6a7c8e);
+  margin-bottom: 0.75rem;
+}
+
+.au-md-tabstrip,
+.bp-module-tabs,
+.bom-module-tabstrip,
+.wc-module-tabstrip,
+.rt-module-tabstrip,
+.pv-module-tabstrip,
+.materials-module-tabstrip,
+.dv-module-tabstrip {
+  border-bottom: 1px solid var(--border, #d9d9d9);
+  padding: 0 0.25rem;
+  background: #fff;
+  margin-bottom: 0;
+}
+
+.au-md-tabstrip .nav-link,
+.bp-module-tabs .nav-link,
+.bom-module-tabstrip .nav-link,
+.wc-module-tabstrip .nav-link,
+.rt-module-tabstrip .nav-link,
+.pv-module-tabstrip .nav-link,
+.materials-module-tabstrip .nav-link,
+.dv-module-tabstrip .nav-link {
+  color: var(--accent, #0053b3) !important;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: transparent !important;
+  border: 1px solid transparent;
+  border-radius: 0.35rem 0.35rem 0 0;
+}
+
+.au-md-tabstrip .nav-link:hover,
+.bp-module-tabs .nav-link:hover,
+.bom-module-tabstrip .nav-link:hover,
+.wc-module-tabstrip .nav-link:hover,
+.rt-module-tabstrip .nav-link:hover,
+.pv-module-tabstrip .nav-link:hover,
+.materials-module-tabstrip .nav-link:hover,
+.dv-module-tabstrip .nav-link:hover {
+  border-color: rgba(0, 83, 179, 0.2);
+  color: var(--accent, #0053b3) !important;
+}
+
+.au-md-tabstrip .nav-link.active,
+.bp-module-tabs .nav-link.active,
+.bom-module-tabstrip .nav-link.active,
+.wc-module-tabstrip .nav-link.active,
+.rt-module-tabstrip .nav-link.active,
+.pv-module-tabstrip .nav-link.active,
+.materials-module-tabstrip .nav-link.active,
+.dv-module-tabstrip .nav-link.active {
+  color: var(--text, #32363a) !important;
+  background-color: #fff !important;
+  font-weight: 600;
+  border-color: var(--border, #d9d9d9);
+  border-bottom-color: #fff;
+  margin-bottom: -1px;
+}
+
+.au-md-tab-content,
+.bom-module-tab-content,
+.wc-module-tab-content,
+.rt-module-tab-content,
+.pv-module-tab-content,
+.materials-module-tab-content,
+.dv-module-tab-content {
+  border: 1px solid var(--border, #d9d9d9);
+  border-top: none;
+  background: #fff;
+}
+
+.au-md-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #ebebeb;
+  background: #fafbfc;
+}
+
+.au-md-filter-bar .form-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--subtle, #6a7c8e);
+  margin-bottom: 0.15rem;
+}
+
+.au-md-filter-bar .au-md-filter-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding-bottom: 1px;
+}
+
+.au-md-list-meta {
+  font-size: 0.75rem;
+  color: var(--subtle, #6a7c8e);
+  padding: 0.35rem 0.75rem 0;
+}
+
+.au-md-module .table-sap {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.au-md-module .table-sap th {
+  background: var(--sap-header-bg, #dee6ef);
+  color: var(--text, #32363a);
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  font-weight: 500;
+  font-size: 0.8125rem;
+}
+
+.au-md-module .table-sap td {
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+  vertical-align: middle;
+}
+
+.au-md-module .table-sap tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
+.au-md-module .table-sap tbody tr:hover {
+  background: #f0f4ff;
 }

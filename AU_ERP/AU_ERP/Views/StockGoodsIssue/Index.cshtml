@@ -231,6 +231,13 @@
         }
         ensureModalOnBody();
         modalEl.addEventListener("show.bs.modal", ensureModalOnBody);
+        /* Ensure backdrop stays under this modal (matches site.css giViewModal / sgi tiers). */
+        modalEl.addEventListener("shown.bs.modal", function () {
+            modalEl.style.setProperty("z-index", "100050", "important");
+            document.querySelectorAll("body > .modal-backdrop").forEach(function (b) {
+                b.style.setProperty("z-index", "100040", "important");
+            });
+        });
         modalEl.addEventListener("hidden.bs.modal", function () {
             if (document.querySelectorAll(".modal.show").length > 0) return;
             document.querySelectorAll(".modal-backdrop").forEach(function (b) { b.remove(); });

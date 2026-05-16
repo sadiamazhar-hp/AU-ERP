@@ -226,14 +226,15 @@ namespace AU_ERP.Controllers
         // ──── Document Integration ────
 
         [HttpGet]
-        public async Task<IActionResult> Integration()
+        public async Task<IActionResult> Integration(CancellationToken ct = default)
         {
             ViewBag.DocumentTypes = await _context.DocumentTypes
                 .Select(d => new SelectListItem
                 {
                     Value = d.DocumentTypeID.ToString(),
                     Text = (d.DocCode ?? "") + " - " + d.Description
-                }).ToListAsync();
+                }).ToListAsync(ct)
+                .ConfigureAwait(false);
 
             ViewBag.ModuleKeys = ModuleKeys.All
                 .Select(x => new SelectListItem { Value = x.Key, Text = x.Display })
@@ -242,13 +243,16 @@ namespace AU_ERP.Controllers
             var data = await _context.DocumentIntegrations
                 .Include(i => i.DocumentType)
                 .OrderBy(i => i.ModuleKey)
-                .ToListAsync();
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            ViewBag.IntegrationWarnings = await DocumentIntegrationDiagnostics.GetActiveIntegrationWarningsAsync(_context, ct)
+                .ConfigureAwait(false);
             return View("Integration", data);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Integration(List<DocumentIntegration>? integrations)
+        public async Task<IActionResult> Integration([FromForm] List<DocumentIntegration>? integrations, CancellationToken ct = default)
         {
             var isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
 
@@ -256,6 +260,20 @@ namespace AU_ERP.Controllers
                 .Where(r => !string.IsNullOrWhiteSpace(r.ModuleKey) && r.DocumentTypeID > 0)
                 .ToList();
 
+            // Never wipe the integration table because some rows posted empty module/document or the binder failed silently.
+            if (rows.Count == 0 &&
+                Request.HasFormContentType &&
+                Request.Form.Keys.Any(k => k.StartsWith("integrations[", StringComparison.OrdinalIgnoreCase)))
+            {
+                const string guarded =
+                    "No valid integration rows were saved. Ensure every row has both a Module and Document selected.";
+                if (isAjax)
+                    return Json(new { success = false, message = guarded });
+                TempData["Error"] = guarded;
+                return RedirectToAction(nameof(Integration));
+            }
+
+            // Clear-all is only allowed when nothing was posted under the integrations[*] prefix.
             if (rows.Count == 0)
             {
                 try

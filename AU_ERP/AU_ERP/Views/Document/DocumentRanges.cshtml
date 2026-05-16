@@ -38,10 +38,10 @@
                     {
                         <tr>
                             <td class="col-sel" onclick="selectRow(this)">
-                                <input type="hidden" name="[@i].RangeID" value="@safeModel[i].RangeID" class="row-id" />
+                                <input type="hidden" name="ranges[@i].RangeID" value="@safeModel[i].RangeID" class="row-id" />
                             </td>
                             <td>
-                                <select name="[@i].DocumentTypeID" class="sap-input" disabled data-required="true">
+                                <select name="ranges[@i].DocumentTypeID" class="sap-input" disabled data-required="true">
                                     <option value="">Select Type</option>
                                     @foreach (var opt in docTypes)
                                     {
@@ -56,9 +56,9 @@
                                     }
                                 </select>
                             </td>
-                            <td><input name="[@i].FromNumber" class="sap-input sap-range-input" value="@safeModel[i].FromNumber" readonly maxlength="10" data-required="true" /></td>
-                            <td><input name="[@i].ToNumber" class="sap-input sap-range-input" value="@safeModel[i].ToNumber" readonly maxlength="10" data-required="true" /></td>
-                            <td><input name="[@i].CurrentNumber" class="sap-input sap-always-readonly" value="@safeModel[i].CurrentNumber" readonly /></td>
+                            <td><input name="ranges[@i].FromNumber" class="sap-input sap-range-input" value="@safeModel[i].FromNumber" readonly maxlength="10" data-required="true" /></td>
+                            <td><input name="ranges[@i].ToNumber" class="sap-input sap-range-input" value="@safeModel[i].ToNumber" readonly maxlength="10" data-required="true" /></td>
+                            <td><input name="ranges[@i].CurrentNumber" class="sap-input sap-always-readonly" value="@safeModel[i].CurrentNumber" readonly /></td>
                         </tr>
                     }
                 </tbody>
@@ -153,12 +153,12 @@
 
         tr.innerHTML = `
             <td class="col-sel" onclick="selectRow(this)">
-                <input type="hidden" name="[${rowCount}].RangeID" value="0" class="row-id" />
+                <input type="hidden" name="ranges[${rowCount}].RangeID" value="0" class="row-id" />
             </td>
-            <td><select name="[${rowCount}].DocumentTypeID" class="sap-input" data-required="true">${opts}</select></td>
-            <td><input name="[${rowCount}].FromNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
-            <td><input name="[${rowCount}].ToNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
-            <td><input name="[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" value="" readonly title="Last issued; empty = next will be From"></td>`;
+            <td><select name="ranges[${rowCount}].DocumentTypeID" class="sap-input" data-required="true">${opts}</select></td>
+            <td><input name="ranges[${rowCount}].FromNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
+            <td><input name="ranges[${rowCount}].ToNumber" class="sap-input sap-range-input" maxlength="10" data-required="true"></td>
+            <td><input name="ranges[${rowCount}].CurrentNumber" class="sap-input sap-always-readonly" value="" readonly title="Last issued; empty = next will be From"></td>`;
         body.appendChild(tr);
         rowCount++;
 
@@ -279,10 +279,8 @@
         rows.forEach((row, idx) => {
             row.querySelectorAll('[name]').forEach(el => {
                 const name = el.name;
-                if (name.includes('.')) {
-                    const property = name.split('.').slice(1).join('.');
-                    el.name = `[${idx}].${property}`;
-                }
+                var m = /^ranges\[(\d+)\]\.(.+)$/.exec(name);
+                if (m) el.name = 'ranges[' + idx + '].' + m[2];
             });
         });
         rowCount = rows.length;

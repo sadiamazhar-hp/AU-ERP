@@ -5,6 +5,7 @@ using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -570,6 +571,11 @@ public class SalesOrderController : Controller
             if (string.IsNullOrEmpty(mat)) continue;
 
             var qty = r.OrderQuantity.GetValueOrDefault();
+            if (DocumentQuantityRules.ValidateNonNegativeWhole(qty, $"Order quantity ({mat})") is { } qWholeErr)
+            {
+                TempData["OrderError"] = qWholeErr;
+                return RedirectToOrderListFromModel(model);
+            }
             if (qty <= 0) continue;
             if (r.QuantityUomId is not > 0) continue;
             var delDay = (r.DeliveryDate?.Date) ?? orderDay;
@@ -604,7 +610,11 @@ public class SalesOrderController : Controller
             }
 
             var unitP = r.UnitPrice.GetValueOrDefault();
-            if (unitP < 0) unitP = 0;
+            if (unitP < 0)
+            {
+                TempData["OrderError"] = $"Unit price cannot be negative ({mat}).";
+                return RedirectToOrderListFromModel(model);
+            }
             const decimal discP = 0m;
 
             decimal sub;
@@ -1103,7 +1113,7 @@ public class SalesOrderController : Controller
         if (s.Equals(StockInventoryGradeCodes.ThirdQuality, StringComparison.OrdinalIgnoreCase) || s.Equals("C", StringComparison.OrdinalIgnoreCase))
             return StockInventoryGradeCodes.ThirdQuality;
         if (s.Equals(StockInventoryGradeCodes.Scrap, StringComparison.OrdinalIgnoreCase))
-            return StockInventoryGradeCodes.Scrap;
+            return StockInventoryGradeCodes.FirstQuality;
         return StockInventoryGradeCodes.FirstQuality;
     }
 

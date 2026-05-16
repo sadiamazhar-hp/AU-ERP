@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers;
 
@@ -313,8 +314,8 @@ public class StockOverviewController : Controller
                 .FirstOrDefaultAsync(m => m.MaterialNumber == key, ct);
             if (mat == null)
                 return "Material does not exist.";
-            if (dto.Quantity <= 0)
-                return "Quantity must be greater than zero.";
+            if (DocumentQuantityRules.ValidatePositiveWhole(dto.Quantity, "Quantity") is { } qErr)
+                return qErr;
             if (dto.QuantityUomId <= 0)
                 return "Quantity UOM is required.";
             if (!await _db.UnitOfMeasurements.AsNoTracking().AnyAsync(u => u.Id == dto.QuantityUomId, ct))
