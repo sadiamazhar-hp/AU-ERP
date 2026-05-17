@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using AU_ERP.Configuration;
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
@@ -122,49 +123,7 @@ public class ReturnOrderController : Controller
         }
 
         if (cm == null)
-        {
-            // #region agent log
-            try
-            {
-                var hostEnvNt = HttpContext.RequestServices.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>();
-                if (hostEnvNt?.IsDevelopment() == true)
-                {
-                    var webEnvNt = HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
-                    var logPathNt = Path.GetFullPath(Path.Combine(webEnvNt.ContentRootPath, "..", "..", "debug-e8a0a5.log"));
-                    var dbgNt =
-                        "{\"sessionId\":\"e8a0a5\",\"runId\":\"post-fix\",\"hypothesisId\":\"H4srv\",\"location\":\"ReturnOrderController.CreditMemoPartial:result\",\"timestamp\":" +
-                        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + ",\"data\":{\"id\":" + id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ",\"outcome\":\"not_found\"}}\n";
-                    await System.IO.File.AppendAllTextAsync(logPathNt, dbgNt, ct).ConfigureAwait(false);
-                }
-            }
-            catch
-            {
-                /* ignore */
-            }
-            // #endregion
-
             return NotFound();
-        }
-
-        // #region agent log
-        try
-        {
-            var hostEnv = HttpContext.RequestServices.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>();
-            if (hostEnv?.IsDevelopment() == true)
-            {
-                var webEnv = HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
-                var logPath = Path.GetFullPath(Path.Combine(webEnv.ContentRootPath, "..", "..", "debug-e8a0a5.log"));
-                var dbgLine =
-                    "{\"sessionId\":\"e8a0a5\",\"runId\":\"post-fix\",\"hypothesisId\":\"H4srv\",\"location\":\"ReturnOrderController.CreditMemoPartial:result\",\"timestamp\":" +
-                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + ",\"data\":{\"id\":" + id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ",\"outcome\":\"ok\"}}\n";
-                await System.IO.File.AppendAllTextAsync(logPath, dbgLine, ct).ConfigureAwait(false);
-            }
-        }
-        catch
-        {
-            /* ignore debug log failures */
-        }
-        // #endregion
 
         var vm = new ReturnOrderCreditMemoModalVm
         {
@@ -695,4 +654,5 @@ public class ReturnOrderController : Controller
         var t = text.Trim();
         return t.Length <= max ? t : t[..max] + "…";
     }
+
 }

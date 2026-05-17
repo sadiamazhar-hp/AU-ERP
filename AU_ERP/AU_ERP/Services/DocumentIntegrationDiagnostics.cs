@@ -7,17 +7,19 @@ namespace AU_ERP.Services;
 /// <summary>Warns admins when Configuration → Document → Integration rows are incomplete (prevents vague runtime failures).</summary>
 public static class DocumentIntegrationDiagnostics
 {
-    /// <summary>Mirrors <see cref="DocumentNumberAllocator"/> range selection for “would allocation succeed?”.</summary>
     private static DocumentRange? PickNextAssignableRange(IEnumerable<DocumentRange>? ranges)
     {
         if (ranges == null)
             return null;
         return ranges
-            .Where(r => r.FromNumber.HasValue && r.ToNumber.HasValue
-                        && (r.CurrentNumber ?? (r.FromNumber!.Value - 1)) < r.ToNumber!.Value)
+            .Where(static r => r.FromNumber.HasValue && r.ToNumber.HasValue
+                               && (r.CurrentNumber ?? (r.FromNumber!.Value - 1)) < r.ToNumber!.Value)
             .OrderBy(r => r.FromNumber)
             .FirstOrDefault();
     }
+
+    private static bool HasConfiguredNumericRanges(IEnumerable<DocumentRange>? ranges) =>
+        ranges?.Any(static r => r.FromNumber.HasValue && r.ToNumber.HasValue) == true;
 
     /// <returns>Human-readable warnings; empty list means every known module key has a usable active mapping.</returns>
     public static async Task<IReadOnlyList<string>> GetActiveIntegrationWarningsAsync(AppDbContext db, CancellationToken ct)
@@ -51,9 +53,14 @@ public static class DocumentIntegrationDiagnostics
                 warnings.Add($"{display}: The linked document type has no DocCode. Update Document types before issuing numbers.");
                 continue;
             }
+            if (!HasConfiguredNumericRanges(row.DocumentType.DocumentRanges))
+            {
+                warnings.Add($"{display}: The linked document type has no Document ranges. Add ranges under Configuration → Document → Document ranges.");
+                continue;
+            }
             if (PickNextAssignableRange(row.DocumentType.DocumentRanges) is null)
             {
-                warnings.Add($"{display}: The linked document type has no document range with remaining numbers. Add or extend ranges under Configuration → Document → Ranges.");
+                warnings.Add($"{display}: All Document ranges linked to this type are exhausted. Extend ranges under Configuration → Document → Document ranges.");
             }
         }
 

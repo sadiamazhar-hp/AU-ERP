@@ -164,8 +164,7 @@
                                 ? $"{p.FinishedMaterialNumber} — {p.FinishedMaterial.Description}"
                                 : p.FinishedMaterialNumber;
                             var uomCode = p.Uom?.Code ?? "—";
-                            var isOperationTrackingCompleted = p.StageProgresses.Any()
-                                && p.StageProgresses.All(s => s.StageStatus == ProductionOrderStageProgress.StageCompleted);
+                            var isOperationTrackingCompleted = Model.OperationTrackingFullyCompletedByOrderId.TryGetValue(p.Id, out var opDoneAll) && opDoneAll;
                             <tr>
                                 <td>
                                     <strong>PO-@p.ProductionNumber</strong>

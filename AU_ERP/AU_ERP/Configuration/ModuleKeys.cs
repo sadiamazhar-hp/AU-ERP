@@ -33,4 +33,19 @@ public static class ModuleKeys
         (QualityInspection, "Quality Inspection"),
         (Batch, "Batch"),
     };
+
+    /// <summary>For user-facing validation messages (fallback: moduleKey text).</summary>
+    public static string GetDisplayName(string moduleKey)
+    {
+        var k = (moduleKey ?? "").Trim();
+        if (k.Length == 0)
+            return "Document";
+        foreach (var (key, display) in All)
+        {
+            if (string.Equals(key, k, StringComparison.OrdinalIgnoreCase))
+                return display;
+        }
+
+        return k;
+    }
 }

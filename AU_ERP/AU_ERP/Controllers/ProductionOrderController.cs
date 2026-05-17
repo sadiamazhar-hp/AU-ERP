@@ -71,11 +71,11 @@ namespace AU_ERP.Controllers
                 CountCompleted = await baseQuery.CountAsync(p => p.Status == ProductionOrder.StatusCompleted, ct)
             };
 
+            // List view: do not Include Lines or StageProgresses (cartesian / huge payloads → timeouts).
+            // Stage completion for the Operation button is loaded in one lightweight follow-up query.
             var filtered = _db.ProductionOrders.AsNoTracking()
                 .Include(p => p.FinishedMaterial)
                 .Include(p => p.Uom)
-                .Include(p => p.StageProgresses)
-                .Include(p => p.Lines)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(q))
@@ -104,6 +104,14 @@ namespace AU_ERP.Controllers
             var poIds = vm.Items.Select(p => p.Id).ToList();
             if (poIds.Count > 0)
             {
+                var stageRows = await _db.ProductionOrderStageProgresses.AsNoTracking()
+                    .Where(s => poIds.Contains(s.ProductionOrderId))
+                    .Select(s => new { s.ProductionOrderId, s.StageStatus })
+                    .ToListAsync(ct);
+                foreach (var grp in stageRows.GroupBy(r => r.ProductionOrderId))
+                    vm.OperationTrackingFullyCompletedByOrderId[grp.Key] =
+                        grp.Any() && grp.All(r => r.StageStatus == ProductionOrderStageProgress.StageCompleted);
+
                 var gis = await _db.GoodsIssueDocuments.AsNoTracking()
                     .Where(g => poIds.Contains(g.ProductionOrderId))
                     .Select(g => new { g.ProductionOrderId, g.Id, g.DocumentNumber, g.DispatchStatus, g.Status })

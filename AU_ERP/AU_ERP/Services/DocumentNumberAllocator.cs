@@ -1,4 +1,5 @@
 using System.Data;
+using AU_ERP.Configuration;
 using AU_ERP.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,13 +29,16 @@ public sealed class DocumentNumberAllocator
                 .ConfigureAwait(false);
 
             if (integ?.DocumentType is null)
-                throw new DocumentIntegrationMissingException(moduleKey);
+                throw DocumentIntegrationMissingException.NotConfigured(moduleKey);
 
             var docCode = (integ.DocumentType.DocCode ?? "").Trim();
             if (string.IsNullOrEmpty(docCode))
-                throw new DocumentIntegrationMissingException(moduleKey, "Document type has no DocCode configured.");
+                throw DocumentIntegrationMissingException.DocCodeMissing(moduleKey);
 
-            var range = PickNextRange(integ.DocumentType.DocumentRanges);
+            if (!HasConfiguredNumericRanges(integ.DocumentType.DocumentRanges))
+                throw DocumentIntegrationMissingException.NoRangesAssigned(moduleKey);
+
+            var range = PickNextAssignableRange(integ.DocumentType.DocumentRanges);
             if (range is null)
                 throw new DocumentIntegrationRangeExhaustedException(moduleKey);
 
@@ -63,13 +67,16 @@ public sealed class DocumentNumberAllocator
             .ConfigureAwait(false);
 
         if (integ?.DocumentType is null)
-            throw new DocumentIntegrationMissingException(moduleKey);
+            throw DocumentIntegrationMissingException.NotConfigured(moduleKey);
 
         var docCode = (integ.DocumentType.DocCode ?? "").Trim();
         if (string.IsNullOrEmpty(docCode))
-            throw new DocumentIntegrationMissingException(moduleKey, "Document type has no DocCode configured.");
+            throw DocumentIntegrationMissingException.DocCodeMissing(moduleKey);
 
-        var range = PickNextRange(integ.DocumentType.DocumentRanges);
+        if (!HasConfiguredNumericRanges(integ.DocumentType.DocumentRanges))
+            throw DocumentIntegrationMissingException.NoRangesAssigned(moduleKey);
+
+        var range = PickNextAssignableRange(integ.DocumentType.DocumentRanges);
         if (range is null)
             throw new DocumentIntegrationRangeExhaustedException(moduleKey);
 
@@ -77,7 +84,12 @@ public sealed class DocumentNumberAllocator
         return $"{docCode}-{next}";
     }
 
-    private static DocumentRange? PickNextRange(IEnumerable<DocumentRange>? ranges)
+    private static bool HasConfiguredNumericRanges(IEnumerable<DocumentRange>? ranges)
+    {
+        return ranges?.Any(static r => r.FromNumber.HasValue && r.ToNumber.HasValue) == true;
+    }
+
+    private static DocumentRange? PickNextAssignableRange(IEnumerable<DocumentRange>? ranges)
     {
         if (ranges == null)
             return null;
@@ -100,10 +112,32 @@ public sealed class DocumentIntegrationMissingException : Exception
 {
     public string ModuleKey { get; }
 
-    public DocumentIntegrationMissingException(string moduleKey, string? detail = null)
-        : base(detail ?? $"No active document integration is configured for module '{moduleKey}'. Configure it under Configuration → Document → Integration.")
+    private DocumentIntegrationMissingException(string moduleKey, string message)
+        : base(message)
     {
         ModuleKey = moduleKey;
+    }
+
+    /// <summary>No active Integration row / missing document type linkage.</summary>
+    public static DocumentIntegrationMissingException NotConfigured(string moduleKey)
+    {
+        var d = ModuleKeys.GetDisplayName(moduleKey);
+        return new DocumentIntegrationMissingException(moduleKey,
+            $"{d} is not integrated under Configuration → Document → Integration with a Document. Add an active row for this module with a Document type and Document ranges.");
+    }
+
+    public static DocumentIntegrationMissingException DocCodeMissing(string moduleKey)
+    {
+        var d = ModuleKeys.GetDisplayName(moduleKey);
+        return new DocumentIntegrationMissingException(moduleKey,
+            $"{d} is linked under Document Integration but the Document type has no DocCode. Set DocCode under Configuration → Document → Document types.");
+    }
+
+    public static DocumentIntegrationMissingException NoRangesAssigned(string moduleKey)
+    {
+        var d = ModuleKeys.GetDisplayName(moduleKey);
+        return new DocumentIntegrationMissingException(moduleKey,
+            $"{d} is linked under Document Integration but its Document type has no Document ranges. Add ranges under Configuration → Document → Document ranges.");
     }
 }
 
@@ -112,8 +146,14 @@ public sealed class DocumentIntegrationRangeExhaustedException : Exception
     public string ModuleKey { get; }
 
     public DocumentIntegrationRangeExhaustedException(string moduleKey)
-        : base($"Document number range is exhausted for module '{moduleKey}'. Add or extend document ranges for the linked document type.")
+        : base(BuildRangeMessage(moduleKey))
     {
         ModuleKey = moduleKey;
+    }
+
+    private static string BuildRangeMessage(string moduleKey)
+    {
+        var d = ModuleKeys.GetDisplayName(moduleKey);
+        return $"{d} cannot allocate the next document number — all configured ranges are exhausted. Extend or add ranges under Configuration → Document → Document ranges.";
     }
 }

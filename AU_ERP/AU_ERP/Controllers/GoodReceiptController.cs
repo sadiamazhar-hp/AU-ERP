@@ -5,6 +5,7 @@ using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Text.Json;
 
 namespace AU_ERP.Controllers;
@@ -276,12 +277,58 @@ public class GoodReceiptController : Controller
             });
         }
         var defaultProduced = lastOut ?? poLines.Sum(l => l.PlannedQuantity);
-        string docNo;
-        string batchNo;
+
         try
         {
-            docNo = await _documentNumbers.AllocateAsync(ModuleKeys.QualityInspection, ct).ConfigureAwait(false);
-            batchNo = await _documentNumbers.AllocateAsync(ModuleKeys.Batch, ct).ConfigureAwait(false);
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx =
+                    await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct).ConfigureAwait(false);
+                try
+                {
+                    var docNo = await _documentNumbers.AllocateAsync(ModuleKeys.QualityInspection, ct).ConfigureAwait(false);
+                    var batchNo = await _documentNumbers.AllocateAsync(ModuleKeys.Batch, ct).ConfigureAwait(false);
+
+                    var lines = poLines.Select(l => new GoodsReceiptPostLineDto
+                    {
+                        ProductionOrderLineId = l.Id,
+                        MaterialNumber = l.MaterialNumber,
+                        UomId = l.UomId,
+                        ProducedQty = l.PlannedQuantity,
+                        QtyFirstQuality = l.PlannedQuantity,
+                        QtySecondQuality = 0m,
+                        QtyThirdQuality = 0m,
+                        RejectedScrapQty = 0m
+                    }).ToList();
+
+                    _db.GoodReceiptDocuments.Add(new GoodReceiptDocument
+                    {
+                        ProductionOrderId = productionOrderId,
+                        DocumentDate = DateTime.Today,
+                        DocumentNumber = docNo,
+                        BatchNo = batchNo,
+                        ProducedQty = defaultProduced,
+                        QtyFirstQuality = defaultProduced,
+                        QtySecondQuality = 0,
+                        QtyThirdQuality = 0,
+                        RejectedScrapQty = 0,
+                        DraftLinesJson = JsonSerializer.Serialize(lines),
+                        IsPosted = false,
+                        PostedAt = null,
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    await _db.SaveChangesAsync(ct).ConfigureAwait(false);
+                    await tx.CommitAsync(ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    await tx.RollbackAsync(ct).ConfigureAwait(false);
+                    throw;
+                }
+            }).ConfigureAwait(false);
+            return (true, null);
         }
         catch (DocumentIntegrationMissingException ex)
         {
@@ -291,37 +338,6 @@ public class GoodReceiptController : Controller
         {
             return (false, ex.Message);
         }
-
-        var lines = poLines.Select(l => new GoodsReceiptPostLineDto
-        {
-            ProductionOrderLineId = l.Id,
-            MaterialNumber = l.MaterialNumber,
-            UomId = l.UomId,
-            ProducedQty = l.PlannedQuantity,
-            QtyFirstQuality = l.PlannedQuantity,
-            QtySecondQuality = 0m,
-            QtyThirdQuality = 0m,
-            RejectedScrapQty = 0m
-        }).ToList();
-
-        _db.GoodReceiptDocuments.Add(new GoodReceiptDocument
-        {
-            ProductionOrderId = productionOrderId,
-            DocumentDate = DateTime.Today,
-            DocumentNumber = docNo,
-            BatchNo = batchNo,
-            ProducedQty = defaultProduced,
-            QtyFirstQuality = defaultProduced,
-            QtySecondQuality = 0,
-            QtyThirdQuality = 0,
-            RejectedScrapQty = 0,
-            DraftLinesJson = JsonSerializer.Serialize(lines),
-            IsPosted = false,
-            PostedAt = null,
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
-        return (true, null);
     }
 
     private static List<GoodsReceiptPostLineDto> ParseDraftLines(string? json)

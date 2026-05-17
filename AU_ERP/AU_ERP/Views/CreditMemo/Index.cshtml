@@ -79,7 +79,6 @@
                         foreach (var row in Model.Items)
                         {
                             var dealer = row.DealerDisplayName ?? "—";
-                            var cmPartialUrl = Url.Action("CreditMemoPartial", "ReturnOrder", new { id = row.SalesReturnOrderId })!;
                             var pdfUrl = Url.Action("CreditMemoPdf", "ReturnOrder", new { id = row.SalesReturnOrderId })!;
                             <tr>
                                 <td><strong>@row.DocumentNumber</strong></td>
@@ -90,8 +89,6 @@
                                 <td class="text-end">@row.GrandTotalCredit.ToString("N2", CultureInfo.CurrentCulture)</td>
                                 <td class="text-end">
                                     <div class="d-flex flex-wrap gap-1 justify-content-end">
-                                        <button type="button" class="btn btn-sm btn-outline-primary cm-btn-modal"
-                                                data-cm-url="@cmPartialUrl" data-cm-doc="@row.DocumentNumber">View</button>
                                         <a class="btn btn-sm btn-outline-secondary" href="@pdfUrl" target="_blank" rel="noopener">Print PDF</a>
                                     </div>
                                 </td>
@@ -122,15 +119,6 @@
 @section Scripts {
     <script>
         (function () {
-            //#region agent log
-            function __cmDbg(payload) {
-                try {
-                    var body = JSON.stringify(Object.assign({ sessionId: 'e8a0a5', timestamp: Date.now(), runId: 'post-fix' }, payload));
-                    fetch('http://127.0.0.1:7528/ingest/b470ac2f-58a5-420c-ac94-dc15116a1146', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e8a0a5' }, body }).catch(function () { });
-                    fetch(new URL('/__debug/cm-log', window.location.origin).href, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body }).catch(function () { });
-                } catch (e) { }
-            }
-            //#endregion
             function esc(t) {
                 var d = document.createElement('div');
                 d.textContent = t || '';
@@ -172,67 +160,26 @@
             }
 
             function loadCmPartial(url, titleDoc) {
-                //#region agent log
-                __cmDbg({ location: 'CreditMemo/Index:loadCmPartial:entry', message: 'load_cm_partial', hypothesisId: 'H3', data: { hasUrl: !!url, urlLen: url ? String(url).length : 0, hasBodyEl: !!bodyEl, titleDocShort: titleDoc ? String(titleDoc).slice(0, 40) : '' } });
-                //#endregion
-                if (!url || !bodyEl) {
-                    //#region agent log
-                    __cmDbg({ location: 'CreditMemo/Index:loadCmPartial:early_return', message: 'skipped_no_url_or_body', hypothesisId: 'H3', data: {} });
-                    //#endregion
-                    return;
-                }
+                if (!url || !bodyEl) return;
                 if (titleEl) titleEl.textContent = titleDoc ? ('Credit memo — ' + titleDoc) : 'Credit memo';
                 bodyEl.innerHTML = '<div class="cm-view-loading">Loading…</div>';
                 var mdl = getModal();
-                //#region agent log
-                __cmDbg({ location: 'CreditMemo/Index:loadCmPartial:after_get_modal', message: 'get_modal_result', hypothesisId: 'H2', data: { hasModalInstance: !!mdl } });
-                //#endregion
-                if (!mdl) {
-                    window.alert('Could not open this dialog — page scripts did not initialize correctly. Try refreshing the page.');
-                    //#region agent log
-                    __cmDbg({ location: 'CreditMemo/Index:loadCmPartial:no_bootstrap_modal', message: 'aborted_no_modal_instance', hypothesisId: 'H2', data: {} });
-                    //#endregion
-                    return;
-                }
-                //#region agent log
-                try { mdl.show(); __cmDbg({ location: 'CreditMemo/Index:loadCmPartial:show_called', message: 'modal_show_ok', hypothesisId: 'H5', data: {} }); } catch (ex) { __cmDbg({ location: 'CreditMemo/Index:loadCmPartial:show_error', message: 'modal_show_threw', hypothesisId: 'H5', data: { err: String(ex && ex.message ? ex.message : ex) } }); throw ex; }
-                //#endregion
+                if (!mdl) return;
+                mdl.show();
                 fetch(url, {
                     credentials: 'same-origin',
                     headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'text/html' }
                 })
                     .then(function (r) {
-                        //#region agent log
-                        __cmDbg({ location: 'CreditMemo/Index:fetch:response', message: 'credit_memo_partial_fetch', hypothesisId: 'H4', data: { ok: r.ok, status: r.status, redirected: !!r.redirected } });
-                        //#endregion
                         if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
                         return r.text();
                     })
                     .then(function (html) { bodyEl.innerHTML = html; })
                     .catch(function (e) {
-                        //#region agent log
-                        __cmDbg({ location: 'CreditMemo/Index:fetch:catch', message: 'fetch_failed', hypothesisId: 'H4', data: { errSnippet: String(e && e.message ? e.message : e).slice(0, 200) } });
-                        //#endregion
                         bodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">' +
                             esc(e && e.message ? e.message : 'Could not load credit memo.') + '</div>';
                     });
             }
-
-            document.querySelectorAll('.cm-btn-modal').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    //#region agent log
-                    __cmDbg({ location: 'CreditMemo/Index:btn_click', message: 'view_button_clicked', hypothesisId: 'H1', data: { dataCmUrlPref: btn.getAttribute('data-cm-url') ? btn.getAttribute('data-cm-url').slice(0, 120) : null } });
-                    //#endregion
-                    loadCmPartial(btn.getAttribute('data-cm-url'), btn.getAttribute('data-cm-doc') || '');
-                });
-            });
-
-            //#region agent log
-            (function () {
-                var btns = document.querySelectorAll('.cm-btn-modal');
-                __cmDbg({ location: 'CreditMemo/Index:init_complete', message: 'cm_handlers_wired', hypothesisId: 'H1', data: { buttonCount: btns.length, hasBootstrapModal: !!(window.bootstrap && bootstrap.Modal), hasModalDom: !!modalEl } });
-            })();
-            //#endregion
 
             var autoRoStr = '@(Model.OpenReturnOrderId?.ToString(CultureInfo.InvariantCulture) ?? "")';
             var autoUrlTpl = @System.Text.Json.JsonSerializer.Serialize(cmPartialTpl);

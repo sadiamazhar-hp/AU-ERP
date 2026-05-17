@@ -113,23 +113,6 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-if (app.Environment.IsDevelopment())
-{
-    // #region agent log — browser-safe NDJSON sink (HTTPS page cannot POST to plain 127.0.0.1 ingest)
-    app.MapPost(
-        "/__debug/cm-log",
-        async (HttpContext ctx, IWebHostEnvironment env) =>
-        {
-            using var reader = new StreamReader(ctx.Request.Body);
-            var text = await reader.ReadToEndAsync().ConfigureAwait(false);
-            var wsRoot = Path.GetFullPath(Path.Combine(env.ContentRootPath, "..", ".."));
-            var logPath = Path.Combine(wsRoot, "debug-e8a0a5.log");
-            await File.AppendAllTextAsync(logPath, text.Trim() + Environment.NewLine).ConfigureAwait(false);
-            return Results.Ok(new { ok = true });
-        });
-    // #endregion
-}
-
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Splash}/{id?}");

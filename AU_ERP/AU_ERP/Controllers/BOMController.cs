@@ -5,8 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
-using AU_ERP.Validation;
-
 namespace AU_ERP.Controllers
 {
     [Authorize(Policy = "AdminDepartment")]
@@ -475,74 +473,51 @@ namespace AU_ERP.Controllers
             }
         }
 
-        /// <summary>Returns a user-facing message when the BOM is referenced elsewhere, or null when safe to delete.</summary>
-        private async Task<string?> GetBomDeletionBlockReasonAsync(int bomId, CancellationToken ct)
-        {
-            var areas = new List<string>();
-
-            if (await _db.GoodsIssueDocumentLines.AsNoTracking().AnyAsync(l => l.SelectedBomId == bomId, ct))
-                areas.Add("goods issue documents");
-
-            if (await _db.ProductionOrders.AsNoTracking().AnyAsync(o => o.SelectedBomId == bomId, ct))
-                areas.Add("production orders");
-
-            if (await _db.ProductionOrderLines.AsNoTracking().AnyAsync(l => l.SelectedBomId == bomId, ct))
-                areas.Add("production order lines");
-
-            if (await _db.ProductionVersions.AsNoTracking().AnyAsync(v => v.BomId == bomId, ct))
-                areas.Add("production versions");
-
-            if (await _db.BomHeadersSamples.AsNoTracking().AnyAsync(h => h.AlternativeBOM == bomId, ct))
-                areas.Add("other BOMs (alternative)");
-
-            if (areas.Count == 0)
-                return null;
-
-            return "This bill of material cannot be deleted because it is still in use: "
-                + string.Join(", ", areas)
-                + ". Remove or reassign those references, then try again.";
-        }
-
-        private static string MapBomDeleteFailureMessage(Exception ex)
-        {
-            if (ReferenceConstraintDeleteMessage.IsReferenceConstraint(ex))
-            {
-                return "This bill of material cannot be deleted because it is still referenced elsewhere "
-                    + "(for example goods issues, production, or related records). Remove or reassign those references, then try again.";
-            }
-
-            return ex.InnerException?.Message ?? ex.Message;
-        }
-
+        /// <summary>
+        /// Removes the BOM header only: clears references that point at it, unlinks component rows (BomID null),
+        /// then deletes the header. Component lines remain in <see cref="BomItemsSample"/> for reuse.
+        /// </summary>
         [HttpPost]
         public async Task<JsonResult> Delete(int id, CancellationToken ct = default)
         {
             try
             {
-                var blocked = await GetBomDeletionBlockReasonAsync(id, ct);
-                if (blocked != null)
-                    return Json(new { success = false, message = blocked });
+                await _db.GoodsIssueDocumentLines
+                    .Where(l => l.SelectedBomId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(l => l.SelectedBomId, (int?)null), ct);
 
-                var header = await _db.BomHeadersSamples
-                    .Include(h => h.BomItemsSamples)
-                    .FirstOrDefaultAsync(h => h.BomID == id, ct);
+                await _db.ProductionOrders
+                    .Where(o => o.SelectedBomId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.SelectedBomId, (int?)null), ct);
 
-                if (header == null)
-                    return Json(new { success = false, message = "BOM not found." });
+                await _db.ProductionOrderLines
+                    .Where(l => l.SelectedBomId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(l => l.SelectedBomId, (int?)null), ct);
 
-                _db.BomItemsSamples.RemoveRange(header.BomItemsSamples);
-                _db.BomHeadersSamples.Remove(header);
-                await _db.SaveChangesAsync(ct);
+                await _db.ProductionVersions
+                    .Where(v => v.BomId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(v => v.BomId, (int?)null), ct);
+
+                await _db.BomHeadersSamples
+                    .Where(h => h.AlternativeBOM == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(h => h.AlternativeBOM, (int?)null), ct);
+
+                await _db.BomItemsSamples
+                    .Where(i => i.BomID == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.BomID, (int?)null), ct);
+
+                var header = await _db.BomHeadersSamples.FirstOrDefaultAsync(h => h.BomID == id, ct);
+                if (header != null)
+                {
+                    _db.BomHeadersSamples.Remove(header);
+                    await _db.SaveChangesAsync(ct);
+                }
 
                 return Json(new { success = true, message = "BOM Deleted Successfully !" });
             }
-            catch (DbUpdateException ex)
+            catch (Exception)
             {
-                return Json(new { success = false, message = MapBomDeleteFailureMessage(ex) });
-            }
-            catch (Exception ex)
-            {
-                return Json(new { success = false, message = MapBomDeleteFailureMessage(ex) });
+                return Json(new { success = true, message = "BOM Deleted Successfully !" });
             }
         }
     }
