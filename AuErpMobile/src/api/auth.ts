@@ -14,9 +14,30 @@ export interface LoginResponse {
   department: string;
 }
 
+type MobileApiBody<T> = {
+  success: boolean;
+  message?: string | null;
+  data?: T;
+};
+
 export async function login(req: LoginRequest): Promise<LoginResponse> {
-  const res = await client.post<{data: any}>('/auth/login', req);
-  const data = res.data.data;
+  const res = await client.post<MobileApiBody<{
+    token: string;
+    expiresAt: string;
+    userId: string;
+    email: string;
+    displayName: string;
+    departments: string[];
+  }>>('/auth/login', {
+    email: req.email.trim(),
+    password: req.password,
+  });
+
+  const body = res.data;
+  if (!body.success || !body.data?.token) {
+    throw new Error(body.message ?? 'Login failed.');
+  }
+  const data = body.data;
   return {
     token: data.token,
     expiration: data.expiresAt,

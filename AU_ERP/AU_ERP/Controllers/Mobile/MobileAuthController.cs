@@ -43,11 +43,17 @@ public class MobileAuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
             return BadRequest(MobileApiResponse<MobileLoginResponse>.Fail("Email and password are required."));
 
-        var user = await _users.FindByEmailAsync(request.Email);
+        var user = await _users.FindByEmailAsync(request.Email.Trim());
         if (user == null)
             return Unauthorized(MobileApiResponse<MobileLoginResponse>.Fail("Invalid email or password."));
 
-        var result = await _signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: false);
+        if (!user.PasswordSetupCompleted || string.IsNullOrEmpty(user.PasswordHash))
+            return Unauthorized(MobileApiResponse<MobileLoginResponse>.Fail(
+                "You have not set your password yet. Use the link in your invitation email, or use Forgot password on the web app."));
+
+        // Match web AccountController: sign-in uses UserName, not email string.
+        var result = await _signIn.PasswordSignInAsync(
+            user.UserName!, request.Password, isPersistent: false, lockoutOnFailure: false);
         if (!result.Succeeded)
             return Unauthorized(MobileApiResponse<MobileLoginResponse>.Fail("Invalid email or password."));
 

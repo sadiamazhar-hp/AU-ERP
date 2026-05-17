@@ -4,6 +4,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,7 +23,19 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const emailRef = useRef<TextInput>(null);
   const pwdRef = useRef<TextInput>(null);
+
+  function apiErrorMessage(err: unknown): string {
+    const e = err as {response?: {data?: {message?: string; Message?: string}}; message?: string};
+    const apiMsg = e.response?.data?.message ?? e.response?.data?.Message;
+    if (apiMsg) return apiMsg;
+    if (e.message === 'Network Error') {
+      return 'Cannot reach the API. Start AU_ERP on http://localhost:5242 (http profile) and reload the app.';
+    }
+    if (err instanceof Error && err.message) return err.message;
+    return 'Login failed. Check your email and password.';
+  }
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
@@ -32,9 +45,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn({email: email.trim(), password});
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Login failed. Check your credentials.';
-      Alert.alert('Login Failed', msg);
+    } catch (err: unknown) {
+      Alert.alert('Login Failed', apiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -78,43 +90,52 @@ export default function LoginScreen() {
             <Text style={styles.cardSub}>Sign in to your account to continue</Text>
 
             {/* Email */}
-            <View style={styles.fieldWrap}>
-              <View style={styles.inputIcon}>
-                <Icon name="alternate-email" size={18} color={Colors.subtle} />
-              </View>
+            <Pressable style={styles.fieldWrap} onPress={() => emailRef.current?.focus()}>
+              <Icon name="alternate-email" size={18} color={Colors.subtle} style={styles.inputIcon} />
               <TextInput
+                ref={emailRef}
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
+                editable={!loading}
                 autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
                 keyboardType="email-address"
                 returnKeyType="next"
                 placeholder="Email address"
                 placeholderTextColor={Colors.placeholder}
                 onSubmitEditing={() => pwdRef.current?.focus()}
               />
-            </View>
+            </Pressable>
 
             {/* Password */}
-            <View style={styles.fieldWrap}>
-              <View style={styles.inputIcon}>
-                <Icon name="lock-outline" size={18} color={Colors.subtle} />
-              </View>
+            <Pressable style={styles.fieldWrap} onPress={() => pwdRef.current?.focus()}>
+              <Icon name="lock-outline" size={18} color={Colors.subtle} style={styles.inputIcon} />
               <TextInput
                 ref={pwdRef}
-                style={[styles.input, {paddingRight: 48}]}
+                style={[styles.input, styles.inputWithTrailingIcon]}
                 value={password}
                 onChangeText={setPassword}
+                editable={!loading}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="password"
+                textContentType="password"
                 secureTextEntry={!showPwd}
                 returnKeyType="done"
                 onSubmitEditing={handleLogin}
                 placeholder="Password"
                 placeholderTextColor={Colors.placeholder}
               />
-              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPwd(v => !v)}>
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPwd(v => !v)}
+                hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
                 <Icon name={showPwd ? 'visibility-off' : 'visibility'} size={18} color={Colors.subtle} />
               </TouchableOpacity>
-            </View>
+            </Pressable>
 
             <TouchableOpacity
               style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
@@ -205,15 +226,25 @@ const styles = StyleSheet.create({
 
   // Fields
   fieldWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.bg, borderWidth: 1.5, borderColor: Colors.border,
-    borderRadius: 12, marginBottom: 14, overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.bg,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    marginBottom: 14,
+    minHeight: 52,
+    paddingRight: 12,
   },
-  inputIcon: {width: 46, alignItems: 'center'},
+  inputIcon: {marginLeft: 14, marginRight: 8},
   input: {
-    flex: 1, paddingVertical: 14, fontSize: 15,
+    flex: 1,
+    paddingVertical: 14,
+    paddingRight: 8,
+    fontSize: 15,
     color: Colors.text,
   },
+  inputWithTrailingIcon: {paddingRight: 40},
   eyeBtn: {position: 'absolute', right: 14, padding: 4},
 
   // Button

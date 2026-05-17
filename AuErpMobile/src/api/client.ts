@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_BASE = 'http://localhost:5242/api/mobile'; // Android emulator → localhost:5242
+export const API_BASE = 'http://10.0.2.2:5242/api/mobile'; // Android emulator → host machine
 
 const client = axios.create({
   baseURL: API_BASE,

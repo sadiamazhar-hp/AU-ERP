@@ -192,7 +192,9 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Mobile dev uses http://10.0.2.2:5242; HTTPS redirect breaks emulator API calls.
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("MobileCors");
