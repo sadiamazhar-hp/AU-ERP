@@ -307,6 +307,11 @@
                     <label class="form-label small">UOM</label>
                     <select id="poCreateUom" class="form-select form-select-sm"></select>
                 </div>
+                <div class="mb-2">
+                    <label class="form-label small">BOM</label>
+                    <select id="poCreateBom" class="form-select form-select-sm" disabled></select>
+                    <div id="poCreateBomHint" class="form-text small text-muted"></div>
+                </div>
                 <div class="row g-2">
                     <div class="col-md-6">
                         <label class="form-label small">Planned start</label>
@@ -583,17 +588,90 @@
             sel.value = String(baseId);
     }
 
+    function poResetCreateBomSelect() {
+        var sel = document.getElementById("poCreateBom");
+        if (!sel) return;
+        sel.innerHTML = '<option value="">—</option>';
+        sel.disabled = true;
+        var hint = document.getElementById("poCreateBomHint");
+        if (hint) hint.textContent = "";
+        window._poCreateBomState = { requiresSelection: false, count: 0 };
+    }
+
+    /** Load active BOMs for finished item (production create modal only). Mirrors server ValidateLineItemsAsync BOM rules. */
+    function poLoadCreateBomCandidates(materialNumber) {
+        var sel = document.getElementById("poCreateBom");
+        if (!sel) return Promise.resolve();
+        var mn = (materialNumber || "").trim();
+        if (!mn) {
+            poResetCreateBomSelect();
+            return Promise.resolve();
+        }
+        var url = poBomCandidatesUrl + "?materialNumber=" + encodeURIComponent(mn);
+        return fetch(url).then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.success) {
+                poResetCreateBomSelect();
+                return;
+            }
+            var d = res.data || res.Data || {};
+            var boms = d.boms || d.Boms || [];
+            var requiresSelection = !!(d.requiresSelection || d.RequiresSelection);
+            window._poCreateBomState = { requiresSelection: requiresSelection, count: boms.length };
+            var hint = document.getElementById("poCreateBomHint");
+            if (hint) {
+                hint.textContent = requiresSelection
+                    ? "Several active BOMs exist — choose which one to use."
+                    : (boms.length === 0 ? "No active BOM for this material within validity dates." : "");
+            }
+            sel.innerHTML = "";
+            var optPlaceholder = document.createElement("option");
+            optPlaceholder.value = "";
+            if (!boms.length) {
+                optPlaceholder.textContent = "No active BOM";
+                sel.appendChild(optPlaceholder);
+                sel.disabled = true;
+                return;
+            }
+            sel.disabled = false;
+            optPlaceholder.textContent = requiresSelection ? "Select BOM…" : "(System default)";
+            sel.appendChild(optPlaceholder);
+            boms.forEach(function (b) {
+                var o = document.createElement("option");
+                var bid = b.bomId != null ? b.bomId : (b.BomId != null ? b.BomId : (b.BomID != null ? b.BomID : 0));
+                o.value = String(bid);
+                var code = b.code || b.Code || "";
+                var title = b.title || b.Title || "";
+                var plant = b.plant || b.Plant || "";
+                var label = (code ? code + " — " : "") + (title || ("BOM #" + bid));
+                if (plant) label += " (" + plant + ")";
+                o.textContent = label;
+                sel.appendChild(o);
+            });
+            if (!requiresSelection && boms.length === 1) {
+                var only = boms[0];
+                var bidOnly = only.bomId != null ? only.bomId : (only.BomId != null ? only.BomId : only.BomID);
+                sel.value = String(bidOnly);
+            } else sel.value = "";
+        }).catch(function () {
+            poResetCreateBomSelect();
+        });
+    }
+
     function poLoadMaterialUomContext(prefix, modalId, materialNumber, includeUomIdForEdit) {
         var sel = document.getElementById(prefix + "Uom");
         var root = poFormRoot(modalId);
         poClearInline(root);
+        if (prefix === "poCreate")
+            poResetCreateBomSelect();
         var url = "@Url.Action("MaterialUomContext", "ProductionOrder")?materialNumber=" + encodeURIComponent(materialNumber);
         if (includeUomIdForEdit != null && includeUomIdForEdit !== "")
             url += "&includeUomIdForEdit=" + encodeURIComponent(String(includeUomIdForEdit));
+        var matForBom = (materialNumber || "").trim();
         return fetch(url).then(function (r) { return r.json(); }).then(function (res) {
             if (!res.success) {
                 poShowInline(root, res.message || "Could not load UOMs.");
                 poInitUomPlaceholder(sel);
+                if (prefix === "poCreate") poResetCreateBomSelect();
                 return;
             }
             var d = res.data || res.Data || {};
@@ -602,13 +680,19 @@
                 poShowInline(root, err);
                 poInitUomPlaceholder(sel);
                 window._poMaterialUomState[prefix] = { allowedIds: new Set() };
+                if (prefix === "poCreate") poResetCreateBomSelect();
                 return;
             }
             poPopulateUomFromContext(prefix, sel, d, includeUomIdForEdit);
             poClearInline(root);
+            if (prefix === "poCreate") {
+                var mn = matForBom || (document.getElementById("poCreateMaterial") && (document.getElementById("poCreateMaterial").value || "").trim()) || "";
+                if (mn) return poLoadCreateBomCandidates(mn);
+            }
         }).catch(function () {
             poShowInline(root, "Could not load UOMs.");
             poInitUomPlaceholder(sel);
+            if (prefix === "poCreate") poResetCreateBomSelect();
         });
     }
 
@@ -667,6 +751,7 @@
     }
 
     var poBomMatSearchUrl = "@Url.Action("SearchBomMaterials", "MasterDataLookup")";
+    var poBomCandidatesUrl = "@Url.Action("BomCandidates", "ProductionOrder")";
     var poCreatePickerTimers = {};
 
     function poEscAttr(s) {
@@ -810,6 +895,7 @@
             poClearInline(poFormRoot("poCreateModal"));
             if (!n) {
                 poInitUomPlaceholder(uSel);
+                poResetCreateBomSelect();
                 return;
             }
             poLoadMaterialUomContext("poCreate", "poCreateModal", n, null);
@@ -866,6 +952,7 @@
             document.getElementById("poCreateMaterial").value = "";
             document.getElementById("poCreateQty").value = "";
             poInitUomPlaceholder(document.getElementById("poCreateUom"));
+            poResetCreateBomSelect();
             document.getElementById("poCreateStart").value = "";
             document.getElementById("poCreateEnd").value = "";
             document.getElementById("poCreatePriority").value = "Medium";
@@ -1010,10 +1097,18 @@
         poClearInline(root);
         var matNum = (document.getElementById("poCreateMaterial").value || "").trim();
         if (matNum && !poValidateUomClient(root, "poCreate")) return;
+        var bs = window._poCreateBomState;
+        var bomEl = document.getElementById("poCreateBom");
+        var bomId = bomEl && bomEl.value ? parseInt(bomEl.value, 10) : 0;
+        if (bs && bs.requiresSelection && (!bomId || bomId <= 0)) {
+            poShowInline(root, "Select which BOM to use for this finished item.");
+            return;
+        }
         var payload = {
             FinishedMaterialNumber: (document.getElementById("poCreateMaterial").value || "").trim(),
             TargetQuantity: parseInt(document.getElementById("poCreateQty").value, 10) || 0,
             UomId: parseInt(document.getElementById("poCreateUom").value, 10) || 0,
+            SelectedBomId: bomId > 0 ? bomId : null,
             PlannedStartDate: document.getElementById("poCreateStart").value || null,
             PlannedEndDate: document.getElementById("poCreateEnd").value || null,
             Priority: document.getElementById("poCreatePriority").value,

@@ -1,5 +1,6 @@
 ﻿using AU_ERP.Models;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -992,9 +993,13 @@ namespace AU_ERP.Main_Controller
                 await _context.SaveChangesAsync();
                 return Json(new { success = true, message = "Material range deleted successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material number range") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material number range") });
             }
         }
         //List Page Methods
@@ -1059,9 +1064,13 @@ namespace AU_ERP.Main_Controller
 
                 return Json(new { success = true, message = "Material Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material") });
             }
         }
 
@@ -1213,9 +1222,13 @@ namespace AU_ERP.Main_Controller
                 await _context.SaveChangesAsync();
                 return Json(new { success = true, message = "Material Type Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material type") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material type") });
             }
         }
 

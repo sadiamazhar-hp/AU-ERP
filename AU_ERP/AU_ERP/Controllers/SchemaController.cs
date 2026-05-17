@@ -1,4 +1,5 @@
 using AU_ERP.Models;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -189,9 +190,13 @@ public class SchemaController : Controller
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
             return Json(new { success = true, message = "Schema deleted." });
         }
+        catch (DbUpdateException ex)
+        {
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "configuration schema") });
+        }
         catch (Exception ex)
         {
-            return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "configuration schema") });
         }
     }
 }

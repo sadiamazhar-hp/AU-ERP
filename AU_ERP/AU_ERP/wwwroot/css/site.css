@@ -1464,6 +1464,11 @@ body.modal-open:has(#sqEmailConfirmModal.show) .modal-backdrop {
   overflow-x: auto;
 }
 
+/* Row ⋮ menus use Popper strategy:fixed (site.js) so they are not clipped by .table-wrapper */
+.au-md-module .dropdown-menu {
+  z-index: 1056;
+}
+
 .au-md-module .sap-window .table-sap {
   width: 100%;
   border-collapse: collapse;

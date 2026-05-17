@@ -281,9 +281,13 @@ public class StockOverviewController : Controller
                 await _db.SaveChangesAsync(ct);
                 return Json(new { success = true, message = "Stock entry deleted." });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "stock entry") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "stock entry") });
             }
         }
 

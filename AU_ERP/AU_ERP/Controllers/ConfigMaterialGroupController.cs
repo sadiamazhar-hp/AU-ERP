@@ -1,4 +1,5 @@
 using AU_ERP.Models;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -112,9 +113,13 @@ public class ConfigMaterialGroupController : Controller
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             return Json(new { success = true, message = "Material group deleted." });
         }
+        catch (DbUpdateException ex)
+        {
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material group") });
+        }
         catch (Exception ex)
         {
-            return Json(new { success = false, message = ex.Message });
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "material group") });
         }
     }
 }

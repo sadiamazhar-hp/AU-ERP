@@ -1,4 +1,5 @@
 using AU_ERP.Models;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -165,9 +166,13 @@ public class ConfigPlantController : Controller
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             return Json(new { success = true, message = "Plant deleted." });
         }
+        catch (DbUpdateException ex)
+        {
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "plant") });
+        }
         catch (Exception ex)
         {
-            return Json(new { success = false, message = ex.Message });
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "plant") });
         }
     }
 }

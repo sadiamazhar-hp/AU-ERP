@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers
 {
@@ -141,9 +142,13 @@ namespace AU_ERP.Controllers
 
                 return Json(new { success = true, message = "Production Version Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "production version") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "production version") });
             }
         }
     }

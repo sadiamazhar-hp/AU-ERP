@@ -951,7 +951,11 @@
                             window.materialShowSuccessModalThen(msg, function () { bomReloadToListTab(); });
                         else { alert(msg); bomReloadToListTab(); }
                     } else {
-                        bomShowInline(bomListPaneRoot(), [], res.message || "Delete failed.");
+                        var msg = res.message || "Delete failed.";
+                        if (typeof window.materialShowErrorModal === "function")
+                            window.materialShowErrorModal(msg);
+                        else
+                            bomShowInline(bomListPaneRoot(), [], msg);
                     }
                 })
                 .catch(function () { bomShowInline(bomListPaneRoot(), [], "Delete request failed."); });

@@ -1,4 +1,5 @@
 using AU_ERP.Models;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -175,9 +176,13 @@ public class ChargesController : Controller
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
             return Json(new { success = true, message = "Charge deleted." });
         }
+        catch (DbUpdateException ex)
+        {
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "charge") });
+        }
         catch (Exception ex)
         {
-            return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "charge") });
         }
     }
 }

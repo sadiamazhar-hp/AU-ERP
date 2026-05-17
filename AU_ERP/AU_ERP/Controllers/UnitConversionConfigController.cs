@@ -1,5 +1,6 @@
 using System.Globalization;
 using AU_ERP.Models;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -190,9 +191,13 @@ public class UnitConversionConfigController : Controller
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
             return Json(new { success = true, message = "Row deleted." });
         }
+        catch (DbUpdateException ex)
+        {
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "unit conversion") });
+        }
         catch (Exception ex)
         {
-            return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+            return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "unit conversion") });
         }
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers
 {
@@ -156,11 +157,27 @@ namespace AU_ERP.Controllers
             }
         }
 
+        private async Task<string?> GetWorkCentreDeletionBlockReasonAsync(int workCentreId, CancellationToken ct)
+        {
+            if (await _db.RoutingOperationsSamples.AsNoTracking()
+                    .AnyAsync(o => o.WorkCenterID == workCentreId, ct))
+            {
+                return "This work centre cannot be deleted because it is still assigned to routing operation(s). "
+                    + "Edit routings to use a different work centre or remove those operations, then try again.";
+            }
+
+            return null;
+        }
+
         [HttpPost]
         public async Task<JsonResult> Delete(int id, CancellationToken ct = default)
         {
             try
             {
+                var blocked = await GetWorkCentreDeletionBlockReasonAsync(id, ct);
+                if (blocked != null)
+                    return Json(new { success = false, message = blocked });
+
                 var wc = await _db.WorkCenterMasterSamples
                     .FirstOrDefaultAsync(w => w.ID == id, ct);
 
@@ -172,9 +189,13 @@ namespace AU_ERP.Controllers
 
                 return Json(new { success = true, message = "Work Centre Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "work centre") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "work centre") });
             }
         }
     }

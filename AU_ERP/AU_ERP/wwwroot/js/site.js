@@ -332,6 +332,52 @@
     );
 })();
 
+/**
+ * Master Data list grids use .table-wrapper { overflow-x:auto }, which clips Bootstrap dropdowns.
+ * Use Popper "fixed" positioning so row action menus render above the scroll container.
+ */
+(function () {
+    var toggleSel = '.au-md-module [data-bs-toggle="dropdown"]';
+
+    function initAuMdRowDropdowns(container) {
+        if (typeof bootstrap === "undefined" || !bootstrap.Dropdown) return;
+        var root = container && container.querySelectorAll ? container : document;
+        var toggles = root.querySelectorAll(toggleSel);
+        if (!toggles || !toggles.length) return;
+        for (var i = 0; i < toggles.length; i++) {
+            var el = toggles[i];
+            if (!el.closest(".au-md-module")) continue;
+            if (el.getAttribute("data-au-md-dropdown-fixed") === "1") continue;
+            el.setAttribute("data-au-md-dropdown-fixed", "1");
+            bootstrap.Dropdown.getOrCreateInstance(el, {
+                popperConfig: { strategy: "fixed" }
+            });
+        }
+    }
+
+    function observeModules() {
+        if (typeof MutationObserver === "undefined") return;
+        var modules = document.querySelectorAll(".au-md-module");
+        for (var m = 0; m < modules.length; m++) {
+            (function (mod) {
+                var mo = new MutationObserver(function () {
+                    initAuMdRowDropdowns(mod);
+                });
+                mo.observe(mod, { childList: true, subtree: true });
+            })(modules[m]);
+        }
+    }
+
+    function boot() {
+        initAuMdRowDropdowns(document);
+        observeModules();
+    }
+
+    if (document.readyState === "loading")
+        document.addEventListener("DOMContentLoaded", boot);
+    else boot();
+})();
+
 (function () {
     /** Strip leading "-" from barcode-style text (EAN cannot be entered as negative) */
     function auStripLeadingMinusText(el) {

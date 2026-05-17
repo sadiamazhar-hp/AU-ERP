@@ -166,7 +166,6 @@ namespace AU_ERP.Controllers
             var mat = (dto.MaterialNumber ?? "").Trim();
             var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
                 .Where(h => h.BomMaterialNumber == mat
-                            && h.Plant == plant
                             && h.Status == "Active"
                             && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
                             && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
@@ -287,7 +286,6 @@ namespace AU_ERP.Controllers
                 
                 var bomOptions = await _db.BomHeadersSamples.AsNoTracking()
                     .Where(h => h.BomMaterialNumber == mat
-                                && (h.Plant == plant || h.Plant == null || h.Plant == "")
                                 && h.Status == "Active"
                                 && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
                                 && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))

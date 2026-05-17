@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using AU_ERP.Models;
 using AU_ERP.Services;
+using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -518,13 +519,24 @@ namespace AU_ERP.Main_Controller
             if (string.IsNullOrWhiteSpace(id))
                 return Json(new { success = false, message = "Missing partner ID." });
 
-            var partner = await _db.BusinessPartnerMasterSamples.FindAsync(new object[] { id }, ct);
-            if (partner == null)
-                return Json(new { success = false, message = "Partner not found." });
+            try
+            {
+                var partner = await _db.BusinessPartnerMasterSamples.FindAsync(new object[] { id }, ct);
+                if (partner == null)
+                    return Json(new { success = false, message = "Partner not found." });
 
-            _db.BusinessPartnerMasterSamples.Remove(partner);
-            await _db.SaveChangesAsync(ct);
-            return Json(new { success = true, message = "Partner Deleted Successfully !" });
+                _db.BusinessPartnerMasterSamples.Remove(partner);
+                await _db.SaveChangesAsync(ct);
+                return Json(new { success = true, message = "Partner Deleted Successfully !" });
+            }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "business partner") });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "business partner") });
+            }
         }
 
         public IActionResult BPgroup()
@@ -604,9 +616,13 @@ namespace AU_ERP.Main_Controller
                 await _db.SaveChangesAsync(ct);
                 return Json(new { success = true, message = "BP Type Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "business partner type") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "business partner type") });
             }
         }
 
@@ -675,9 +691,13 @@ namespace AU_ERP.Main_Controller
                 await _db.SaveChangesAsync(ct);
                 return Json(new { success = true, message = "BP Grouping Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "business partner grouping") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "business partner grouping") });
             }
         }
 
@@ -811,9 +831,13 @@ namespace AU_ERP.Main_Controller
                 await _db.SaveChangesAsync(ct);
                 return Json(new { success = true, message = "BP range deleted successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "BP number range") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "BP number range") });
             }
         }
     }

@@ -220,6 +220,44 @@ namespace AU_ERP.Controllers
             return Json(new { success = true, data });
         }
 
+        /// <summary>
+        /// Active BOM headers for the finished material (same rules as <see cref="ValidateLineItemsAsync"/> BOM pick).
+        /// Plant does not narrow the list — all plant-specific BOM variants are returned when valid.
+        /// </summary>
+        [HttpGet]
+        public async Task<JsonResult> BomCandidates(string? materialNumber, string? plantId, CancellationToken ct = default)
+        {
+            _ = plantId;
+            var mn = (materialNumber ?? "").Trim();
+            if (string.IsNullOrEmpty(mn))
+            {
+                return Json(new { success = true, data = new { boms = Array.Empty<object>(), requiresSelection = false } });
+            }
+
+            var matEntity = await _db.CreateMaterialMaster.AsNoTracking()
+                .FirstOrDefaultAsync(m => m.MaterialNumber == mn, ct);
+            var hdrType = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
+
+            var boms = await _db.BomHeadersSamples.AsNoTracking()
+                .Where(h => h.BomMaterialNumber == mn
+                            && h.HeaderMaterialTypeCode == hdrType
+                            && h.Status == "Active"
+                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
+                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
+                .OrderBy(h => h.BOMCode).ThenBy(h => h.BomID)
+                .Select(h => new
+                {
+                    bomId = h.BomID,
+                    code = h.BOMCode ?? "",
+                    title = h.BOMTitle ?? "",
+                    plant = h.Plant ?? ""
+                })
+                .ToListAsync(ct);
+
+            var requiresSelection = boms.Count > 1;
+            return Json(new { success = true, data = new { boms, requiresSelection } });
+        }
+
         [HttpGet]
         public async Task<JsonResult> GetForEdit(int id, CancellationToken ct = default)
         {
@@ -587,9 +625,13 @@ namespace AU_ERP.Controllers
                     : "Production order deleted.";
                 return Json(new { success = true, message = deletedMsg });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "production order") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "production order") });
             }
         }
 
@@ -772,8 +814,10 @@ namespace AU_ERP.Controllers
                     MaterialNumber = (dto.FinishedMaterialNumber ?? "").Trim(),
                     PlannedQuantity = dto.TargetQuantity,
                     UomId = dto.UomId,
-                    SelectedBomId = null,
-                    SelectedBomAlternative = null
+                    SelectedBomId = dto.SelectedBomId,
+                    SelectedBomAlternative = string.IsNullOrWhiteSpace(dto.SelectedBomAlternative)
+                        ? null
+                        : dto.SelectedBomAlternative.Trim()
                 }
             };
         }
@@ -810,11 +854,9 @@ namespace AU_ERP.Controllers
                 var matEntity = await _db.CreateMaterialMaster.AsNoTracking()
                     .FirstOrDefaultAsync(m => m.MaterialNumber == l.MaterialNumber, ct);
                 var hdrType = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
-                var plantId = (l.PlantId ?? "").Trim();
                 var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
                     .Where(h => h.BomMaterialNumber == l.MaterialNumber
                                 && h.HeaderMaterialTypeCode == hdrType
-                                && (plantId == "" || h.Plant == plantId)
                                 && h.Status == "Active"
                                 && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
                                 && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
@@ -838,6 +880,9 @@ namespace AU_ERP.Controllers
         public string? PlannedEndDate { get; set; }
         public string? Priority { get; set; }
         public string? Remarks { get; set; }
+        /// <summary>When posting a shorthand create (no <see cref="Lines"/>), sets BOM on the synthesized finished line.</summary>
+        public int? SelectedBomId { get; set; }
+        public string? SelectedBomAlternative { get; set; }
         public List<ProductionOrderLineInputDto> Lines { get; set; } = new();
     }
 

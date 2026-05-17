@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers
 {
@@ -315,17 +316,17 @@ namespace AU_ERP.Controllers
             });
         }
         
+        /// <remarks>Plant argument is ignored; all valid BOM variants for the material are returned regardless of BOM header plant.</remarks>
         [HttpGet]
         public async Task<JsonResult> GetBomOptionsForMrp(string? materialNumber, string? plantId, CancellationToken ct = default)
         {
+            _ = plantId;
             var mat = (materialNumber ?? "").Trim();
-            var plant = (plantId ?? "").Trim();
-            if (mat.Length == 0 || plant.Length == 0)
+            if (mat.Length == 0)
                 return Json(new { success = true, items = Array.Empty<object>() });
             var today = DateTime.Today;
             var list = await _db.BomHeadersSamples.AsNoTracking()
                 .Where(h => h.BomMaterialNumber == mat
-                            && (h.Plant == plant || h.Plant == null || h.Plant == "")
                             && h.Status == "Active"
                             && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= today)
                             && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= today))
@@ -336,6 +337,7 @@ namespace AU_ERP.Controllers
                 {
                     bomId = h.BomID,
                     bomCode = h.BOMCode,
+                    plant = h.Plant ?? "",
                     validFrom = h.ValidFrom,
                     validTo = h.ValidTo,
                     isDefault = h.IsDefaultBom
@@ -473,11 +475,54 @@ namespace AU_ERP.Controllers
             }
         }
 
+        /// <summary>Returns a user-facing message when the BOM is referenced elsewhere, or null when safe to delete.</summary>
+        private async Task<string?> GetBomDeletionBlockReasonAsync(int bomId, CancellationToken ct)
+        {
+            var areas = new List<string>();
+
+            if (await _db.GoodsIssueDocumentLines.AsNoTracking().AnyAsync(l => l.SelectedBomId == bomId, ct))
+                areas.Add("goods issue documents");
+
+            if (await _db.ProductionOrders.AsNoTracking().AnyAsync(o => o.SelectedBomId == bomId, ct))
+                areas.Add("production orders");
+
+            if (await _db.ProductionOrderLines.AsNoTracking().AnyAsync(l => l.SelectedBomId == bomId, ct))
+                areas.Add("production order lines");
+
+            if (await _db.ProductionVersions.AsNoTracking().AnyAsync(v => v.BomId == bomId, ct))
+                areas.Add("production versions");
+
+            if (await _db.BomHeadersSamples.AsNoTracking().AnyAsync(h => h.AlternativeBOM == bomId, ct))
+                areas.Add("other BOMs (alternative)");
+
+            if (areas.Count == 0)
+                return null;
+
+            return "This bill of material cannot be deleted because it is still in use: "
+                + string.Join(", ", areas)
+                + ". Remove or reassign those references, then try again.";
+        }
+
+        private static string MapBomDeleteFailureMessage(Exception ex)
+        {
+            if (ReferenceConstraintDeleteMessage.IsReferenceConstraint(ex))
+            {
+                return "This bill of material cannot be deleted because it is still referenced elsewhere "
+                    + "(for example goods issues, production, or related records). Remove or reassign those references, then try again.";
+            }
+
+            return ex.InnerException?.Message ?? ex.Message;
+        }
+
         [HttpPost]
         public async Task<JsonResult> Delete(int id, CancellationToken ct = default)
         {
             try
             {
+                var blocked = await GetBomDeletionBlockReasonAsync(id, ct);
+                if (blocked != null)
+                    return Json(new { success = false, message = blocked });
+
                 var header = await _db.BomHeadersSamples
                     .Include(h => h.BomItemsSamples)
                     .FirstOrDefaultAsync(h => h.BomID == id, ct);
@@ -491,9 +536,13 @@ namespace AU_ERP.Controllers
 
                 return Json(new { success = true, message = "BOM Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = MapBomDeleteFailureMessage(ex) });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+                return Json(new { success = false, message = MapBomDeleteFailureMessage(ex) });
             }
         }
     }

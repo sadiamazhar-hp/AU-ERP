@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers
 {
@@ -402,6 +403,15 @@ namespace AU_ERP.Controllers
                     .Select(oh => oh.OperationHeaderId)
                     .ToListAsync(ct);
 
+                if (await _db.ProductionVersions.AsNoTracking().AnyAsync(v => v.RoutingId == id, ct))
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "Cannot delete this routing because one or more production versions still reference it. Update or delete those versions first."
+                    });
+                }
+
                 var stageRefs = await _db.ProductionOrderStageProgresses.AsNoTracking()
                     .AnyAsync(s => opIdsUnderRouting.Contains(s.RoutingOperationHeaderId), ct);
 
@@ -420,9 +430,13 @@ namespace AU_ERP.Controllers
 
                 return Json(new { success = true, message = "Routing Deleted Successfully !" });
             }
+            catch (DbUpdateException ex)
+            {
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "routing") });
+            }
             catch (Exception ex)
             {
-                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+                return Json(new { success = false, message = ReferenceConstraintDeleteMessage.MapDeleteFailure(ex, "routing") });
             }
         }
     }
