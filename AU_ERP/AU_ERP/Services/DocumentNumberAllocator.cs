@@ -5,6 +5,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Services;
 
+/// <summary>
+/// Issues integrated codes (e.g. SO-2001) under Document Integration ranges.
+/// Concurrency: callers should ideally run allocation inside their own Serializable transaction when multiple DB writes participate;
+/// when no ambient transaction exists, allocator begins one with <see cref="IsolationLevel.Serializable"/> so parallel issuers serialize.
+/// </summary>
 public sealed class DocumentNumberAllocator
 {
     private readonly AppDbContext _db;
@@ -38,12 +43,20 @@ public sealed class DocumentNumberAllocator
             if (!HasConfiguredNumericRanges(integ.DocumentType.DocumentRanges))
                 throw DocumentIntegrationMissingException.NoRangesAssigned(moduleKey);
 
-            var range = PickNextAssignableRange(integ.DocumentType.DocumentRanges);
-            if (range is null)
+            var rangesOrdered = integ.DocumentType.DocumentRanges!
+                .Where(static r => r.FromNumber.HasValue && r.ToNumber.HasValue)
+                .OrderBy(r => r.FromNumber)
+                .ToList();
+
+            var maxExisting = await IntegratedDocumentIssuedNumbersMaxSuffix
+                .GetMaxSuffixAsync(_db, docCode, moduleKey, ct)
+                .ConfigureAwait(false);
+
+            if (!DocumentIntegratedSequence.TryPickNextAcrossOrderedRanges(
+                    rangesOrdered, maxExisting, out var chosenRange, out var next))
                 throw new DocumentIntegrationRangeExhaustedException(moduleKey);
 
-            var next = NextSerial(range);
-            range.CurrentNumber = next;
+            chosenRange!.LastIssuedNumber = next;
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
             if (ownTx is not null)
                 await ownTx.CommitAsync(ct).ConfigureAwait(false);
@@ -58,7 +71,7 @@ public sealed class DocumentNumberAllocator
         }
     }
 
-    /// <summary>Computes the next number that would be issued without updating the database.</summary>
+    /// <summary>Computes what would be issued next without committing (best-effort; race with concurrent issuers is possible).</summary>
     public async Task<string> PeekNextAsync(string moduleKey, CancellationToken ct = default)
     {
         var integ = await _db.DocumentIntegrations.AsNoTracking()
@@ -76,36 +89,23 @@ public sealed class DocumentNumberAllocator
         if (!HasConfiguredNumericRanges(integ.DocumentType.DocumentRanges))
             throw DocumentIntegrationMissingException.NoRangesAssigned(moduleKey);
 
-        var range = PickNextAssignableRange(integ.DocumentType.DocumentRanges);
-        if (range is null)
+        var rangesOrdered = integ.DocumentType.DocumentRanges!
+            .Where(static r => r.FromNumber.HasValue && r.ToNumber.HasValue)
+            .OrderBy(r => r.FromNumber)
+            .ToList();
+
+        var maxExisting = await IntegratedDocumentIssuedNumbersMaxSuffix
+            .GetMaxSuffixAsync(_db, docCode, moduleKey, ct)
+            .ConfigureAwait(false);
+
+        if (!DocumentIntegratedSequence.TryPickNextAcrossOrderedRanges(rangesOrdered, maxExisting, out _, out var next))
             throw new DocumentIntegrationRangeExhaustedException(moduleKey);
 
-        var next = NextSerial(range);
         return $"{docCode}-{next}";
     }
 
-    private static bool HasConfiguredNumericRanges(IEnumerable<DocumentRange>? ranges)
-    {
-        return ranges?.Any(static r => r.FromNumber.HasValue && r.ToNumber.HasValue) == true;
-    }
-
-    private static DocumentRange? PickNextAssignableRange(IEnumerable<DocumentRange>? ranges)
-    {
-        if (ranges == null)
-            return null;
-        return ranges
-            .Where(r => r.FromNumber.HasValue && r.ToNumber.HasValue
-                        && (r.CurrentNumber ?? (r.FromNumber!.Value - 1)) < r.ToNumber!.Value)
-            .OrderBy(r => r.FromNumber)
-            .FirstOrDefault();
-    }
-
-    private static long NextSerial(DocumentRange range)
-    {
-        var from = range.FromNumber!.Value;
-        var last = range.CurrentNumber ?? (from - 1);
-        return Math.Max(from, last + 1);
-    }
+    private static bool HasConfiguredNumericRanges(IEnumerable<DocumentRange>? ranges) =>
+        ranges?.Any(static r => r.FromNumber.HasValue && r.ToNumber.HasValue) == true;
 }
 
 public sealed class DocumentIntegrationMissingException : Exception

@@ -7,17 +7,6 @@ namespace AU_ERP.Services;
 /// <summary>Warns admins when Configuration → Document → Integration rows are incomplete (prevents vague runtime failures).</summary>
 public static class DocumentIntegrationDiagnostics
 {
-    private static DocumentRange? PickNextAssignableRange(IEnumerable<DocumentRange>? ranges)
-    {
-        if (ranges == null)
-            return null;
-        return ranges
-            .Where(static r => r.FromNumber.HasValue && r.ToNumber.HasValue
-                               && (r.CurrentNumber ?? (r.FromNumber!.Value - 1)) < r.ToNumber!.Value)
-            .OrderBy(r => r.FromNumber)
-            .FirstOrDefault();
-    }
-
     private static bool HasConfiguredNumericRanges(IEnumerable<DocumentRange>? ranges) =>
         ranges?.Any(static r => r.FromNumber.HasValue && r.ToNumber.HasValue) == true;
 
@@ -58,9 +47,19 @@ public static class DocumentIntegrationDiagnostics
                 warnings.Add($"{display}: The linked document type has no Document ranges. Add ranges under Configuration → Document → Document ranges.");
                 continue;
             }
-            if (PickNextAssignableRange(row.DocumentType.DocumentRanges) is null)
+
+            var rangesOrdered = row.DocumentType.DocumentRanges!
+                .Where(static r => r.FromNumber.HasValue && r.ToNumber.HasValue)
+                .OrderBy(r => r.FromNumber)
+                .ToList();
+
+            var maxSuffix = await IntegratedDocumentIssuedNumbersMaxSuffix
+                .GetMaxSuffixAsync(db, docCode, moduleKey, ct)
+                .ConfigureAwait(false);
+
+            if (!DocumentIntegratedSequence.TryPickNextAcrossOrderedRanges(rangesOrdered, maxSuffix, out _, out _))
             {
-                warnings.Add($"{display}: All Document ranges linked to this type are exhausted. Extend ranges under Configuration → Document → Document ranges.");
+                warnings.Add($"{display}: All Document ranges linked to this type are exhausted (including existing issued numbers versus range limits). Extend ranges under Configuration → Document → Document ranges.");
             }
         }
 

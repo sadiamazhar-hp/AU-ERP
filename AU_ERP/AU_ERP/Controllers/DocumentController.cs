@@ -168,8 +168,13 @@ namespace AU_ERP.Controllers
                 {
                     if (item.DocumentTypeID == null || item.DocumentTypeID == 0) continue;
 
-                    var normalizedCurrent = NumberRangeMaintenance.NormalizeDocumentLastIssued(
-                        item.FromNumber, item.ToNumber, item.CurrentNumber);
+                    if (!item.FromNumber.HasValue || !item.ToNumber.HasValue)
+                        continue;
+
+                    var normalizedLast = NumberRangeMaintenance.NormalizeDocumentLastIssuedNumber(
+                        item.FromNumber.Value,
+                        item.ToNumber.Value,
+                        item.LastIssuedNumber);
 
                     if (item.RangeID > 0)
                     {
@@ -179,12 +184,12 @@ namespace AU_ERP.Controllers
                             existing.DocumentTypeID = item.DocumentTypeID;
                             existing.FromNumber = item.FromNumber;
                             existing.ToNumber = item.ToNumber;
-                            existing.CurrentNumber = normalizedCurrent;
+                            existing.LastIssuedNumber = normalizedLast;
                         }
                     }
                     else
                     {
-                        item.CurrentNumber = normalizedCurrent;
+                        item.LastIssuedNumber = normalizedLast;
                         await _context.DocumentRanges.AddAsync(item);
                     }
                 }
@@ -317,13 +322,16 @@ namespace AU_ERP.Controllers
 
             foreach (var r in rows)
             {
-                var hasRange = await _context.DocumentRanges.AsNoTracking()
-                    .AnyAsync(x => x.DocumentTypeID == r.DocumentTypeID
-                        && x.FromNumber.HasValue && x.ToNumber.HasValue
-                        && (x.CurrentNumber ?? (x.FromNumber!.Value - 1)) < x.ToNumber!.Value);
-                if (!hasRange)
+                var hasNumericRangeConfigured = await _context.DocumentRanges.AsNoTracking()
+                    .AnyAsync(
+                        x => x.DocumentTypeID == r.DocumentTypeID
+                             && x.FromNumber.HasValue
+                             && x.ToNumber.HasValue,
+                        ct)
+                    .ConfigureAwait(false);
+                if (!hasNumericRangeConfigured)
                 {
-                    var msg = $"Document type for module '{r.ModuleKey}' has no available number range (configure ranges with remaining capacity).";
+                    var msg = $"Document type for module '{r.ModuleKey}' needs at least one numeric Document range under Configuration → Document → Document ranges.";
                     if (isAjax) return Json(new { success = false, message = msg });
                     TempData["Error"] = msg;
                     return RedirectToAction(nameof(Integration));

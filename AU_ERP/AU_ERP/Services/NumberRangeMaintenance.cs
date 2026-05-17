@@ -152,16 +152,22 @@ namespace AU_ERP.Services
             return last ?? 0;
         }
 
-        public static long? NormalizeDocumentLastIssued(long? fromNumber, long? toNumber, long? currentNumber)
+        public static long NormalizeDocumentLastIssuedNumber(long fromNumber, long toNumber, long? postedLastIssuedNumber)
         {
-            if (!fromNumber.HasValue)
-                return currentNumber is null or 0 ? null : currentNumber;
+            if (fromNumber > toNumber)
+                return DocumentIntegratedSequence.DefaultLastIssuedBeforeFirstIssue(fromNumber);
 
-            var from = fromNumber.Value;
-            long? to = toNumber;
-            var last = currentNumber is null or 0 ? (long?)null : currentNumber;
-            last = ClampLastIssued(from, to, last);
-            return last;
+            var floorBeforeFirstIssue = DocumentIntegratedSequence.DefaultLastIssuedBeforeFirstIssue(fromNumber);
+            // Treat missing / clearing the field like a fresh segment: explicitly From−1 before any issue.
+            if (!postedLastIssuedNumber.HasValue || postedLastIssuedNumber.Value == 0)
+                return floorBeforeFirstIssue;
+
+            var v = postedLastIssuedNumber.Value;
+            if (v < floorBeforeFirstIssue)
+                return floorBeforeFirstIssue;
+            if (v > toNumber)
+                return toNumber;
+            return v;
         }
 
         private static string BlankMaterialCurrent(string? currentNumber)
