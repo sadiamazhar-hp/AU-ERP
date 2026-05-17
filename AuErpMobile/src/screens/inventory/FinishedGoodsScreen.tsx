@@ -1,4 +1,4 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -6,13 +6,20 @@ import {useFocusEffect} from '@react-navigation/native';
 import {getFinishedGoods, FinishedGoodsDto, FinishedGoodsRow} from '../../api/inventory';
 import KpiCard from '../../components/KpiCard';
 import ReportTable, {Column} from '../../components/ReportTable';
-import FilterSheet, {FilterValues} from '../../components/FilterSheet';
+import SearchBar from '../../components/SearchBar';
+import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
+import {defaultFilter, filterToInventoryParams} from '../../utils/reportFilters';
+import {filterRowsBySearch} from '../../utils/tableSearch';
 import {Colors} from '../../theme/colors';
 
-const fmtPKR = (n: number) => `${(n / 1000).toFixed(0)}K`;
+const fmtPKR = (n: number) => {
+  if (n >= 1_000_000) return `PKR ${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `PKR ${(n / 1_000).toFixed(0)}K`;
+  return `PKR ${n}`;
+};
 
 const COLS: Column<FinishedGoodsRow>[] = [
   {key: 'materialDescription', label: 'Material', flex: 2},
@@ -20,24 +27,25 @@ const COLS: Column<FinishedGoodsRow>[] = [
   {key: 'batchNumber', label: 'Batch', flex: 1.2},
   {key: 'quantity', label: 'Qty', flex: 0.8, align: 'right'},
   {key: 'unitOfMeasure', label: 'UoM', flex: 0.6, align: 'center'},
-  {key: 'stockValue', label: 'Value (K)', flex: 1, align: 'right', render: v => fmtPKR(Number(v))},
+  {key: 'stockValue', label: 'Value', flex: 1, align: 'right', render: v => fmtPKR(Number(v))},
 ];
 
-const defaultFilter: FilterValues = {dateFrom: null, dateTo: null, plantId: '', customerId: ''};
+const SEARCH_KEYS: (keyof FinishedGoodsRow)[] = ['materialNumber', 'materialDescription', 'batchNumber', 'grade', 'plant'];
 
 export default function FinishedGoodsScreen() {
   const [data, setData] = useState<FinishedGoodsDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterValues>(defaultFilter);
+  const [filter, setFilter] = useState(defaultFilter);
   const [showFilter, setShowFilter] = useState(false);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
 
-  const load = useCallback(async (f: FilterValues, p: number) => {
+  const load = useCallback(async (f: typeof defaultFilter, p: number) => {
     setLoading(true);
     setError(null);
     try {
-      const d = await getFinishedGoods({plantId: f.plantId || undefined, page: p, pageSize: 20});
+      const d = await getFinishedGoods({...filterToInventoryParams(f), page: p, pageSize: 20});
       setData(d);
     } catch {
       setError('Failed to load inventory data.');
@@ -46,7 +54,12 @@ export default function FinishedGoodsScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(filter, 1); }, [load, filter]));
+  useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
+
+  const filteredRows = useMemo(
+    () => filterRowsBySearch(data?.rows.items ?? [], search, SEARCH_KEYS),
+    [data?.rows.items, search],
+  );
 
   if (loading && !data) return <LoadingView />;
   if (error && !data) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
@@ -65,36 +78,41 @@ export default function FinishedGoodsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <SectionHeader title="Stock Summary" />
         <View style={styles.kpiRow}>
-          <KpiCard label="Total Qty" value={String(kpis?.totalQuantity ?? 0)} accent={Colors.blue} />
-          <KpiCard label="Stock Value" value={`PKR ${fmtPKR(kpis?.totalStockValue ?? 0)}`} accent={Colors.green} />
+          <KpiCard label="SKU lines" value={String(kpis?.totalLines ?? 0)} accent={Colors.blue} />
+          <KpiCard label="Stock value" value={fmtPKR(kpis?.totalStockValue ?? 0)} accent={Colors.green} />
         </View>
         <View style={styles.kpiRow}>
-          <KpiCard label="Grade A" value={String(kpis?.gradeAQuantity ?? 0)} accent={Colors.green} />
-          <KpiCard label="Grade B" value={String(kpis?.gradeBQuantity ?? 0)} accent={Colors.orange} />
+          <KpiCard label="Zero stock" value={String(kpis?.zeroStockLines ?? 0)} accent={Colors.red} />
+          <KpiCard label="Page qty" value={String(kpis?.pageQuantity ?? 0)} sub="this page" accent={Colors.orange} />
         </View>
         <View style={styles.kpiRow}>
-          <KpiCard label="Grade C" value={String(kpis?.gradeCQuantity ?? 0)} accent={Colors.red} />
+          <KpiCard label="Grade A" value={String(kpis?.pageGradeAQuantity ?? 0)} sub="this page" accent={Colors.green} />
+          <KpiCard label="Grade B" value={String(kpis?.pageGradeBQuantity ?? 0)} sub="this page" accent={Colors.orange} />
+        </View>
+        <View style={styles.kpiRow}>
+          <KpiCard label="Grade C" value={String(kpis?.pageGradeCQuantity ?? 0)} sub="this page" accent={Colors.red} />
           <View style={{flex: 1, minWidth: 140}} />
         </View>
 
         <SectionHeader title="Stock Lines" />
+        <SearchBar value={search} onChangeText={setSearch} placeholder="Search stock lines…" />
         <View style={styles.tableWrap}>
-          <ReportTable columns={COLS} data={data?.rows.items ?? []} keyExtractor={(_, i) => String(i)} />
+          <ReportTable columns={COLS} data={filteredRows} keyExtractor={(_, i) => String(i)} emptyMessage={search ? 'No matches on this page' : undefined} />
         </View>
 
         {(data?.rows.totalPages ?? 0) > 1 && (
           <View style={styles.pagination}>
-            <TouchableOpacity disabled={page <= 1} onPress={() => { const p = page - 1; setPage(p); load(filter, p); }} style={[styles.pageBtn, page <= 1 && styles.pageBtnDisabled]}>
+            <TouchableOpacity disabled={page <= 1} onPress={() => setPage(p => p - 1)} style={[styles.pageBtn, page <= 1 && styles.pageBtnDisabled]}>
               <Icon name="chevron-left" size={20} color={page <= 1 ? Colors.subtle : Colors.blue} />
             </TouchableOpacity>
             <Text style={styles.pageText}>{page} / {data?.rows.totalPages}</Text>
-            <TouchableOpacity disabled={page >= (data?.rows.totalPages ?? 1)} onPress={() => { const p = page + 1; setPage(p); load(filter, p); }} style={[styles.pageBtn, page >= (data?.rows.totalPages ?? 1) && styles.pageBtnDisabled]}>
+            <TouchableOpacity disabled={page >= (data?.rows.totalPages ?? 1)} onPress={() => setPage(p => p + 1)} style={[styles.pageBtn, page >= (data?.rows.totalPages ?? 1) && styles.pageBtnDisabled]}>
               <Icon name="chevron-right" size={20} color={page >= (data?.rows.totalPages ?? 1) ? Colors.subtle : Colors.blue} />
             </TouchableOpacity>
           </View>
         )}
       </ScrollView>
-      <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); }} onClose={() => setShowFilter(false)} showPlant />
+      <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showPlant />
     </SafeAreaView>
   );
 }

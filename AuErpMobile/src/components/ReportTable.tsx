@@ -15,9 +15,10 @@ interface Props<T> {
   columns: Column<T>[];
   data: T[];
   keyExtractor: (item: T, index: number) => string;
+  emptyMessage?: string;
 }
 
-export default function ReportTable<T>({columns, data, keyExtractor}: Props<T>) {
+export default function ReportTable<T>({columns, data, keyExtractor, emptyMessage}: Props<T>) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View style={styles.tableWrap}>
@@ -53,7 +54,7 @@ export default function ReportTable<T>({columns, data, keyExtractor}: Props<T>) 
         {data.length === 0 && (
           <View style={styles.empty}>
             <Icon name="table-rows" size={28} color={Colors.border} />
-            <Text style={styles.emptyText}>No data for selected period</Text>
+            <Text style={styles.emptyText}>{emptyMessage ?? 'No data for selected period'}</Text>
           </View>
         )}
       </View>

@@ -22,6 +22,9 @@ export interface DailyProductionRow {
   materialNumber: string;
   materialDescription: string;
   quantityProduced: number;
+  goodQty: number;
+  defectiveQty: number;
+  defectPercent: number;
   unitOfMeasure: string;
   qualityGrade: string;
   plant: string;
@@ -37,6 +40,7 @@ export interface ProductionSummaryKpis {
 export interface ProductionSummaryRow {
   weekLabel: string;
   quantityProduced: number;
+  defectPercent: number;
 }
 
 export interface ProductionSummaryDto {
@@ -45,10 +49,14 @@ export interface ProductionSummaryDto {
 }
 
 export interface DefectKpis {
-  totalBatches: number;
-  batchesWithDefects: number;
+  totalProduced: number;
+  totalFirstQuality: number;
+  totalSecondQuality: number;
+  totalThirdQuality: number;
   totalDefectQty: number;
   totalWastageQty: number;
+  scrapPercent: number;
+  rowCount: number;
 }
 
 export interface DefectReportRow {
@@ -67,9 +75,8 @@ export interface DefectReportDto {
 }
 
 export interface RawMaterialKpis {
-  totalIssueDocuments: number;
   totalMaterialsConsumed: number;
-  totalQuantityConsumed: number;
+  totalIssuedLines: number;
 }
 
 export interface RawMaterialConsumptionRow {
@@ -97,14 +104,17 @@ export interface BatchTrackingRow {
   gradeC: number;
   defects: number;
   wastage: number;
+  goodPercent: number;
   plant: string;
 }
 
 export interface WorkOrderKpis {
+  total: number;
   planned: number;
   released: number;
   inProgress: number;
   completed: number;
+  completionPercent: number;
 }
 
 export interface WorkOrderRow {
@@ -130,6 +140,9 @@ export async function getDailyProduction(filter: ReportFilter): Promise<PagedRes
     materialNumber: row.materialNumber,
     materialDescription: row.materialDescription,
     quantityProduced: row.producedQty,
+    goodQty: row.goodQty,
+    defectiveQty: row.defectiveQty,
+    defectPercent: row.defectPercent,
     unitOfMeasure: '',
     qualityGrade: row.status,
     plant: '',
@@ -149,6 +162,7 @@ export async function getProductionSummary(filter: ReportFilter): Promise<Produc
     weeklySeries: (data.chartSeries ?? []).map((row: any) => ({
       weekLabel: row.label,
       quantityProduced: row.producedQty,
+      defectPercent: row.defectPercent ?? 0,
     })),
   };
 }
@@ -158,10 +172,14 @@ export async function getDefects(filter: ReportFilter): Promise<DefectReportDto>
   const data = res.data.data;
   return {
     kpis: {
-      totalBatches: data.rows?.total ?? 0,
-      batchesWithDefects: (data.rows?.rows ?? []).filter((row: any) => Number(row.scrapQty ?? 0) > 0).length,
+      totalProduced: data.kpis?.totalProduced ?? 0,
+      totalFirstQuality: data.kpis?.totalFirstQuality ?? 0,
+      totalSecondQuality: data.kpis?.totalSecondQuality ?? 0,
+      totalThirdQuality: data.kpis?.totalThirdQuality ?? 0,
       totalDefectQty: data.kpis?.totalScrap ?? 0,
       totalWastageQty: data.kpis?.totalStageWastage ?? 0,
+      scrapPercent: data.kpis?.scrapPercent ?? 0,
+      rowCount: data.rows?.total ?? 0,
     },
     rows: mapPagedResult(data.rows, (row: any) => ({
       batchNumber: row.batchNo,
@@ -180,9 +198,8 @@ export async function getRawMaterials(filter: ReportFilter): Promise<RawMaterial
   const data = res.data.data;
   return {
     kpis: {
-      totalIssueDocuments: data.kpis?.totalMaterialsConsumed ?? 0,
       totalMaterialsConsumed: data.kpis?.totalMaterialsConsumed ?? 0,
-      totalQuantityConsumed: data.kpis?.totalIssuedLines ?? 0,
+      totalIssuedLines: data.kpis?.totalIssuedLines ?? 0,
     },
     rows: mapPagedResult(data.rows, (row: any) => ({
       issueDate: row.documentDate,
@@ -197,30 +214,39 @@ export async function getRawMaterials(filter: ReportFilter): Promise<RawMaterial
 
 export async function getBatches(filter: ReportFilter): Promise<PagedResult<BatchTrackingRow>> {
   const res = await client.get<{data: any}>('/reports/production/batches', {params: filter});
-  return mapPagedResult(res.data.data, (row: any) => ({
-    batchNumber: row.batchNo,
-    materialNumber: row.materialNumber,
-    materialDescription: row.materialDescription,
-    grDate: row.batchDate,
-    quantityProduced: row.producedQty,
-    gradeA: row.firstQualityQty,
-    gradeB: row.secondQualityQty,
-    gradeC: row.thirdQualityQty,
-    defects: row.scrapQty,
-    wastage: 0,
-    plant: '',
-  }));
+  return mapPagedResult(res.data.data, (row: any) => {
+    const produced = Number(row.producedQty ?? 0);
+    const good = Number(row.firstQualityQty ?? 0) + Number(row.secondQualityQty ?? 0) + Number(row.thirdQualityQty ?? 0);
+    return {
+      batchNumber: row.batchNo,
+      materialNumber: row.materialNumber,
+      materialDescription: row.materialDescription,
+      grDate: row.batchDate,
+      quantityProduced: produced,
+      gradeA: row.firstQualityQty,
+      gradeB: row.secondQualityQty,
+      gradeC: row.thirdQualityQty,
+      defects: row.scrapQty,
+      wastage: 0,
+      goodPercent: produced > 0 ? (good / produced) * 100 : 0,
+      plant: '',
+    };
+  });
 }
 
 export async function getWorkOrders(filter: ReportFilter): Promise<WorkOrdersDto> {
   const res = await client.get<{data: any}>('/reports/production/work-orders', {params: filter});
   const data = res.data.data;
+  const total = data.kpis?.total ?? 0;
+  const completed = data.kpis?.completed ?? 0;
   return {
     kpis: {
+      total,
       planned: data.kpis?.planned ?? 0,
       released: data.kpis?.released ?? 0,
       inProgress: data.kpis?.inProgress ?? 0,
-      completed: data.kpis?.completed ?? 0,
+      completed,
+      completionPercent: total > 0 ? (completed / total) * 100 : 0,
     },
     rows: mapPagedResult(data.rows, (row: any) => ({
       workOrderNumber: row.productionOrderNumber,
@@ -249,8 +275,6 @@ function mapPagedResult<TIn, TOut>(data: any, mapRow: (row: TIn) => TOut): Paged
 }
 
 function percentage(part: number, total: number): number {
-  if (!total) {
-    return 0;
-  }
+  if (!total) return 0;
   return (part / total) * 100;
 }

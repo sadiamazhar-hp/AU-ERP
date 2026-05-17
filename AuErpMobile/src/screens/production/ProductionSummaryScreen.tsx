@@ -6,30 +6,26 @@ import {useFocusEffect} from '@react-navigation/native';
 import {getProductionSummary, ProductionSummaryDto} from '../../api/production';
 import KpiCard from '../../components/KpiCard';
 import BarChartWidget from '../../components/BarChartWidget';
-import FilterSheet, {FilterValues} from '../../components/FilterSheet';
+import LineChartWidget from '../../components/LineChartWidget';
+import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
+import {defaultFilter, filterToProductionParams} from '../../utils/reportFilters';
 import {Colors} from '../../theme/colors';
-
-const defaultFilter: FilterValues = {dateFrom: null, dateTo: null, plantId: '', customerId: ''};
 
 export default function ProductionSummaryScreen() {
   const [data, setData] = useState<ProductionSummaryDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterValues>(defaultFilter);
+  const [filter, setFilter] = useState(defaultFilter);
   const [showFilter, setShowFilter] = useState(false);
 
-  const load = useCallback(async (f: FilterValues) => {
+  const load = useCallback(async (f: typeof defaultFilter) => {
     setLoading(true);
     setError(null);
     try {
-      const d = await getProductionSummary({
-        dateFrom: f.dateFrom?.toISOString().split('T')[0],
-        dateTo: f.dateTo?.toISOString().split('T')[0],
-        plantId: f.plantId || undefined,
-      });
+      const d = await getProductionSummary(filterToProductionParams(f));
       setData(d);
     } catch {
       setError('Failed to load production summary.');
@@ -47,6 +43,7 @@ export default function ProductionSummaryScreen() {
   const weekly = data?.weeklySeries ?? [];
   const chartLabels = weekly.map(w => w.weekLabel);
   const chartData = weekly.map(w => w.quantityProduced);
+  const defectData = weekly.map(w => w.defectPercent);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -71,41 +68,33 @@ export default function ProductionSummaryScreen() {
           <KpiCard label="Total Qty" value={String(kpis?.totalQuantityProduced ?? 0)} accent={Colors.green} />
         </View>
         <View style={styles.kpiRow}>
-          <KpiCard label="Grade A %" value={`${(kpis?.gradeAPercentage ?? 0).toFixed(1)}%`} accent={Colors.green} />
+          <KpiCard label="Good %" value={`${(kpis?.gradeAPercentage ?? 0).toFixed(1)}%`} accent={Colors.green} />
           <KpiCard label="Defect Rate" value={`${(kpis?.defectRate ?? 0).toFixed(1)}%`} accent={Colors.red} />
         </View>
 
         <SectionHeader title="Weekly Output" />
-        {chartLabels.length > 0 ? (
-          <BarChartWidget labels={chartLabels} data={chartData} color={Colors.blue} />
-        ) : (
-          <View style={styles.noChart}><Text style={styles.noChartText}>No weekly data available</Text></View>
-        )}
+        <BarChartWidget labels={chartLabels} data={chartData} color={Colors.blue} decimalPlaces={0} />
+
+        <SectionHeader title="Defect % Trend" />
+        <LineChartWidget
+          labels={chartLabels}
+          datasets={[{label: 'Defect %', data: defectData, color: Colors.red}]}
+          decimalPlaces={1}
+          formatYLabel={v => `${v}%`}
+        />
       </ScrollView>
 
-      <FilterSheet
-        visible={showFilter}
-        values={filter}
-        onApply={v => { setFilter(v); }}
-        onClose={() => setShowFilter(false)}
-        showPlant
-      />
+      <FilterSheet visible={showFilter} values={filter} onApply={setFilter} onClose={() => setShowFilter(false)} showPlant />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
+  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
   period: {fontSize: 13, color: Colors.subtle},
   filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
   filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
   kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
-  noChart: {backgroundColor: Colors.card, borderRadius: 8, padding: 32, alignItems: 'center', marginBottom: 12},
-  noChartText: {color: Colors.subtle, fontSize: 14},
 });

@@ -6,33 +6,28 @@ import {useFocusEffect} from '@react-navigation/native';
 import {getSalesSummary, SalesSummaryDto} from '../../api/sales';
 import KpiCard from '../../components/KpiCard';
 import LineChartWidget from '../../components/LineChartWidget';
-import FilterSheet, {FilterValues} from '../../components/FilterSheet';
+import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
+import {defaultFilter, filterToSalesParams} from '../../utils/reportFilters';
 import {Colors} from '../../theme/colors';
 
 const fmtM = (n: number) => `PKR ${(n / 1_000_000).toFixed(2)}M`;
 const fmtK = (n: number) => `PKR ${(n / 1_000).toFixed(0)}K`;
 
-const defaultFilter: FilterValues = {dateFrom: null, dateTo: null, plantId: '', customerId: ''};
-
 export default function SalesSummaryScreen() {
   const [data, setData] = useState<SalesSummaryDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterValues>(defaultFilter);
+  const [filter, setFilter] = useState(defaultFilter);
   const [showFilter, setShowFilter] = useState(false);
 
-  const load = useCallback(async (f: FilterValues) => {
+  const load = useCallback(async (f: typeof defaultFilter) => {
     setLoading(true);
     setError(null);
     try {
-      const d = await getSalesSummary({
-        dateFrom: f.dateFrom?.toISOString().split('T')[0],
-        dateTo: f.dateTo?.toISOString().split('T')[0],
-        customerId: f.customerId || undefined,
-      });
+      const d = await getSalesSummary(filterToSalesParams(f));
       setData(d);
     } catch {
       setError('Failed to load sales summary.');
@@ -78,25 +73,26 @@ export default function SalesSummaryScreen() {
           <KpiCard label="Invoices" value={String(kpis?.totalInvoices ?? 0)} accent={Colors.accent} />
         </View>
         <View style={styles.kpiRow}>
-          <KpiCard label="Orders" value={String(kpis?.totalOrders ?? 0)} accent={Colors.subtle} />
-          <View style={{flex: 1, minWidth: 140}} />
+          <KpiCard label="Paid" value={String(kpis?.paidInvoices ?? 0)} accent={Colors.green} />
+          <KpiCard label="Unpaid" value={String(kpis?.unpaidInvoices ?? 0)} accent={Colors.red} />
+        </View>
+        <View style={styles.kpiRow}>
+          <KpiCard label="Avg invoice" value={fmtK(kpis?.averageInvoiceValue ?? 0)} accent={Colors.blue} />
+          <KpiCard label="Returns" value={String(kpis?.totalReturns ?? 0)} accent={Colors.subtle} />
         </View>
 
         <SectionHeader title="Monthly Trend" />
-        {labels.length > 0 ? (
-          <LineChartWidget
-            labels={labels}
-            datasets={[
-              {label: 'Revenue', data: revData, color: Colors.blue},
-              {label: 'Collected', data: colData, color: Colors.green},
-            ]}
-          />
-        ) : (
-          <View style={styles.noChart}><Text style={styles.noChartText}>No monthly data</Text></View>
-        )}
+        <LineChartWidget
+          labels={labels}
+          datasets={[
+            {label: 'Revenue', data: revData, color: Colors.blue},
+            {label: 'Collected', data: colData, color: Colors.green},
+          ]}
+          decimalPlaces={0}
+        />
       </ScrollView>
 
-      <FilterSheet visible={showFilter} values={filter} onApply={v => setFilter(v)} onClose={() => setShowFilter(false)} showCustomer />
+      <FilterSheet visible={showFilter} values={filter} onApply={setFilter} onClose={() => setShowFilter(false)} showCustomer showProduct />
     </SafeAreaView>
   );
 }
@@ -109,6 +105,4 @@ const styles = StyleSheet.create({
   filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
   kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
-  noChart: {backgroundColor: Colors.card, borderRadius: 8, padding: 32, alignItems: 'center'},
-  noChartText: {color: Colors.subtle, fontSize: 14},
 });

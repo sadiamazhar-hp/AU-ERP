@@ -337,3 +337,9 @@ public record SalesReturnsDto(
     SalesReturnKpis Kpis,
     PagedResult<SalesReturnRow> Rows
 );
+
+// ─── Lookups ────────────────────────────────────────────────────────────────────
+
+public record MobileLookupItem(string Id, string Name);
+
+public record MobileProductLookupItem(string MaterialNumber, string Description);

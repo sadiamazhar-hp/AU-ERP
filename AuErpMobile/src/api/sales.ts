@@ -16,6 +16,12 @@ export interface SalesSummaryKpis {
   totalOutstanding: number;
   totalOrders: number;
   totalInvoices: number;
+  paidInvoices: number;
+  unpaidInvoices: number;
+  returnInProcessInvoices: number;
+  averageInvoiceValue: number;
+  totalReturns: number;
+  totalReturnCreditValue: number;
 }
 
 export interface SalesSummaryChartPoint {
@@ -36,8 +42,6 @@ export interface InvoiceRow {
   netAmount: number;
   taxAmount: number;
   totalAmount: number;
-  amountPaid: number;
-  outstanding: number;
   status: string;
 }
 
@@ -62,19 +66,21 @@ export interface ProductSalesRow {
 export interface SalesReturnKpis {
   totalReturns: number;
   totalReturnValue: number;
-  pendingCreditMemos: number;
-  approvedCreditMemos: number;
+  pendingQualityInspection: number;
+  creditMemoIssued: number;
+  totalCreditIssued: number;
 }
 
 export interface SalesReturnRow {
   returnNumber: string;
   returnDate: string;
   customerName: string;
-  materialDescription: string;
-  returnQuantity: number;
-  returnValue: number;
-  creditMemoStatus: string;
-  qualityStatus: string;
+  invoiceNumber: string;
+  returnReason: string;
+  invoiceTotal: number;
+  creditAmount: number | null;
+  hasQualityInspection: boolean;
+  hasCreditMemo: boolean;
 }
 
 export interface SalesReturnsDto {
@@ -92,6 +98,12 @@ export async function getSalesSummary(filter: SalesFilter): Promise<SalesSummary
       totalOutstanding: data.kpis?.outstandingRevenue ?? 0,
       totalOrders: data.kpis?.totalOrders ?? 0,
       totalInvoices: data.kpis?.totalInvoices ?? 0,
+      paidInvoices: data.kpis?.paidInvoices ?? 0,
+      unpaidInvoices: data.kpis?.unpaidInvoices ?? 0,
+      returnInProcessInvoices: data.kpis?.returnInProcessInvoices ?? 0,
+      averageInvoiceValue: data.kpis?.averageInvoiceValue ?? 0,
+      totalReturns: data.kpis?.totalReturns ?? 0,
+      totalReturnCreditValue: data.kpis?.totalReturnCreditValue ?? 0,
     },
     monthlySeries: (data.chartSeries ?? []).map((row: any) => ({
       month: row.label,
@@ -110,8 +122,6 @@ export async function getInvoices(filter: SalesFilter): Promise<PagedResult<Invo
     netAmount: row.subtotal,
     taxAmount: Number(row.grandTotal ?? 0) - Number(row.subtotal ?? 0),
     totalAmount: row.grandTotal,
-    amountPaid: row.status === 'Collected' ? row.grandTotal : 0,
-    outstanding: row.status === 'Collected' ? 0 : row.grandTotal,
     status: row.status,
   }));
 }
@@ -147,18 +157,20 @@ export async function getSalesReturns(filter: SalesFilter): Promise<SalesReturns
     kpis: {
       totalReturns: data.kpis?.totalReturns ?? 0,
       totalReturnValue: data.kpis?.totalReturnValue ?? 0,
-      pendingCreditMemos: data.kpis?.pendingQualityInspection ?? 0,
-      approvedCreditMemos: data.kpis?.creditMemoIssued ?? 0,
+      pendingQualityInspection: data.kpis?.pendingQualityInspection ?? 0,
+      creditMemoIssued: data.kpis?.creditMemoIssued ?? 0,
+      totalCreditIssued: data.kpis?.totalCreditIssued ?? 0,
     },
     rows: mapPagedResult(data.rows, (row: any) => ({
       returnNumber: row.documentNumber,
       returnDate: row.documentDate,
       customerName: row.customerName,
-      materialDescription: row.invoiceNumber,
-      returnQuantity: 0,
-      returnValue: row.invoiceTotal,
-      creditMemoStatus: row.hasCreditMemo ? 'Issued' : 'Pending',
-      qualityStatus: row.hasQualityInspection ? 'Done' : 'Pending',
+      invoiceNumber: row.invoiceNumber,
+      returnReason: row.returnReason,
+      invoiceTotal: row.invoiceTotal,
+      creditAmount: row.creditAmount ?? null,
+      hasQualityInspection: row.hasQualityInspection,
+      hasCreditMemo: row.hasCreditMemo,
     })),
   };
 }

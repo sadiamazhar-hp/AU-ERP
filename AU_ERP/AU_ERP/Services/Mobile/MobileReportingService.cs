@@ -670,6 +670,9 @@ public class MobileReportingService
         if (!string.IsNullOrWhiteSpace(filter.CustomerId))
             query = query.Where(i => i.DealerBusinessPartnerId == filter.CustomerId);
 
+        if (!string.IsNullOrWhiteSpace(filter.MaterialNumber))
+            query = query.Where(i => i.Lines.Any(l => l.MaterialNumber == filter.MaterialNumber));
+
         var total = await query.CountAsync(ct);
 
         var rows = await query
@@ -854,5 +857,64 @@ public class MobileReportingService
             .ToList();
 
         return new SalesReturnsDto(kpis, new PagedResult<SalesReturnRow>(paged, filter.Page, filter.PageSize, allReturns.Count));
+    }
+
+    // ─── Lookups ──────────────────────────────────────────────────────────────
+
+    public async Task<List<MobileLookupItem>> GetPlantsLookupAsync(string? search, int take, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take <= 0 ? 50 : take, 1, 100);
+        var query = _db.PlantsSamples.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(p =>
+                p.PlantID.Contains(term) ||
+                (p.PlantName != null && p.PlantName.Contains(term)));
+        }
+
+        return await query
+            .OrderBy(p => p.PlantName)
+            .Take(take)
+            .Select(p => new MobileLookupItem(p.PlantID, p.PlantName ?? p.PlantID))
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<MobileLookupItem>> GetCustomersLookupAsync(string? search, int take, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take <= 0 ? 50 : take, 1, 100);
+        var query = _db.BusinessPartnerMasterSamples.AsNoTracking().Where(bp => bp.IsActive);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(bp =>
+                bp.BPID.Contains(term) ||
+                (bp.FullName != null && bp.FullName.Contains(term)));
+        }
+
+        return await query
+            .OrderBy(bp => bp.FullName)
+            .Take(take)
+            .Select(bp => new MobileLookupItem(bp.BPID, bp.FullName ?? bp.BPID))
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<MobileProductLookupItem>> GetProductsLookupAsync(string? search, int take, CancellationToken ct = default)
+    {
+        take = Math.Clamp(take <= 0 ? 50 : take, 1, 100);
+        var query = _db.CreateMaterialMaster.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(m =>
+                m.MaterialNumber.Contains(term) ||
+                (m.Description != null && m.Description.Contains(term)));
+        }
+
+        return await query
+            .OrderBy(m => m.MaterialNumber)
+            .Take(take)
+            .Select(m => new MobileProductLookupItem(m.MaterialNumber, m.Description ?? m.MaterialNumber))
+            .ToListAsync(ct);
     }
 }

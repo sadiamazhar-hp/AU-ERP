@@ -9,11 +9,14 @@ export interface ReportFilter {
 
 export interface FinishedGoodsKpis {
   totalLines: number;
-  totalQuantity: number;
   totalStockValue: number;
-  gradeAQuantity: number;
-  gradeBQuantity: number;
-  gradeCQuantity: number;
+  zeroStockLines: number;
+  /** Sum of quantities on the current page only */
+  pageQuantity: number;
+  /** Grade totals from current page only */
+  pageGradeAQuantity: number;
+  pageGradeBQuantity: number;
+  pageGradeCQuantity: number;
 }
 
 export interface FinishedGoodsRow {
@@ -36,14 +39,16 @@ export interface FinishedGoodsDto {
 export async function getFinishedGoods(filter: ReportFilter): Promise<FinishedGoodsDto> {
   const res = await client.get<{data: any}>('/reports/inventory/finished-goods', {params: filter});
   const data = res.data.data;
+  const pageRows = data.rows?.rows ?? [];
   return {
     kpis: {
       totalLines: data.kpis?.totalLines ?? 0,
-      totalQuantity: (data.rows?.rows ?? []).reduce((sum: number, row: any) => sum + Number(row.quantity ?? 0), 0),
       totalStockValue: data.kpis?.totalStockValue ?? 0,
-      gradeAQuantity: sumGrade(data.rows?.rows, 'A'),
-      gradeBQuantity: sumGrade(data.rows?.rows, 'B'),
-      gradeCQuantity: sumGrade(data.rows?.rows, 'C'),
+      zeroStockLines: data.kpis?.zeroStockLines ?? 0,
+      pageQuantity: pageRows.reduce((sum: number, row: any) => sum + Number(row.quantity ?? 0), 0),
+      pageGradeAQuantity: sumGrade(pageRows, 'A'),
+      pageGradeBQuantity: sumGrade(pageRows, 'B'),
+      pageGradeCQuantity: sumGrade(pageRows, 'C'),
     },
     rows: mapPagedResult(data.rows, (row: any) => ({
       materialNumber: row.materialNumber,

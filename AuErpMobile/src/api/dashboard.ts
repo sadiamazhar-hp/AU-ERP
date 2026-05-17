@@ -1,15 +1,19 @@
 import client from './client';
 
+/** Mirrors backend MobileDashboardDto (api/mobile/dashboard). */
 export interface DashboardDto {
-  totalProductionThisMonth: number;
+  productionOrdersThisMonth: number;
   activeWorkOrders: number;
-  totalSalesThisMonth: number;
-  outstandingReceivables: number;
-  totalInvoicesThisMonth: number;
-  totalReturnsThisMonth: number;
-  finishedGoodsStock: number;
-  rawMaterialConsumptionThisMonth: number;
-  totalDefectsThisMonth: number;
+  totalProductionQtyThisMonth: number;
+  defectPercentThisMonth: number;
+  totalRevenueThisMonth: number;
+  collectedRevenueThisMonth: number;
+  outstandingRevenueThisMonth: number;
+  invoicesThisMonth: number;
+  pendingInvoices: number;
+  totalStockValue: number;
+  finishedGoodsLines: number;
+  salesReturnsThisMonth: number;
 }
 
 interface MobileDashboardDto {
@@ -31,14 +35,17 @@ export async function getDashboard(): Promise<DashboardDto> {
   const res = await client.get<{data: MobileDashboardDto}>('/dashboard');
   const data = res.data.data;
   return {
-    totalProductionThisMonth: data.totalProductionQtyThisMonth,
+    productionOrdersThisMonth: data.productionOrdersThisMonth,
     activeWorkOrders: data.activeWorkOrders,
-    totalSalesThisMonth: data.totalRevenueThisMonth,
-    outstandingReceivables: data.outstandingRevenueThisMonth,
-    totalInvoicesThisMonth: data.invoicesThisMonth,
-    totalReturnsThisMonth: data.salesReturnsThisMonth,
-    finishedGoodsStock: data.finishedGoodsLines,
-    rawMaterialConsumptionThisMonth: 0,
-    totalDefectsThisMonth: data.defectPercentThisMonth,
+    totalProductionQtyThisMonth: data.totalProductionQtyThisMonth,
+    defectPercentThisMonth: data.defectPercentThisMonth,
+    totalRevenueThisMonth: data.totalRevenueThisMonth,
+    collectedRevenueThisMonth: data.collectedRevenueThisMonth,
+    outstandingRevenueThisMonth: data.outstandingRevenueThisMonth,
+    invoicesThisMonth: data.invoicesThisMonth,
+    pendingInvoices: data.pendingInvoices,
+    totalStockValue: data.totalStockValue,
+    finishedGoodsLines: data.finishedGoodsLines,
+    salesReturnsThisMonth: data.salesReturnsThisMonth,
   };
 }
