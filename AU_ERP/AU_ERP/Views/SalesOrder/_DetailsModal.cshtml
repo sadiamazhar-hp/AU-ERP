@@ -1,9 +1,29 @@
 @model AU_ERP.Models.ViewModels.SalesOrderDetailsFullVm
 @using System.Globalization
 @using AU_ERP.Models.ViewModels
+@using AU_ERP.Services
 @{
     var d = Model?.Order;
     var p = Model?.Pricing;
+    var wfStatus = Model?.WorkflowStatus ?? "";
+    string SoBadgeClass(string? ws)
+    {
+        if (string.IsNullOrEmpty(ws) || string.Equals(ws, SalesOrderWorkflowStatus.Open, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-open";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.Completed, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-completed";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingStock, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-stock";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingGoodReceive, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-gr";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingDc, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-dc";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.DeliveryInProcess, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-delivery";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingPayment, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-pay";
+        return "so-badge-confirmed";
+    }
     string FmtDate(DateTime t) => t.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
     string FmtMoney(decimal n) => UiNumberFormat.D2(n);
     string FmtQty(decimal n) => UiNumberFormat.D2(n);
@@ -26,7 +46,7 @@ else
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
         <div>
             <h6 class="mb-0" style="color: var(--dark, #354a5e);">@d.SalesOrderNumber</h6>
-            <p class="small text-muted mb-0">@FmtDate(d.OrderDate) · @(d.Plant?.PlantName ?? "—") · <span class="so-badge so-badge-confirmed">Confirmed</span></p>
+            <p class="small text-muted mb-0">@FmtDate(d.OrderDate) · @(d.Plant?.PlantName ?? "—") · <span class="so-badge @SoBadgeClass(wfStatus)">@(string.IsNullOrEmpty(wfStatus) ? "Confirmed" : wfStatus)</span></p>
         </div>
         @if (!string.IsNullOrEmpty(pdfUrl))
         {

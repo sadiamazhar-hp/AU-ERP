@@ -55,6 +55,7 @@ public sealed class DashboardHeadlineVm
 
     public bool ShowOrdersFulfillment { get; init; }
     public int OrdersOpen { get; init; }
+    public int OrdersPendingPayment { get; init; }
     public int DCsInTransit { get; init; }
 
     public bool ShowLowStock { get; init; }
@@ -117,6 +118,13 @@ public sealed class SalesModuleStats
     // Order & Fulfillment
     public int OrderOpen { get; init; }
     public int OrderConfirmed { get; init; }
+    public int OrderPendingStock { get; init; }
+    public int OrderPendingGoodReceive { get; init; }
+    public int OrderPendingDc { get; init; }
+    public int OrderDeliveryInProcess { get; init; }
+    public int OrderPendingPayment { get; init; }
+    public int OrderCompleted { get; init; }
+    public IReadOnlyList<LabelCountDto> OrderWorkflowByStatus { get; init; } = Array.Empty<LabelCountDto>();
     public int DeliveryChallanCount { get; init; }
     public int DeliveryChallansCreatedInPeriod { get; init; }
     public int DeliveryChallansDelivered { get; init; }

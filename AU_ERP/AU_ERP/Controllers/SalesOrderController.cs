@@ -21,19 +21,22 @@ public class SalesOrderController : Controller
     private readonly DocumentNumberAllocator _documentNumbers;
     private readonly CompanyInfoService _companyInfo;
     private readonly EmporiumWalkInCustomerService _emporiumWalkIn;
+    private readonly SalesOrderWorkflowStatusResolver _workflowStatus;
 
     public SalesOrderController(
         AppDbContext db,
         SalesGoodsIssueService salesGiService,
         DocumentNumberAllocator documentNumbers,
         CompanyInfoService companyInfo,
-        EmporiumWalkInCustomerService emporiumWalkIn)
+        EmporiumWalkInCustomerService emporiumWalkIn,
+        SalesOrderWorkflowStatusResolver workflowStatus)
     {
         _db = db;
         _salesGiService = salesGiService;
         _documentNumbers = documentNumbers;
         _companyInfo = companyInfo;
         _emporiumWalkIn = emporiumWalkIn;
+        _workflowStatus = workflowStatus;
     }
 
     /// <summary>FERT materials for quotation line picker (same JSON shape as BOM material search).</summary>
@@ -309,22 +312,31 @@ public class SalesOrderController : Controller
                 || (x.CustomerName != null && x.CustomerName.Contains(qq)));
         }
 
-        var st = (status ?? "All").Trim();
-        if (string.Equals(st, SalesOrder.StatusOpen, StringComparison.OrdinalIgnoreCase))
-            query = query.Where(x => x.Status == SalesOrder.StatusOpen);
-        else if (string.Equals(st, SalesOrder.StatusConfirmed, StringComparison.OrdinalIgnoreCase))
-            query = query.Where(x => x.Status == SalesOrder.StatusConfirmed);
-
         if (!string.IsNullOrWhiteSpace(plantId))
             query = query.Where(x => x.PlantId == plantId);
         if (distributionChannelId is { } dcid && dcid > 0)
             query = query.Where(x => x.DistributionChannelId == dcid);
 
-        var list = await query
+        var allMatching = await query
             .OrderByDescending(so => so.OrderDate)
             .ThenBy(so => so.SalesOrderNumber)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+
+        var st = (status ?? "All").Trim();
+        var countFilter = new SalesOrderWorkflowCountFilter
+        {
+            Q = string.IsNullOrEmpty(qq) ? null : qq,
+            PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,
+            DistributionChannelId = distributionChannelId is > 0 ? distributionChannelId : null
+        };
+        var statusCounts = await _workflowStatus.CountByStatusAsync(countFilter, ct).ConfigureAwait(false);
+
+        var workflowById = await _workflowStatus.ResolveBatchAsync(
+            allMatching.Select(x => x.Id).ToList(),
+            ct).ConfigureAwait(false);
+
+        var list = FilterByWorkflowStatus(allMatching, workflowById, st);
         var customers = await _db.BusinessPartnerMasterSamples.AsNoTracking()
             .OrderBy(c => c.FullName)
             .ToListAsync(ct)
@@ -373,6 +385,14 @@ public class SalesOrderController : Controller
             Status = string.IsNullOrEmpty(st) ? "All" : st,
             PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,
             DistributionChannelId = distributionChannelId is > 0 ? distributionChannelId : null,
+            WorkflowStatusById = workflowById,
+            CountOpen = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Open),
+            CountPendingStock = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingStock),
+            CountPendingGoodReceive = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingGoodReceive),
+            CountPendingDc = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingDc),
+            CountDeliveryInProcess = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.DeliveryInProcess),
+            CountPendingPayment = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingPayment),
+            CountCompleted = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Completed),
             SalesOrderIdsWithChallan = withDcIds.ToHashSet(),
             SalesOrderGiStatusById = giRows.ToDictionary(x => x.SalesOrderId, x => x.Status),
             SalesOrderGiDocIdByOrderId = giRows.ToDictionary(x => x.SalesOrderId, x => x.Id),
@@ -380,6 +400,29 @@ public class SalesOrderController : Controller
             SalesOrderGiDispatchStatusById = giRows.ToDictionary(x => x.SalesOrderId, x => x.DispatchStatus)
         };
         return View(vm);
+    }
+
+    private static List<SalesOrder> FilterByWorkflowStatus(
+        List<SalesOrder> orders,
+        IReadOnlyDictionary<int, string> workflowById,
+        string statusFilter)
+    {
+        if (string.IsNullOrWhiteSpace(statusFilter)
+            || string.Equals(statusFilter, "All", StringComparison.OrdinalIgnoreCase))
+            return orders;
+
+        if (string.Equals(statusFilter, SalesOrder.StatusConfirmed, StringComparison.OrdinalIgnoreCase))
+        {
+            return orders.Where(o =>
+                workflowById.TryGetValue(o.Id, out var ws)
+                && !string.Equals(ws, SalesOrderWorkflowStatus.Open, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        return orders.Where(o =>
+            workflowById.TryGetValue(o.Id, out var ws)
+            && string.Equals(ws, statusFilter, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     [HttpGet]
@@ -411,6 +454,13 @@ public class SalesOrderController : Controller
         if (o.Status != SalesOrder.StatusConfirmed)
             return NotFound();
         var full = await SalesDocumentDetailsModalBuilder.BuildSalesOrderAsync(o, _db, ct).ConfigureAwait(false);
+        var workflowStatus = await _workflowStatus.ResolveAsync(id, ct).ConfigureAwait(false);
+        full = new SalesOrderDetailsFullVm
+        {
+            Order = full.Order,
+            Pricing = full.Pricing,
+            WorkflowStatus = workflowStatus
+        };
         return PartialView("_DetailsModal", full);
     }
 

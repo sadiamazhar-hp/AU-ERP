@@ -117,4 +117,56 @@ public static class DeliveryChallanStockService
 
         return (true, null, batches);
     }
+
+    /// <summary>Read-only check: whether active stock can cover all lines (grade/UOM aware).</summary>
+    public static async Task<(bool sufficient, string? firstShortMaterial)> CheckAvailabilityAsync(
+        AppDbContext db,
+        IReadOnlyList<LineDeduct> lines,
+        IReadOnlyDictionary<int, string?>? salesItemGradeById,
+        string inventoryPlantId,
+        CancellationToken ct = default)
+    {
+        inventoryPlantId = (inventoryPlantId ?? "").Trim();
+        if (inventoryPlantId.Length == 0)
+            return (false, null);
+
+        foreach (var line in lines)
+        {
+            var mat = (line.MaterialNumber ?? "").Trim();
+            if (mat.Length == 0 || line.QuantityUomId <= 0 || line.Qty <= InventoryEpsilon)
+                continue;
+
+            string grade = StockInventoryGradeCodes.FirstQuality;
+            if (line.SalesOrderItemId is int soiId && salesItemGradeById != null
+                && salesItemGradeById.TryGetValue(soiId, out var g))
+                grade = InventoryGradeFromSalesGrade(g);
+
+            var stockRows = await db.StockInventoryLines
+                .AsNoTracking()
+                .Where(s =>
+                    s.PlantID == inventoryPlantId
+                    && s.MaterialNumber == mat
+                    && s.Status == StockInventoryLine.StatusActive
+                    && s.Grade == grade
+                    && s.Quantity > 0)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            var availableInLineUom = 0m;
+            foreach (var st in stockRows)
+            {
+                var (backOk, backDocQty, _) = await UnitConversionMath.ConvertAsync(
+                    db, mat, st.Quantity, st.QuantityUomId, line.QuantityUomId, ct)
+                    .ConfigureAwait(false);
+                if (!backOk)
+                    return (false, mat);
+                availableInLineUom = Math.Round(availableInLineUom + backDocQty, 4, MidpointRounding.AwayFromZero);
+            }
+
+            if (availableInLineUom + InventoryEpsilon < line.Qty)
+                return (false, mat);
+        }
+
+        return (true, null);
+    }
 }

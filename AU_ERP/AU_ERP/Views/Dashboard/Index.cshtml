@@ -195,7 +195,7 @@
                     <div class="db-headline-card">
                         <div class="db-hl-label">Orders open</div>
                         <div class="db-hl-val">@h.OrdersOpen</div>
-                        <div class="db-hl-sub">@h.DCsInTransit DC(s) in transit</div>
+                        <div class="db-hl-sub">@h.DCsInTransit DC(s) in transit · @h.OrdersPendingPayment pending payment</div>
                     </div>
                 }
                 @if (h.ShowLowStock)
@@ -382,7 +382,12 @@
                     <h3 class="db-subgroup-title">Order &amp; Fulfillment</h3>
                     <div class="db-kpi-grid">
                         <div class="db-kpi"><div class="db-kpi-label">Orders (open)</div><div class="db-kpi-val">@sa.OrderOpen</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Orders (confirmed)</div><div class="db-kpi-val">@sa.OrderConfirmed</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Pending stock</div><div class="db-kpi-val">@sa.OrderPendingStock</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Pending good receive</div><div class="db-kpi-val">@sa.OrderPendingGoodReceive</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Pending DC</div><div class="db-kpi-val">@sa.OrderPendingDc</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Delivery in process</div><div class="db-kpi-val">@sa.OrderDeliveryInProcess</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Pending payment</div><div class="db-kpi-val">@sa.OrderPendingPayment</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Completed</div><div class="db-kpi-val">@sa.OrderCompleted</div></div>
                         <div class="db-kpi"><div class="db-kpi-label">Delivery challans</div><div class="db-kpi-val">@sa.DeliveryChallanCount</div></div>
                         <div class="db-kpi"><div class="db-kpi-label">DCs created</div><div class="db-kpi-val">@sa.DeliveryChallansCreatedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
                         <div class="db-kpi"><div class="db-kpi-label">DCs delivered</div><div class="db-kpi-val">@sa.DeliveryChallansDelivered</div></div>
@@ -408,6 +413,15 @@
                                 }
                                 </tbody>
                             </table>
+                        </div>
+                    }
+                    @if (sa.OrderWorkflowByStatus.Count > 0)
+                    {
+                        <div class="db-chart-row">
+                            <div class="db-chart-card" style="grid-column: 1 / -1;">
+                                <h3>Sales orders by workflow status</h3>
+                                <div class="db-chart-wrap db-chart-tall"><canvas id="dbChartOrderWorkflow"></canvas></div>
+                            </div>
                         </div>
                     }
                     <div class="db-quick">
@@ -624,6 +638,17 @@
                 new Chart(el, { type: "line", data, options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } } });
             })();
                 </text>
+                @if (Model.Sales.OrderWorkflowByStatus.Count > 0)
+                {
+                <text>
+            (function () {
+                const el = document.getElementById("dbChartOrderWorkflow");
+                if (!el) return;
+                const data = @Html.Raw(DashboardDataService.ChartJsonSalesOrderWorkflowDoughnut(Model.Sales.OrderWorkflowByStatus));
+                new Chart(el, { type: "doughnut", data, options: commonOpts });
+            })();
+                </text>
+                }
                 @if (Model.Sales.InvoicedVsPaymentsByDay.Count > 0)
                 {
                 <text>

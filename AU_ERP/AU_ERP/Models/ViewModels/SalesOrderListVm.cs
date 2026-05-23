@@ -12,6 +12,17 @@ public class SalesOrderListVm
 
     public int? DistributionChannelId { get; set; }
 
+    /// <summary>Computed workflow status per sales order id.</summary>
+    public Dictionary<int, string> WorkflowStatusById { get; set; } = new();
+
+    public int CountOpen { get; set; }
+    public int CountPendingStock { get; set; }
+    public int CountPendingGoodReceive { get; set; }
+    public int CountPendingDc { get; set; }
+    public int CountDeliveryInProcess { get; set; }
+    public int CountPendingPayment { get; set; }
+    public int CountCompleted { get; set; }
+
     /// <summary>Sales orders that already have a delivery challan (hide “DC” action).</summary>
     public HashSet<int> SalesOrderIdsWithChallan { get; set; } = new();
 

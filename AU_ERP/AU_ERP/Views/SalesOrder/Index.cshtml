@@ -1,6 +1,7 @@
 @model AU_ERP.Models.ViewModels.SalesOrderListVm
 @using System.Globalization
 @using AU_ERP.Models
+@using AU_ERP.Services
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Sales Order";
@@ -24,6 +25,24 @@
     var soDetailsModalUrlPlaceholder = Url.Action("DetailsModal", "SalesOrder", new { id = 900000001 }) ?? "";
     var walkInSchemaId = ViewBag.WalkInSchemaId as int? ?? 0;
     var isEmporiumWalkIn = ViewBag.IsEmporiumWalkInUser as bool? == true;
+    string SoBadgeClass(string? ws)
+    {
+        if (string.IsNullOrEmpty(ws) || string.Equals(ws, SalesOrderWorkflowStatus.Open, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-open";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.Completed, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-completed";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingStock, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-stock";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingGoodReceive, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-gr";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingDc, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-dc";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.DeliveryInProcess, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-delivery";
+        if (string.Equals(ws, SalesOrderWorkflowStatus.PendingPayment, StringComparison.OrdinalIgnoreCase))
+            return "so-badge-pending-pay";
+        return "so-badge-confirmed";
+    }
 }
 
 @section Styles {
@@ -34,9 +53,10 @@
     .so-page .so-hero p { margin: 0; color: var(--subtle, #6a7c8e); font-size: .9rem; }
     .so-btn-new { background: var(--blue, #0070f2); color: #fff; border: 1px solid var(--blue, #0070f2); border-radius: 4px; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
     .so-btn-new:hover { filter: brightness(1.05); color: #fff; }
-    .so-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; max-width: 32rem; margin-bottom: 1.25rem; }
-    @@media (max-width: 500px) { .so-stats { grid-template-columns: 1fr; } }
-    .so-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); border-top: 3px solid var(--blue, #0070f2); }
+    .so-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+    .so-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); border-top: 3px solid var(--blue, #0070f2); cursor: pointer; transition: box-shadow .15s; }
+    .so-stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.16); }
+    .so-stat-card.so-stat-active { outline: 2px solid var(--blue, #0070f2); outline-offset: 1px; }
     .so-stat-card .so-stat-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--subtle, #6a7c8e); text-transform: uppercase; }
     .so-stat-card .so-stat-val { font-size: 1.65rem; font-weight: 600; color: var(--dark, #354a5e); line-height: 1.2; margin-top: .2rem; }
     .so-table-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
@@ -52,6 +72,12 @@
     .so-badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 500; }
     .so-badge-open { background: #e2e3e5; color: #41464b; }
     .so-badge-confirmed { background: #d1e7dd; color: #0f5132; }
+    .so-badge-pending-stock { background: #f8d7da; color: #842029; }
+    .so-badge-pending-gr { background: #fff3cd; color: #664d03; }
+    .so-badge-pending-dc { background: #cff4fc; color: #055160; }
+    .so-badge-delivery { background: #e7f1ff; color: #084298; }
+    .so-badge-pending-pay { background: #ffe5d0; color: #984c0c; }
+    .so-badge-completed { background: #d1e7dd; color: #0f5132; }
     .so-actions { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
     .so-actions .btn { font-size: .75rem; padding: .2rem .5rem; }
 </style>
@@ -111,6 +137,29 @@
         <button type="button" class="so-btn-new" data-bs-toggle="modal" data-bs-target="#addSalesOrderModal">
             <i class="bi bi-plus-lg"></i> New order
         </button>
+    </div>
+
+    <div class="so-stats" role="group" aria-label="Sales order status summary">
+        @{
+            var statCards = new (string Label, int Count, string Value)[]
+            {
+                (SalesOrderWorkflowStatus.Open, Model?.CountOpen ?? 0, SalesOrderWorkflowStatus.Open),
+                (SalesOrderWorkflowStatus.PendingStock, Model?.CountPendingStock ?? 0, SalesOrderWorkflowStatus.PendingStock),
+                (SalesOrderWorkflowStatus.PendingGoodReceive, Model?.CountPendingGoodReceive ?? 0, SalesOrderWorkflowStatus.PendingGoodReceive),
+                (SalesOrderWorkflowStatus.PendingDc, Model?.CountPendingDc ?? 0, SalesOrderWorkflowStatus.PendingDc),
+                (SalesOrderWorkflowStatus.DeliveryInProcess, Model?.CountDeliveryInProcess ?? 0, SalesOrderWorkflowStatus.DeliveryInProcess),
+                (SalesOrderWorkflowStatus.PendingPayment, Model?.CountPendingPayment ?? 0, SalesOrderWorkflowStatus.PendingPayment),
+                (SalesOrderWorkflowStatus.Completed, Model?.CountCompleted ?? 0, SalesOrderWorkflowStatus.Completed)
+            };
+        }
+        @foreach (var card in statCards)
+        {
+            var active = string.Equals(listStatus, card.Value, StringComparison.OrdinalIgnoreCase);
+            <div class="so-stat-card@(active ? " so-stat-active" : "")" data-so-stat-status="@card.Value" title="Filter by @card.Label">
+                <div class="so-stat-label">@card.Label</div>
+                <div class="so-stat-val">@card.Count</div>
+            </div>
+        }
     </div>
 
     @if (TempData["OrderMessage"] is string okMsg2)
@@ -194,10 +243,12 @@
                         <td>@(o.CustomerName ?? "—")</td>
                         <td class="text-nowrap">@FmtDate(o.OrderDate)</td>
                         <td>
-                            @if (isOpen)
-                            { <span class="so-badge so-badge-open">Open</span> }
-                            else
-                            { <span class="so-badge so-badge-confirmed">Confirmed</span> }
+                            @{
+                                var wfStatus = Model?.WorkflowStatusById != null && Model.WorkflowStatusById.TryGetValue(o.Id, out var wsVal)
+                                    ? wsVal
+                                    : (isOpen ? SalesOrderWorkflowStatus.Open : SalesOrderWorkflowStatus.PendingStock);
+                            }
+                            <span class="so-badge @SoBadgeClass(wfStatus)">@wfStatus</span>
                         </td>
                         <td>
                             <div class="so-actions">
@@ -284,8 +335,12 @@
                     <label class="form-label small">Status</label>
                     <select id="soModStatus" class="form-select form-select-sm">
                         <option value="All">All</option>
-                        <option value="@SalesOrder.StatusOpen">Open</option>
-                        <option value="@SalesOrder.StatusConfirmed">Confirmed</option>
+                        <option value="@SalesOrderWorkflowStatus.Open">@SalesOrderWorkflowStatus.Open</option>
+                        <option value="@SalesOrder.StatusConfirmed">Confirmed (all post-open)</option>
+                        @foreach (var ws in SalesOrderWorkflowStatus.ConfirmedWorkflowStatuses)
+                        {
+                            <option value="@ws">@ws</option>
+                        }
                     </select>
                 </div>
                 <div class="mb-2">
@@ -1745,6 +1800,15 @@
             var f = document.getElementById("soListFilterForm");
             if (f) f.submit();
         };
+        document.querySelectorAll(".so-stat-card[data-so-stat-status]").forEach(function (card) {
+            card.addEventListener("click", function () {
+                var st = card.getAttribute("data-so-stat-status") || "All";
+                if (document.getElementById("soListStatus")) document.getElementById("soListStatus").value = st;
+                if (document.getElementById("soModStatus")) document.getElementById("soModStatus").value = st;
+                var f = document.getElementById("soListFilterForm");
+                if (f) f.submit();
+            });
+        });
         if (soOpenEditId != null && soOpenEditId > 0) {
             _soSkipFormReset = true;
             fetch(orderDataFor(soOpenEditId)).then(function (r) { return r.json(); }).then(function (d) {

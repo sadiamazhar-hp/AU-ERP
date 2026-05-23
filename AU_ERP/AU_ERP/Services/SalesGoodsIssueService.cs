@@ -154,53 +154,17 @@ public sealed class SalesGoodsIssueService
                 return (false, "Sales order plant is required to deduct inventory on dispatch.");
             }
 
-            var reqLines = doc.Lines
-                .Where(l => !string.IsNullOrWhiteSpace(l.MaterialNumber) && l.RequiredUomId > 0 && l.RemainingQty > 0)
-                .ToList();
-            if (reqLines.Count == 0)
+            if (!doc.Lines.Any(l => l.RemainingQty > InventoryEpsilon))
             {
                 await tx.RollbackAsync(ct);
                 return (false, "No quantities left to dispatch on this goods issue.");
             }
 
-            var gradeBySoItem = reqLines
-                .Where(l => l.SalesOrderItemId is > 0)
-                .ToDictionary(l => l.SalesOrderItemId!.Value, l => l.SalesPriceGrade);
-
-            var deducts = reqLines.Select(l => new DeliveryChallanStockService.LineDeduct
-            {
-                MaterialNumber = l.MaterialNumber.Trim(),
-                Qty = l.RemainingQty,
-                QuantityUomId = l.RequiredUomId,
-                SalesOrderItemId = l.SalesOrderItemId
-            }).ToList();
-
-            var (okDeduct, errDeduct, batches) = await DeliveryChallanStockService.DeductAndGetBatchLabelsAsync(
-                _db,
-                deducts,
-                gradeBySoItem,
-                plantId,
-                ct);
-            if (!okDeduct)
+            var dispatchErr = await DispatchRemainingLinesAsync(doc, plantId, ct);
+            if (dispatchErr != null)
             {
                 await tx.RollbackAsync(ct);
-                return (false, errDeduct ?? "Could not deduct stock when dispatching goods.");
-            }
-
-            for (var i = 0; i < reqLines.Count; i++)
-            {
-                var line = reqLines[i];
-                var issuedNow = line.RemainingQty;
-                line.IssuedQty = decimal.Round(line.IssuedQty + issuedNow, 4, MidpointRounding.AwayFromZero);
-                line.RemainingQty = decimal.Round(Math.Max(0m, line.RequiredQty - line.IssuedQty), 4, MidpointRounding.AwayFromZero);
-                var b = (batches != null && i < batches.Count) ? batches[i] : null;
-                line.BatchSummary = string.IsNullOrWhiteSpace(b) ? null : b;
-            }
-
-            if (doc.Lines.Any(l => l.RemainingQty > InventoryEpsilon))
-            {
-                await tx.RollbackAsync(ct);
-                return (false, "Could not fully dispatch all sales goods issue lines against stock.");
+                return (false, dispatchErr);
             }
 
             var now = DateTime.UtcNow;
@@ -258,10 +222,22 @@ public sealed class SalesGoodsIssueService
                 return (false, "Linked sales order is not confirmed.");
             }
 
-            if (doc.Lines.Any(l => l.RemainingQty > InventoryEpsilon))
+            var hadOutstandingDispatch = doc.Lines.Any(l => l.RemainingQty > InventoryEpsilon);
+            if (hadOutstandingDispatch)
             {
-                await tx.RollbackAsync(ct);
-                return (false, "Dispatch is incomplete: remaining quantities must be cleared when goods are sent.");
+                var plantId = (doc.SalesOrder.PlantId ?? "").Trim();
+                if (plantId.Length == 0)
+                {
+                    await tx.RollbackAsync(ct);
+                    return (false, "Sales order plant is required to deduct inventory on goods receive.");
+                }
+
+                var dispatchErr = await DispatchRemainingLinesAsync(doc, plantId, ct);
+                if (dispatchErr != null)
+                {
+                    await tx.RollbackAsync(ct);
+                    return (false, dispatchErr);
+                }
             }
 
             doc.Status = SalesGoodsIssueDocument.StatusReceived;
@@ -269,13 +245,63 @@ public sealed class SalesGoodsIssueService
             doc.ReceivedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
-            return (true, "Sales goods issue received. (Stock was already deducted when goods were sent.)");
+            return (true, hadOutstandingDispatch
+                ? "Sales goods issue received. Inventory deducted for outstanding dispatch quantities."
+                : "Sales goods issue received. (Stock was already deducted when goods were sent.)");
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(ct);
             return (false, ex.InnerException?.Message ?? ex.Message);
         }
+    }
+
+    private async Task<string?> DispatchRemainingLinesAsync(
+        SalesGoodsIssueDocument doc,
+        string plantId,
+        CancellationToken ct)
+    {
+        var reqLines = doc.Lines
+            .Where(l => !string.IsNullOrWhiteSpace(l.MaterialNumber) && l.RequiredUomId > 0 && l.RemainingQty > InventoryEpsilon)
+            .ToList();
+        if (reqLines.Count == 0)
+            return null;
+
+        var gradeBySoItem = reqLines
+            .Where(l => l.SalesOrderItemId is > 0)
+            .ToDictionary(l => l.SalesOrderItemId!.Value, l => l.SalesPriceGrade);
+
+        var deducts = reqLines.Select(l => new DeliveryChallanStockService.LineDeduct
+        {
+            MaterialNumber = l.MaterialNumber.Trim(),
+            Qty = l.RemainingQty,
+            QuantityUomId = l.RequiredUomId,
+            SalesOrderItemId = l.SalesOrderItemId
+        }).ToList();
+
+        var (okDeduct, errDeduct, batches) = await DeliveryChallanStockService.DeductAndGetBatchLabelsAsync(
+            _db,
+            deducts,
+            gradeBySoItem,
+            plantId,
+            ct);
+        if (!okDeduct)
+            return errDeduct ?? "Could not deduct stock when dispatching goods.";
+
+        for (var i = 0; i < reqLines.Count; i++)
+        {
+            var line = reqLines[i];
+            var issuedNow = line.RemainingQty;
+            line.IssuedQty = decimal.Round(line.IssuedQty + issuedNow, 4, MidpointRounding.AwayFromZero);
+            line.RemainingQty = decimal.Round(Math.Max(0m, line.RequiredQty - line.IssuedQty), 4, MidpointRounding.AwayFromZero);
+            var b = (batches != null && i < batches.Count) ? batches[i] : null;
+            line.BatchSummary = string.IsNullOrWhiteSpace(b) ? null : b;
+        }
+
+        if (doc.Lines.Any(l => l.RemainingQty > InventoryEpsilon))
+            return "Could not fully dispatch all sales goods issue lines against stock.";
+
+        return null;
     }
 
     public async Task<(bool success, string message, int? salesGoodsIssueId)> ReceiveBySalesOrderAsync(

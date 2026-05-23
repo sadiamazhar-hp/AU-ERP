@@ -10,8 +10,13 @@ namespace AU_ERP.Services;
 public sealed class DashboardDataService
 {
     private readonly AppDbContext _db;
+    private readonly SalesOrderWorkflowStatusResolver _orderWorkflow;
 
-    public DashboardDataService(AppDbContext db) => _db = db;
+    public DashboardDataService(AppDbContext db, SalesOrderWorkflowStatusResolver orderWorkflow)
+    {
+        _db = db;
+        _orderWorkflow = orderWorkflow;
+    }
 
     public async Task<DashboardPageVm> BuildAsync(ClaimsPrincipal user, string? period = null, CancellationToken ct = default)
     {
@@ -234,10 +239,19 @@ public sealed class DashboardDataService
             .CountAsync(x => x.Status == SalesQuotation.StatusDraft, ct).ConfigureAwait(false);
         var qSent = await _db.SalesQuotations.AsNoTracking()
             .CountAsync(x => x.Status == SalesQuotation.StatusSent, ct).ConfigureAwait(false);
-        var oOpen = await _db.SalesOrders.AsNoTracking()
-            .CountAsync(x => x.Status == SalesOrder.StatusOpen, ct).ConfigureAwait(false);
-        var oConf = await _db.SalesOrders.AsNoTracking()
-            .CountAsync(x => x.Status == SalesOrder.StatusConfirmed, ct).ConfigureAwait(false);
+        var workflowCounts = await _orderWorkflow.CountByStatusAsync(null, ct).ConfigureAwait(false);
+        var oOpen = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Open);
+        var oConf = SalesOrderWorkflowStatus.ConfirmedWorkflowStatuses
+            .Sum(s => workflowCounts.GetValueOrDefault(s));
+        var orderWorkflowChart = SalesOrderWorkflowStatus.AllWorkflowStatuses
+            .Select(s => new LabelCountDto
+            {
+                Label = s,
+                Count = workflowCounts.GetValueOrDefault(s),
+                Value = workflowCounts.GetValueOrDefault(s)
+            })
+            .Where(x => x.Count > 0)
+            .ToList();
         var dcTotal = await _db.DeliveryChallans.AsNoTracking().CountAsync(ct).ConfigureAwait(false);
 
         var qInPeriod = await _db.SalesQuotations.AsNoTracking()
@@ -395,6 +409,13 @@ public sealed class DashboardDataService
             SalesOrderByMonth = om,
             OrderOpen = oOpen,
             OrderConfirmed = oConf,
+            OrderPendingStock = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingStock),
+            OrderPendingGoodReceive = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingGoodReceive),
+            OrderPendingDc = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingDc),
+            OrderDeliveryInProcess = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.DeliveryInProcess),
+            OrderPendingPayment = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingPayment),
+            OrderCompleted = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Completed),
+            OrderWorkflowByStatus = orderWorkflowChart,
             DeliveryChallanCount = dcTotal,
             DeliveryChallansCreatedInPeriod = dcCreated,
             DeliveryChallansDelivered = dcDelivered,
@@ -516,7 +537,7 @@ public sealed class DashboardDataService
         string? storePlant, DateTime today, CancellationToken ct)
     {
         decimal revenue = 0, revenuePrev = 0, outstanding = 0;
-        int openCount = 0, ordersOpen = 0, dcTransit = 0, lowStock = 0, wip = 0;
+        int openCount = 0, ordersOpen = 0, ordersPendingPayment = 0, dcTransit = 0, lowStock = 0, wip = 0;
         IReadOnlyList<LabelCountDto> spark = Array.Empty<LabelCountDto>();
 
         if (showSa)
@@ -543,8 +564,9 @@ public sealed class DashboardDataService
                 .SumAsync(i => (decimal?)i.GrandTotal, ct).ConfigureAwait(false) ?? 0m;
             openCount = await _db.SalesInvoices.AsNoTracking()
                 .CountAsync(i => i.Status == SalesInvoice.StatusOpen, ct).ConfigureAwait(false);
-            ordersOpen = await _db.SalesOrders.AsNoTracking()
-                .CountAsync(o => o.Status == SalesOrder.StatusOpen, ct).ConfigureAwait(false);
+            var workflowCounts = await _orderWorkflow.CountByStatusAsync(null, ct).ConfigureAwait(false);
+            ordersOpen = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Open);
+            ordersPendingPayment = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingPayment);
             dcTransit = await _db.DeliveryChallans.AsNoTracking()
                 .CountAsync(d => d.DeliveryCompletedAt == null, ct).ConfigureAwait(false);
         }
@@ -589,6 +611,7 @@ public sealed class DashboardDataService
             OpenInvoiceCount = openCount,
             ShowOrdersFulfillment = showSa,
             OrdersOpen = ordersOpen,
+            OrdersPendingPayment = ordersPendingPayment,
             DCsInTransit = dcTransit,
             ShowLowStock = showSt,
             LowStockCount = lowStock,
@@ -699,6 +722,25 @@ public sealed class DashboardDataService
             labels = items.Select(i => i.Label).ToList(),
             datasets = new[] { new { data = items.Select(i => (double)i.Value).ToList(), backgroundColor = background ?? new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6" } } }
         });
+
+    /// <summary>Doughnut chart for sales order workflow — one distinct color per status label.</summary>
+    public static string ChartJsonSalesOrderWorkflowDoughnut(IReadOnlyList<LabelCountDto> items)
+    {
+        var colorByStatus = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [SalesOrderWorkflowStatus.Open] = "#94a3b8",
+            [SalesOrderWorkflowStatus.PendingStock] = "#dc2626",
+            [SalesOrderWorkflowStatus.PendingGoodReceive] = "#ca8a04",
+            [SalesOrderWorkflowStatus.PendingDc] = "#0891b2",
+            [SalesOrderWorkflowStatus.DeliveryInProcess] = "#2563eb",
+            [SalesOrderWorkflowStatus.PendingPayment] = "#ea580c",
+            [SalesOrderWorkflowStatus.Completed] = "#16a34a"
+        };
+        var colors = items
+            .Select(i => colorByStatus.TryGetValue(i.Label, out var c) ? c : "#64748b")
+            .ToList();
+        return ChartJsonDoughnut(items, colors);
+    }
 
     public static string ChartJsonLineQuotationsAndOrders(IReadOnlyList<LabelCountDto> quotations, IReadOnlyList<LabelCountDto> orders) =>
         JsonSerializer.Serialize(new

@@ -1,4 +1,6 @@
 using System.Globalization;
+using AU_ERP.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Services
 {
@@ -168,6 +170,64 @@ namespace AU_ERP.Services
             if (v > toNumber)
                 return toNumber;
             return v;
+        }
+
+        /// <summary>
+        /// Merges stored counter with highest suffix found in issuing tables (same MAX semantics as <see cref="DocumentNumberAllocator"/>).
+        /// </summary>
+        public static long CombineDocumentLastIssuedWithDbMax(
+            long fromNumber,
+            long toNumber,
+            long? storedLastIssued,
+            long maxDbSuffix)
+        {
+            var floor = DocumentIntegratedSequence.DefaultLastIssuedBeforeFirstIssue(fromNumber);
+            var stored = storedLastIssued ?? floor;
+            var effective = Math.Max(stored, maxDbSuffix);
+            return NormalizeDocumentLastIssuedNumber(fromNumber, toNumber, effective);
+        }
+
+        /// <summary>
+        /// Resolves last issued suffix from DB-issued documents and stored counter; ignores form-posted display values.
+        /// </summary>
+        public static async Task<long> ResolveDocumentLastIssuedAsync(
+            AppDbContext db,
+            int documentTypeId,
+            long fromNumber,
+            long toNumber,
+            long? storedLastIssued,
+            CancellationToken ct = default)
+        {
+            var docCode = await db.DocumentTypes.AsNoTracking()
+                .Where(t => t.DocumentTypeID == documentTypeId)
+                .Select(t => t.DocCode)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+
+            docCode = (docCode ?? "").Trim();
+            if (docCode.Length == 0)
+                return NormalizeDocumentLastIssuedNumber(fromNumber, toNumber, storedLastIssued);
+
+            var moduleKeys = await db.DocumentIntegrations.AsNoTracking()
+                .Where(i => i.IsActive && i.DocumentTypeID == documentTypeId)
+                .Select(i => i.ModuleKey)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            if (moduleKeys.Count == 0)
+                return NormalizeDocumentLastIssuedNumber(fromNumber, toNumber, storedLastIssued);
+
+            long maxDbSuffix = 0;
+            foreach (var moduleKey in moduleKeys)
+            {
+                var suffix = await IntegratedDocumentIssuedNumbersMaxSuffix
+                    .GetMaxSuffixAsync(db, docCode, moduleKey, ct)
+                    .ConfigureAwait(false);
+                if (suffix > maxDbSuffix)
+                    maxDbSuffix = suffix;
+            }
+
+            return CombineDocumentLastIssuedWithDbMax(fromNumber, toNumber, storedLastIssued, maxDbSuffix);
         }
 
         private static string BlankMaterialCurrent(string? currentNumber)

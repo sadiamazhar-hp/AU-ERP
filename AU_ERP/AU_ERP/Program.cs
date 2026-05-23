@@ -66,6 +66,7 @@ builder.Services.AddScoped<GoodsReceiptPostingService>();
 builder.Services.AddScoped<GoodReceiptPdfService>();
 builder.Services.AddScoped<GoodsIssueService>();
 builder.Services.AddScoped<SalesGoodsIssueService>();
+builder.Services.AddScoped<SalesOrderWorkflowStatusResolver>();
 builder.Services.AddScoped<GoodsIssuePdfService>();
 builder.Services.AddScoped<StockMovementService>();
 builder.Services.AddScoped<DocumentNumberAllocator>();

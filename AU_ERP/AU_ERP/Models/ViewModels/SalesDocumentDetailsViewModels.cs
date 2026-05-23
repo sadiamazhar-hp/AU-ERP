@@ -50,6 +50,7 @@ public sealed class SalesOrderDetailsFullVm
 {
     public SalesOrder Order { get; init; } = null!;
     public SalesDocumentDetailsModalVm Pricing { get; init; } = null!;
+    public string WorkflowStatus { get; init; } = "";
 }
 
 public sealed class SalesQuotationDetailsFullVm

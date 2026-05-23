@@ -107,6 +107,21 @@ namespace AU_ERP.Controllers
             var data = await _context.DocumentRanges
                 .Include(r => r.DocumentType)
                 .ToListAsync();
+
+            foreach (var range in data)
+            {
+                if (!range.DocumentTypeID.HasValue || range.DocumentTypeID == 0
+                    || !range.FromNumber.HasValue || !range.ToNumber.HasValue)
+                    continue;
+
+                range.LastIssuedNumber = await NumberRangeMaintenance.ResolveDocumentLastIssuedAsync(
+                    _context,
+                    range.DocumentTypeID.Value,
+                    range.FromNumber.Value,
+                    range.ToNumber.Value,
+                    range.LastIssuedNumber);
+            }
+
             return View("DocumentRanges", data);
         }
 
@@ -171,11 +186,6 @@ namespace AU_ERP.Controllers
                     if (!item.FromNumber.HasValue || !item.ToNumber.HasValue)
                         continue;
 
-                    var normalizedLast = NumberRangeMaintenance.NormalizeDocumentLastIssuedNumber(
-                        item.FromNumber.Value,
-                        item.ToNumber.Value,
-                        item.LastIssuedNumber);
-
                     if (item.RangeID > 0)
                     {
                         var existing = await _context.DocumentRanges.FindAsync(item.RangeID);
@@ -184,12 +194,22 @@ namespace AU_ERP.Controllers
                             existing.DocumentTypeID = item.DocumentTypeID;
                             existing.FromNumber = item.FromNumber;
                             existing.ToNumber = item.ToNumber;
-                            existing.LastIssuedNumber = normalizedLast;
+                            existing.LastIssuedNumber = await NumberRangeMaintenance.ResolveDocumentLastIssuedAsync(
+                                _context,
+                                item.DocumentTypeID!.Value,
+                                item.FromNumber.Value,
+                                item.ToNumber.Value,
+                                existing.LastIssuedNumber);
                         }
                     }
                     else
                     {
-                        item.LastIssuedNumber = normalizedLast;
+                        item.LastIssuedNumber = await NumberRangeMaintenance.ResolveDocumentLastIssuedAsync(
+                            _context,
+                            item.DocumentTypeID!.Value,
+                            item.FromNumber.Value,
+                            item.ToNumber.Value,
+                            storedLastIssued: null);
                         await _context.DocumentRanges.AddAsync(item);
                     }
                 }
