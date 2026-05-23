@@ -18,12 +18,14 @@ public sealed class SalesReturnQiBomService
         if (key.Length == 0)
             return new List<string>();
 
-        var bom = await _db.BomHeadersSamples.AsNoTracking()
-            .Where(b => b.BomMaterialNumber == key && b.Status == "Active")
-            .OrderByDescending(b => b.IsDefaultBom)
-            .ThenBy(b => b.BomID)
-            .FirstOrDefaultAsync(ct)
+        var matEntity = await _db.CreateMaterialMaster.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.MaterialNumber == key, ct)
             .ConfigureAwait(false);
+        var mt = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
+        if (mt != "FERT" && mt != "HALB")
+            return new List<string>();
+
+        var bom = await MrpExplosionService.ResolveBomHeaderAsync(_db, key, mt, null, ct).ConfigureAwait(false);
         if (bom == null)
             return new List<string>();
 

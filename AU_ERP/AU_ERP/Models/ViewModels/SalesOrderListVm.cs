@@ -35,4 +35,7 @@ public class SalesOrderListVm
     public Dictionary<int, string> SalesOrderGiDocumentNumberById { get; set; } = new();
 
     public Dictionary<int, string> SalesOrderGiDispatchStatusById { get; set; } = new();
+
+    /// <summary>Delivery challan fleet action by sales order id (one challan per order).</summary>
+    public Dictionary<int, DeliveryChallanFleetActionVm> DeliveryChallanBySalesOrderId { get; set; } = new();
 }

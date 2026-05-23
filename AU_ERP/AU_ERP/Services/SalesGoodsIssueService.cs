@@ -222,32 +222,17 @@ public sealed class SalesGoodsIssueService
                 return (false, "Linked sales order is not confirmed.");
             }
 
-            var hadOutstandingDispatch = doc.Lines.Any(l => l.RemainingQty > InventoryEpsilon);
-            if (hadOutstandingDispatch)
-            {
-                var plantId = (doc.SalesOrder.PlantId ?? "").Trim();
-                if (plantId.Length == 0)
-                {
-                    await tx.RollbackAsync(ct);
-                    return (false, "Sales order plant is required to deduct inventory on goods receive.");
-                }
-
-                var dispatchErr = await DispatchRemainingLinesAsync(doc, plantId, ct);
-                if (dispatchErr != null)
-                {
-                    await tx.RollbackAsync(ct);
-                    return (false, dispatchErr);
-                }
-            }
+            // Dispatch Sent means stock was already deducted on Send; receive only acknowledges on the sales side.
+            var hadUnsyncedLines = SyncLinesAsFullyDispatched(doc.Lines);
 
             doc.Status = SalesGoodsIssueDocument.StatusReceived;
             doc.ReceivedAt = DateTime.UtcNow;
             doc.ReceivedByUserId = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
-            return (true, hadOutstandingDispatch
-                ? "Sales goods issue received. Inventory deducted for outstanding dispatch quantities."
-                : "Sales goods issue received. (Stock was already deducted when goods were sent.)");
+            return (true, hadUnsyncedLines
+                ? "Sales goods issue received. Line quantities synchronized with dispatch (stock was deducted when goods were sent)."
+                : "Sales goods issue received.");
         }
         catch (Exception ex)
         {
@@ -302,6 +287,24 @@ public sealed class SalesGoodsIssueService
             return "Could not fully dispatch all sales goods issue lines against stock.";
 
         return null;
+    }
+
+    /// <summary>
+    /// When dispatch is already Sent, line issued/remaining qty must reflect full dispatch without another stock hit.
+    /// Returns true if any line was out of sync (legacy migration or header/line mismatch).
+    /// </summary>
+    private static bool SyncLinesAsFullyDispatched(IEnumerable<SalesGoodsIssueDocumentLine> lines)
+    {
+        var syncedAny = false;
+        foreach (var line in lines)
+        {
+            if (line.RemainingQty <= InventoryEpsilon)
+                continue;
+            line.IssuedQty = decimal.Round(line.RequiredQty, 4, MidpointRounding.AwayFromZero);
+            line.RemainingQty = 0m;
+            syncedAny = true;
+        }
+        return syncedAny;
     }
 
     public async Task<(bool success, string message, int? salesGoodsIssueId)> ReceiveBySalesOrderAsync(

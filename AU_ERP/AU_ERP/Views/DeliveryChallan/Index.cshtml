@@ -76,6 +76,8 @@
     .dc-items-table-wrap.dc-items-locked tbody .form-control,
     .dc-items-table-wrap.dc-items-locked tbody .form-select { pointer-events: none; }
     #dcViewModal .modal-body { min-height: 8rem; }
+    .dc-badge-completed { background: #5a6268; color: #fff; }
+    .dc-badge-active { background: #f8f9fa; color: #212529; border: 1px solid #ced4da; }
 </style>
 }
 
@@ -152,11 +154,11 @@
                         <td class="text-nowrap">
                             @if (d.DeliveryCompletedAt.HasValue)
                             {
-                                <span class="badge text-bg-secondary">Completed</span>
+                                <span class="badge dc-badge-completed">Completed</span>
                             }
                             else
                             {
-                                <span class="badge text-bg-light border text-dark">Active</span>
+                                <span class="badge dc-badge-active">Active</span>
                             }
                         </td>
                         <td>@(d.Items?.Count ?? 0)</td>

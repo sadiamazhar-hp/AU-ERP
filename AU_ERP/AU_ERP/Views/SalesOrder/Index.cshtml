@@ -54,9 +54,7 @@
     .so-btn-new { background: var(--blue, #0070f2); color: #fff; border: 1px solid var(--blue, #0070f2); border-radius: 4px; padding: .45rem 1rem; font-size: .875rem; font-weight: 500; }
     .so-btn-new:hover { filter: brightness(1.05); color: #fff; }
     .so-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
-    .so-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); border-top: 3px solid var(--blue, #0070f2); cursor: pointer; transition: box-shadow .15s; }
-    .so-stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.16); }
-    .so-stat-card.so-stat-active { outline: 2px solid var(--blue, #0070f2); outline-offset: 1px; }
+    .so-stat-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); border-top: 3px solid var(--blue, #0070f2); }
     .so-stat-card .so-stat-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--subtle, #6a7c8e); text-transform: uppercase; }
     .so-stat-card .so-stat-val { font-size: 1.65rem; font-weight: 600; color: var(--dark, #354a5e); line-height: 1.2; margin-top: .2rem; }
     .so-table-card { background: #fff; border: 1px solid var(--border, #d9d9d9); border-radius: 4px; padding: 1rem 1.1rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
@@ -154,8 +152,7 @@
         }
         @foreach (var card in statCards)
         {
-            var active = string.Equals(listStatus, card.Value, StringComparison.OrdinalIgnoreCase);
-            <div class="so-stat-card@(active ? " so-stat-active" : "")" data-so-stat-status="@card.Value" title="Filter by @card.Label">
+            <div class="so-stat-card">
                 <div class="so-stat-label">@card.Label</div>
                 <div class="so-stat-val">@card.Count</div>
             </div>
@@ -229,6 +226,9 @@
                         ? gdnum
                         : null;
                     var hasGiRow = !string.IsNullOrEmpty(giDocNum) || (Model?.SalesOrderGiDocIdByOrderId?.ContainsKey(o.Id) ?? false);
+                    var dcFleet = Model?.DeliveryChallanBySalesOrderId != null && Model.DeliveryChallanBySalesOrderId.TryGetValue(o.Id, out var dcAct)
+                        ? dcAct
+                        : null;
                     <tr>
                         <td class="text-nowrap">
                             <strong>@o.SalesOrderNumber</strong>
@@ -267,6 +267,23 @@
                                         if (!hasDc)
                                         {
                                             <a class="btn btn-outline-primary btn-sm" href="@Url.Action("Index", "DeliveryChallan", new { fromSalesOrderId = o.Id })" title="Create delivery challan from this order"><i class="bi bi-truck"></i> DC</a>
+                                        }
+                                        else if (dcFleet != null)
+                                        {
+                                            <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("Index", "DeliveryChallan", new { q = dcFleet.DeliveryChallanNumber })" title="Open delivery challan @dcFleet.DeliveryChallanNumber"><i class="bi bi-truck"></i> DC</a>
+                                            if (dcFleet.CanMarkDeliveryCompleted)
+                                            {
+                                                <form asp-controller="DeliveryChallan" asp-action="MarkDeliveryCompleted" method="post" class="d-inline" onsubmit="return confirm('Mark delivery completed and free the driver / vehicle?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@dcFleet.DeliveryChallanId" />
+                                                    <input type="hidden" name="returnTo" value="salesorder" />
+                                                    <input type="hidden" name="returnQ" value="@listQ" />
+                                                    <input type="hidden" name="returnStatus" value="@listStatus" />
+                                                    <input type="hidden" name="returnPlantId" value="@listPlantId" />
+                                                    <input type="hidden" name="returnDistributionChannelId" value="@(listDcId?.ToString() ?? "")" />
+                                                    <button type="submit" class="btn btn-outline-success btn-sm" title="Releases fleet for other challans"><i class="bi bi-check2-circle"></i> Delivery completed</button>
+                                                </form>
+                                            }
                                         }
                                     }
                                     else if (giPending && giDispatchSent)
@@ -1800,15 +1817,6 @@
             var f = document.getElementById("soListFilterForm");
             if (f) f.submit();
         };
-        document.querySelectorAll(".so-stat-card[data-so-stat-status]").forEach(function (card) {
-            card.addEventListener("click", function () {
-                var st = card.getAttribute("data-so-stat-status") || "All";
-                if (document.getElementById("soListStatus")) document.getElementById("soListStatus").value = st;
-                if (document.getElementById("soModStatus")) document.getElementById("soModStatus").value = st;
-                var f = document.getElementById("soListFilterForm");
-                if (f) f.submit();
-            });
-        });
         if (soOpenEditId != null && soOpenEditId > 0) {
             _soSkipFormReset = true;
             fetch(orderDataFor(soOpenEditId)).then(function (r) { return r.json(); }).then(function (d) {

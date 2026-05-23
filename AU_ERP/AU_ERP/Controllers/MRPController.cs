@@ -165,16 +165,14 @@ namespace AU_ERP.Controllers
             
             var mat = (dto.MaterialNumber ?? "").Trim();
             var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == mat
-                            && h.Status == "Active"
-                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
-                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
+                .Where(h => h.BomMaterialNumber == mat)
+                .ForMrpSelection(DateTime.Today)
                 .Select(h => h.BomID)
                 .ToListAsync(ct);
             if (bomCandidates.Count > 1 && (!dto.SelectedBomId.HasValue || dto.SelectedBomId.Value <= 0))
                 return Json(new MrpRunResponseDto { Success = false, Message = "BOM selection is required." });
             if (dto.SelectedBomId.HasValue && dto.SelectedBomId.Value > 0 && !bomCandidates.Contains(dto.SelectedBomId.Value))
-                return Json(new MrpRunResponseDto { Success = false, Message = "Selected BOM is invalid/inactive." });
+                return Json(new MrpRunResponseDto { Success = false, Message = "Selected BOM is deleted or not valid for MRP." });
 
             var result = await MrpExplosionService.RunAsync(
                 _db,
@@ -285,13 +283,9 @@ namespace AU_ERP.Controllers
                 }
                 
                 var bomOptions = await _db.BomHeadersSamples.AsNoTracking()
-                    .Where(h => h.BomMaterialNumber == mat
-                                && h.Status == "Active"
-                                && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
-                                && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
-                    .OrderByDescending(h => h.IsDefaultBom)
-                    .ThenByDescending(h => h.ValidFrom)
-                    .ThenByDescending(h => h.BomID)
+                    .Where(h => h.BomMaterialNumber == mat)
+                    .ForMrpSelection(DateTime.Today)
+                    .OrderForMrpSelection()
                     .Select(h => new { h.BomID, h.BOMCode, h.IsDefaultBom })
                     .ToListAsync(ct);
                 if (bomOptions.Count == 0)

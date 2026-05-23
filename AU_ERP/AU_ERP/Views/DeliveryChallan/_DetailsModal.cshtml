@@ -33,7 +33,7 @@ else
             @if (d.DeliveryCompletedAt.HasValue)
             {
                 var done = d.DeliveryCompletedAt!.Value.ToString("dd-MMM-yyyy HH:mm", CultureInfo.InvariantCulture);
-                <span class="badge text-bg-secondary align-self-center" title="@done UTC">Delivered (@done&nbsp;UTC)</span>
+                <span class="badge bg-secondary text-white align-self-center" title="@done UTC">Delivered (@done&nbsp;UTC)</span>
             }
             else if (d.DriverId != null || d.VehicleId != null)
             {

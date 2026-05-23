@@ -105,23 +105,18 @@ namespace AU_ERP.Services
 
             var today = DateTime.Today;
             IQueryable<BomHeadersSample> headerQ = db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == key
-                            && h.HeaderMaterialTypeCode == mt
-                            && h.Status == "Active"
-                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= today)
-                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= today));
+                .Where(h => h.BomMaterialNumber == key && h.HeaderMaterialTypeCode == mt)
+                .ForMrpSelection(today);
             if (selectedBomId.HasValue && selectedBomId.Value > 0)
                 headerQ = headerQ.Where(h => h.BomID == selectedBomId.Value);
             var header = await headerQ
-                .OrderByDescending(h => h.IsDefaultBom)
-                .ThenByDescending(h => h.ValidFrom)
-                .ThenByDescending(h => h.BomID)
+                .OrderForMrpSelection()
                 .FirstOrDefaultAsync(ct);
 
             if (header == null)
             {
                 resp.Message = selectedBomId.HasValue
-                    ? $"Selected BOM is invalid/inactive for material '{key}'."
+                    ? $"Selected BOM is deleted, inactive, or not valid for MRP for material '{key}'."
                     : $"No active valid BOM found for material '{key}' with header type {mt}.";
                 return resp;
             }
@@ -216,7 +211,9 @@ namespace AU_ERP.Services
                 var shortage = onHandInLineUom + Epsilon < required;
 
                 var hasHalbBom = compType == "HALB" && await db.BomHeadersSamples.AsNoTracking()
-                    .AnyAsync(h => h.BomMaterialNumber == compNum && h.HeaderMaterialTypeCode == "HALB", ct);
+                    .Where(h => h.BomMaterialNumber == compNum && h.HeaderMaterialTypeCode == "HALB")
+                    .ForMrpSelection(DateTime.Today)
+                    .AnyAsync(ct);
 
                 var row = new MrpRunResultRowDto
                 {
@@ -242,7 +239,7 @@ namespace AU_ERP.Services
             return resp;
         }
 
-        /// <summary>Resolve BOM header for a material (HALB or FERT header type must match material type).</summary>
+        /// <summary>Resolve BOM header for MRP / live production (excludes deleted; ValidFrom-only).</summary>
         public static async Task<BomHeadersSample?> ResolveBomHeaderAsync(
             AppDbContext db,
             string materialNumber,
@@ -254,18 +251,22 @@ namespace AU_ERP.Services
             var mt = headerMaterialTypeCode.Trim().ToUpperInvariant();
             var today = DateTime.Today;
             IQueryable<BomHeadersSample> q = db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == key
-                            && h.HeaderMaterialTypeCode == mt
-                            && h.Status == "Active"
-                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= today)
-                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= today));
+                .Where(h => h.BomMaterialNumber == key && h.HeaderMaterialTypeCode == mt)
+                .ForMrpSelection(today);
             if (selectedBomId.HasValue && selectedBomId.Value > 0)
                 q = q.Where(h => h.BomID == selectedBomId.Value);
             return await q
-                .OrderByDescending(h => h.ValidFrom)
-                .ThenByDescending(h => h.BomID)
+                .OrderForMrpSelection()
                 .FirstOrDefaultAsync(ct);
         }
+
+        /// <summary>Load BOM header by id without MRP applicability (historical FK references).</summary>
+        public static Task<BomHeadersSample?> GetBomHeaderByIdAsync(
+            AppDbContext db,
+            int bomId,
+            CancellationToken ct = default) =>
+            db.BomHeadersSamples.AsNoTracking()
+                .FirstOrDefaultAsync(h => h.BomID == bomId, ct);
 
         /// <summary>Static BOM lines (quantities as stored on BOM, not scaled by production order).</summary>
         public static async Task<List<MrpBomLineDisplayDto>> GetBomLinesForMaterialAsync(

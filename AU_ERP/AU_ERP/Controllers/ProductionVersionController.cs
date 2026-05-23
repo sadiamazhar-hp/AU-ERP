@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Services;
 using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers
@@ -21,6 +22,7 @@ namespace AU_ERP.Controllers
                 "PlantID", "PlantName");
 
             ViewBag.Boms = await _db.BomHeadersSamples.AsNoTracking()
+                .ActiveMaster()
                 .OrderBy(b => b.BomID)
                 .Select(b => new { b.BomID, Display = b.BOMCode + " - " + b.BOMTitle })
                 .ToListAsync(ct);

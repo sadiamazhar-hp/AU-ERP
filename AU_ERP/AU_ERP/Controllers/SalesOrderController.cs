@@ -354,13 +354,30 @@ public class SalesOrderController : Controller
         var walkInSchemaId = await _emporiumWalkIn.GetWalkInSalesSchemaIdAsync(ct).ConfigureAwait(false);
         ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
         ViewBag.IsEmporiumWalkInUser = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
-        var withDcIds = await _db.DeliveryChallans.AsNoTracking()
-            .Where(d => d.SalesOrderId != null)
-            .Select(d => d.SalesOrderId!.Value)
-            .Distinct()
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
         var orderIds = list.Select(x => x.Id).ToList();
+        var dcRows = orderIds.Count == 0
+            ? new List<DeliveryChallan>()
+            : await _db.DeliveryChallans.AsNoTracking()
+                .Where(d => d.SalesOrderId != null && orderIds.Contains(d.SalesOrderId.Value))
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        var withDcIds = dcRows.Select(d => d.SalesOrderId!.Value).Distinct().ToList();
+        var dcBySoId = dcRows
+            .GroupBy(d => d.SalesOrderId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    var d = g.OrderByDescending(x => x.Id).First();
+                    return new DeliveryChallanFleetActionVm
+                    {
+                        DeliveryChallanId = d.Id,
+                        DeliveryChallanNumber = d.DeliveryChallanNumber,
+                        IsDeliveryCompleted = d.DeliveryCompletedAt.HasValue,
+                        CanMarkDeliveryCompleted = !d.DeliveryCompletedAt.HasValue
+                            && (d.DriverId != null || d.VehicleId != null)
+                    };
+                });
         List<SalesGoodsIssueDocument> giRows;
         try
         {
@@ -397,7 +414,8 @@ public class SalesOrderController : Controller
             SalesOrderGiStatusById = giRows.ToDictionary(x => x.SalesOrderId, x => x.Status),
             SalesOrderGiDocIdByOrderId = giRows.ToDictionary(x => x.SalesOrderId, x => x.Id),
             SalesOrderGiDocumentNumberById = giRows.ToDictionary(x => x.SalesOrderId, x => x.DocumentNumber),
-            SalesOrderGiDispatchStatusById = giRows.ToDictionary(x => x.SalesOrderId, x => x.DispatchStatus)
+            SalesOrderGiDispatchStatusById = giRows.ToDictionary(x => x.SalesOrderId, x => x.DispatchStatus),
+            DeliveryChallanBySalesOrderId = dcBySoId
         };
         return View(vm);
     }

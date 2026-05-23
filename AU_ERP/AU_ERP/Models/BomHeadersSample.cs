@@ -39,6 +39,11 @@ namespace AU_ERP.Models
         public DateTime? ValidTo { get; set; }
         public decimal? BaseQty { get; set; }
 
+        /// <summary>Logical delete — header and references remain for history; excluded from MRP and BOM master list.</summary>
+        public bool IsDeleted { get; set; }
+
+        public DateTime? DeletedAt { get; set; }
+
         public virtual ICollection<BomItemsSample> BomItemsSamples { get; set; }
         public virtual BOMLevelsSample? BOMLevel { get; set; }
         public virtual PlantsSample? PlantSample { get; set; }

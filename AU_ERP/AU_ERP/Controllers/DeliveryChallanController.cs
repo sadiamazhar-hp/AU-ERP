@@ -663,7 +663,16 @@ public class DeliveryChallanController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> MarkDeliveryCompleted(int id, CancellationToken ct = default)
+    public async Task<IActionResult> MarkDeliveryCompleted(
+        int id,
+        string? returnTo = null,
+        string? returnQ = null,
+        string? returnStatus = null,
+        string? returnPlantId = null,
+        int? returnDistributionChannelId = null,
+        string? returnDateFrom = null,
+        string? returnDateTo = null,
+        CancellationToken ct = default)
     {
         var dc = await _db.DeliveryChallans.FirstOrDefaultAsync(x => x.Id == id, ct).ConfigureAwait(false);
         if (dc == null)
@@ -673,27 +682,81 @@ public class DeliveryChallanController : Controller
         if (pid.Length > 0
             && !allowed.Any(a => string.Equals(a, pid, StringComparison.OrdinalIgnoreCase)))
         {
-            TempData["DcError"] = "You cannot change this delivery challan (plant not allowed for your login).";
-            return RedirectToAction(nameof(Index));
+            SetDeliveryCompletedFlash(false, "You cannot change this delivery challan (plant not allowed for your login).", returnTo);
+            return RedirectAfterDeliveryCompleted(returnTo, returnQ, returnStatus, returnPlantId, returnDistributionChannelId, returnDateFrom, returnDateTo);
         }
 
         if (dc.DeliveryCompletedAt != null)
         {
-            TempData["DcWarning"] = $"Delivery challan {dc.DeliveryChallanNumber} is already marked completed.";
-            return RedirectToAction(nameof(Index));
+            SetDeliveryCompletedFlash(true, $"Delivery challan {dc.DeliveryChallanNumber} is already marked completed.", returnTo);
+            return RedirectAfterDeliveryCompleted(returnTo, returnQ, returnStatus, returnPlantId, returnDistributionChannelId, returnDateFrom, returnDateTo);
         }
 
         if (dc.DriverId == null && dc.VehicleId == null)
         {
-            TempData["DcError"] =
-                "Assign a driver or vehicle on this delivery challan before marking delivery completed.";
-            return RedirectToAction(nameof(Index));
+            SetDeliveryCompletedFlash(false,
+                "Assign a driver or vehicle on this delivery challan before marking delivery completed.",
+                returnTo);
+            return RedirectAfterDeliveryCompleted(returnTo, returnQ, returnStatus, returnPlantId, returnDistributionChannelId, returnDateFrom, returnDateTo);
         }
 
         dc.DeliveryCompletedAt = DateTime.UtcNow;
         dc.DeliveryCompletedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
-        TempData["DcWarning"] = $"Marked delivery completed for {dc.DeliveryChallanNumber}. Driver / vehicle are available for new challans.";
+        SetDeliveryCompletedFlash(true,
+            $"Marked delivery completed for {dc.DeliveryChallanNumber}. Driver / vehicle are available for new challans.",
+            returnTo);
+        return RedirectAfterDeliveryCompleted(returnTo, returnQ, returnStatus, returnPlantId, returnDistributionChannelId, returnDateFrom, returnDateTo);
+    }
+
+    private void SetDeliveryCompletedFlash(bool isWarning, string message, string? returnTo)
+    {
+        if (string.Equals((returnTo ?? "").Trim(), "salesorder", StringComparison.OrdinalIgnoreCase))
+        {
+            if (isWarning) TempData["OrderMessage"] = message;
+            else TempData["OrderError"] = message;
+            return;
+        }
+        if (string.Equals((returnTo ?? "").Trim(), "returnorder", StringComparison.OrdinalIgnoreCase))
+        {
+            if (isWarning) TempData["RoMessage"] = message;
+            else TempData["RoError"] = message;
+            return;
+        }
+        if (isWarning) TempData["DcWarning"] = message;
+        else TempData["DcError"] = message;
+    }
+
+    private IActionResult RedirectAfterDeliveryCompleted(
+        string? returnTo,
+        string? returnQ,
+        string? returnStatus,
+        string? returnPlantId,
+        int? returnDistributionChannelId,
+        string? returnDateFrom = null,
+        string? returnDateTo = null)
+    {
+        var dest = (returnTo ?? "").Trim();
+        if (string.Equals(dest, "salesorder", StringComparison.OrdinalIgnoreCase))
+        {
+            return RedirectToAction("Index", "SalesOrder", new
+            {
+                q = returnQ,
+                status = returnStatus,
+                plantId = returnPlantId,
+                distributionChannelId = returnDistributionChannelId is > 0 ? returnDistributionChannelId : null
+            });
+        }
+        if (string.Equals(dest, "returnorder", StringComparison.OrdinalIgnoreCase))
+        {
+            return RedirectToAction("Index", "ReturnOrder", new
+            {
+                q = returnQ,
+                status = returnStatus,
+                dateFrom = string.IsNullOrWhiteSpace(returnDateFrom) ? null : returnDateFrom,
+                dateTo = string.IsNullOrWhiteSpace(returnDateTo) ? null : returnDateTo
+            });
+        }
         return RedirectToAction(nameof(Index));
     }
 

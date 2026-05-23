@@ -857,6 +857,22 @@ body.modal-open:has(#salesOrderFilterModal.show) .modal-backdrop {
   z-index: 100040 !important;
 }
 
+/* Return order filter + view modals (in-layout; reparent to body in ReturnOrder/Index.cshtml). */
+#returnOrderFilterModal.modal,
+#roViewModal.modal {
+  z-index: 100050 !important;
+}
+
+#returnOrderFilterModal.modal ~ .modal-backdrop,
+#roViewModal.modal ~ .modal-backdrop {
+  z-index: 100040 !important;
+}
+
+body.modal-open:has(#returnOrderFilterModal.show) .modal-backdrop,
+body.modal-open:has(#roViewModal.show) .modal-backdrop {
+  z-index: 100040 !important;
+}
+
 /* Emporium walk-in “Add customer” dialog — above #addQuotationModal / #addSalesOrderModal (100050); opened with backdrop:false */
 #sqWalkInAddCustomerModal.modal,
 #soWalkInAddCustomerModal.modal {

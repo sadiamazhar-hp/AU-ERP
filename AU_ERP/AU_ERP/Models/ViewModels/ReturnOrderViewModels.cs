@@ -1,11 +1,19 @@
 using AU_ERP.Models;
+using AU_ERP.Services;
 
 namespace AU_ERP.Models.ViewModels;
 
 public sealed class ReturnOrderIndexVm
 {
     public string? FilterQuery { get; set; }
+    public string? FilterStatus { get; set; }
+    public DateTime? DateFrom { get; set; }
+    public DateTime? DateTo { get; set; }
     public List<ReturnOrderIndexRowVm> Orders { get; set; } = new();
+    public int CountTotal { get; set; }
+    public int CountRodPending { get; set; }
+    public int CountDcPending { get; set; }
+    public int CountCompleted { get; set; }
 }
 
 public sealed class ReturnOrderIndexRowVm
@@ -18,6 +26,12 @@ public sealed class ReturnOrderIndexRowVm
     public string ReturnReasonSnippet { get; set; } = "";
     public bool HasCreditMemo { get; set; }
     public string? CreditMemoDocumentNumber { get; set; }
+    public string WorkflowStatus { get; set; } = ReturnOrderWorkflowStatus.RodPending;
+
+    public int? DeliveryChallanId { get; set; }
+    public string? DeliveryChallanNumber { get; set; }
+    public bool IsDeliveryCompleted { get; set; }
+    public bool CanMarkDeliveryCompleted { get; set; }
 }
 
 /// <summary>Payload for credit memo read-only modal on return order list.</summary>

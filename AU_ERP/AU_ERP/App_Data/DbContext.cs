@@ -229,14 +229,15 @@ namespace AU_ERP.Models
             
             modelBuilder.Entity<BomHeadersSample>()
                 .HasIndex(h => new { h.BomMaterialNumber, h.Plant, h.BomUsage, h.AlternativeNo })
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
             
             modelBuilder.Entity<BomHeadersSample>()
                 .HasIndex(h => new { h.BomMaterialNumber, h.Plant, h.IsDefaultBom, h.Status });
             
             modelBuilder.Entity<BomHeadersSample>()
                 .HasIndex(h => h.BomMaterialNumber)
-                .HasFilter("[IsDefaultBom] = 1")
+                .HasFilter("[IsDefaultBom] = 1 AND [IsDeleted] = 0")
                 .IsUnique();
 
             // modelBuilder.Entity<BomHeadersSample>()

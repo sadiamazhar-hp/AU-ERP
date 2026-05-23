@@ -33,14 +33,21 @@ public class ReturnOrderController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(string? q, CancellationToken ct = default)
+    public async Task<IActionResult> Index(
+        string? q,
+        string? status,
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        CancellationToken ct = default)
     {
         ViewData["Title"] = "Return order";
         var qq = (q ?? "").Trim();
+        var st = (status ?? ReturnOrderWorkflowStatus.All).Trim();
         List<SalesReturnOrder> orders;
         try
         {
             var query = ApplyReturnOrderSearchFilter(_db.SalesReturnOrders.AsNoTracking(), qq);
+            query = ApplyReturnOrderDateFilter(query, dateFrom, dateTo);
             orders = await query
                 .OrderByDescending(r => r.DocumentDate)
                 .ThenByDescending(r => r.Id)
@@ -77,10 +84,36 @@ public class ReturnOrderController : Controller
             }
         }
 
-        var vm = new ReturnOrderIndexVm
+        var fleetByReturnOrderId = new Dictionary<int, (DeliveryChallan? Dc, string? QiStatus)>();
+        if (orders.Count > 0)
         {
-            FilterQuery = string.IsNullOrEmpty(qq) ? null : qq,
-            Orders = orders.Select(r => new ReturnOrderIndexRowVm
+            var roIds = orders.Select(o => o.Id).ToList();
+            try
+            {
+                var fleetRows = await (
+                    from ro in _db.SalesReturnOrders.AsNoTracking()
+                    join inv in _db.SalesInvoices.AsNoTracking() on ro.SalesInvoiceId equals inv.Id
+                    join dc in _db.DeliveryChallans.AsNoTracking() on inv.DeliveryChallanId equals dc.Id
+                    join qi in _db.SalesReturnQualityInspections.AsNoTracking() on ro.Id equals qi.SalesReturnOrderId into qiJoin
+                    from qi in qiJoin.DefaultIfEmpty()
+                    where roIds.Contains(ro.Id)
+                    select new { ro.Id, Dc = dc, QiStatus = qi != null ? qi.Status : null }
+                ).ToListAsync(ct).ConfigureAwait(false);
+                foreach (var row in fleetRows)
+                    fleetByReturnOrderId[row.Id] = (row.Dc, row.QiStatus);
+            }
+            catch (SqlException)
+            {
+                // Invoice / DC / QI tables missing; list still works without fleet actions.
+            }
+        }
+
+        var rowVms = orders.Select(r =>
+        {
+            fleetByReturnOrderId.TryGetValue(r.Id, out var fleet);
+            var dc = fleet.Dc;
+            var workflow = ReturnOrderWorkflowStatusResolver.Resolve(fleet.QiStatus, dc?.DeliveryCompletedAt);
+            return new ReturnOrderIndexRowVm
             {
                 Id = r.Id,
                 DocumentNumber = r.DocumentNumber,
@@ -89,8 +122,30 @@ public class ReturnOrderController : Controller
                 DealerDisplayName = r.DealerDisplayName,
                 ReturnReasonSnippet = Snippet(r.ReturnReason, 80),
                 HasCreditMemo = cmDocByReturnOrderId.ContainsKey(r.Id),
-                CreditMemoDocumentNumber = cmDocByReturnOrderId.TryGetValue(r.Id, out var dn) ? dn : null
-            }).ToList()
+                CreditMemoDocumentNumber = cmDocByReturnOrderId.TryGetValue(r.Id, out var dn) ? dn : null,
+                WorkflowStatus = workflow,
+                DeliveryChallanId = dc?.Id,
+                DeliveryChallanNumber = dc?.DeliveryChallanNumber,
+                IsDeliveryCompleted = dc?.DeliveryCompletedAt != null,
+                CanMarkDeliveryCompleted = dc != null
+                    && dc.DeliveryCompletedAt == null
+                    && (dc.DriverId != null || dc.VehicleId != null)
+            };
+        }).ToList();
+
+        var displayed = FilterByWorkflowStatus(rowVms, st);
+
+        var vm = new ReturnOrderIndexVm
+        {
+            FilterQuery = string.IsNullOrEmpty(qq) ? null : qq,
+            FilterStatus = string.IsNullOrEmpty(st) ? ReturnOrderWorkflowStatus.All : st,
+            DateFrom = dateFrom,
+            DateTo = dateTo,
+            Orders = displayed,
+            CountTotal = rowVms.Count,
+            CountRodPending = rowVms.Count(o => o.WorkflowStatus == ReturnOrderWorkflowStatus.RodPending),
+            CountDcPending = rowVms.Count(o => o.WorkflowStatus == ReturnOrderWorkflowStatus.DcPending),
+            CountCompleted = rowVms.Count(o => o.WorkflowStatus == ReturnOrderWorkflowStatus.Completed)
         };
         return View(vm);
     }
@@ -155,6 +210,37 @@ public class ReturnOrderController : Controller
             || (r.DealerDisplayName != null && r.DealerDisplayName.Contains(qq))
             || (r.DealerBusinessPartnerId != null && r.DealerBusinessPartnerId.Contains(qq))
             || r.ReturnReason.Contains(qq));
+    }
+
+    private static IQueryable<SalesReturnOrder> ApplyReturnOrderDateFilter(
+        IQueryable<SalesReturnOrder> query,
+        DateTime? dateFrom,
+        DateTime? dateTo)
+    {
+        if (dateFrom.HasValue)
+        {
+            var from = dateFrom.Value.Date;
+            query = query.Where(r => r.DocumentDate >= from);
+        }
+        if (dateTo.HasValue)
+        {
+            var to = dateTo.Value.Date;
+            query = query.Where(r => r.DocumentDate <= to);
+        }
+        return query;
+    }
+
+    private static List<ReturnOrderIndexRowVm> FilterByWorkflowStatus(
+        List<ReturnOrderIndexRowVm> rows,
+        string statusFilter)
+    {
+        if (string.IsNullOrWhiteSpace(statusFilter)
+            || string.Equals(statusFilter, ReturnOrderWorkflowStatus.All, StringComparison.OrdinalIgnoreCase))
+            return rows;
+
+        return rows.Where(r =>
+            string.Equals(r.WorkflowStatus, statusFilter, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     private async Task<SalesReturnOrder?> LoadReturnOrderForDetailAsync(int id, CancellationToken ct)

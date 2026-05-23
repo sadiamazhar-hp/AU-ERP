@@ -106,7 +106,7 @@ public sealed class DashboardDataService
     {
         var mat = await _db.CreateMaterialMaster.AsNoTracking().CountAsync(ct).ConfigureAwait(false);
         var bp = await _db.BusinessPartnerMasterSamples.AsNoTracking().CountAsync(ct).ConfigureAwait(false);
-        var bom = await _db.BomHeadersSamples.AsNoTracking().CountAsync(ct).ConfigureAwait(false);
+        var bom = await _db.BomHeadersSamples.AsNoTracking().ActiveMaster().CountAsync(ct).ConfigureAwait(false);
         var wc = await _db.WorkCenterMasterSamples.AsNoTracking().CountAsync(ct).ConfigureAwait(false);
         var rt = await _db.RoutingHeadersSamples.AsNoTracking().CountAsync(ct).ConfigureAwait(false);
         var ucnt = await _db.Users.AsNoTracking().CountAsync(ct).ConfigureAwait(false);

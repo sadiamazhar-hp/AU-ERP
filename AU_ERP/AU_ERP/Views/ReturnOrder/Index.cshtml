@@ -1,9 +1,25 @@
 @model AU_ERP.Models.ViewModels.ReturnOrderIndexVm
 @using System.Globalization
+@using AU_ERP.Services
 @{
     ViewData["Title"] = "Return order";
     var n = Model.Orders.Count;
-    var withCm = Model.Orders.Count(o => o.HasCreditMemo);
+    var listStatus = (Model.FilterStatus ?? ReturnOrderWorkflowStatus.All).Trim();
+    if (string.IsNullOrEmpty(listStatus))
+        listStatus = ReturnOrderWorkflowStatus.All;
+    var df = Model.DateFrom?.ToString("yyyy-MM-dd") ?? "";
+    var dt = Model.DateTo?.ToString("yyyy-MM-dd") ?? "";
+    var hasFilters = !string.IsNullOrWhiteSpace(Model.FilterQuery)
+        || !string.Equals(listStatus, ReturnOrderWorkflowStatus.All, StringComparison.OrdinalIgnoreCase)
+        || Model.DateFrom.HasValue
+        || Model.DateTo.HasValue;
+    var statCards = new (string Label, int Count, string CssClass)[]
+    {
+        ("Total", Model.CountTotal, ""),
+        ("ROD", Model.CountRodPending, "ro-stat-rod"),
+        ("DC", Model.CountDcPending, "ro-stat-dc"),
+        ("Completed", Model.CountCompleted, "ro-stat-done")
+    };
 }
 
 @section Styles {
@@ -12,22 +28,29 @@
         .ro-hero { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
         .ro-hero h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 .25rem 0; }
         .ro-hero p { margin: 0; color: var(--bs-secondary-color, #6c757d); font-size: .9rem; max-width: 42rem; }
-        .ro-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+        .ro-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
         .ro-toolbar .form-control { min-width: 12rem; max-width: 22rem; }
-        .ro-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+        .ro-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+        @@media (max-width: 768px) { .ro-stats { grid-template-columns: repeat(2, 1fr); } }
         @@media (max-width: 576px) { .ro-stats { grid-template-columns: 1fr; } }
         .ro-stat { background: #fff; border: 1px solid var(--bs-border-color, #dee2e6); border-radius: .375rem; padding: .85rem 1rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); border-top: 3px solid #6f42c1; }
-        .ro-stat.ro-stat-cm { border-top-color: #198754; }
+        .ro-stat.ro-stat-rod { border-top-color: #fd7e14; }
+        .ro-stat.ro-stat-dc { border-top-color: #0d6efd; }
+        .ro-stat.ro-stat-done { border-top-color: #198754; }
         .ro-stat .label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; color: var(--bs-secondary-color, #6c757d); text-transform: uppercase; }
         .ro-stat .val { font-size: 1.45rem; font-weight: 600; line-height: 1.2; margin-top: .2rem; }
+        .ro-badge-ro-pending { background-color: #fd7e14; color: #fff; }
+        .ro-badge-dc-pending { background-color: #0d6efd; color: #fff; }
+        .ro-badge-completed { background-color: #198754; color: #fff; }
         .ro-card { background: #fff; border: 1px solid var(--bs-border-color, #dee2e6); border-radius: .375rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); overflow: hidden; }
+        .ro-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem .5rem; }
+        .ro-card-head h2 { font-size: 1rem; font-weight: 600; margin: 0; }
         .ro-table { width: 100%; border-collapse: collapse; font-size: .875rem; margin: 0; }
         .ro-table thead th { background: #354a5e; color: #fff; font-weight: 500; padding: .55rem .75rem; text-align: left; white-space: nowrap; border: none; }
         .ro-table tbody td { border: 1px solid #e9ecef; padding: .5rem .75rem; vertical-align: middle; }
         .ro-table tbody tr:nth-child(even) { background: #f8f9fa; }
         .ro-actions { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: flex-end; }
         #roViewModal .modal-content { box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.2); border: 1px solid rgba(0,0,0,.12); }
-        #roViewModal.ro-modal-no-bd { z-index: 1060; }
         .ro-view-loading { padding: 2rem; text-align: center; color: #6c757d; }
     </style>
 }
@@ -49,22 +72,32 @@
         </div>
     </div>
 
-    <form method="get" asp-action="Index" class="ro-toolbar" role="search">
-        <input type="search" name="q" class="form-control form-control-sm" placeholder="Return #, invoice, dealer, reason…" value="@Model.FilterQuery" autocomplete="off" />
-        <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
-        @if (!string.IsNullOrWhiteSpace(Model.FilterQuery))
+    <div class="ro-stats" role="group" aria-label="Return order status summary">
+        @foreach (var card in statCards)
         {
-            <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear</a>
+            <div class="ro-stat @card.CssClass">
+                <div class="label">@card.Label</div>
+                <div class="val">@card.Count.ToString("N0", CultureInfo.CurrentCulture)</div>
+            </div>
         }
-    </form>
-
-    <div class="ro-stats">
-        <div class="ro-stat"><div class="label">@(string.IsNullOrWhiteSpace(Model.FilterQuery) ? "Total" : "Matching")</div><div class="val">@n.ToString("N0", CultureInfo.CurrentCulture)</div></div>
-        <div class="ro-stat ro-stat-cm"><div class="label">With credit memo</div><div class="val">@withCm.ToString("N0", CultureInfo.CurrentCulture)</div></div>
-        <div class="ro-stat"><div class="label">No credit memo</div><div class="val">@((n - withCm).ToString("N0", CultureInfo.CurrentCulture))</div></div>
     </div>
 
     <div class="ro-card">
+        <div class="ro-card-head">
+            <h2>Return orders (@n.ToString("N0", CultureInfo.CurrentCulture))</h2>
+            <form method="get" asp-action="Index" id="roListFilterForm" class="ro-toolbar" role="search">
+                <input type="search" name="q" id="roListQ" class="form-control form-control-sm" placeholder="Return #, invoice, dealer, reason…" value="@Model.FilterQuery" autocomplete="off" />
+                <input type="hidden" name="status" id="roListStatus" value="@listStatus" />
+                <input type="hidden" name="dateFrom" id="roListDateFrom" value="@df" />
+                <input type="hidden" name="dateTo" id="roListDateTo" value="@dt" />
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#returnOrderFilterModal">Filter</button>
+                @if (hasFilters)
+                {
+                    <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear</a>
+                }
+            </form>
+        </div>
         <div class="table-responsive">
             <table class="ro-table">
                 <thead>
@@ -74,13 +107,14 @@
                         <th>Invoice no.</th>
                         <th>Dealer</th>
                         <th>Reason (excerpt)</th>
+                        <th>Status</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (n == 0)
                     {
-                        <tr><td colspan="6" class="text-secondary p-4 text-center">No return orders@(string.IsNullOrWhiteSpace(Model.FilterQuery) ? "" : " match your search").</td></tr>
+                        <tr><td colspan="7" class="text-secondary p-4 text-center">No return orders@(hasFilters ? " match your filters" : "").</td></tr>
                     }
                     else
                     {
@@ -92,12 +126,34 @@
                                 <td>@o.InvoiceDocumentNumber</td>
                                 <td>@(o.DealerDisplayName ?? "—")</td>
                                 <td class="small text-secondary">@o.ReturnReasonSnippet</td>
+                                <td class="text-nowrap">
+                                    <span class="badge @ReturnOrderWorkflowStatusResolver.BadgeClass(o.WorkflowStatus)">@o.WorkflowStatus</span>
+                                </td>
                                 <td class="text-end">
                                     <div class="ro-actions">
                                         <button type="button" class="btn btn-sm btn-outline-primary ro-btn-view"
                                                 data-ro-read-url="@Url.Action("ReadOnlyPartial", "ReturnOrder", new { id = o.Id })"
                                                 data-ro-doc="@o.DocumentNumber"
                                                 title="View summary in a popup">View</button>
+                                        @if (o.DeliveryChallanId is > 0)
+                                        {
+                                            <a class="btn btn-sm btn-outline-secondary"
+                                               href="@Url.Action("Index", "DeliveryChallan", new { q = o.DeliveryChallanNumber })"
+                                               title="Open delivery challan @(o.DeliveryChallanNumber ?? "")">DC</a>
+                                            @if (o.CanMarkDeliveryCompleted)
+                                            {
+                                                <form asp-controller="DeliveryChallan" asp-action="MarkDeliveryCompleted" method="post" class="d-inline" onsubmit="return confirm('Mark delivery completed and free the driver / vehicle?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@o.DeliveryChallanId" />
+                                                    <input type="hidden" name="returnTo" value="returnorder" />
+                                                    <input type="hidden" name="returnQ" value="@Model.FilterQuery" />
+                                                    <input type="hidden" name="returnStatus" value="@listStatus" />
+                                                    <input type="hidden" name="returnDateFrom" value="@df" />
+                                                    <input type="hidden" name="returnDateTo" value="@dt" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Releases fleet for other challans">Delivery completed</button>
+                                                </form>
+                                            }
+                                        }
                                         @if (o.HasCreditMemo)
                                         {
                                             <a class="btn btn-sm btn-outline-success"
@@ -121,7 +177,41 @@
     <p class="mt-3 mb-0"><a asp-controller="Invoice" asp-action="Index" class="btn btn-sm btn-outline-secondary">Back to invoices</a></p>
 </div>
 
-<div class="modal fade ro-modal-no-bd" id="roViewModal" tabindex="-1" aria-labelledby="roViewModalTitle" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
+<div class="modal fade" id="returnOrderFilterModal" tabindex="-1" aria-labelledby="returnOrderFilterModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="returnOrderFilterModalLabel">Filter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small" for="roModStatus">Status</label>
+                    <select id="roModStatus" class="form-select form-select-sm">
+                        <option value="@ReturnOrderWorkflowStatus.All">All</option>
+                        <option value="@ReturnOrderWorkflowStatus.RodPending">@ReturnOrderWorkflowStatus.RodPending</option>
+                        <option value="@ReturnOrderWorkflowStatus.DcPending">@ReturnOrderWorkflowStatus.DcPending</option>
+                        <option value="@ReturnOrderWorkflowStatus.Completed">@ReturnOrderWorkflowStatus.Completed</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small" for="roModDateFrom">From date</label>
+                    <input type="date" id="roModDateFrom" class="form-control form-control-sm" value="@df" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small" for="roModDateTo">To date</label>
+                    <input type="date" id="roModDateTo" class="form-control form-control-sm" value="@dt" />
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="roApplyFilterModal()">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="roViewModal" tabindex="-1" aria-labelledby="roViewModalTitle" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
     <div class="modal-dialog modal-dialog-scrollable modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header py-2">
@@ -139,59 +229,80 @@
 @section Scripts {
     <script>
         (function () {
-            function ensureOnBody(el) {
-                if (el && el.parentElement !== document.body) document.body.appendChild(el);
+            function moveRoModalsToBody() {
+                ['returnOrderFilterModal', 'roViewModal'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el && el.parentElement !== document.body)
+                        document.body.appendChild(el);
+                });
             }
-            function stripOrphanBackdrops() {
-                document.querySelectorAll('.modal-backdrop').forEach(function (b) { b.remove(); });
-                document.body.classList.remove('modal-open');
-                document.body.style.removeProperty('padding-right');
-                document.body.style.removeProperty('overflow');
-            }
-            function wireModal(modalId, bodyId, titleId, fullLinkId) {
-                var modalEl = document.getElementById(modalId);
-                var bodyEl = document.getElementById(bodyId);
-                var titleEl = titleId ? document.getElementById(titleId) : null;
-                var fullLink = (fullLinkId && String(fullLinkId).length) ? document.getElementById(fullLinkId) : null;
-                var inst = null;
-                function getInst() {
-                    if (!modalEl || !window.bootstrap) return null;
-                    ensureOnBody(modalEl);
-                    if (!inst) inst = new bootstrap.Modal(modalEl, { backdrop: false, keyboard: true, focus: true });
-                    return inst;
+            moveRoModalsToBody();
+
+            function removeStrayBackdrops() {
+                document.querySelectorAll('body > .modal-backdrop').forEach(function (b) { b.remove(); });
+                if (!document.querySelector('.modal.show')) {
+                    document.body.classList.remove('modal-open');
+                    document.body.style.removeProperty('padding-right');
+                    document.body.style.removeProperty('overflow');
                 }
-                if (modalEl) {
-                    modalEl.addEventListener('show.bs.modal', function () {
-                        ensureOnBody(modalEl);
-                        stripOrphanBackdrops();
-                    });
-                    modalEl.addEventListener('hidden.bs.modal', stripOrphanBackdrops);
-                }
-                return { modalEl: modalEl, bodyEl: bodyEl, titleEl: titleEl, fullLink: fullLink, getInst: getInst };
             }
 
-            var v = wireModal('roViewModal', 'roViewModalBody', 'roViewModalTitle', null);
+            var roViewModalEl = document.getElementById('roViewModal');
+            var roViewBodyEl = document.getElementById('roViewModalBody');
+            var roViewTitleEl = document.getElementById('roViewModalTitle');
+            var roViewInst = null;
+            function getRoViewInst() {
+                if (!roViewModalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) return null;
+                if (!roViewInst)
+                    roViewInst = bootstrap.Modal.getOrCreateInstance(roViewModalEl, { backdrop: false, keyboard: true, focus: true });
+                return roViewInst;
+            }
+            if (roViewModalEl) {
+                roViewModalEl.addEventListener('show.bs.modal', removeStrayBackdrops);
+                roViewModalEl.addEventListener('hidden.bs.modal', removeStrayBackdrops);
+            }
 
             document.querySelectorAll('.ro-btn-view').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     var url = btn.getAttribute('data-ro-read-url');
                     var doc = btn.getAttribute('data-ro-doc') || '';
-                    if (!url || !v.bodyEl) return;
-                    if (v.titleEl) v.titleEl.textContent = doc ? ('View — ' + doc) : 'Return order';
-                    v.bodyEl.innerHTML = '<div class="ro-view-loading">Loading…</div>';
-                    v.getInst().show();
+                    if (!url || !roViewBodyEl) return;
+                    if (roViewTitleEl) roViewTitleEl.textContent = doc ? ('View — ' + doc) : 'Return order';
+                    roViewBodyEl.innerHTML = '<div class="ro-view-loading">Loading…</div>';
+                    var inst = getRoViewInst();
+                    if (inst) inst.show();
                     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(function (r) {
                             if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
                             return r.text();
                         })
-                        .then(function (html) { v.bodyEl.innerHTML = html; })
+                        .then(function (html) { roViewBodyEl.innerHTML = html; })
                         .catch(function (e) {
-                            v.bodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">' +
+                            roViewBodyEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">' +
                                 (e && e.message ? e.message.replace(/</g, '&lt;') : 'Could not load return order.') + '</div>';
                         });
                 });
             });
+
+            var roF = document.getElementById('returnOrderFilterModal');
+            if (roF) roF.addEventListener('show.bs.modal', function () {
+                moveRoModalsToBody();
+                var st = document.getElementById('roListStatus');
+                var dfEl = document.getElementById('roListDateFrom');
+                var dtEl = document.getElementById('roListDateTo');
+                if (document.getElementById('roModStatus')) document.getElementById('roModStatus').value = (st && st.value) || '@ReturnOrderWorkflowStatus.All';
+                if (document.getElementById('roModDateFrom') && dfEl) document.getElementById('roModDateFrom').value = dfEl.value || '';
+                if (document.getElementById('roModDateTo') && dtEl) document.getElementById('roModDateTo').value = dtEl.value || '';
+            });
+            window.roApplyFilterModal = function () {
+                if (document.getElementById('roListStatus')) document.getElementById('roListStatus').value = document.getElementById('roModStatus').value || '@ReturnOrderWorkflowStatus.All';
+                if (document.getElementById('roListDateFrom')) document.getElementById('roListDateFrom').value = document.getElementById('roModDateFrom').value || '';
+                if (document.getElementById('roListDateTo')) document.getElementById('roListDateTo').value = document.getElementById('roModDateTo').value || '';
+                var m = document.getElementById('returnOrderFilterModal');
+                if (m && typeof bootstrap !== 'undefined') { var i = bootstrap.Modal.getInstance(m); if (i) i.hide(); }
+                var f = document.getElementById('roListFilterForm');
+                if (f) f.submit();
+            };
         })();
     </script>
 }

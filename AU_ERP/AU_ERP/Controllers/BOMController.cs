@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AU_ERP.Models;
+using AU_ERP.Services;
 namespace AU_ERP.Controllers
 {
     [Authorize(Policy = "AdminDepartment")]
@@ -25,17 +26,12 @@ namespace AU_ERP.Controllers
             return AllowedBomStatuses.Contains(v) ? AllowedBomStatuses.First(x => x.Equals(v, StringComparison.OrdinalIgnoreCase)) : v;
         }
         
-        /// <param name="preservedValidToWhenNoneInDto">On updates, BOM end date retained when JSON does not supply Valid To (nullable column).</param>
-        private async Task<string?> ValidateBomHeaderBusinessRulesAsync(BomCreateDto dto, DateTime? preservedValidToWhenNoneInDto, CancellationToken ct)
+        private async Task<string?> ValidateBomHeaderBusinessRulesAsync(BomCreateDto dto, CancellationToken ct)
         {
             var status = NormalizeBomStatus(dto.Status);
-            var plant = (dto.Plant ?? "").Trim();
             var headerMat = (dto.BomMaterialNumber ?? "").Trim();
             if (!AllowedBomStatuses.Contains(status))
                 return "Invalid BOM status.";
-            var rangeEndValidTo = dto.ValidTo.HasValue ? dto.ValidTo : preservedValidToWhenNoneInDto;
-            if (dto.ValidFrom.HasValue && rangeEndValidTo.HasValue && dto.ValidFrom.Value.Date > rangeEndValidTo.Value.Date)
-                return "Valid To date must be on or after Valid From date.";
             var headerMaterial = await _db.CreateMaterialMaster.AsNoTracking()
                 .FirstOrDefaultAsync(m => m.MaterialNumber == headerMat, ct);
             if (headerMaterial == null)
@@ -90,6 +86,7 @@ namespace AU_ERP.Controllers
 
             var list = await _db.BomHeadersSamples
                 .AsNoTracking()
+                .ActiveMaster()
                 .Include(h => h.BOMLevel)
                 .Include(h => h.PlantSample)
                 .Include(h => h.BomItemsSamples)
@@ -179,7 +176,7 @@ namespace AU_ERP.Controllers
                 if (string.IsNullOrEmpty(headerType) || string.IsNullOrEmpty(headerMat))
                     return Json(new { success = false, message = "Material Type and Material are required for the BOM header." });
                 
-                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, null, ct);
+                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, ct);
                 if (hdrErr != null)
                     return Json(new { success = false, message = hdrErr });
 
@@ -192,12 +189,11 @@ namespace AU_ERP.Controllers
                     BLevel = dto.BLevel,
                     Plant = dto.Plant,
                     BaseQty = dto.BaseQty,
-                    ValidFrom = dto.ValidFrom,
-                    ValidTo = dto.ValidTo,
                     BomUsage = "Production",
                     AlternativeNo = code,
                     Status = NormalizeBomStatus(dto.Status),
-                    IsDefaultBom = dto.IsDefaultBom
+                    IsDefaultBom = dto.IsDefaultBom,
+                    IsDeleted = false
                 };
 
                 if (dto.Items != null)
@@ -239,7 +235,9 @@ namespace AU_ERP.Controllers
                 if (header.IsDefaultBom)
                 {
                     var others = await _db.BomHeadersSamples
-                        .Where(h => h.BomMaterialNumber == header.BomMaterialNumber && h.IsDefaultBom)
+                        .Where(h => !h.IsDeleted
+                                    && h.BomMaterialNumber == header.BomMaterialNumber
+                                    && h.IsDefaultBom)
                         .ToListAsync(ct);
                     foreach (var other in others)
                         other.IsDefaultBom = false;
@@ -269,6 +267,8 @@ namespace AU_ERP.Controllers
 
             if (bom == null)
                 return Json(new { success = false, message = "BOM not found." });
+            if (bom.IsDeleted)
+                return Json(new { success = false, message = "BOM has been deleted." });
 
             string? headerMatDisplay = null;
             if (!string.IsNullOrEmpty(bom.BomMaterialNumber))
@@ -297,8 +297,6 @@ namespace AU_ERP.Controllers
                     bom.Status,
                     bom.IsDefaultBom,
                     HeaderMaterialDisplay = headerMatDisplay,
-                    ValidFrom = bom.ValidFrom?.ToString("yyyy-MM-dd"),
-                    ValidTo = bom.ValidTo?.ToString("yyyy-MM-dd"),
                     Items = bom.BomItemsSamples.Select(i => new
                     {
                         i.ItemID,
@@ -324,20 +322,15 @@ namespace AU_ERP.Controllers
                 return Json(new { success = true, items = Array.Empty<object>() });
             var today = DateTime.Today;
             var list = await _db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == mat
-                            && h.Status == "Active"
-                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= today)
-                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= today))
-                .OrderByDescending(h => h.IsDefaultBom)
-                .ThenByDescending(h => h.ValidFrom)
-                .ThenByDescending(h => h.BomID)
+                .Where(h => h.BomMaterialNumber == mat)
+                .ForMrpSelection(today)
+                .OrderForMrpSelection()
                 .Select(h => new
                 {
                     bomId = h.BomID,
                     bomCode = h.BOMCode,
                     plant = h.Plant ?? "",
                     validFrom = h.ValidFrom,
-                    validTo = h.ValidTo,
                     isDefault = h.IsDefaultBom
                 })
                 .ToListAsync(ct);
@@ -352,6 +345,7 @@ namespace AU_ERP.Controllers
                 return Json(new { success = true, exists = false });
 
             var existing = await _db.BomHeadersSamples.AsNoTracking()
+                .ActiveMaster()
                 .Where(h => h.BomMaterialNumber == mat
                             && h.IsDefaultBom
                             && (!excludeBomId.HasValue || h.BomID != excludeBomId.Value))
@@ -382,6 +376,8 @@ namespace AU_ERP.Controllers
 
                 if (header == null)
                     return Json(new { success = false, message = "BOM not found." });
+                if (header.IsDeleted)
+                    return Json(new { success = false, message = "BOM has been deleted and cannot be edited." });
 
                 var code = dto.BOMCode?.Trim();
                 if (string.IsNullOrEmpty(code))
@@ -390,10 +386,8 @@ namespace AU_ERP.Controllers
                 if (code.Length > 20)
                     return Json(new { success = false, message = "BOM Code must be 20 characters or less." });
 
-                if (await _db.BomHeadersSamples.AnyAsync(h => h.BomID != dto.BomID && h.BOMCode == code, ct))
+                if (await _db.BomHeadersSamples.AnyAsync(h => !h.IsDeleted && h.BomID != dto.BomID && h.BOMCode == code, ct))
                     return Json(new { success = false, message = "This BOM code is already in use." });
-
-                var preservedValidTo = header.ValidTo;
 
                 // Header assembly (HALB/FERT + material number) is fixed after create so production orders can stay aligned with a stable assembly identity.
 
@@ -402,16 +396,12 @@ namespace AU_ERP.Controllers
                 header.BLevel = dto.BLevel;
                 header.Plant = dto.Plant;
                 header.BaseQty = dto.BaseQty;
-                header.ValidFrom = dto.ValidFrom;
-                // UI no longer sends Valid To; preserve existing DB value unless a caller explicitly posts a date.
-                if (dto.ValidTo.HasValue)
-                    header.ValidTo = dto.ValidTo;
                 header.BomUsage = "Production";
                 header.AlternativeNo = header.BOMCode ?? header.AlternativeNo;
                 header.Status = NormalizeBomStatus(dto.Status);
                 header.IsDefaultBom = dto.IsDefaultBom;
                 
-                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, preservedValidTo, ct);
+                var hdrErr = await ValidateBomHeaderBusinessRulesAsync(dto, ct);
                 if (hdrErr != null)
                     return Json(new { success = false, message = hdrErr });
 
@@ -456,7 +446,8 @@ namespace AU_ERP.Controllers
                 if (header.IsDefaultBom)
                 {
                     var others = await _db.BomHeadersSamples
-                        .Where(h => h.BomID != header.BomID
+                        .Where(h => !h.IsDeleted
+                                    && h.BomID != header.BomID
                                     && h.BomMaterialNumber == header.BomMaterialNumber
                                     && h.IsDefaultBom)
                         .ToListAsync(ct);
@@ -473,51 +464,29 @@ namespace AU_ERP.Controllers
             }
         }
 
-        /// <summary>
-        /// Removes the BOM header only: clears references that point at it, unlinks component rows (BomID null),
-        /// then deletes the header. Component lines remain in <see cref="BomItemsSample"/> for reuse.
-        /// </summary>
+        /// <summary>Logical delete: marks header deleted; all FK references and component lines remain unchanged.</summary>
         [HttpPost]
         public async Task<JsonResult> Delete(int id, CancellationToken ct = default)
         {
             try
             {
-                await _db.GoodsIssueDocumentLines
-                    .Where(l => l.SelectedBomId == id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(l => l.SelectedBomId, (int?)null), ct);
-
-                await _db.ProductionOrders
-                    .Where(o => o.SelectedBomId == id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.SelectedBomId, (int?)null), ct);
-
-                await _db.ProductionOrderLines
-                    .Where(l => l.SelectedBomId == id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(l => l.SelectedBomId, (int?)null), ct);
-
-                await _db.ProductionVersions
-                    .Where(v => v.BomId == id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(v => v.BomId, (int?)null), ct);
-
-                await _db.BomHeadersSamples
-                    .Where(h => h.AlternativeBOM == id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(h => h.AlternativeBOM, (int?)null), ct);
-
-                await _db.BomItemsSamples
-                    .Where(i => i.BomID == id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.BomID, (int?)null), ct);
-
                 var header = await _db.BomHeadersSamples.FirstOrDefaultAsync(h => h.BomID == id, ct);
-                if (header != null)
-                {
-                    _db.BomHeadersSamples.Remove(header);
-                    await _db.SaveChangesAsync(ct);
-                }
+                if (header == null)
+                    return Json(new { success = false, message = "BOM not found." });
+                if (header.IsDeleted)
+                    return Json(new { success = true, message = "BOM is already deleted." });
+
+                header.IsDeleted = true;
+                header.DeletedAt = DateTime.UtcNow;
+                header.IsDefaultBom = false;
+                header.Status = "Inactive";
+                await _db.SaveChangesAsync(ct);
 
                 return Json(new { success = true, message = "BOM Deleted Successfully !" });
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return Json(new { success = true, message = "BOM Deleted Successfully !" });
+                return Json(new { success = false, message = "Delete failed: " + (ex.InnerException?.Message ?? ex.Message) });
             }
         }
     }

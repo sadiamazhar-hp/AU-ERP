@@ -247,12 +247,9 @@ namespace AU_ERP.Controllers
             var hdrType = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
 
             var boms = await _db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == mn
-                            && h.HeaderMaterialTypeCode == hdrType
-                            && h.Status == "Active"
-                            && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
-                            && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
-                .OrderBy(h => h.BOMCode).ThenBy(h => h.BomID)
+                .Where(h => h.BomMaterialNumber == mn && h.HeaderMaterialTypeCode == hdrType)
+                .ForMrpSelection(DateTime.Today)
+                .OrderForMrpSelection()
                 .Select(h => new
                 {
                     bomId = h.BomID,
@@ -863,17 +860,14 @@ namespace AU_ERP.Controllers
                     .FirstOrDefaultAsync(m => m.MaterialNumber == l.MaterialNumber, ct);
                 var hdrType = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
                 var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
-                    .Where(h => h.BomMaterialNumber == l.MaterialNumber
-                                && h.HeaderMaterialTypeCode == hdrType
-                                && h.Status == "Active"
-                                && (!h.ValidFrom.HasValue || h.ValidFrom.Value.Date <= DateTime.Today)
-                                && (!h.ValidTo.HasValue || h.ValidTo.Value.Date >= DateTime.Today))
+                    .Where(h => h.BomMaterialNumber == l.MaterialNumber && h.HeaderMaterialTypeCode == hdrType)
+                    .ForMrpSelection(DateTime.Today)
                     .Select(h => h.BomID)
                     .ToListAsync(ct);
                 if (bomCandidates.Count > 1 && (!l.SelectedBomId.HasValue || l.SelectedBomId.Value <= 0))
                     return $"Line {l.LineNo}: BOM selection is required.";
                 if (l.SelectedBomId.HasValue && l.SelectedBomId.Value > 0 && !bomCandidates.Contains(l.SelectedBomId.Value))
-                    return $"Line {l.LineNo}: selected BOM is invalid/inactive.";
+                    return $"Line {l.LineNo}: selected BOM is deleted or not valid for MRP.";
             }
             return null;
         }
