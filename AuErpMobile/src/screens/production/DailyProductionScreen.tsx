@@ -81,7 +81,7 @@ export default function DailyProductionScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Totals in current view" />
         <View style={styles.kpiRow}>
           <KpiCard label="Total qty" value={String(pageKpis.totalQty)} accent={Colors.blue} />

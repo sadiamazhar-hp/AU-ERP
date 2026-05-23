@@ -77,7 +77,7 @@ export default function InvoicesScreen() {
           <Text style={styles.filterTxt}>Filter</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Page totals (current view)" />
         <View style={styles.kpiRow}>
           <KpiCard label="Rows" value={String(pageKpis.count)} accent={Colors.blue} />

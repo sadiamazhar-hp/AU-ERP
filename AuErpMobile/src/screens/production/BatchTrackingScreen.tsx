@@ -76,7 +76,7 @@ export default function BatchTrackingScreen() {
           <Text style={styles.filterTxt}>Filter</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Batch KPIs (this filter)" />
         <View style={styles.kpiRow}>
           <KpiCard label="Total batches" value={String(result?.totalCount ?? 0)} accent={Colors.blue} />

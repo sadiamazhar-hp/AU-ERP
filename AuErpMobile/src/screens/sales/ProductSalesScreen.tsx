@@ -83,7 +83,7 @@ export default function ProductSalesScreen() {
           <Text style={styles.filterTxt}>Filter</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Product KPIs (this page)" />
         <View style={styles.kpiRow}>
           <KpiCard label="Total qty" value={String(pageKpis.totalQty)} accent={Colors.blue} />

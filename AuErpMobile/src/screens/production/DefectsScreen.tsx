@@ -73,7 +73,7 @@ export default function DefectsScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Defect KPIs" />
         <View style={styles.kpiRow}>
           <KpiCard label="Produced" value={String(kpis?.totalProduced ?? 0)} accent={Colors.blue} />

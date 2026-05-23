@@ -79,7 +79,7 @@ export default function RawMaterialsScreen() {
           <Text style={styles.filterTxt}>Filter</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Consumption KPIs" />
         <View style={styles.kpiRow}>
           <KpiCard label="Qty consumed" value={String(kpis?.totalMaterialsConsumed ?? 0)} accent={Colors.orange} />

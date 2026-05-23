@@ -76,7 +76,7 @@ export default function CustomerSalesScreen() {
           <Text style={styles.filterTxt}>Filter</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Customer KPIs (this page)" />
         <View style={styles.kpiRow}>
           <KpiCard label="Customers" value={String(result?.items.length ?? 0)} accent={Colors.blue} />

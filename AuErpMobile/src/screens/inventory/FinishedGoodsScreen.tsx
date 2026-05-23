@@ -75,7 +75,7 @@ export default function FinishedGoodsScreen() {
           <Text style={styles.filterTxt}>Filter</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Stock Summary" />
         <View style={styles.kpiRow}>
           <KpiCard label="SKU lines" value={String(kpis?.totalLines ?? 0)} accent={Colors.blue} />

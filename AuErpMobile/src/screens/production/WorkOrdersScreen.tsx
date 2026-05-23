@@ -72,7 +72,7 @@ export default function WorkOrdersScreen() {
           <Text style={styles.filterTxt}>Filter</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
         <SectionHeader title="Status Summary" />
         <View style={styles.kpiRow}>
           <KpiCard label="Total" value={String(kpis?.total ?? 0)} accent={Colors.blue} />
