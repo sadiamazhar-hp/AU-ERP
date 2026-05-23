@@ -16,6 +16,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {Colors} from '../../theme/colors';
 import {useAuth} from '../../auth/AuthContext';
+import {getApiBaseUrl} from '../../config/apiHost';
 
 export default function LoginScreen() {
   const {signIn} = useAuth();
@@ -31,7 +32,12 @@ export default function LoginScreen() {
     const apiMsg = e.response?.data?.message ?? e.response?.data?.Message;
     if (apiMsg) return apiMsg;
     if (e.message === 'Network Error') {
-      return 'Cannot reach the API. Start AU_ERP on http://localhost:5242 (http profile) and reload the app.';
+      return (
+        `Cannot reach the API at ${getApiBaseUrl()}.\n\n` +
+        '• Start AU_ERP: dotnet run --launch-profile http\n' +
+        '• Physical phone (USB): adb reverse tcp:5242 tcp:5242\n' +
+        '• Wi‑Fi only: set DEV_HOST_OVERRIDE in src/config/apiHost.ts to your PC IPv4'
+      );
     }
     if (err instanceof Error && err.message) return err.message;
     return 'Login failed. Check your email and password.';
