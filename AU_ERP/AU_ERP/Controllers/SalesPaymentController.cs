@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Controllers;
 
-[Authorize(Policy = "SalesDepartment")]
+[Authorize(Policy = "FinanceDepartment")]
 public class SalesPaymentController : Controller
 {
     private readonly AppDbContext _db;

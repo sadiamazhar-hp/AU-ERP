@@ -93,6 +93,10 @@ public class SalesQuotationController : Controller
         if (bp == null)
             return Json(new { success = false, message = "Customer not found." });
 
+        var schemaErr = await ValidateCustomerSalesSchemaAsync(bp, plantId: null, forSalesOrder: false, ct).ConfigureAwait(false);
+        if (schemaErr != null)
+            return Json(new { success = false, message = schemaErr });
+
         var channelId = await ResolveDistributionChannelIdAsync(bp.DistChannel, ct).ConfigureAwait(false);
         var salesSchemaId = await ResolveSalesSchemaIdAsync(bp.SalesSchema, ct).ConfigureAwait(false);
         var plantId = await ResolvePlantIdFromSalesSchemaAsync(bp.SalesSchema, ct).ConfigureAwait(false);
@@ -293,7 +297,15 @@ public class SalesQuotationController : Controller
             }
         }
 
-        var customers = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+        var walkInSchemaId = await SalesSchemaResolution.GetWalkInSchemaIdAsync(_db, ct).ConfigureAwait(false);
+        var dealerSchemaId = await SalesSchemaResolution.GetDealerSchemaIdAsync(_db, ct).ConfigureAwait(false);
+        var isEmporiumWalkIn = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
+        var customersQuery = _db.BusinessPartnerMasterSamples.AsNoTracking();
+        if (isEmporiumWalkIn)
+            customersQuery = SalesSchemaResolution.FilterWalkInCustomers(customersQuery, walkInSchemaId!.Value);
+        else if (dealerSchemaId is > 0)
+            customersQuery = SalesSchemaResolution.FilterDealerCustomers(customersQuery, dealerSchemaId.Value);
+        var customers = await customersQuery
             .OrderBy(c => c.FullName)
             .ToListAsync(ct)
             .ConfigureAwait(false);
@@ -307,9 +319,8 @@ public class SalesQuotationController : Controller
         ViewBag.DistributionChannels = channels;
         ViewBag.Customers = customers;
         ViewBag.ConfigurationSchemas = schemas;
-        var walkInSchemaId = await _emporiumWalkIn.GetWalkInSalesSchemaIdAsync(ct).ConfigureAwait(false);
         ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
-        ViewBag.IsEmporiumWalkInUser = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
+        ViewBag.IsEmporiumWalkInUser = isEmporiumWalkIn;
         var vm = new SalesQuotationListVm
         {
             Items = list,
@@ -403,6 +414,12 @@ public class SalesQuotationController : Controller
             customerSalesSchema = bp.SalesSchema;
             customerShipTo = BuildBpShipTo(bp);
             await ApplyCustomerDrivenDefaultsAsync(model, bp, ct).ConfigureAwait(false);
+            var schemaErr = await ValidateCustomerSalesSchemaAsync(bp, model.PlantId, forSalesOrder: false, ct).ConfigureAwait(false);
+            if (schemaErr != null)
+            {
+                TempData["QuotationError"] = schemaErr;
+                return RedirectToQuotationListFromModel(model);
+            }
         }
         else if (strict)
         {
@@ -762,6 +779,14 @@ public class SalesQuotationController : Controller
         return Json(new
         {
             success = true,
+            customerCatalogEntry = string.IsNullOrWhiteSpace(q.CustomerBusinessPartnerId)
+                ? null
+                : new
+                {
+                    bpId = q.CustomerBusinessPartnerId,
+                    displayName = q.CustomerName ?? q.CustomerBusinessPartnerId,
+                    shipTo = q.ShipToAddress ?? ""
+                },
             h = new
             {
                 id = q.Id,
@@ -1080,5 +1105,36 @@ public class SalesQuotationController : Controller
             .Select(p => p.PlantID)
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>Validates customer schema for Emporium (WalkIn) vs other plants (Dealer).</summary>
+    private async Task<string?> ValidateCustomerSalesSchemaAsync(
+        BusinessPartnerMasterSample bp,
+        string? plantId,
+        bool forSalesOrder,
+        CancellationToken ct)
+    {
+        var walkInSchemaId = await SalesSchemaResolution.GetWalkInSchemaIdAsync(_db, ct).ConfigureAwait(false);
+        var dealerSchemaId = await SalesSchemaResolution.GetDealerSchemaIdAsync(_db, ct).ConfigureAwait(false);
+        var isEmporiumUser = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
+        var plant = (plantId ?? string.Empty).Trim();
+        var isEmporiumPlant = string.Equals(plant, UserPlantResolution.EmporiumPlantId, StringComparison.OrdinalIgnoreCase);
+        var requireWalkIn = isEmporiumPlant || (plant.Length == 0 && isEmporiumUser);
+
+        var docLabel = forSalesOrder ? "sales orders" : "sales quotations";
+        if (requireWalkIn)
+        {
+            if (walkInSchemaId is not > 0)
+                return null;
+            if (!SalesSchemaResolution.MatchesWalkInSchema(bp.SalesSchema, walkInSchemaId.Value))
+                return $"Only WalkIn customers can be used for Emporium {docLabel}.";
+            return null;
+        }
+
+        if (dealerSchemaId is not > 0)
+            return null;
+        if (!SalesSchemaResolution.MatchesDealerSchema(bp.SalesSchema, dealerSchemaId.Value))
+            return $"Only Dealer customers can be used for {docLabel} outside Emporium plant.";
+        return null;
     }
 }

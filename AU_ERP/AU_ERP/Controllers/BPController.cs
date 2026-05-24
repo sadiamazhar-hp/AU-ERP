@@ -101,14 +101,25 @@ namespace AU_ERP.Main_Controller
             var ss = m.SalesSchema?.Trim();
             if (!string.IsNullOrEmpty(ss))
             {
-                if (!int.TryParse(ss, out var salesSchId) || salesSchId <= 0
-                    || !await _db.ConfigurationSchemas.AsNoTracking()
-                        .AnyAsync(s => s.Id == salesSchId && s.SchemaType == ConfigurationSchemaType.Sales, ct))
+                int? resolvedSalesSchemaId = null;
+                if (int.TryParse(ss, out var salesSchId) && salesSchId > 0)
                 {
-                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.SalesSchema), "Select a valid sales configuration schema.");
+                    if (await _db.ConfigurationSchemas.AsNoTracking()
+                            .AnyAsync(s => s.Id == salesSchId && s.SchemaType == ConfigurationSchemaType.Sales, ct))
+                        resolvedSalesSchemaId = salesSchId;
                 }
                 else
-                    m.SalesSchema = salesSchId.ToString();
+                {
+                    resolvedSalesSchemaId = await _db.ConfigurationSchemas.AsNoTracking()
+                        .Where(s => s.SchemaType == ConfigurationSchemaType.Sales && s.Title == ss)
+                        .Select(s => (int?)s.Id)
+                        .FirstOrDefaultAsync(ct);
+                }
+
+                if (resolvedSalesSchemaId is not > 0)
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.SalesSchema), "Select a valid sales configuration schema.");
+                else
+                    m.SalesSchema = resolvedSalesSchemaId.Value.ToString();
             }
 
             var ps = m.PurchSchema?.Trim();
@@ -308,6 +319,10 @@ namespace AU_ERP.Main_Controller
         {
             ViewBag.FormReturnTo = "Index";
             await PrepareBpLookupListsAsync(ct);
+            var salesSchemaTitles = await _db.ConfigurationSchemas.AsNoTracking()
+                .Where(s => s.SchemaType == ConfigurationSchemaType.Sales)
+                .ToDictionaryAsync(s => s.Id.ToString(), s => s.Title, ct);
+            ViewBag.SalesSchemaTitles = salesSchemaTitles;
             var partners = await _db.BusinessPartnerMasterSamples
                 .AsNoTracking()
                 .Include(p => p.Role)
@@ -423,6 +438,18 @@ namespace AU_ERP.Main_Controller
             if (p == null)
                 return Json(new { success = false, message = "Partner not found." });
 
+            var salesSchemaForEdit = p.SalesSchema;
+            if (!string.IsNullOrWhiteSpace(p.SalesSchema)
+                && !int.TryParse(p.SalesSchema.Trim(), out _))
+            {
+                var schemaId = await _db.ConfigurationSchemas.AsNoTracking()
+                    .Where(s => s.SchemaType == ConfigurationSchemaType.Sales && s.Title == p.SalesSchema.Trim())
+                    .Select(s => (int?)s.Id)
+                    .FirstOrDefaultAsync(ct);
+                if (schemaId is > 0)
+                    salesSchemaForEdit = schemaId.Value.ToString();
+            }
+
             return Json(new
             {
                 success = true,
@@ -454,7 +481,7 @@ namespace AU_ERP.Main_Controller
                     p.BankName,
                     p.AccountNumber,
                     p.DistChannel,
-                    p.SalesSchema,
+                    salesSchema = salesSchemaForEdit,
                     p.PurchSchema
                 }
             });

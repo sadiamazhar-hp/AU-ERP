@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Controllers;
 
-[Authorize(Policy = "SalesDepartment")]
+[Authorize(Policy = "FinanceDepartment")]
 public class InvoiceController : Controller
 {
     private readonly AppDbContext _db;

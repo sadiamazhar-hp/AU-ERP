@@ -174,7 +174,10 @@
         </div>
     </div>
 
-    <p class="mt-3 mb-0"><a asp-controller="Invoice" asp-action="Index" class="btn btn-sm btn-outline-secondary">Back to invoices</a></p>
+    @if (User.HasClaim(AuClaimTypes.Department, "Finance"))
+    {
+        <p class="mt-3 mb-0"><a asp-controller="Invoice" asp-action="Index" class="btn btn-sm btn-outline-secondary">Back to invoices</a></p>
+    }
 </div>
 
 <div class="modal fade" id="returnOrderFilterModal" tabindex="-1" aria-labelledby="returnOrderFilterModalLabel" aria-hidden="true">

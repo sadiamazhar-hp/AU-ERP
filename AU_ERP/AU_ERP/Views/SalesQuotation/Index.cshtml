@@ -671,9 +671,25 @@
             if (sqUpdateUrlTpl) f.action = sqUpdateUrlTpl.replace("Update/0", "Update/" + quotationId).replace(/\/0(\?.*)?$/, "/" + quotationId + "$1");
             f.setAttribute("data-sq-form-mode", "update");
         }
+        function sqEnsureCustomerInCatalog(entry) {
+            if (!entry || !entry.bpId) return;
+            var cat = document.getElementById("sqCustomerCatalog");
+            if (!cat) return;
+            var id = String(entry.bpId || "").trim();
+            if (!id) return;
+            for (var i = 0; i < cat.options.length; i++) {
+                if (cat.options[i].value === id) return;
+            }
+            var opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = (entry.displayName || id).trim();
+            opt.setAttribute("data-ship", entry.shipTo || "");
+            cat.appendChild(opt);
+        }
         function applyQuotationData(d) {
             var h = d.h, items = d.items || [];
             schemaCharges = d.schemaCharges || [];
+            if (d.customerCatalogEntry) sqEnsureCustomerInCatalog(d.customerCatalogEntry);
             if (h.plantId && document.getElementById("sqPlant")) document.getElementById("sqPlant").value = h.plantId;
             if (h.distributionChannelId != null && document.getElementById("sqDc")) document.getElementById("sqDc").value = String(h.distributionChannelId);
             if (document.getElementById("sqSchema")) document.getElementById("sqSchema").value = h.configurationSchemaId != null && h.configurationSchemaId !== "" ? String(h.configurationSchemaId) : "";

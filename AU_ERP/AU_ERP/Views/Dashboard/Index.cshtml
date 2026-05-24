@@ -14,7 +14,7 @@
         var arrow = pct >= 0 ? "↑" : "↓";
         return $"<span class=\"db-delta {cls}\">{arrow} {Math.Abs(pct):0.#}% vs prev</span>";
     }
-    var sectionCount = (Model.ShowAdmin ? 1 : 0) + (Model.ShowStore ? 1 : 0) + (Model.ShowSales ? 1 : 0) + (Model.ShowProduction ? 1 : 0);
+    var sectionCount = (Model.ShowAdmin ? 1 : 0) + (Model.ShowStore ? 1 : 0) + (Model.ShowSales ? 1 : 0) + (Model.ShowFinance ? 1 : 0) + (Model.ShowProduction ? 1 : 0);
 }
 
 @section Styles {
@@ -160,7 +160,7 @@
     @if (!Model.HasAnyModule)
     {
         <div class="alert alert-warning mb-0" role="alert">
-            No department modules are assigned to your account. Contact an administrator to grant access to Master data, Inventory, Sales, or Production.
+            No department modules are assigned to your account. Contact an administrator to grant access to Master data, Inventory, Sales, Finance, or Production.
         </div>
     }
     else
@@ -223,6 +223,7 @@
                 @if (Model.ShowAdmin) { <a href="#db-admin">Master data</a> }
                 @if (Model.ShowStore) { <a href="#db-store">Inventory</a> }
                 @if (Model.ShowSales) { <a href="#db-sales">Sales</a> }
+                @if (Model.ShowFinance) { <a href="#db-finance">Finance</a> }
                 @if (Model.ShowProduction) { <a href="#db-production">Production</a> }
             </nav>
         }
@@ -394,6 +395,8 @@
                         <div class="db-kpi"><div class="db-kpi-label">DCs in transit</div><div class="db-kpi-val">@sa.DeliveryChallansInTransit</div></div>
                         <div class="db-kpi"><div class="db-kpi-label">SGI pending</div><div class="db-kpi-val">@sa.SalesGoodsIssuePendingInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
                         <div class="db-kpi"><div class="db-kpi-label">SGI received</div><div class="db-kpi-val">@sa.SalesGoodsIssueReceivedInPeriod</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">Return orders open</div><div class="db-kpi-val">@sa.ReturnOrdersOpenCount</div></div>
+                        <div class="db-kpi"><div class="db-kpi-label">QI pending</div><div class="db-kpi-val">@sa.ReturnQiPendingCount</div></div>
                     </div>
                     @if (sa.RecentDeliveryChallans.Count > 0)
                     {
@@ -430,59 +433,64 @@
                         <a asp-controller="SalesGoodsIssue" asp-action="Index">Sales goods issue</a>
                         <a asp-controller="ReturnOrder" asp-action="Index">Return order</a>
                         <a asp-controller="CreditMemo" asp-action="Index">Credit memo</a>
-                    </div>
-                </div>
-
-                <div class="db-subgroup">
-                    <h3 class="db-subgroup-title">Billing &amp; Payments</h3>
-                    <div class="db-kpi-grid">
-                        <div class="db-kpi"><div class="db-kpi-label">Invoices open</div><div class="db-kpi-val">@sa.InvoiceOpenCount</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Overdue</div><div class="db-kpi-val">@sa.InvoiceOverdueCount</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Collected</div><div class="db-kpi-val">@sa.InvoiceCollectedCount</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Return in process</div><div class="db-kpi-val">@sa.InvoiceReturnInProcessCount</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Returned</div><div class="db-kpi-val">@sa.InvoiceReturnedCount</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Open amount</div><div class="db-kpi-val">@FmtMoney(sa.InvoiceOpenAmount)</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Outstanding</div><div class="db-kpi-val">@FmtMoney(sa.InvoiceOutstandingAmount)</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Collected</div><div class="db-kpi-val">@FmtMoney(sa.InvoiceCollectedAmountInPeriod)</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Payments</div><div class="db-kpi-val">@sa.PaymentsInPeriod</div><div class="db-kpi-foot">@FmtMoney(sa.PaymentsAmountInPeriod)</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Credit memos</div><div class="db-kpi-val">@sa.CreditMemosInPeriod</div><div class="db-kpi-foot">@FmtMoney(sa.CreditMemosAmountInPeriod)</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">Return orders open</div><div class="db-kpi-val">@sa.ReturnOrdersOpenCount</div></div>
-                        <div class="db-kpi"><div class="db-kpi-label">QI pending</div><div class="db-kpi-val">@sa.ReturnQiPendingCount</div></div>
-                    </div>
-                    @if (sa.InvoicedVsPaymentsByDay.Count > 0)
-                    {
-                        <div class="db-chart-row">
-                            <div class="db-chart-card" style="grid-column: 1 / -1;">
-                                <h3>Invoices billed vs payments collected (@Model.PeriodLabel)</h3>
-                                <div class="db-chart-wrap db-chart-wide"><canvas id="dbChartBillingTrend"></canvas></div>
-                            </div>
-                        </div>
-                    }
-                    @if (sa.RecentOverdueInvoices.Count > 0)
-                    {
-                        <div class="db-table-card">
-                            <h3>Overdue invoices (top 5)</h3>
-                            <table class="db-table">
-                                <thead><tr><th>Invoice</th><th>Dealer</th><th>Due</th><th class="text-end">Days</th><th class="text-end">Balance</th></tr></thead>
-                                <tbody>
-                                @foreach (var inv in sa.RecentOverdueInvoices)
-                                {
-                                    <tr>
-                                        <td class="mono"><a asp-controller="Invoice" asp-action="Index">@inv.DocumentNumber</a></td>
-                                        <td>@(inv.DealerDisplayName ?? "—")</td>
-                                        <td>@inv.DueDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)</td>
-                                        <td class="text-end">@inv.DaysOverdue</td>
-                                        <td class="text-end mono">@FmtMoney(inv.Balance)</td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    <div class="db-quick">
-                        <a asp-controller="Invoice" asp-action="Index">Invoice</a>
                         <a asp-controller="ReorderQualityInspection" asp-action="Index">Return QI</a>
                     </div>
+                </div>
+            </section>
+        }
+
+        @if (Model.ShowFinance && Model.Finance != null)
+        {
+            var fi = Model.Finance;
+            <section class="db-section" id="db-finance" aria-labelledby="db-finance-title">
+                <div class="db-section-header">
+                    <h2 class="db-section-title" id="db-finance-title"><i class="bi bi-cash-stack"></i> Finance</h2>
+                </div>
+                <div class="db-kpi-grid">
+                    <div class="db-kpi"><div class="db-kpi-label">Invoices open</div><div class="db-kpi-val">@fi.InvoiceOpenCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Overdue</div><div class="db-kpi-val">@fi.InvoiceOverdueCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Collected</div><div class="db-kpi-val">@fi.InvoiceCollectedCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Return in process</div><div class="db-kpi-val">@fi.InvoiceReturnInProcessCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Returned</div><div class="db-kpi-val">@fi.InvoiceReturnedCount</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Open amount</div><div class="db-kpi-val">@FmtMoney(fi.InvoiceOpenAmount)</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Outstanding</div><div class="db-kpi-val">@FmtMoney(fi.InvoiceOutstandingAmount)</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Collected</div><div class="db-kpi-val">@FmtMoney(fi.InvoiceCollectedAmountInPeriod)</div><div class="db-kpi-foot">@Model.PeriodLabel</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Payments</div><div class="db-kpi-val">@fi.PaymentsInPeriod</div><div class="db-kpi-foot">@FmtMoney(fi.PaymentsAmountInPeriod)</div></div>
+                    <div class="db-kpi"><div class="db-kpi-label">Credit memos</div><div class="db-kpi-val">@fi.CreditMemosInPeriod</div><div class="db-kpi-foot">@FmtMoney(fi.CreditMemosAmountInPeriod)</div></div>
+                </div>
+                @if (fi.InvoicedVsPaymentsByDay.Count > 0)
+                {
+                    <div class="db-chart-row">
+                        <div class="db-chart-card" style="grid-column: 1 / -1;">
+                            <h3>Invoices billed vs payments collected (@Model.PeriodLabel)</h3>
+                            <div class="db-chart-wrap db-chart-wide"><canvas id="dbChartBillingTrend"></canvas></div>
+                        </div>
+                    </div>
+                }
+                @if (fi.RecentOverdueInvoices.Count > 0)
+                {
+                    <div class="db-table-card">
+                        <h3>Overdue invoices (top 5)</h3>
+                        <table class="db-table">
+                            <thead><tr><th>Invoice</th><th>Dealer</th><th>Due</th><th class="text-end">Days</th><th class="text-end">Balance</th></tr></thead>
+                            <tbody>
+                            @foreach (var inv in fi.RecentOverdueInvoices)
+                            {
+                                <tr>
+                                    <td class="mono"><a asp-controller="Invoice" asp-action="Index">@inv.DocumentNumber</a></td>
+                                    <td>@(inv.DealerDisplayName ?? "—")</td>
+                                    <td>@inv.DueDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)</td>
+                                    <td class="text-end">@inv.DaysOverdue</td>
+                                    <td class="text-end mono">@FmtMoney(inv.Balance)</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <div class="db-quick">
+                    <a asp-controller="Invoice" asp-action="Index">Invoice</a>
+                    <a asp-controller="SalesPayment" asp-action="Index">Payments</a>
                 </div>
             </section>
         }
@@ -649,17 +657,18 @@
             })();
                 </text>
                 }
-                @if (Model.Sales.InvoicedVsPaymentsByDay.Count > 0)
-                {
+            }
+
+            @if (Model.ShowFinance && Model.Finance != null && Model.Finance.InvoicedVsPaymentsByDay.Count > 0)
+            {
                 <text>
             (function () {
                 const el = document.getElementById("dbChartBillingTrend");
                 if (!el) return;
-                const data = @Html.Raw(DashboardDataService.ChartJsonInvoicedVsPayments(Model.Sales.InvoicedVsPaymentsByDay, Model.Sales.PaymentsCollectedByDay));
+                const data = @Html.Raw(DashboardDataService.ChartJsonInvoicedVsPayments(Model.Finance.InvoicedVsPaymentsByDay, Model.Finance.PaymentsCollectedByDay));
                 new Chart(el, { type: "line", data, options: { ...commonOpts, scales: { x: { grid }, y: { beginAtZero: true, grid } } } });
             })();
                 </text>
-                }
             }
 
             @if (Model.ShowProduction && Model.Production != null && Model.Production.ProductionOrdersByStatusChart.Count > 0)

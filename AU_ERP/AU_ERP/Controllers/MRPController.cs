@@ -32,6 +32,19 @@ namespace AU_ERP.Controllers
             return Json(new { success = true, data = items });
         }
 
+        /// <summary>Production plants available for MRP (Emporium excluded).</summary>
+        [HttpGet]
+        public async Task<JsonResult> Plants(CancellationToken ct = default)
+        {
+            var items = await _db.PlantsSamples.AsNoTracking()
+                .Where(p => p.PlantID != EmporiumPlantId)
+                .OrderBy(p => p.PlantName)
+                .Select(p => new { plantId = p.PlantID, plantName = p.PlantName })
+                .ToListAsync(ct);
+            var defaultPlantId = await ResolveDefaultMrpPlantIdAsync(ct).ConfigureAwait(false);
+            return Json(new { success = true, data = items, defaultPlantId });
+        }
+
         [HttpGet]
         public async Task<JsonResult> MaterialUomContext(string? materialNumber, int? includeUomIdForEdit, CancellationToken ct = default)
         {

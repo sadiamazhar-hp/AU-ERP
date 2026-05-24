@@ -15,6 +15,7 @@ public sealed class DashboardPageVm
     public bool ShowAdmin { get; init; }
     public bool ShowStore { get; init; }
     public bool ShowSales { get; init; }
+    public bool ShowFinance { get; init; }
     public bool ShowProduction { get; init; }
     public bool HasAnyModule { get; init; }
 
@@ -23,6 +24,7 @@ public sealed class DashboardPageVm
     public AdminModuleStats? Admin { get; init; }
     public StoreModuleStats? Store { get; init; }
     public SalesModuleStats? Sales { get; init; }
+    public FinanceModuleStats? Finance { get; init; }
     public ProductionModuleStats? Production { get; init; }
 }
 
@@ -132,8 +134,12 @@ public sealed class SalesModuleStats
     public int SalesGoodsIssuePendingInPeriod { get; init; }
     public int SalesGoodsIssueReceivedInPeriod { get; init; }
     public IReadOnlyList<DashboardRecentDcRowVm> RecentDeliveryChallans { get; init; } = Array.Empty<DashboardRecentDcRowVm>();
+    public int ReturnOrdersOpenCount { get; init; }
+    public int ReturnQiPendingCount { get; init; }
+}
 
-    // Billing & Payments
+public sealed class FinanceModuleStats
+{
     public int InvoiceOpenCount { get; init; }
     public int InvoiceOverdueCount { get; init; }
     public int InvoiceCollectedCount { get; init; }
@@ -146,8 +152,6 @@ public sealed class SalesModuleStats
     public decimal CreditMemosAmountInPeriod { get; init; }
     public int PaymentsInPeriod { get; init; }
     public decimal PaymentsAmountInPeriod { get; init; }
-    public int ReturnOrdersOpenCount { get; init; }
-    public int ReturnQiPendingCount { get; init; }
     public IReadOnlyList<LabelCountDto> InvoicedVsPaymentsByDay { get; init; } = Array.Empty<LabelCountDto>();
     public IReadOnlyList<LabelCountDto> PaymentsCollectedByDay { get; init; } = Array.Empty<LabelCountDto>();
     public IReadOnlyList<DashboardOverdueInvoiceRowVm> RecentOverdueInvoices { get; init; } = Array.Empty<DashboardOverdueInvoiceRowVm>();

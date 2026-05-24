@@ -48,8 +48,9 @@ public sealed class DashboardDataService
         var showAd = user.HasClaim(AuClaimTypes.Department, "Admin");
         var showSt = user.HasClaim(AuClaimTypes.Department, "Store");
         var showSa = user.HasClaim(AuClaimTypes.Department, "Sales");
+        var showFi = user.HasClaim(AuClaimTypes.Department, "Finance");
         var showPr = user.HasClaim(AuClaimTypes.Department, "Production");
-        var hasAny = showAd || showSt || showSa || showPr;
+        var hasAny = showAd || showSt || showSa || showFi || showPr;
 
         var periodKey = NormalizePeriod(period);
         var window = ResolvePeriodWindow(periodKey);
@@ -70,12 +71,16 @@ public sealed class DashboardDataService
         if (showSa)
             sales = await BuildSalesAsync(window.From, window.To, today, ct).ConfigureAwait(false);
 
+        FinanceModuleStats? finance = null;
+        if (showFi)
+            finance = await BuildFinanceAsync(window.From, window.To, today, ct).ConfigureAwait(false);
+
         ProductionModuleStats? prod = null;
         if (showPr)
             prod = await BuildProductionAsync(window.From, window.To, ct).ConfigureAwait(false);
 
         var headline = await BuildHeadlineAsync(
-            showSa, showSt, showPr,
+            showSa, showFi, showSt, showPr,
             window, window.PreviousFrom, window.PreviousTo,
             user.FindFirst(AuClaimTypes.StorePlant)?.Value?.Trim(),
             today, ct).ConfigureAwait(false);
@@ -92,12 +97,14 @@ public sealed class DashboardDataService
             ShowAdmin = showAd,
             ShowStore = showSt,
             ShowSales = showSa,
+            ShowFinance = showFi,
             ShowProduction = showPr,
             HasAnyModule = hasAny,
             Headline = headline,
             Admin = admin,
             Store = store,
             Sales = sales,
+            Finance = finance,
             Production = prod
         };
     }
@@ -326,6 +333,45 @@ public sealed class DashboardDataService
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
+        var roOpen = await _db.SalesReturnOrders.AsNoTracking()
+            .CountAsync(r => !_db.SalesReturnCreditMemos.Any(c => c.SalesReturnOrderId == r.Id), ct)
+            .ConfigureAwait(false);
+        var qiPending = await _db.SalesReturnQualityInspections.AsNoTracking()
+            .CountAsync(q => q.Status == SalesReturnQualityInspection.StatusPending, ct)
+            .ConfigureAwait(false);
+
+        return new SalesModuleStats
+        {
+            QuotationDraft = qDraft,
+            QuotationSent = qSent,
+            QuotationsCreatedInPeriod = qInPeriod,
+            QuotationToOrderConversionPercent = conversion,
+            QuotationByMonth = qm,
+            SalesOrderByMonth = om,
+            OrderOpen = oOpen,
+            OrderConfirmed = oConf,
+            OrderPendingStock = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingStock),
+            OrderPendingGoodReceive = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingGoodReceive),
+            OrderPendingDc = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingDc),
+            OrderDeliveryInProcess = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.DeliveryInProcess),
+            OrderPendingPayment = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingPayment),
+            OrderCompleted = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Completed),
+            OrderWorkflowByStatus = orderWorkflowChart,
+            DeliveryChallanCount = dcTotal,
+            DeliveryChallansCreatedInPeriod = dcCreated,
+            DeliveryChallansDelivered = dcDelivered,
+            DeliveryChallansInTransit = dcInTransit,
+            SalesGoodsIssuePendingInPeriod = sgiPending,
+            SalesGoodsIssueReceivedInPeriod = sgiReceived,
+            RecentDeliveryChallans = recentDcs,
+            ReturnOrdersOpenCount = roOpen,
+            ReturnQiPendingCount = qiPending
+        };
+    }
+
+    private async Task<FinanceModuleStats> BuildFinanceAsync(
+        DateTime from, DateTime to, DateTime today, CancellationToken ct)
+    {
         var invOpenQ = _db.SalesInvoices.AsNoTracking().Where(i => i.Status == SalesInvoice.StatusOpen);
         var invOverdueQ = invOpenQ.Where(i => i.DueDate < today);
         var invOpenCount = await invOpenQ.CountAsync(ct).ConfigureAwait(false);
@@ -338,7 +384,6 @@ public sealed class DashboardDataService
             .CountAsync(i => i.Status == SalesInvoice.StatusReturned, ct).ConfigureAwait(false);
 
         var openAmount = await invOpenQ.SumAsync(i => (decimal?)i.GrandTotal, ct).ConfigureAwait(false) ?? 0m;
-        var outstanding = openAmount;
 
         var collectedInPeriod = await _db.SalesPayments.AsNoTracking()
             .Where(p => p.DocumentDate >= from && p.DocumentDate <= to)
@@ -352,13 +397,6 @@ public sealed class DashboardDataService
         var paymentsInPeriod = await _db.SalesPayments.AsNoTracking()
             .Where(p => p.DocumentDate >= from && p.DocumentDate <= to)
             .CountAsync(ct)
-            .ConfigureAwait(false);
-
-        var roOpen = await _db.SalesReturnOrders.AsNoTracking()
-            .CountAsync(r => !_db.SalesReturnCreditMemos.Any(c => c.SalesReturnOrderId == r.Id), ct)
-            .ConfigureAwait(false);
-        var qiPending = await _db.SalesReturnQualityInspections.AsNoTracking()
-            .CountAsync(q => q.Status == SalesReturnQualityInspection.StatusPending, ct)
             .ConfigureAwait(false);
 
         var invoiceDates = await _db.SalesInvoices.AsNoTracking()
@@ -399,44 +437,20 @@ public sealed class DashboardDataService
             Balance = i.GrandTotal
         }).ToList();
 
-        return new SalesModuleStats
+        return new FinanceModuleStats
         {
-            QuotationDraft = qDraft,
-            QuotationSent = qSent,
-            QuotationsCreatedInPeriod = qInPeriod,
-            QuotationToOrderConversionPercent = conversion,
-            QuotationByMonth = qm,
-            SalesOrderByMonth = om,
-            OrderOpen = oOpen,
-            OrderConfirmed = oConf,
-            OrderPendingStock = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingStock),
-            OrderPendingGoodReceive = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingGoodReceive),
-            OrderPendingDc = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingDc),
-            OrderDeliveryInProcess = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.DeliveryInProcess),
-            OrderPendingPayment = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingPayment),
-            OrderCompleted = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Completed),
-            OrderWorkflowByStatus = orderWorkflowChart,
-            DeliveryChallanCount = dcTotal,
-            DeliveryChallansCreatedInPeriod = dcCreated,
-            DeliveryChallansDelivered = dcDelivered,
-            DeliveryChallansInTransit = dcInTransit,
-            SalesGoodsIssuePendingInPeriod = sgiPending,
-            SalesGoodsIssueReceivedInPeriod = sgiReceived,
-            RecentDeliveryChallans = recentDcs,
             InvoiceOpenCount = invOpenCount,
             InvoiceOverdueCount = invOverdueCount,
             InvoiceCollectedCount = invCollectedCount,
             InvoiceReturnInProcessCount = invRipCount,
             InvoiceReturnedCount = invReturnedCount,
             InvoiceOpenAmount = openAmount,
-            InvoiceOutstandingAmount = outstanding,
+            InvoiceOutstandingAmount = openAmount,
             InvoiceCollectedAmountInPeriod = collectedInPeriod,
             CreditMemosInPeriod = cmInPeriod.Count,
             CreditMemosAmountInPeriod = cmInPeriod.Sum(c => c.GrandTotalCredit),
             PaymentsInPeriod = paymentsInPeriod,
             PaymentsAmountInPeriod = collectedInPeriod,
-            ReturnOrdersOpenCount = roOpen,
-            ReturnQiPendingCount = qiPending,
             InvoicedVsPaymentsByDay = invoicedByDay,
             PaymentsCollectedByDay = paymentsByDay,
             RecentOverdueInvoices = overdueRows
@@ -532,7 +546,7 @@ public sealed class DashboardDataService
     }
 
     private async Task<DashboardHeadlineVm> BuildHeadlineAsync(
-        bool showSa, bool showSt, bool showPr,
+        bool showSa, bool showFi, bool showSt, bool showPr,
         PeriodWindow current, DateTime prevFrom, DateTime prevTo,
         string? storePlant, DateTime today, CancellationToken ct)
     {
@@ -540,7 +554,7 @@ public sealed class DashboardDataService
         int openCount = 0, ordersOpen = 0, ordersPendingPayment = 0, dcTransit = 0, lowStock = 0, wip = 0;
         IReadOnlyList<LabelCountDto> spark = Array.Empty<LabelCountDto>();
 
-        if (showSa)
+        if (showFi)
         {
             revenue = await _db.SalesInvoices.AsNoTracking()
                 .Where(i => i.DocumentDate >= current.From && i.DocumentDate <= current.To)
@@ -564,6 +578,10 @@ public sealed class DashboardDataService
                 .SumAsync(i => (decimal?)i.GrandTotal, ct).ConfigureAwait(false) ?? 0m;
             openCount = await _db.SalesInvoices.AsNoTracking()
                 .CountAsync(i => i.Status == SalesInvoice.StatusOpen, ct).ConfigureAwait(false);
+        }
+
+        if (showSa)
+        {
             var workflowCounts = await _orderWorkflow.CountByStatusAsync(null, ct).ConfigureAwait(false);
             ordersOpen = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Open);
             ordersPendingPayment = workflowCounts.GetValueOrDefault(SalesOrderWorkflowStatus.PendingPayment);
@@ -602,11 +620,11 @@ public sealed class DashboardDataService
 
         return new DashboardHeadlineVm
         {
-            ShowRevenue = showSa,
+            ShowRevenue = showFi,
             RevenueInPeriod = revenue,
             RevenuePreviousPeriod = revenuePrev,
             RevenueSparkline = spark,
-            ShowOutstandingAr = showSa,
+            ShowOutstandingAr = showFi,
             OutstandingAR = outstanding,
             OpenInvoiceCount = openCount,
             ShowOrdersFulfillment = showSa,

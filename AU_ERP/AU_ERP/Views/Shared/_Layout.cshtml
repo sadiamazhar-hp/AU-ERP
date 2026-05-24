@@ -64,6 +64,7 @@
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var isAdminDept = User.HasClaim(AuClaimTypes.Department, "Admin");
     var isSalesDept = User.HasClaim(AuClaimTypes.Department, "Sales");
+    var isFinanceDept = User.HasClaim(AuClaimTypes.Department, "Finance");
     var isProductionDept = User.HasClaim(AuClaimTypes.Department, "Production");
     var isStoreDept = User.HasClaim(AuClaimTypes.Department, "Store");
     var salesQuotationActive = string.Equals(ctrl, "SalesQuotation", StringComparison.OrdinalIgnoreCase)
@@ -89,7 +90,6 @@
             || string.Equals(act, "Details", StringComparison.OrdinalIgnoreCase));
     var salesPreSalesNavActive = salesQuotationActive;
     var salesOrderFulfillmentNavActive = salesOrderActive || deliveryChallanActive || returnOrderActive || reorderQiActive || creditMemoActive;
-    var salesBillingNavActive = invoiceActive || salesPaymentActive;
     var dashboardActive = string.Equals(ctrl, "Dashboard", StringComparison.OrdinalIgnoreCase)
         && string.Equals(act, "Index", StringComparison.OrdinalIgnoreCase);
     var companyInfoActive = string.Equals(ctrl, "CompanyInfo", StringComparison.OrdinalIgnoreCase)
@@ -181,11 +181,12 @@
                         <a class="au-sidebar-link au-sidebar-link--sub @(reorderQiActive ? "active" : null)" asp-controller="ReorderQualityInspection" asp-action="Index">ROD Inspection</a>
                         <a class="au-sidebar-link au-sidebar-link--sub @(creditMemoActive ? "active" : null)" asp-controller="CreditMemo" asp-action="Index">Credit memo</a>
                     </div>
-                    <div class="au-sidebar-group">
-                        <div class="au-sidebar-group-title @(salesBillingNavActive ? "au-sidebar-group-title--active" : null)">Billing &amp; Payments</div>
-                        <a class="au-sidebar-link au-sidebar-link--sub @(invoiceActive ? "active" : null)" asp-controller="Invoice" asp-action="Index">Invoice</a>
-                        <a class="au-sidebar-link au-sidebar-link--sub @(salesPaymentActive ? "active" : null)" asp-controller="SalesPayment" asp-action="Index">Payments</a>
-                    </div>
+                }
+                @if (isFinanceDept)
+                {
+                    <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Finance</div>
+                    <a class="au-sidebar-link @(invoiceActive ? "active" : null)" asp-controller="Invoice" asp-action="Index">Invoice</a>
+                    <a class="au-sidebar-link @(salesPaymentActive ? "active" : null)" asp-controller="SalesPayment" asp-action="Index">Payments</a>
                 }
                 @if (isProductionDept)
                 {

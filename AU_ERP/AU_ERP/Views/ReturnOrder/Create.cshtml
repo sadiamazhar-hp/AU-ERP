@@ -21,7 +21,10 @@
 
 <div class="ro-create">
     <h1 class="h4 mb-2">Create return order</h1>
-    <p class="small text-secondary mb-4"><a asp-controller="Invoice" asp-action="Index">&larr; Back to invoices</a></p>
+    @if (User.HasClaim(AuClaimTypes.Department, "Finance"))
+    {
+        <p class="small text-secondary mb-4"><a asp-controller="Invoice" asp-action="Index">&larr; Back to invoices</a></p>
+    }
 
     @if (TempData["RoError"] is string err && !string.IsNullOrWhiteSpace(err))
     {
@@ -126,7 +129,14 @@
 
         <div class="card-footer bg-white d-flex gap-2">
             <button type="submit" class="btn btn-primary btn-sm">Save return order</button>
-            <a asp-controller="Invoice" asp-action="Index" class="btn btn-outline-secondary btn-sm">Cancel</a>
+            @if (User.HasClaim(AuClaimTypes.Department, "Finance"))
+            {
+                <a asp-controller="Invoice" asp-action="Index" class="btn btn-outline-secondary btn-sm">Cancel</a>
+            }
+            else
+            {
+                <a asp-action="Index" class="btn btn-outline-secondary btn-sm">Cancel</a>
+            }
         </div>
     </form>
 </div>

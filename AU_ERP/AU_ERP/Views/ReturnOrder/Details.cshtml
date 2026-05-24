@@ -19,7 +19,13 @@
 }
 
 <div class="ro-det">
-    <p class="small mb-3"><a asp-action="Index">&larr; Return order list</a> · <a asp-controller="Invoice" asp-action="Details" asp-route-id="@Model.SalesInvoiceId">Invoice</a></p>
+    <p class="small mb-3">
+        <a asp-action="Index">&larr; Return order list</a>
+        @if (User.HasClaim(AuClaimTypes.Department, "Finance"))
+        {
+            <text> · <a asp-controller="Invoice" asp-action="Details" asp-route-id="@Model.SalesInvoiceId">Invoice</a></text>
+        }
+    </p>
     <h1 class="h4 mb-3">Return order @Model.DocumentNumber</h1>
 
     <div class="card shadow-sm mb-3">

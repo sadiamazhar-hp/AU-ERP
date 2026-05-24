@@ -65,6 +65,7 @@
 (function () {
     const demandUrl = "@Url.Action("DemandForMaterial", "MRP")";
     const fertUrl = "@Url.Action("FertMaterials", "MRP")";
+    const plantsUrl = "@Url.Action("Plants", "MRP")";
     const runMultiUrl = "@Url.Action("RunMulti", "MRP")";
     const createPoUrl = "@Url.Action("CreateFromMrpMulti", "ProductionOrder")";
     const poIndexUrl = "@Url.Action("Index", "ProductionOrder")";
@@ -79,6 +80,8 @@
     const resultsBody = document.getElementById("mrpResultsBody");
 
     let fertItems = [];
+    let plantItems = [];
+    let defaultPlantId = "";
     let lastMulti = null;
 
     function setMsg(msg, ok) {
@@ -95,7 +98,7 @@
         const tr = document.createElement("tr");
         tr.innerHTML =
             '<td><select class="form-select form-select-sm mrp-line-mat"><option value="">-- Select material --</option></select></td>' +
-            '<td><input type="text" class="form-control form-control-sm mrp-line-plant" value="Man102"></td>' +
+            '<td><select class="form-select form-select-sm mrp-line-plant"><option value="">-- Select plant --</option></select></td>' +
             '<td><select class="form-select form-select-sm mrp-line-bom"><option value="">-- Select BOM --</option></select><div class="small text-muted mt-1 mrp-line-bom-hint">Select material (demand load)</div></td>' +
             '<td><input type="number" class="form-control form-control-sm mrp-line-qty" step="0.0001" readonly></td>' +
             '<td><input type="text" class="form-control form-control-sm mrp-line-uom" readonly><input type="hidden" class="mrp-line-uom-id"></td>' +
@@ -109,6 +112,18 @@
             opt.textContent = opt.value + (desc ? (" — " + desc) : "");
             sel.appendChild(opt);
         });
+        const plantSel = tr.querySelector(".mrp-line-plant");
+        plantItems.forEach(function (p) {
+            const opt = document.createElement("option");
+            opt.value = p.plantId || p.PlantId || "";
+            const name = p.plantName || p.PlantName || "";
+            opt.textContent = name ? (opt.value + " — " + name) : opt.value;
+            plantSel.appendChild(opt);
+        });
+        if (defaultPlantId && plantSel.querySelector('option[value="' + defaultPlantId + '"]'))
+            plantSel.value = defaultPlantId;
+        else if (plantItems.length === 1)
+            plantSel.value = plantItems[0].plantId || plantItems[0].PlantId || "";
         return tr;
     }
 
@@ -298,6 +313,12 @@
         const lines = collectRunLines();
         if (!fromEl.value || !toEl.value) { setMsg("From date and To date are required.", false); return; }
         if (!lines.length) { setMsg("Add at least one valid line (material with demand).", false); return; }
+        const missingPlant = linesBody.querySelector("tr .mrp-line-mat") &&
+            Array.from(linesBody.querySelectorAll("tr")).some(function (tr) {
+                const p = readLinePayload(tr);
+                return p.materialNumber && p.quantity > 0 && p.uomId > 0 && !p.plantId;
+            });
+        if (missingPlant) { setMsg("Select a plant for each line.", false); return; }
         fetch(runMultiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -358,11 +379,20 @@
         }).catch(() => setMsg("Request failed.", false));
     });
 
-    fetch(fertUrl).then(r => r.json()).then(res => {
-        fertItems = (res && res.success && (res.data || res.Data)) ? (res.data || res.Data) : [];
+    Promise.all([
+        fetch(fertUrl).then(r => r.json()),
+        fetch(plantsUrl).then(r => r.json())
+    ]).then(function (results) {
+        const fertRes = results[0];
+        const plantsRes = results[1];
+        fertItems = (fertRes && fertRes.success && (fertRes.data || fertRes.Data)) ? (fertRes.data || fertRes.Data) : [];
+        plantItems = (plantsRes && plantsRes.success && (plantsRes.data || plantsRes.Data)) ? (plantsRes.data || plantsRes.Data) : [];
+        defaultPlantId = (plantsRes && (plantsRes.defaultPlantId || plantsRes.DefaultPlantId)) || "";
+        if (!plantItems.length)
+            setMsg("No production plants available for MRP.", false);
         addLine();
-    }).catch(() => {
-        setMsg("Could not load FERT materials.", false);
+    }).catch(function () {
+        setMsg("Could not load MRP master data.", false);
     });
 })();
 </script>

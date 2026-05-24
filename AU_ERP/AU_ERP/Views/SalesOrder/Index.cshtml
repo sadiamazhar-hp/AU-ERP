@@ -736,9 +736,25 @@
             if (soUpdateUrlTpl) f.action = soUpdateUrlTpl.replace("Update/0", "Update/" + quotationId).replace(/\/0(\?.*)?$/, "/" + quotationId + "$1");
             f.setAttribute("data-so-form-mode", "update");
         }
+        function soEnsureCustomerInCatalog(entry) {
+            if (!entry || !entry.bpId) return;
+            var cat = document.getElementById("soCustomerCatalog");
+            if (!cat) return;
+            var id = String(entry.bpId || "").trim();
+            if (!id) return;
+            for (var i = 0; i < cat.options.length; i++) {
+                if (cat.options[i].value === id) return;
+            }
+            var opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = (entry.displayName || id).trim();
+            opt.setAttribute("data-ship", entry.shipTo || "");
+            cat.appendChild(opt);
+        }
         function applyOrderData(d) {
             var h = d.h, items = d.items || [];
             schemaCharges = d.schemaCharges || [];
+            if (d.customerCatalogEntry) soEnsureCustomerInCatalog(d.customerCatalogEntry);
             if (h.plantId && document.getElementById("soPlant")) document.getElementById("soPlant").value = h.plantId;
             if (h.distributionChannelId != null && document.getElementById("soDc")) document.getElementById("soDc").value = String(h.distributionChannelId);
             if (document.getElementById("soSchema")) {

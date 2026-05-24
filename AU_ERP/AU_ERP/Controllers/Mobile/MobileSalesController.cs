@@ -1,4 +1,5 @@
 using AU_ERP.Models.Mobile;
+using AU_ERP.Services;
 using AU_ERP.Services.Mobile;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +35,9 @@ public class MobileSalesController : ControllerBase
     public async Task<ActionResult<MobileApiResponse<PagedResult<InvoiceRow>>>> Invoices(
         [FromQuery] MobileSalesFilter filter, CancellationToken ct)
     {
+        if (!User.HasClaim(AuClaimTypes.Department, "Finance"))
+            return StatusCode(StatusCodes.Status403Forbidden, MobileApiResponse<PagedResult<InvoiceRow>>.Fail("Finance department access required."));
+
         var data = await _reports.GetInvoicesAsync(filter, ct);
         return Ok(MobileApiResponse<PagedResult<InvoiceRow>>.Ok(data));
     }

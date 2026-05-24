@@ -1,8 +1,10 @@
 @model AU_ERP.Models.BPIndexViewModel
 @using System
+@using AU_ERP.Services
 @{
     ViewData["Title"] = "Business Partners";
     var bpTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
+    var salesSchemaTitles = ViewBag.SalesSchemaTitles as Dictionary<string, string> ?? new Dictionary<string, string>();
 }
 
 @Html.ValidationSummary(false, "", new { @class = "text-danger small mb-2" })
@@ -26,8 +28,13 @@
         <div class="tab-pane fade @(bpTabList ? "show active" : "")" id="bpPaneList" role="tabpanel" aria-labelledby="bpTabList">
             <div class="sap-window">
                 <div class="au-validation-summary px-3 pt-2" style="display:none;" role="alert"></div>
-                <div class="p-2 px-3">
+                <div class="p-2 px-3 d-flex flex-wrap align-items-center gap-2">
                     <input type="search" class="form-control form-control-sm" id="bpListFilter" placeholder="Filter by ID, name, city…" style="max-width:22rem;" />
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Sales schema filter">
+                        <button type="button" class="btn btn-outline-secondary active" data-bp-schema-filter="">All</button>
+                        <button type="button" class="btn btn-outline-secondary" data-bp-schema-filter="WalkIn">WalkIn</button>
+                        <button type="button" class="btn btn-outline-secondary" data-bp-schema-filter="Dealer">Dealer</button>
+                    </div>
                 </div>
                 <div class="table-wrapper">
                     <table class="table-sap" id="bpListTable">
@@ -38,6 +45,7 @@
                                 <th>Name</th>
                                 <th>Grouping</th>
                                 <th>Role</th>
+                                <th>Sales Schema</th>
                                 <th>City</th>
                                 <th style="width:72px;">Action</th>
                             </tr>
@@ -48,12 +56,14 @@
                             {
                                 var roleTxt = p.Role != null ? $"{p.Role.RoleCode} {p.Role.RoleName}" : "";
                                 var groupTxt = p.Grouping?.GroupName ?? "";
-                                <tr data-bp-filter="@($"{p.BPID} {p.FullName} {p.City} {roleTxt} {groupTxt}")" data-bp-id="@p.BPID">
+                                var salesSchemaLabel = SalesSchemaResolution.ResolveSalesSchemaDisplayTitle(p.SalesSchema, salesSchemaTitles);
+                                <tr data-bp-filter="@($"{p.BPID} {p.FullName} {p.City} {roleTxt} {groupTxt} {salesSchemaLabel}")" data-bp-sales-schema="@salesSchemaLabel" data-bp-id="@p.BPID">
                                     <td class="col-no">@(bpIdx + 1)</td>
                                     <td><input class="sap-input" value="@p.BPID" readonly /></td>
                                     <td><input class="sap-input" value="@p.FullName" readonly /></td>
                                     <td><input class="sap-input" value="@groupTxt" readonly /></td>
                                     <td><input class="sap-input" value="@roleTxt" readonly /></td>
+                                    <td><input class="sap-input" value="@salesSchemaLabel" readonly /></td>
                                     <td><input class="sap-input" value="@p.City" readonly /></td>
                                     <td class="col-action">
                                         <div class="dropdown">
@@ -367,8 +377,16 @@
             if (!sel) return;
             var v = String(salesSchemaVal || '').trim();
             if (!v) { sel.value = ''; return; }
-            if ([].some.call(sel.options, function (o) { return o.value === v; })) sel.value = v;
-            else sel.value = '';
+            if ([].some.call(sel.options, function (o) { return o.value === v; })) { sel.value = v; return; }
+            var want = v.toLowerCase();
+            for (var i = 0; i < sel.options.length; i++) {
+                var o = sel.options[i];
+                if ((o.textContent || '').trim().toLowerCase() === want) {
+                    sel.value = o.value;
+                    return;
+                }
+            }
+            sel.value = '';
         }
         function bpEditApplyPurchSchema(purchSchemaVal) {
             var sel = document.getElementById('bpEditPurchSchema');
@@ -389,8 +407,34 @@
             }
         }
 
-        if (typeof window.auMdBindListFilter === "function")
-            window.auMdBindListFilter("bpListFilter", "bpListTable", "data-bp-filter");
+        (function bpListFilters() {
+            var schemaFilter = "";
+            var searchInput = document.getElementById("bpListFilter");
+            var table = document.getElementById("bpListTable");
+            function applyBpListFilters() {
+                if (!table) return;
+                var q = (searchInput && searchInput.value || "").trim().toLowerCase();
+                var rows = table.querySelectorAll("tbody tr");
+                rows.forEach(function (tr) {
+                    var hay = (tr.getAttribute("data-bp-filter") || "").toLowerCase();
+                    var schema = (tr.getAttribute("data-bp-sales-schema") || "").trim();
+                    var textOk = !q || hay.indexOf(q) >= 0;
+                    var schemaOk = !schemaFilter || schema === schemaFilter;
+                    tr.style.display = textOk && schemaOk ? "" : "none";
+                });
+            }
+            if (searchInput) searchInput.addEventListener("input", applyBpListFilters);
+            document.querySelectorAll("[data-bp-schema-filter]").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    document.querySelectorAll("[data-bp-schema-filter]").forEach(function (b) {
+                        b.classList.remove("active");
+                    });
+                    btn.classList.add("active");
+                    schemaFilter = (btn.getAttribute("data-bp-schema-filter") || "").trim();
+                    applyBpListFilters();
+                });
+            });
+        })();
 
         function bpListPaneRoot() {
             return document.getElementById("bpPaneList");

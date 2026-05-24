@@ -88,7 +88,7 @@ public sealed class EmporiumWalkInCustomerService
             FullName = fullName,
             Street = addr,
             Mobile = mob,
-            SalesSchema = WalkInSchemaTitle,
+            SalesSchema = schemaId.Value.ToString(),
             DistChannel = "2",
             IsActive = true,
             CreatedAt = DateTime.UtcNow

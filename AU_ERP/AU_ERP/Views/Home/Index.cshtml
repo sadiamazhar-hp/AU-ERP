@@ -3,6 +3,7 @@
     var isAdmin = User?.HasClaim(AuClaimTypes.Department, "Admin") == true;
     var isProd = User?.HasClaim(AuClaimTypes.Department, "Production") == true;
     var isSales = User?.HasClaim(AuClaimTypes.Department, "Sales") == true;
+    var isFinance = User?.HasClaim(AuClaimTypes.Department, "Finance") == true;
     var isStore = User?.HasClaim(AuClaimTypes.Department, "Store") == true;
     var isAuth = User?.Identity?.IsAuthenticated == true;
 }
@@ -15,17 +16,17 @@
         <a class="btn btn-primary" asp-controller="Account" asp-action="Login">Sign in</a>
     </div>
 }
-else if (!isAdmin && !isProd && !isSales && !isStore)
+else if (!isAdmin && !isProd && !isSales && !isFinance && !isStore)
 {
     <div>
         <h1 class="h4 mb-2">No modules available</h1>
-        <p class="text-muted mb-0">Your account is not assigned to a department with app modules (Admin, Store, Sales, or Production). You only have access to this page. Contact an administrator if you need access.</p>
+        <p class="text-muted mb-0">Your account is not assigned to a department with app modules (Admin, Store, Sales, Finance, or Production). You only have access to this page. Contact an administrator if you need access.</p>
     </div>
 }
 else
 {
     <div>
         <h1 class="h4 mb-3">Home</h1>
-        <p class="text-muted">Use the sidebar to open a module. Your access depends on your department: Admin (master data, users, configuration), Store (stock overview), Sales (quotation, order, delivery challan), and/or Production (MRP, production order, operation tracking).</p>
+        <p class="text-muted">Use the sidebar to open a module. Your access depends on your department: Admin (master data, users, configuration), Store (stock overview), Sales (quotation, order, delivery challan), Finance (invoice, payments), and/or Production (MRP, production order, operation tracking).</p>
     </div>
 }
