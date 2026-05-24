@@ -91,6 +91,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim(AuClaimTypes.Department, "Production"));
     options.AddPolicy("SalesDepartment", policy =>
         policy.RequireClaim(AuClaimTypes.Department, "Sales"));
+    options.AddPolicy("FinanceDepartment", policy =>
+        policy.RequireClaim(AuClaimTypes.Department, "Finance"));
     options.AddPolicy("SalesOrAdminDepartment", policy =>
         policy.RequireAssertion(ctx =>
             ctx.User.HasClaim(AuClaimTypes.Department, "Sales")
