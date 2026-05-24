@@ -1,0 +1,16 @@
+node_modules/
+.gradle/
+build/
+*.keystore
+!debug.keystore
+android/app/release/
+ios/Pods/
+ios/build/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.bundle/
+.env
