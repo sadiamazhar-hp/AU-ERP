@@ -54,17 +54,31 @@ namespace AU_ERP.Controllers
                     && (m.MaterialTypeCode == "HALB" || m.MaterialTypeCode == "FERT"), ct);
         }
 
-        public async Task<IActionResult> Index(string? q, string? status, string? priority, CancellationToken ct = default)
+        public async Task<IActionResult> Index(string? q, string? status, string? priority, string? plantId, CancellationToken ct = default)
         {
             ViewData["Title"] = "Production Orders";
 
-            var baseQuery = _db.ProductionOrders.AsNoTracking();
+            var allPlants = await _db.PlantsSamples.AsNoTracking()
+                .OrderBy(p => p.PlantName)
+                .ToListAsync(ct);
+            var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct);
+            SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+            ViewBag.ListPlantId = plantScope.EffectiveListPlantId ?? plantId ?? "";
+            ViewBag.PlantFilterFormId = "poListFilterForm";
+            ViewBag.PlantHiddenInputId = "poListPlant";
+            ViewBag.PlantFilterModalId = "poPlantFilterModal";
+            ViewBag.PlantFilterModalPlantId = "poModPlant";
+
+            var baseQuery = SalesPlantAccess.ApplyProductionOrderPlantFilter(
+                _db.ProductionOrders.AsNoTracking(),
+                plantScope);
 
             var vm = new ProductionOrderPageVm
             {
                 Q = q,
                 Status = status,
                 Priority = priority,
+                PlantId = plantScope.EffectiveListPlantId ?? (plantId ?? ""),
                 CountPlanned = await baseQuery.CountAsync(p => p.Status == ProductionOrder.StatusPlanned, ct),
                 CountReleased = await baseQuery.CountAsync(p => p.Status == ProductionOrder.StatusReleased, ct),
                 CountInProgress = await baseQuery.CountAsync(p => p.Status == ProductionOrder.StatusInProgress, ct),
@@ -73,9 +87,11 @@ namespace AU_ERP.Controllers
 
             // List view: do not Include Lines or StageProgresses (cartesian / huge payloads → timeouts).
             // Stage completion for the Operation button is loaded in one lightweight follow-up query.
-            var filtered = _db.ProductionOrders.AsNoTracking()
-                .Include(p => p.FinishedMaterial)
-                .Include(p => p.Uom)
+            var filtered = SalesPlantAccess.ApplyProductionOrderPlantFilter(
+                    _db.ProductionOrders.AsNoTracking()
+                        .Include(p => p.FinishedMaterial)
+                        .Include(p => p.Uom),
+                    plantScope)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(q))
@@ -135,6 +151,7 @@ namespace AU_ERP.Controllers
             [FromForm] string? returnQ,
             [FromForm] string? returnStatus,
             [FromForm] string? returnPriority,
+            [FromForm] string? returnPlantId,
             CancellationToken ct = default)
         {
             var gi = await _db.GoodsIssueDocuments.AsNoTracking()
@@ -142,7 +159,7 @@ namespace AU_ERP.Controllers
             if (gi == null)
             {
                 TempData["PoError"] = "No reservation goods issue exists for this production order.";
-                return RedirectToPoList(returnQ, returnStatus, returnPriority);
+                return RedirectToPoList(returnQ, returnStatus, returnPriority, returnPlantId);
             }
 
             var (ok, msg) = await _goodsIssueService.ReceiveGoodsAsync(
@@ -152,7 +169,7 @@ namespace AU_ERP.Controllers
                 ct);
             if (ok) TempData["PoMessage"] = msg;
             else TempData["PoError"] = msg;
-            return RedirectToPoList(returnQ, returnStatus, returnPriority);
+            return RedirectToPoList(returnQ, returnStatus, returnPriority, returnPlantId);
         }
 
         [HttpPost]
@@ -162,6 +179,7 @@ namespace AU_ERP.Controllers
             [FromForm] string? returnQ,
             [FromForm] string? returnStatus,
             [FromForm] string? returnPriority,
+            [FromForm] string? returnPlantId,
             CancellationToken ct = default)
         {
             var gi = await _db.GoodsIssueDocuments.AsNoTracking()
@@ -169,7 +187,7 @@ namespace AU_ERP.Controllers
             if (gi == null)
             {
                 TempData["PoError"] = "No reservation goods issue exists for this production order.";
-                return RedirectToPoList(returnQ, returnStatus, returnPriority);
+                return RedirectToPoList(returnQ, returnStatus, returnPriority, returnPlantId);
             }
 
             var (ok, msg) = await _goodsIssueService.ReleaseReservationToOperationsAsync(
@@ -178,15 +196,16 @@ namespace AU_ERP.Controllers
                 ct);
             if (ok) TempData["PoMessage"] = msg;
             else TempData["PoError"] = msg;
-            return RedirectToPoList(returnQ, returnStatus, returnPriority);
+            return RedirectToPoList(returnQ, returnStatus, returnPriority, returnPlantId);
         }
 
-        private IActionResult RedirectToPoList(string? returnQ, string? returnStatus, string? returnPriority) =>
+        private IActionResult RedirectToPoList(string? returnQ, string? returnStatus, string? returnPriority, string? returnPlantId) =>
             RedirectToAction(nameof(Index), new
             {
                 q = string.IsNullOrWhiteSpace(returnQ) ? null : returnQ.Trim(),
                 status = returnStatus,
-                priority = returnPriority
+                priority = returnPriority,
+                plantId = string.IsNullOrWhiteSpace(returnPlantId) ? null : returnPlantId.Trim()
             });
 
         [HttpGet]
@@ -380,6 +399,10 @@ namespace AU_ERP.Controllers
                 if (lineErr != null)
                     return Json(new { success = false, message = lineErr });
 
+                var plantErr = await ValidateLinePlantAccessAsync(lineItems, ct);
+                if (plantErr != null)
+                    return Json(new { success = false, message = plantErr });
+
                 foreach (var li in lineItems)
                 {
                     var mrp = await MrpExplosionService.RunAsync(
@@ -511,6 +534,18 @@ namespace AU_ERP.Controllers
                 var lineErr = await ValidateLineItemsAsync(lineItems, ct);
                 if (lineErr != null)
                     return Json(new { success = false, message = lineErr });
+
+                var plantErr = await ValidateLinePlantAccessAsync(lineItems, ct);
+                if (plantErr != null)
+                    return Json(new { success = false, message = plantErr });
+
+                var existingLines = await _db.ProductionOrderLines.AsNoTracking()
+                    .Where(l => l.ProductionOrderId == entity.Id)
+                    .Select(l => l.PlantId)
+                    .ToListAsync(ct);
+                var readScope = await ResolveProductionPlantScopeAsync(null, ct);
+                if (!SalesPlantAccess.IsProductionOrderReadable(readScope, existingLines))
+                    return Json(new { success = false, message = "You are not allowed to edit this production order." });
 
                 var first = lineItems.OrderBy(x => x.LineNo).First();
                 entity.FinishedMaterialNumber = first.MaterialNumber;
@@ -755,6 +790,29 @@ namespace AU_ERP.Controllers
                 }
             }
 
+            return null;
+        }
+
+        private async Task<SalesPlantScope> ResolveProductionPlantScopeAsync(string? plantId, CancellationToken ct)
+        {
+            var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+                .Select(p => p.PlantID)
+                .ToListAsync(ct);
+            return await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlantIds, ct);
+        }
+
+        private async Task<string?> ValidateLinePlantAccessAsync(List<ProductionOrderLineInputDto> lines, CancellationToken ct)
+        {
+            var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+                .Select(p => p.PlantID)
+                .ToListAsync(ct);
+            var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct);
+            foreach (var l in lines)
+            {
+                var err = SalesPlantAccess.EnsurePlantAllowed(scope, l.PlantId);
+                if (err != null)
+                    return $"Line {l.LineNo}: {err}";
+            }
             return null;
         }
 

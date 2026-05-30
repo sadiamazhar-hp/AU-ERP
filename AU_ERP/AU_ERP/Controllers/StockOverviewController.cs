@@ -8,7 +8,7 @@ using AU_ERP.Validation;
 
 namespace AU_ERP.Controllers;
 
-[Authorize]
+[Authorize(Policy = "StoreDepartment")]
 public class StockOverviewController : Controller
     {
         private readonly AppDbContext _db;

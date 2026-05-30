@@ -2,6 +2,12 @@
 @using AU_ERP.Models
 @{
     ViewData["Title"] = "Operation Tracking";
+    var listPlantId = Model.PlantId ?? "";
+    ViewBag.ListPlantId = listPlantId;
+    ViewBag.PlantFilterFormId = "otlListFilterForm";
+    ViewBag.PlantHiddenInputId = "otlListPlant";
+    ViewBag.PlantFilterModalId = "otlPlantFilterModal";
+    ViewBag.PlantFilterModalPlantId = "otlModPlant";
     string OverallBadgeClass(string? label) => (label ?? "") switch
     {
         "Completed" => "otl-badge otl-done",
@@ -47,6 +53,13 @@
         <h1>Operation tracking</h1>
         <p>Monitor and open production orders that have released routings and stage progress.</p>
     </div>
+
+    <partial name="_OperationalPlantFilter" />
+
+    <form id="otlListFilterForm" method="get" asp-controller="OperationTracking" asp-action="Index" class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#otlPlantFilterModal">Plant filter</button>
+        <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear filters</a>
+    </form>
 
     @if (Model.Orders.Count == 0)
     {

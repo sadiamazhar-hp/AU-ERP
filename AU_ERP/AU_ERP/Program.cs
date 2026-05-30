@@ -100,12 +100,6 @@ builder.Services.AddAuthorization(options =>
     // Stock overview: users with Store department claim (seed data).
     options.AddPolicy("StoreDepartment", policy =>
         policy.RequireClaim(AuClaimTypes.Department, "Store"));
-    options.AddPolicy("InventoryGoodsIssue", policy =>
-        policy.RequireAssertion(ctx =>
-            ctx.User.HasClaim(AuClaimTypes.Department, "Store")
-            || ctx.User.HasClaim(AuClaimTypes.Department, "Production")
-            || ctx.User.HasClaim(AuClaimTypes.Department, "Sales")
-            || ctx.User.HasClaim(AuClaimTypes.Department, "Admin")));
 
     // Mobile API: any authenticated user (JWT) may access reporting.
     options.AddPolicy("MobileApi", policy =>

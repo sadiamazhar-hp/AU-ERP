@@ -20,22 +20,37 @@ namespace AU_ERP.Controllers
         public OperationTrackingController(AppDbContext db) => _db = db;
 
         /// <summary>Dashboard: all production orders that have operation stages (released routing).</summary>
-        public async Task<IActionResult> Index(int? productionOrderId, CancellationToken ct = default)
+        public async Task<IActionResult> Index(int? productionOrderId, string? plantId, CancellationToken ct = default)
         {
             if (productionOrderId is > 0)
                 return RedirectToAction(nameof(Details), new { productionOrderId = productionOrderId.Value });
 
             ViewData["Title"] = "Operation Tracking";
 
-            var orders = await _db.ProductionOrders.AsNoTracking()
-                .Include(p => p.FinishedMaterial)
-                .Include(p => p.Uom)
-                .Include(p => p.StageProgresses)
-                .Include(p => p.Lines)
-                .Where(p => p.ReleasedRoutingId != null
-                    && (p.Status == ProductionOrder.StatusReleased
-                        || p.Status == ProductionOrder.StatusInProgress
-                        || p.Status == ProductionOrder.StatusCompleted))
+            var allPlants = await _db.PlantsSamples.AsNoTracking()
+                .OrderBy(p => p.PlantName)
+                .ToListAsync(ct);
+            var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct);
+            SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+            ViewBag.ListPlantId = plantScope.EffectiveListPlantId ?? plantId ?? "";
+            ViewBag.PlantFilterFormId = "otlListFilterForm";
+            ViewBag.PlantHiddenInputId = "otlListPlant";
+            ViewBag.PlantFilterModalId = "otlPlantFilterModal";
+            ViewBag.PlantFilterModalPlantId = "otlModPlant";
+
+            var ordersQuery = SalesPlantAccess.ApplyProductionOrderPlantFilter(
+                    _db.ProductionOrders.AsNoTracking()
+                        .Include(p => p.FinishedMaterial)
+                        .Include(p => p.Uom)
+                        .Include(p => p.StageProgresses)
+                        .Include(p => p.Lines)
+                        .Where(p => p.ReleasedRoutingId != null
+                            && (p.Status == ProductionOrder.StatusReleased
+                                || p.Status == ProductionOrder.StatusInProgress
+                                || p.Status == ProductionOrder.StatusCompleted)),
+                    plantScope);
+
+            var orders = await ordersQuery
                 .OrderByDescending(p => p.ProductionNumber)
                 .ToListAsync(ct);
 
@@ -98,7 +113,11 @@ namespace AU_ERP.Controllers
                 });
             }
 
-            return View("List", new OperationTrackingListVm { Orders = list });
+            return View("List", new OperationTrackingListVm
+            {
+                Orders = list,
+                PlantId = plantScope.EffectiveListPlantId ?? (plantId ?? "")
+            });
         }
 
         /// <summary>Single production order: stages, stepper, and update actions.</summary>
@@ -116,6 +135,17 @@ namespace AU_ERP.Controllers
                 .FirstOrDefaultAsync(p => p.Id == productionOrderId, ct);
 
             if (po == null)
+                return RedirectToAction(nameof(Index));
+
+            var linePlants = await _db.ProductionOrderLines.AsNoTracking()
+                .Where(l => l.ProductionOrderId == po.Id)
+                .Select(l => l.PlantId)
+                .ToListAsync(ct);
+            var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+                .Select(p => p.PlantID)
+                .ToListAsync(ct);
+            var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct);
+            if (!SalesPlantAccess.IsProductionOrderReadable(readScope, linePlants))
                 return RedirectToAction(nameof(Index));
 
             var stages = await _db.ProductionOrderStageProgresses.AsNoTracking()

@@ -18,6 +18,16 @@ namespace AU_ERP.Controllers
         public async Task<IActionResult> Index(CancellationToken ct = default)
         {
             ViewData["Title"] = "MRP";
+            var allPlants = await _db.PlantsSamples.AsNoTracking()
+                .Where(p => p.PlantID != EmporiumPlantId)
+                .OrderBy(p => p.PlantName)
+                .ToListAsync(ct);
+            var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlants.Select(p => p.PlantID), ct);
+            SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+            ViewBag.MrpDefaultPlantId = plantScope.EffectiveListPlantId
+                ?? (plantScope.IsSinglePlantLocked ? plantScope.AllowedPlantIds.FirstOrDefault() : null)
+                ?? plantScope.AllowedPlantIds.FirstOrDefault()
+                ?? "";
             return View();
         }
 
@@ -36,13 +46,20 @@ namespace AU_ERP.Controllers
         [HttpGet]
         public async Task<JsonResult> Plants(CancellationToken ct = default)
         {
-            var items = await _db.PlantsSamples.AsNoTracking()
+            var allPlants = await _db.PlantsSamples.AsNoTracking()
                 .Where(p => p.PlantID != EmporiumPlantId)
                 .OrderBy(p => p.PlantName)
-                .Select(p => new { plantId = p.PlantID, plantName = p.PlantName })
                 .ToListAsync(ct);
-            var defaultPlantId = await ResolveDefaultMrpPlantIdAsync(ct).ConfigureAwait(false);
-            return Json(new { success = true, data = items, defaultPlantId });
+            var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlants.Select(p => p.PlantID), ct);
+            var filtered = SalesPlantAccess.FilterPlantsList(allPlants, plantScope);
+            var items = filtered
+                .Select(p => new { plantId = p.PlantID, plantName = p.PlantName })
+                .ToList();
+            var defaultPlantId = plantScope.EffectiveListPlantId
+                ?? (plantScope.IsSinglePlantLocked ? plantScope.AllowedPlantIds.FirstOrDefault() : null)
+                ?? filtered.FirstOrDefault()?.PlantID
+                ?? "";
+            return Json(new { success = true, data = items, defaultPlantId, missingPlantAssignment = plantScope.MissingAssignment });
         }
 
         [HttpGet]
@@ -172,9 +189,9 @@ namespace AU_ERP.Controllers
                 return Json(new MrpRunResponseDto { Success = false, Message = "No eligible plant found for MRP." });
             if (string.Equals(plant, EmporiumPlantId, StringComparison.OrdinalIgnoreCase))
                 return Json(new MrpRunResponseDto { Success = false, Message = "Emporium plant is not allowed for this MRP flow." });
-            var plantOk = await _db.PlantsSamples.AsNoTracking().AnyAsync(p => p.PlantID == plant, ct).ConfigureAwait(false);
-            if (!plantOk)
-                return Json(new MrpRunResponseDto { Success = false, Message = "Invalid plant." });
+            var plantAccessErr = await ValidateMrpPlantAsync(plant, ct).ConfigureAwait(false);
+            if (plantAccessErr != null)
+                return Json(new MrpRunResponseDto { Success = false, Message = plantAccessErr });
             
             var mat = (dto.MaterialNumber ?? "").Trim();
             var bomOptions = await BomMrpLookup.GetOptionsAsync(_db, mat, ct: ct);
@@ -275,8 +292,8 @@ namespace AU_ERP.Controllers
                     allSatisfied = false;
                     continue;
                 }
-                var plantOk = await _db.PlantsSamples.AsNoTracking().AnyAsync(p => p.PlantID == plant, ct).ConfigureAwait(false);
-                if (!plantOk)
+                var plantAccessErr = await ValidateMrpPlantAsync(plant, ct).ConfigureAwait(false);
+                if (plantAccessErr != null)
                 {
                     outLines.Add(new MrpMultiRunResultLineDto
                     {
@@ -286,7 +303,7 @@ namespace AU_ERP.Controllers
                         Quantity = ln.Quantity,
                         UomId = ln.UomId,
                         PlantId = plant,
-                        Result = new MrpRunResponseDto { Success = false, Message = $"Invalid plant for line {i + 1}." }
+                        Result = new MrpRunResponseDto { Success = false, Message = plantAccessErr }
                     });
                     allSatisfied = false;
                     continue;
@@ -428,15 +445,38 @@ namespace AU_ERP.Controllers
             });
         }
 
+        private async Task<string?> ValidateMrpPlantAsync(string plant, CancellationToken ct)
+        {
+            var allPlants = await _db.PlantsSamples.AsNoTracking()
+                .Where(p => p.PlantID != EmporiumPlantId)
+                .Select(p => p.PlantID)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlants, ct).ConfigureAwait(false);
+            return SalesPlantAccess.EnsurePlantAllowed(scope, plant);
+        }
+
         private async Task<string> ResolveDefaultMrpPlantIdAsync(CancellationToken ct)
         {
-            var plant = await _db.PlantsSamples.AsNoTracking()
+            var allPlants = await _db.PlantsSamples.AsNoTracking()
                 .Where(p => p.PlantID != EmporiumPlantId)
                 .OrderBy(p => p.PlantID)
                 .Select(p => p.PlantID)
-                .FirstOrDefaultAsync(ct)
+                .ToListAsync(ct)
                 .ConfigureAwait(false);
-            return (plant ?? string.Empty).Trim();
+            var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlants, ct).ConfigureAwait(false);
+            if (scope.MissingAssignment)
+                return string.Empty;
+            if (!string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+                return scope.EffectiveListPlantId!;
+            if (scope.IsSinglePlantLocked && scope.AllowedPlantIds.Count > 0)
+                return scope.AllowedPlantIds[0];
+            if (scope.IsAdminAllPlants)
+            {
+                var plant = allPlants.FirstOrDefault();
+                return (plant ?? string.Empty).Trim();
+            }
+            return scope.AllowedPlantIds.FirstOrDefault() ?? string.Empty;
         }
     }
 }

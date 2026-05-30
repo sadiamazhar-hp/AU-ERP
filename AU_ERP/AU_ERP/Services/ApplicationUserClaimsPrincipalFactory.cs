@@ -9,7 +9,7 @@ namespace AU_ERP.Services
     public static class AuClaimTypes
     {
         public const string Department = "department";
-        /// <summary>Value is <see cref="PlantsSample.PlantID"/> for Store or Sales department plant assignments.</summary>
+        /// <summary>Value is <see cref="PlantsSample.PlantID"/> for Store, Sales, or Production department plant assignments.</summary>
         public const string StorePlant = "store_plant";
     }
 
@@ -43,7 +43,8 @@ namespace AU_ERP.Services
             {
                 identity.AddClaim(new Claim(AuClaimTypes.Department, row.Code));
                 if ((string.Equals(row.Code, "Store", StringComparison.OrdinalIgnoreCase)
-                     || string.Equals(row.Code, "Sales", StringComparison.OrdinalIgnoreCase))
+                     || string.Equals(row.Code, "Sales", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(row.Code, "Production", StringComparison.OrdinalIgnoreCase))
                     && !string.IsNullOrWhiteSpace(row.PlantID))
                 {
                     foreach (var p in row.PlantID!

@@ -5,6 +5,7 @@
     var deptList = ViewBag.Departments as IEnumerable<Department>;
     var storeDeptId = ViewBag.StoreDepartmentId is int sdi ? sdi : 0;
     var salesDeptId = ViewBag.SalesDepartmentId is int sldi ? sldi : 0;
+    var productionDeptId = ViewBag.ProductionDepartmentId is int pdi ? pdi : 0;
     var plantsForUsers = ViewBag.Plants as IEnumerable<PlantsSample>;
 }
 
@@ -113,12 +114,13 @@
                     </div>
                     @{
                         var hasPlantsCreate = (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId)
-                            || (salesDeptId > 0 && (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId));
+                            || (salesDeptId > 0 && (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId))
+                            || (productionDeptId > 0 && (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(productionDeptId));
                         var selectedStorePlantsCreate = Model.CreateForm.StorePlantIds ?? Array.Empty<string>();
                     }
                     <div class="mb-3" id="createStorePlantRow" style="display:@(hasPlantsCreate ? "block" : "none");">
                         <div class="form-label">Assigned plants</div>
-                        <div class="form-text mb-1">Required when Store or Sales department is selected.</div>
+                        <div class="form-text mb-1">Required when Store, Sales, or Production department is selected.</div>
                         <div class="border rounded p-2 bg-body-secondary" style="max-height: 10rem; overflow-y: auto;">
                             @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
                             {
@@ -202,12 +204,13 @@
                     </div>
                     @{
                         var hasPlantsEdit = (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId)
-                            || (salesDeptId > 0 && (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId));
+                            || (salesDeptId > 0 && (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId))
+                            || (productionDeptId > 0 && (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(productionDeptId));
                         var selectedStorePlantsEdit = Model.EditForm.StorePlantIds ?? Array.Empty<string>();
                     }
                     <div class="mb-3" id="editStorePlantRow" style="display:@(hasPlantsEdit ? "block" : "none");">
                         <div class="form-label">Assigned plants</div>
-                        <div class="form-text mb-1">Required when Store or Sales department is selected.</div>
+                        <div class="form-text mb-1">Required when Store, Sales, or Production department is selected.</div>
                         <div class="border rounded p-2 bg-body-secondary" style="max-height: 10rem; overflow-y: auto;">
                             @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
                             {
@@ -239,24 +242,31 @@
                     if (el && el.parentElement !== document.body) document.body.appendChild(el);
                 };
             }
-            function toggleAssignedPlantRow(cbSelector, rowId, storeDeptIdNum, salesDeptIdNum) {
+            function toggleAssignedPlantRow(cbSelector, rowId, storeDeptIdNum, salesDeptIdNum, productionDeptIdNum) {
                 var row = document.getElementById(rowId);
                 if (!row) return;
                 var any = Array.prototype.some.call(document.querySelectorAll(cbSelector), function (inp) {
                     if (!inp.checked) return false;
                     var v = String(inp.value);
-                    return v === String(storeDeptIdNum) || (salesDeptIdNum > 0 && v === String(salesDeptIdNum));
+                    return v === String(storeDeptIdNum)
+                        || (salesDeptIdNum > 0 && v === String(salesDeptIdNum))
+                        || (productionDeptIdNum > 0 && v === String(productionDeptIdNum));
                 });
                 row.style.display = any ? 'block' : 'none';
+                if (!any) {
+                    row.querySelectorAll('input[type="checkbox"]').forEach(function (plantCb) {
+                        plantCb.checked = false;
+                    });
+                }
             }
 
-            function wireAssignedPlantToggle(cbSel, rowId, storeDeptIdNum, salesDeptIdNum) {
+            function wireAssignedPlantToggle(cbSel, rowId, storeDeptIdNum, salesDeptIdNum, productionDeptIdNum) {
                 document.querySelectorAll(cbSel).forEach(function (inp) {
                     inp.addEventListener('change', function () {
-                        toggleAssignedPlantRow(cbSel, rowId, storeDeptIdNum, salesDeptIdNum);
+                        toggleAssignedPlantRow(cbSel, rowId, storeDeptIdNum, salesDeptIdNum, productionDeptIdNum);
                     });
                 });
-                toggleAssignedPlantRow(cbSel, rowId, storeDeptIdNum, salesDeptIdNum);
+                toggleAssignedPlantRow(cbSel, rowId, storeDeptIdNum, salesDeptIdNum, productionDeptIdNum);
             }
 
             function init() {
@@ -272,8 +282,9 @@
                 }
                 var sd = @storeDeptId;
                 var sld = @salesDeptId;
-                wireAssignedPlantToggle('input[name=\"CreateForm.DepartmentIds\"]', 'createStorePlantRow', sd, sld);
-                wireAssignedPlantToggle('input[name=\"EditForm.DepartmentIds\"]', 'editStorePlantRow', sd, sld);
+                var pd = @productionDeptId;
+                wireAssignedPlantToggle('input[name=\"CreateForm.DepartmentIds\"]', 'createStorePlantRow', sd, sld, pd);
+                wireAssignedPlantToggle('input[name=\"EditForm.DepartmentIds\"]', 'editStorePlantRow', sd, sld, pd);
             }
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
             else init();

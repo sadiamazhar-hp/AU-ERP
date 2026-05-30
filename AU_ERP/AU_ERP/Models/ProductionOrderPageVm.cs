@@ -12,6 +12,7 @@ namespace AU_ERP.Models
         public string? Q { get; set; }
         public string? Status { get; set; }
         public string? Priority { get; set; }
+        public string? PlantId { get; set; }
 
         public int FilteredTotalQty => Items.Sum(i => i.TargetQuantity);
 

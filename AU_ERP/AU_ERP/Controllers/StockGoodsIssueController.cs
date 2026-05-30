@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 namespace AU_ERP.Controllers;
 
-[Authorize(Policy = "InventoryGoodsIssue")]
+[Authorize(Policy = "StoreDepartment")]
 public class StockGoodsIssueController : Controller
 {
     private readonly AppDbContext _db;

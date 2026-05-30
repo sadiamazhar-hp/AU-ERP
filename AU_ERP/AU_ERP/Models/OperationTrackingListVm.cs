@@ -21,5 +21,6 @@ namespace AU_ERP.Models
     public class OperationTrackingListVm
     {
         public List<OperationTrackingListItemVm> Orders { get; set; } = new();
+        public string? PlantId { get; set; }
     }
 }

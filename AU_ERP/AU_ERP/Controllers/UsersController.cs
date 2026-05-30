@@ -162,15 +162,16 @@ public class UsersController : Controller
             .ToListAsync()
             .ConfigureAwait(false);
         _db.ApplicationUserDepartments.RemoveRange(existing);
-        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        var (storeDeptId, salesDeptId, productionDeptId) = await GetOperationalDepartmentIdsAsync().ConfigureAwait(false);
         var plantCsv = JoinStorePlantIds(model.StorePlantIds);
         var hasStore = storeDeptId > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
         var hasSales = salesDeptId > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId);
-        var needsPlants = hasStore || hasSales;
+        var hasProduction = productionDeptId > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(productionDeptId);
+        var needsPlants = hasStore || hasSales || hasProduction;
         foreach (var deptId in model.DepartmentIds!.Distinct())
         {
             string? rowPlantId = null;
-            if (needsPlants && (deptId == storeDeptId || deptId == salesDeptId))
+            if (needsPlants && (deptId == storeDeptId || deptId == salesDeptId || deptId == productionDeptId))
                 rowPlantId = plantCsv;
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
@@ -268,15 +269,16 @@ public class UsersController : Controller
             });
         }
 
-        var (storeDeptIdCreate, salesDeptIdCreate) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        var (storeDeptIdCreate, salesDeptIdCreate, productionDeptIdCreate) = await GetOperationalDepartmentIdsAsync().ConfigureAwait(false);
         var plantCsvCreate = JoinStorePlantIds(model.StorePlantIds);
         var hasStoreCreate = storeDeptIdCreate > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptIdCreate);
         var hasSalesCreate = salesDeptIdCreate > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptIdCreate);
-        var needsPlantsCreate = hasStoreCreate || hasSalesCreate;
+        var hasProductionCreate = productionDeptIdCreate > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(productionDeptIdCreate);
+        var needsPlantsCreate = hasStoreCreate || hasSalesCreate || hasProductionCreate;
         foreach (var deptId in (model.DepartmentIds ?? Array.Empty<int>()).Distinct())
         {
             string? rowPlantId = null;
-            if (needsPlantsCreate && (deptId == storeDeptIdCreate || deptId == salesDeptIdCreate))
+            if (needsPlantsCreate && (deptId == storeDeptIdCreate || deptId == salesDeptIdCreate || deptId == productionDeptIdCreate))
                 rowPlantId = plantCsvCreate;
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
@@ -329,31 +331,33 @@ public class UsersController : Controller
 
     private async Task FillUserPlantLookupsAsync()
     {
-        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        var (storeDeptId, salesDeptId, productionDeptId) = await GetOperationalDepartmentIdsAsync().ConfigureAwait(false);
         ViewBag.StoreDepartmentId = storeDeptId;
         ViewBag.SalesDepartmentId = salesDeptId;
+        ViewBag.ProductionDepartmentId = productionDeptId;
         ViewBag.Plants = await _db.PlantsSamples.AsNoTracking()
             .OrderBy(p => p.PlantName)
             .ToListAsync()
             .ConfigureAwait(false);
     }
 
-    private async Task<(int storeDeptId, int salesDeptId)> GetStoreAndSalesDepartmentIdsAsync()
+    private async Task<(int storeDeptId, int salesDeptId, int productionDeptId)> GetOperationalDepartmentIdsAsync()
     {
         var rows = await _db.Departments.AsNoTracking()
-            .Where(d => d.Code == "Store" || d.Code == "Sales")
+            .Where(d => d.Code == "Store" || d.Code == "Sales" || d.Code == "Production")
             .Select(d => new { d.Code, d.Id })
             .ToListAsync()
             .ConfigureAwait(false);
         var storeDeptId = rows.FirstOrDefault(r => r.Code == "Store")?.Id ?? 0;
         var salesDeptId = rows.FirstOrDefault(r => r.Code == "Sales")?.Id ?? 0;
-        return (storeDeptId, salesDeptId);
+        var productionDeptId = rows.FirstOrDefault(r => r.Code == "Production")?.Id ?? 0;
+        return (storeDeptId, salesDeptId, productionDeptId);
     }
 
     private async Task<string[]> LoadAssignedPlantIdsForUserAsync(string userId)
     {
-        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
-        var deptIds = new[] { storeDeptId, salesDeptId }.Where(id => id > 0).ToList();
+        var (storeDeptId, salesDeptId, productionDeptId) = await GetOperationalDepartmentIdsAsync().ConfigureAwait(false);
+        var deptIds = new[] { storeDeptId, salesDeptId, productionDeptId }.Where(id => id > 0).ToList();
         if (deptIds.Count == 0)
             return Array.Empty<string>();
 
@@ -389,11 +393,12 @@ public class UsersController : Controller
         int[]? departmentIds,
         string[]? storePlantIds)
     {
-        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        var (storeDeptId, salesDeptId, productionDeptId) = await GetOperationalDepartmentIdsAsync().ConfigureAwait(false);
 
         var hasStore = storeDeptId > 0 && (departmentIds?.Contains(storeDeptId) ?? false);
         var hasSales = salesDeptId > 0 && (departmentIds?.Contains(salesDeptId) ?? false);
-        var needsPlants = hasStore || hasSales;
+        var hasProduction = productionDeptId > 0 && (departmentIds?.Contains(productionDeptId) ?? false);
+        var needsPlants = hasStore || hasSales || hasProduction;
         var ids = (storePlantIds ?? Array.Empty<string>())
             .Select(p => (p ?? "").Trim())
             .Where(p => p.Length > 0)
@@ -405,7 +410,7 @@ public class UsersController : Controller
             if (ids.Length == 0)
             {
                 modelState.AddModelError($"{fieldPrefix}StorePlantIds",
-                    "Select at least one assigned plant when the Store or Sales department is assigned.");
+                    "Select at least one assigned plant when the Store, Sales, or Production department is assigned.");
                 return;
             }
 
@@ -415,11 +420,6 @@ public class UsersController : Controller
                 .ConfigureAwait(false);
             if (validCount != ids.Length)
                 modelState.AddModelError($"{fieldPrefix}StorePlantIds", "One or more selected plants are invalid.");
-        }
-        else if (ids.Length > 0)
-        {
-            modelState.AddModelError($"{fieldPrefix}StorePlantIds",
-                "Assigned plants are only applicable when Store or Sales department is selected.");
         }
     }
 

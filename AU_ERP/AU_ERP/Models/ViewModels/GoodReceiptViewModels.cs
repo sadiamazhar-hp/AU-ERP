@@ -4,6 +4,7 @@ public class GoodReceiptIndexVm
 {
     public int? FocusProductionOrderId { get; set; }
     public List<GoodReceiptRowVm> Documents { get; set; } = new();
+    public string? PlantId { get; set; }
 }
 
 public class GoodReceiptRowVm

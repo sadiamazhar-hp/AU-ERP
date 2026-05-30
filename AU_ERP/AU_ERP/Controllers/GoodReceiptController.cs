@@ -31,18 +31,63 @@ public class GoodReceiptController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(int? productionOrderId, CancellationToken ct = default)
+    public async Task<IActionResult> Index(int? productionOrderId, string? plantId, CancellationToken ct = default)
     {
+        var allPlants = await _db.PlantsSamples.AsNoTracking()
+            .OrderBy(p => p.PlantName)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct)
+            .ConfigureAwait(false);
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+        ViewBag.ListPlantId = plantScope.EffectiveListPlantId ?? plantId ?? "";
+        ViewBag.PlantFilterFormId = "grListFilterForm";
+        ViewBag.PlantHiddenInputId = "grListPlant";
+        ViewBag.PlantFilterModalId = "grPlantFilterModal";
+        ViewBag.PlantFilterModalPlantId = "grModPlant";
+
         if (productionOrderId.HasValue && productionOrderId.Value > 0)
         {
-            var (ok, err) = await EnsureDraftAsync(productionOrderId.Value, ct).ConfigureAwait(false);
+            var (ok, err) = await EnsureDraftAsync(productionOrderId.Value, plantScope, ct).ConfigureAwait(false);
             if (!ok && !string.IsNullOrWhiteSpace(err))
                 TempData["GoodReceiptError"] = err;
         }
 
-        var docs = await _db.GoodReceiptDocuments.AsNoTracking()
+        var docsQuery = _db.GoodReceiptDocuments.AsNoTracking()
+            .Include(d => d.ProductionOrder!)
+            .ThenInclude(p => p.Lines)
             .Include(d => d.ProductionOrder!)
             .ThenInclude(p => p.FinishedMaterial)
+            .AsQueryable();
+
+        if (plantScope.MissingAssignment)
+            docsQuery = docsQuery.Where(_ => false);
+        else if (plantScope.IsAdminAllPlants)
+        {
+            if (!string.IsNullOrWhiteSpace(plantScope.EffectiveListPlantId))
+            {
+                var adminPlant = plantScope.EffectiveListPlantId!;
+                docsQuery = docsQuery.Where(d =>
+                    d.ProductionOrder != null
+                    && d.ProductionOrder.Lines.Any(l => l.PlantId == adminPlant));
+            }
+        }
+        else if (plantScope.IsSinglePlantLocked || !string.IsNullOrWhiteSpace(plantScope.EffectiveListPlantId))
+        {
+            var effectivePlant = plantScope.EffectiveListPlantId ?? plantScope.AllowedPlantIds[0];
+            docsQuery = docsQuery.Where(d =>
+                d.ProductionOrder != null
+                && d.ProductionOrder.Lines.Any(l => l.PlantId == effectivePlant));
+        }
+        else
+        {
+            var allowed = plantScope.AllowedPlantIds;
+            docsQuery = docsQuery.Where(d =>
+                d.ProductionOrder != null
+                && d.ProductionOrder.Lines.Any(l => l.PlantId != null && allowed.Contains(l.PlantId)));
+        }
+
+        var docs = await docsQuery
             .OrderByDescending(d => d.Id)
             .ToListAsync(ct)
             .ConfigureAwait(false);
@@ -50,6 +95,7 @@ public class GoodReceiptController : Controller
         var vm = new GoodReceiptIndexVm
         {
             FocusProductionOrderId = productionOrderId,
+            PlantId = plantScope.EffectiveListPlantId ?? (plantId ?? ""),
             Documents = docs.Select(d => new GoodReceiptRowVm(d)).ToList()
         };
 
@@ -63,7 +109,13 @@ public class GoodReceiptController : Controller
         if (productionOrderId <= 0)
             return BadRequest("Invalid production order.");
 
-        var (ok, err) = await EnsureDraftAsync(productionOrderId, ct).ConfigureAwait(false);
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct)
+            .ConfigureAwait(false);
+        var (ok, err) = await EnsureDraftAsync(productionOrderId, plantScope, ct).ConfigureAwait(false);
         if (!ok && !string.IsNullOrWhiteSpace(err))
             TempData["GoodReceiptError"] = err;
         return RedirectToAction(nameof(Index), new { productionOrderId });
@@ -243,7 +295,7 @@ public class GoodReceiptController : Controller
         return File(bytes, "application/pdf", fileName);
     }
 
-    private async Task<(bool Ok, string? Error)> EnsureDraftAsync(int productionOrderId, CancellationToken ct)
+    private async Task<(bool Ok, string? Error)> EnsureDraftAsync(int productionOrderId, SalesPlantScope plantScope, CancellationToken ct)
     {
         var exists = await _db.GoodReceiptDocuments.AnyAsync(d => d.ProductionOrderId == productionOrderId, ct).ConfigureAwait(false);
         if (exists)
@@ -255,6 +307,9 @@ public class GoodReceiptController : Controller
             .ConfigureAwait(false);
         if (po == null)
             return (true, null);
+
+        if (!SalesPlantAccess.IsProductionOrderReadable(plantScope, po.Lines.Select(l => l.PlantId)))
+            return (false, "You are not allowed to open a quality inspection for this production order's plant.");
 
         var lastOut = await _db.ProductionOrderStageProgresses.AsNoTracking()
             .Where(s => s.ProductionOrderId == productionOrderId && s.OutputQuantity.HasValue)

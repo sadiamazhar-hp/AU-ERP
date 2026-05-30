@@ -153,18 +153,12 @@
                     <a class="au-sidebar-link @(rtActive ? "active" : null)" asp-controller="Routing" asp-action="Index">Routing</a>
                     <a class="au-sidebar-link @(pvActive ? "active" : null)" asp-controller="ProductionVersion" asp-action="Index">Product Version</a>
                 }
-                @if (User.Identity?.IsAuthenticated == true)
+                @if (isStoreDept)
                 {
                     <div class="au-sidebar-section-title au-sidebar-section-title-spaced">Inventory</div>
                     <a class="au-sidebar-link @(stockOverviewActive ? "active" : null)" asp-controller="StockOverview" asp-action="Index">Stock Overview</a>
-                    @if (isStoreDept || isProductionDept || isSalesDept || isAdminDept)
-                    {
-                        <a class="au-sidebar-link @(stockGoodsIssueActive ? "active" : null)" asp-controller="StockGoodsIssue" asp-action="Index">Stock Goods Issue</a>
-                    }
-                    @if (isStoreDept)
-                    {
-                        <a class="au-sidebar-link @(stockMovementActive ? "active" : null)" asp-controller="StockMovement" asp-action="Index">Stock Movement</a>
-                    }
+                    <a class="au-sidebar-link @(stockGoodsIssueActive ? "active" : null)" asp-controller="StockGoodsIssue" asp-action="Index">Stock Goods Issue</a>
+                    <a class="au-sidebar-link @(stockMovementActive ? "active" : null)" asp-controller="StockMovement" asp-action="Index">Stock Movement</a>
                 }
                 @if (isSalesDept || isAdminDept)
                 {

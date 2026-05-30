@@ -29,6 +29,12 @@
     };
     var stSel = string.IsNullOrWhiteSpace(Model.Status) ? "All" : Model.Status!;
     var prSel = string.IsNullOrWhiteSpace(Model.Priority) ? "All" : Model.Priority!;
+    var listPlantId = Model.PlantId ?? "";
+    ViewBag.ListPlantId = listPlantId;
+    ViewBag.PlantFilterFormId = "poListFilterForm";
+    ViewBag.PlantHiddenInputId = "poListPlant";
+    ViewBag.PlantFilterModalId = "poPlantFilterModal";
+    ViewBag.PlantFilterModalPlantId = "poModPlant";
 }
 
 @section Styles {
@@ -121,6 +127,8 @@
         <div class="alert alert-danger py-2 small mb-3" role="status">@poErr</div>
     }
 
+    <partial name="_OperationalPlantFilter" />
+
     <div class="po-table-card">
         <div class="po-table-head">
             <h2 class="po-table-title">Production Orders (@Model.Items.Count)</h2>
@@ -130,6 +138,7 @@
                 <input type="hidden" name="priority" id="poListPriority" value="@prSel" />
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#poFilterModal">Filter</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#poPlantFilterModal">Plant</button>
                 <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear</a>
             </form>
         </div>
@@ -223,6 +232,7 @@
                                                     <input type="hidden" name="returnQ" value="@Model.Q" />
                                                     <input type="hidden" name="returnStatus" value="@stSel" />
                                                     <input type="hidden" name="returnPriority" value="@prSel" />
+                                                    <input type="hidden" name="returnPlantId" value="@listPlantId" />
                                                     <button type="submit" class="btn btn-outline-warning btn-sm" title="Post BOM consumption from stock (after dispatch locked)"><i class="bi bi-box-seam"></i> Goods Receive</button>
                                                 </form>
                                                 <button type="button" class="btn btn-outline-danger btn-sm" title="Delete order and linked reservation GI" onclick="poDelete(@p.Id)"><i class="bi bi-trash"></i></button>
@@ -239,6 +249,7 @@
                                                     <input type="hidden" name="returnQ" value="@Model.Q" />
                                                     <input type="hidden" name="returnStatus" value="@stSel" />
                                                     <input type="hidden" name="returnPriority" value="@prSel" />
+                                                    <input type="hidden" name="returnPlantId" value="@listPlantId" />
                                                     <button type="submit" class="btn btn-outline-primary btn-sm" title="Create operation tracking and start production"><i class="bi bi-play-circle"></i> Release</button>
                                                 </form>
                                                 @if (!string.IsNullOrEmpty(plannedGiNum))

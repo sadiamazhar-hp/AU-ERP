@@ -4,6 +4,12 @@
     ViewData["Title"] = "Quality Inspection";
     var draftCount = Model.Documents.Count(x => !x.IsPosted);
     var postedCount = Model.Documents.Count(x => x.IsPosted);
+    var listPlantId = Model.PlantId ?? "";
+    ViewBag.ListPlantId = listPlantId;
+    ViewBag.PlantFilterFormId = "grListFilterForm";
+    ViewBag.PlantHiddenInputId = "grListPlant";
+    ViewBag.PlantFilterModalId = "grPlantFilterModal";
+    ViewBag.PlantFilterModalPlantId = "grModPlant";
 }
 
 @section Styles {
@@ -46,6 +52,13 @@
             <p>Create draft receipts from Operation Tracking, then post to update inventory.</p>
         </div>
     </div>
+
+    <partial name="_OperationalPlantFilter" />
+
+    <form id="grListFilterForm" method="get" asp-controller="GoodReceipt" asp-action="Index" class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#grPlantFilterModal">Plant filter</button>
+        <a class="btn btn-sm btn-link text-secondary" asp-action="Index">Clear filters</a>
+    </form>
 
     <div class="po-stats">
         <div class="po-stat-card">

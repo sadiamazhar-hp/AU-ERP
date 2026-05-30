@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Services;
 
-/// <summary>Resolves plant scope for Sales module listings and writes (uses Store/Sales department <see cref="ApplicationUserDepartment.PlantID"/> assignments).</summary>
+/// <summary>Resolves plant scope for operational module listings and writes (uses Store/Sales/Production department <see cref="ApplicationUserDepartment.PlantID"/> assignments).</summary>
 public sealed record SalesPlantScope(
     IReadOnlyList<string> AllowedPlantIds,
     string? EffectiveListPlantId,
@@ -18,9 +18,10 @@ public static class SalesPlantAccess
 {
     public static bool HasOperationalDepartment(ClaimsPrincipal? user) =>
         user?.HasClaim(AuClaimTypes.Department, "Store") == true
-        || user?.HasClaim(AuClaimTypes.Department, "Sales") == true;
+        || user?.HasClaim(AuClaimTypes.Department, "Sales") == true
+        || user?.HasClaim(AuClaimTypes.Department, "Production") == true;
 
-    /// <summary>Loads assigned plant ids from Store/Sales department rows (authoritative for operational users).</summary>
+    /// <summary>Loads assigned plant ids from Store/Sales/Production department rows (authoritative for operational users).</summary>
     public static async Task<IReadOnlyList<string>> LoadAssignedPlantIdsAsync(
         AppDbContext db,
         ClaimsPrincipal? user,
@@ -39,7 +40,7 @@ public static class SalesPlantAccess
                 from ud in db.ApplicationUserDepartments.AsNoTracking()
                 join d in db.Departments.AsNoTracking() on ud.DepartmentId equals d.Id
                 where ud.UserId == userId
-                    && (d.Code == "Store" || d.Code == "Sales")
+                    && (d.Code == "Store" || d.Code == "Sales" || d.Code == "Production")
                     && ud.PlantID != null
                     && ud.PlantID != ""
                 select ud.PlantID!).ToListAsync(ct).ConfigureAwait(false);
@@ -54,7 +55,7 @@ public static class SalesPlantAccess
                 return fromDb.Where(p => allSet.Contains(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             }
 
-            // Store/Sales users: never fall back to stale identity claims — empty DB means no assignment.
+            // Operational users: never fall back to stale identity claims — empty DB means no assignment.
             if (hasOperationalDept)
                 return Array.Empty<string>();
         }
@@ -109,8 +110,8 @@ public static class SalesPlantAccess
     {
         var requested = (requestedPlantId ?? "").Trim();
 
-        // Pure Admin (no Store/Sales dept) with no plant rows → optional filter across all plants.
-        // Users with Store or Sales MUST always be scoped to assigned plants (even if they also have Admin).
+        // Pure Admin (no Store/Sales/Production dept) with no plant rows → optional filter across all plants.
+        // Users with Store, Sales, or Production MUST always be scoped to assigned plants (even if they also have Admin).
         if (isAdminDepartment && assigned.Count == 0 && !hasOperationalDepartment)
         {
             string? effective = null;
@@ -173,10 +174,52 @@ public static class SalesPlantAccess
         return query.Where(BuildInList(plantIdSelector, scope.AllowedPlantIds));
     }
 
+    /// <summary>Filter production orders where any line plant matches the resolved scope (orders have no header plant).</summary>
+    public static IQueryable<ProductionOrder> ApplyProductionOrderPlantFilter(
+        IQueryable<ProductionOrder> query,
+        SalesPlantScope scope)
+    {
+        if (scope.MissingAssignment)
+            return query.Where(_ => false);
+
+        if (scope.IsAdminAllPlants)
+        {
+            if (string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+                return query;
+            var adminPlant = scope.EffectiveListPlantId!;
+            return query.Where(po => po.Lines.Any(l => l.PlantId == adminPlant));
+        }
+
+        if (scope.IsSinglePlantLocked || !string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+        {
+            var plant = scope.EffectiveListPlantId ?? scope.AllowedPlantIds[0];
+            return query.Where(po => po.Lines.Any(l => l.PlantId == plant));
+        }
+
+        var allowed = scope.AllowedPlantIds;
+        return query.Where(po => po.Lines.Any(l => l.PlantId != null && allowed.Contains(l.PlantId)));
+    }
+
+    public static bool IsProductionOrderReadable(SalesPlantScope scope, IEnumerable<string?> linePlantIds)
+    {
+        if (scope.IsAdminAllPlants)
+            return true;
+        if (scope.MissingAssignment)
+            return false;
+        var plants = linePlantIds
+            .Select(p => (p ?? "").Trim())
+            .Where(p => p.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (plants.Count == 0)
+            return false;
+        return plants.Any(p => scope.AllowedPlantIds.Contains(p, StringComparer.OrdinalIgnoreCase));
+    }
+
     public static string? EnsurePlantAllowed(SalesPlantScope scope, string? plantId)
     {
         if (scope.MissingAssignment)
-            return "Your user has no plant assigned. An administrator must assign at least one plant for your Sales or Store department.";
+            return "Your user has no plant assigned. An administrator must assign at least one plant for your Store, Sales, or Production department.";
 
         var key = (plantId ?? "").Trim();
         if (scope.IsSinglePlantLocked)
