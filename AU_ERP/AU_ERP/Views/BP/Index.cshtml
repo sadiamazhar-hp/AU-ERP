@@ -173,29 +173,6 @@
                                         }
                                     </select>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">First Name</label>
-                                    <input name="FirstName" id="bpEditFirstName" class="form-control" />
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Last Name</label>
-                                    <input name="LastName" id="bpEditLastName" class="form-control" />
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">CNIC</label>
-                                    <input name="CNIC" id="bpEditCNIC" class="form-control" />
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Licence No</label>
-                                    <input name="LicenceNo" id="bpEditLicenceNo" class="form-control" />
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Status</label>
-                                    <select name="IsActive" id="bpEditIsActive" class="form-select">
-                                        <option value="true">Active</option>
-                                        <option value="false">Inactive</option>
-                                    </select>
-                                </div>
                             </div>
                         </div>
 
@@ -636,11 +613,6 @@
                     setEditField("bpEditType", p.bpTypeId || p.BPTypeId || "");
                     setEditField("bpEditGroup", p.bpGroupingId || p.BPGroupingId || "");
                     setEditField("bpEditFullName", p.fullName || p.FullName);
-                    setEditField("bpEditFirstName", p.firstName || p.FirstName);
-                    setEditField("bpEditLastName", p.lastName || p.LastName);
-                    setEditField("bpEditCNIC", p.cnic || p.CNIC);
-                    setEditField("bpEditLicenceNo", p.licenceNo || p.LicenceNo);
-                    setEditField("bpEditIsActive", String((p.isActive ?? p.IsActive) ? "true" : "false"));
                     setEditField("bpEditStreet", p.street || p.Street);
                     setEditField("bpEditHouseNo", p.houseNo || p.HouseNo);
                     setEditField("bpEditCity", p.city || p.City);

@@ -7,6 +7,7 @@ using AU_ERP.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace AU_ERP.Main_Controller
@@ -236,7 +237,7 @@ namespace AU_ERP.Main_Controller
             }
         }
 
-        private static bool TryComputeNextFromRange(BPTypeNumberRanges range, out int nextNumber, out string? error)
+        private static bool TryComputeNextFromRange(BPTypeNumberRanges range, out long nextNumber, out string? error)
         {
             nextNumber = 0;
             error = null;
@@ -260,8 +261,44 @@ namespace AU_ERP.Main_Controller
             return true;
         }
 
-        private static string FormatBpIdFromRange(BPTypeNumberRanges range, int nextNumber) =>
-            (range.Prefix ?? "") + nextNumber.ToString();
+        private static string FormatBpIdFromRange(BPTypeNumberRanges range, long nextNumber) =>
+            (range.Prefix ?? "") + nextNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        private async Task<bool> TryAssignNextBpIdFromRangeAsync(
+            BusinessPartnerMasterSample model,
+            BPTypeNumberRanges range,
+            CancellationToken ct)
+        {
+            range.CurrentNumber = await NumberRangeMaintenance.ResolveBpLastIssuedAsync(_db, range, ct);
+
+            while (true)
+            {
+                if (!TryComputeNextFromRange(range, out var nextNum, out var rangeErr))
+                {
+                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.BPID), rangeErr ?? "Range error.");
+                    return false;
+                }
+
+                var candidate = FormatBpIdFromRange(range, nextNum);
+                var exists = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+                    .AnyAsync(x => x.BPID == candidate, ct);
+                if (!exists)
+                {
+                    model.BPID = candidate;
+                    range.CurrentNumber = nextNum;
+                    return true;
+                }
+
+                range.CurrentNumber = nextNum;
+                if (nextNum >= range.EndNumber)
+                {
+                    ModelState.AddModelError(
+                        nameof(BusinessPartnerMasterSample.BPID),
+                        "The number range for this BP type has been exhausted!");
+                    return false;
+                }
+            }
+        }
 
         [HttpGet]
         public async Task<JsonResult> GetNextBPID(int bpTypeId, CancellationToken ct = default)
@@ -275,6 +312,7 @@ namespace AU_ERP.Main_Controller
                 if (range == null)
                     return Json(new { success = false, message = "No number range defined for this BP type." });
 
+                range.CurrentNumber = await NumberRangeMaintenance.ResolveBpLastIssuedAsync(_db, range, ct);
                 if (!TryComputeNextFromRange(range, out var nextNum, out var err))
                     return Json(new { success = false, message = err ?? "Range error." });
 
@@ -299,6 +337,7 @@ namespace AU_ERP.Main_Controller
                 if (range == null)
                     return Json(new { success = false, message = "No number range defined for this BP type." });
 
+                range.CurrentNumber = await NumberRangeMaintenance.ResolveBpLastIssuedAsync(_db, range, ct);
                 if (!TryComputeNextFromRange(range, out var nextNum, out var err))
                     return Json(new { success = false, message = err ?? "Range error." });
 
@@ -365,13 +404,8 @@ namespace AU_ERP.Main_Controller
                 var range = await ResolveBpTypeRangeTrackedAsync(bpTypeForRange, ct);
                 if (range == null)
                     ModelState.AddModelError(nameof(BusinessPartnerMasterSample.BPTypeId), "No number range defined for this BP type.");
-                else if (!TryComputeNextFromRange(range, out var nextNum, out var rangeErr))
-                    ModelState.AddModelError(nameof(BusinessPartnerMasterSample.BPID), rangeErr ?? "Range error.");
                 else
-                {
-                    model.BPID = FormatBpIdFromRange(range, nextNum);
-                    range.CurrentNumber = nextNum;
-                }
+                    await TryAssignNextBpIdFromRangeAsync(model, range, ct);
             }
             else if (string.IsNullOrWhiteSpace(model.BPID))
             {
@@ -413,6 +447,30 @@ namespace AU_ERP.Main_Controller
                 await _db.BusinessPartnerMasterSamples.AddAsync(model, ct);
                 await _db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2627 })
+            {
+                await transaction.RollbackAsync(ct);
+                const string msg = "A business partner with this ID already exists. The number range may be out of sync — try again or update BP Type Number Ranges.";
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    return Json(new { success = false, message = msg });
+                ModelState.AddModelError("", msg);
+                var ret = Request.Form["returnTo"].ToString();
+                if (string.Equals(ret, "Index", StringComparison.OrdinalIgnoreCase))
+                {
+                    var partners = await _db.BusinessPartnerMasterSamples
+                        .AsNoTracking()
+                        .Include(p => p.Role)
+                        .Include(p => p.TypeSample)
+                        .Include(p => p.Grouping)
+                        .OrderByDescending(p => p.CreatedAt ?? DateTime.MinValue)
+                        .ThenBy(p => p.BPID)
+                        .ToListAsync(ct);
+                    ViewBag.FormReturnTo = "Index";
+                    return View("Index", new BPIndexViewModel { Draft = model, Partners = partners });
+                }
+                ViewBag.FormReturnTo = "Create";
+                return View(model);
             }
             catch
             {
@@ -512,11 +570,6 @@ namespace AU_ERP.Main_Controller
             existing.BPTypeId = model.BPTypeId;
             existing.BPGroupingId = model.BPGroupingId;
             existing.FullName = model.FullName;
-            existing.FirstName = model.FirstName;
-            existing.LastName = model.LastName;
-            existing.CNIC = model.CNIC;
-            existing.LicenceNo = model.LicenceNo;
-            existing.IsActive = model.IsActive;
             existing.Street = model.Street;
             existing.HouseNo = model.HouseNo;
             existing.City = model.City;
@@ -805,6 +858,8 @@ namespace AU_ERP.Main_Controller
 
                     var normalizedCurrent = NumberRangeMaintenance.NormalizeBpLastIssued(
                         item.StartNumber, item.EndNumber, item.CurrentNumber);
+                    var resolvedCurrent = await NumberRangeMaintenance.ResolveBpLastIssuedAsync(
+                        _db, item.Prefix, item.StartNumber, item.EndNumber, normalizedCurrent, ct);
 
                     if (item.RangeID > 0)
                     {
@@ -815,12 +870,12 @@ namespace AU_ERP.Main_Controller
                             existing.Prefix = item.Prefix;
                             existing.StartNumber = item.StartNumber;
                             existing.EndNumber = item.EndNumber;
-                            existing.CurrentNumber = normalizedCurrent;
+                            existing.CurrentNumber = resolvedCurrent;
                         }
                     }
                     else
                     {
-                        if (item.StartNumber == 0 && item.EndNumber == 0 && normalizedCurrent == 0 && (item.BPTypeId == null || item.BPTypeId == 0))
+                        if (item.StartNumber == 0 && item.EndNumber == 0 && resolvedCurrent == 0 && (item.BPTypeId == null || item.BPTypeId == 0))
                             continue;
                         if (item.BPTypeId == 0)
                             item.BPTypeId = null;
@@ -830,7 +885,7 @@ namespace AU_ERP.Main_Controller
                             Prefix = item.Prefix,
                             StartNumber = item.StartNumber,
                             EndNumber = item.EndNumber,
-                            CurrentNumber = normalizedCurrent
+                            CurrentNumber = resolvedCurrent
                         }, ct);
                     }
                 }

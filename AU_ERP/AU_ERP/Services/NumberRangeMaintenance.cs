@@ -46,19 +46,47 @@ namespace AU_ERP.Services
             return true;
         }
 
-        public static bool TryValidateBpRange(int startNumber, int endNumber, out string? error)
+        /// <summary>Largest value allowed for document from/to (10 decimal digits).</summary>
+        public const long MaxDocumentRangeNumber = 9_999_999_999L;
+
+        /// <summary>Largest value allowed for BP start/end (10 decimal digits).</summary>
+        public const long MaxBpRangeNumber = MaxDocumentRangeNumber;
+
+        public static bool TryValidateBpRange(long startNumber, long endNumber, out string? error)
         {
             error = null;
+            if (startNumber < 0)
+            {
+                error = "BP range start number cannot be negative.";
+                return false;
+            }
+
+            if (endNumber < 0)
+            {
+                error = "BP range end number cannot be negative.";
+                return false;
+            }
+
+            if (startNumber > MaxBpRangeNumber)
+            {
+                error = $"BP range start number cannot exceed {MaxBpRangeNumber} (10 digits).";
+                return false;
+            }
+
+            if (endNumber > MaxBpRangeNumber)
+            {
+                error = $"BP range end number cannot exceed {MaxBpRangeNumber} (10 digits).";
+                return false;
+            }
+
             if (endNumber < startNumber)
             {
                 error = "BP range end number cannot be smaller than start number.";
                 return false;
             }
+
             return true;
         }
-
-        /// <summary>Largest value allowed for document from/to (10 decimal digits).</summary>
-        public const long MaxDocumentRangeNumber = 9_999_999_999L;
 
         public static bool TryValidateDocumentRange(long? fromNumber, long? toNumber, out string? error)
         {
@@ -144,15 +172,84 @@ namespace AU_ERP.Services
             return FormatMaterialLastIssued(last);
         }
 
-        public static int NormalizeBpLastIssued(int startNumber, int endNumber, int currentNumber)
+        public static long NormalizeBpLastIssued(long startNumber, long endNumber, long currentNumber)
         {
             if (startNumber > endNumber)
                 return 0;
 
-            var last = currentNumber == 0 ? (int?)null : currentNumber;
-            last = ClampLastIssuedInt(startNumber, endNumber, last);
+            long? last = currentNumber == 0 ? null : currentNumber;
+            last = ClampLastIssued(startNumber, endNumber, last);
             return last ?? 0;
         }
+
+        public static bool TryParseBpRangeSuffix(string bpId, string? prefix, out long numericSuffix)
+        {
+            numericSuffix = 0;
+            if (string.IsNullOrWhiteSpace(bpId))
+                return false;
+
+            var suffixPart = bpId.Trim();
+            var pfx = prefix ?? "";
+            if (pfx.Length > 0)
+            {
+                if (!suffixPart.StartsWith(pfx, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                suffixPart = suffixPart[pfx.Length..];
+            }
+
+            return long.TryParse(suffixPart, NumberStyles.None, CultureInfo.InvariantCulture, out numericSuffix);
+        }
+
+        public static async Task<long> GetMaxBpNumericSuffixInRangeAsync(
+            AppDbContext db,
+            string? prefix,
+            long startNumber,
+            long endNumber,
+            CancellationToken ct = default)
+        {
+            if (startNumber > endNumber)
+                return 0;
+
+            var bpIds = await db.BusinessPartnerMasterSamples.AsNoTracking()
+                .Select(x => x.BPID)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            var max = 0L;
+            foreach (var bpId in bpIds)
+            {
+                if (!TryParseBpRangeSuffix(bpId, prefix, out var num))
+                    continue;
+                if (num < startNumber || num > endNumber)
+                    continue;
+                max = Math.Max(max, num);
+            }
+
+            return max;
+        }
+
+        public static long CombineBpLastIssuedWithDbMax(long startNumber, long endNumber, long storedCurrent, long maxDbSuffix)
+        {
+            var stored = storedCurrent == 0 ? 0 : storedCurrent;
+            var effective = Math.Max(stored, maxDbSuffix);
+            return NormalizeBpLastIssued(startNumber, endNumber, effective);
+        }
+
+        public static async Task<long> ResolveBpLastIssuedAsync(
+            AppDbContext db,
+            string? prefix,
+            long startNumber,
+            long endNumber,
+            long storedCurrent,
+            CancellationToken ct = default)
+        {
+            var maxDb = await GetMaxBpNumericSuffixInRangeAsync(db, prefix, startNumber, endNumber, ct)
+                .ConfigureAwait(false);
+            return CombineBpLastIssuedWithDbMax(startNumber, endNumber, storedCurrent, maxDb);
+        }
+
+        public static Task<long> ResolveBpLastIssuedAsync(AppDbContext db, BPTypeNumberRanges range, CancellationToken ct = default) =>
+            ResolveBpLastIssuedAsync(db, range.Prefix, range.StartNumber, range.EndNumber, range.CurrentNumber, ct);
 
         public static long NormalizeDocumentLastIssuedNumber(long fromNumber, long toNumber, long? postedLastIssuedNumber)
         {

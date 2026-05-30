@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- buildout\ from -p:BaseOutputPath builds: ignore those generated sources (else CS0579 vs obj\). -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);buildout/**;buildtmp/**;buildtmp2/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);buildout/**;buildtmp*/**</DefaultItemExcludes>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

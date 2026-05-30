@@ -224,17 +224,17 @@ namespace AU_ERP.Migrations
                     b.Property<int?>("BPTypeId")
                         .HasColumnType("int");
 
-                    b.Property<int>("CurrentNumber")
-                        .HasColumnType("int");
+                    b.Property<long>("CurrentNumber")
+                        .HasColumnType("bigint");
 
-                    b.Property<int>("EndNumber")
-                        .HasColumnType("int");
+                    b.Property<long>("EndNumber")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Prefix")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("StartNumber")
-                        .HasColumnType("int");
+                    b.Property<long>("StartNumber")
+                        .HasColumnType("bigint");
 
                     b.HasKey("RangeID");
 
