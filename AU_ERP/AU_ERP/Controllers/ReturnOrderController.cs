@@ -36,6 +36,7 @@ public class ReturnOrderController : Controller
     public async Task<IActionResult> Index(
         string? q,
         string? status,
+        string? plantId,
         DateTime? dateFrom,
         DateTime? dateTo,
         CancellationToken ct = default)
@@ -43,11 +44,15 @@ public class ReturnOrderController : Controller
         ViewData["Title"] = "Return order";
         var qq = (q ?? "").Trim();
         var st = (status ?? ReturnOrderWorkflowStatus.All).Trim();
+        var allPlants = await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
         List<SalesReturnOrder> orders;
         try
         {
             var query = ApplyReturnOrderSearchFilter(_db.SalesReturnOrders.AsNoTracking(), qq);
             query = ApplyReturnOrderDateFilter(query, dateFrom, dateTo);
+            query = ApplyReturnOrderPlantScope(query, plantScope);
             orders = await query
                 .OrderByDescending(r => r.DocumentDate)
                 .ThenByDescending(r => r.Id)
@@ -147,12 +152,15 @@ public class ReturnOrderController : Controller
             CountDcPending = rowVms.Count(o => o.WorkflowStatus == ReturnOrderWorkflowStatus.DcPending),
             CountCompleted = rowVms.Count(o => o.WorkflowStatus == ReturnOrderWorkflowStatus.Completed)
         };
+        ViewBag.FilterPlantId = plantScope.EffectiveListPlantId;
         return View(vm);
     }
 
     [HttpGet]
     public async Task<IActionResult> ReadOnlyPartial(int id, CancellationToken ct = default)
     {
+        if (!await IsReturnOrderReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
         var r = await LoadReturnOrderForDetailAsync(id, ct).ConfigureAwait(false);
         if (r == null)
             return NotFound();
@@ -162,6 +170,8 @@ public class ReturnOrderController : Controller
     [HttpGet]
     public async Task<IActionResult> CreditMemoPartial(int id, CancellationToken ct = default)
     {
+        if (!await IsReturnOrderReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
         SalesReturnCreditMemo? cm;
         try
         {
@@ -191,6 +201,8 @@ public class ReturnOrderController : Controller
     [HttpGet]
     public async Task<IActionResult> Details(int id, CancellationToken ct = default)
     {
+        if (!await IsReturnOrderReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
         var r = await LoadReturnOrderForDetailAsync(id, ct).ConfigureAwait(false);
         if (r == null)
             return NotFound();
@@ -210,6 +222,48 @@ public class ReturnOrderController : Controller
             || (r.DealerDisplayName != null && r.DealerDisplayName.Contains(qq))
             || (r.DealerBusinessPartnerId != null && r.DealerBusinessPartnerId.Contains(qq))
             || r.ReturnReason.Contains(qq));
+    }
+
+    private static IQueryable<SalesReturnOrder> ApplyReturnOrderPlantScope(
+        IQueryable<SalesReturnOrder> query,
+        AppDbContext db,
+        SalesPlantScope scope)
+    {
+        if (scope.IsAdminAllPlants && string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+            return query;
+        if (scope.MissingAssignment)
+            return query.Where(_ => false);
+
+        var joined = from ro in query
+            join inv in db.SalesInvoices.AsNoTracking() on ro.SalesInvoiceId equals inv.Id
+            join dc in db.DeliveryChallans.AsNoTracking() on inv.DeliveryChallanId equals dc.Id
+            select new { ro, PlantId = dc.PlantId };
+        joined = SalesPlantAccess.ApplyListingPlantFilter(joined, scope, x => x.PlantId);
+        return joined.Select(x => x.ro);
+    }
+
+    private IQueryable<SalesReturnOrder> ApplyReturnOrderPlantScope(
+        IQueryable<SalesReturnOrder> query,
+        SalesPlantScope scope) =>
+        ApplyReturnOrderPlantScope(query, _db, scope);
+
+    private async Task<string?> GetReturnOrderPlantIdAsync(int returnOrderId, CancellationToken ct) =>
+        await (
+            from ro in _db.SalesReturnOrders.AsNoTracking()
+            join inv in _db.SalesInvoices.AsNoTracking() on ro.SalesInvoiceId equals inv.Id
+            join dc in _db.DeliveryChallans.AsNoTracking() on inv.DeliveryChallanId equals dc.Id
+            where ro.Id == returnOrderId
+            select dc.PlantId).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+
+    private async Task<bool> IsReturnOrderReadableAsync(int returnOrderId, CancellationToken ct)
+    {
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct).ConfigureAwait(false);
+        var plantId = await GetReturnOrderPlantIdAsync(returnOrderId, ct).ConfigureAwait(false);
+        return SalesPlantAccess.IsPlantReadable(scope, plantId);
     }
 
     private static IQueryable<SalesReturnOrder> ApplyReturnOrderDateFilter(
@@ -267,6 +321,8 @@ public class ReturnOrderController : Controller
     [HttpGet]
     public async Task<IActionResult> CreditMemo(int id, CancellationToken ct = default)
     {
+        if (!await IsReturnOrderReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
         var cm = await _db.SalesReturnCreditMemos.AsNoTracking()
             .Include(c => c.Lines).ThenInclude(l => l.QuantityUom)
             .FirstOrDefaultAsync(c => c.SalesReturnOrderId == id, ct);
@@ -284,6 +340,8 @@ public class ReturnOrderController : Controller
     [HttpGet]
     public async Task<IActionResult> CreditMemoPdf(int id, CancellationToken ct = default)
     {
+        if (!await IsReturnOrderReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
         var cm = await _db.SalesReturnCreditMemos.AsNoTracking()
             .Include(c => c.Lines).ThenInclude(l => l.QuantityUom)
             .FirstOrDefaultAsync(c => c.SalesReturnOrderId == id, ct);
@@ -312,6 +370,14 @@ public class ReturnOrderController : Controller
 
         if (inv == null)
             return NotFound();
+
+        var createScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(createScope, inv.DeliveryChallan?.PlantId))
+        {
+            TempData["RoError"] = "You are not allowed to create a return order for this invoice's plant.";
+            return RedirectToAction(nameof(InvoiceController.Index), "Invoice");
+        }
 
         if (string.Equals(inv.Status, SalesInvoice.StatusReturned, StringComparison.OrdinalIgnoreCase))
         {
@@ -413,6 +479,14 @@ public class ReturnOrderController : Controller
 
         if (inv == null)
             return NotFound();
+
+        var postScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(postScope, inv.DeliveryChallan?.PlantId))
+        {
+            TempData["RoError"] = "You are not allowed to create a return order for this invoice's plant.";
+            return RedirectToAction(nameof(InvoiceController.Index), "Invoice");
+        }
 
         if (string.Equals(inv.Status, SalesInvoice.StatusReturned, StringComparison.OrdinalIgnoreCase))
         {

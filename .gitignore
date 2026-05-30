@@ -53,3 +53,6 @@ appsettings.Local.json
 **/appsettings.*.local.json
 *.pfx
 secrets.json
+/AU_ERP/AU_ERP/buildtmp_walkin
+/AU_ERP/AU_ERP/buildtmp_schema
+/AU_ERP/AU_ERP/buildtmp_mrp

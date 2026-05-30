@@ -21,15 +21,32 @@ public class SalesGoodsIssueController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(int? salesOrderId, CancellationToken ct = default)
+    public async Task<IActionResult> Index(int? salesOrderId, string? plantId, CancellationToken ct = default)
     {
+        var allPlants = await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+
         List<SalesGoodsIssueDocument> docs;
         try
         {
-            docs = await _db.SalesGoodsIssueDocuments.AsNoTracking()
-                .Include(d => d.SalesOrder)
-                .OrderByDescending(d => d.Id)
-                .ToListAsync(ct);
+            var joined = from doc in _db.SalesGoodsIssueDocuments.AsNoTracking()
+                join so in _db.SalesOrders.AsNoTracking() on doc.SalesOrderId equals so.Id
+                select new { doc, PlantId = so.PlantId };
+            joined = SalesPlantAccess.ApplyListingPlantFilter(joined, plantScope, x => x.PlantId);
+            var ids = await joined
+                .OrderByDescending(x => x.doc.Id)
+                .Select(x => x.doc.Id)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            docs = ids.Count == 0
+                ? new List<SalesGoodsIssueDocument>()
+                : await _db.SalesGoodsIssueDocuments.AsNoTracking()
+                    .Include(d => d.SalesOrder)
+                    .Where(d => ids.Contains(d.Id))
+                    .OrderByDescending(d => d.Id)
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
         }
         catch (SqlException ex) when (
             ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) &&
@@ -44,6 +61,7 @@ public class SalesGoodsIssueController : Controller
             FocusSalesOrderId = salesOrderId,
             Documents = docs.Select(d => new SalesGoodsIssueRowVm(d)).ToList()
         };
+        ViewBag.FilterPlantId = plantScope.EffectiveListPlantId;
         return View(vm);
     }
 
@@ -51,6 +69,12 @@ public class SalesGoodsIssueController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateOrOpen(int salesOrderId, CancellationToken ct = default)
     {
+        if (!await IsSalesOrderPlantAllowedAsync(salesOrderId, ct).ConfigureAwait(false))
+        {
+            TempData["SgiError"] = "You are not allowed to access this sales order's plant.";
+            return RedirectToAction(nameof(Index), new { salesOrderId });
+        }
+
         var (ok, msg, _) = await _service.CreateOrOpenPendingAsync(
             salesOrderId,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -64,6 +88,12 @@ public class SalesGoodsIssueController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Send(int id, CancellationToken ct = default)
     {
+        if (!await IsGoodsIssueReadableAsync(id, ct).ConfigureAwait(false))
+        {
+            TempData["SgiError"] = "You are not allowed to access this goods issue document.";
+            return RedirectToAction(nameof(Index));
+        }
+
         var (ok, msg) = await _service.SendGoodsAsync(
             id,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -77,6 +107,12 @@ public class SalesGoodsIssueController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Receive(int id, CancellationToken ct = default)
     {
+        if (!await IsGoodsIssueReadableAsync(id, ct).ConfigureAwait(false))
+        {
+            TempData["SgiError"] = "You are not allowed to access this goods issue document.";
+            return RedirectToAction(nameof(Index));
+        }
+
         var (ok, msg) = await _service.ReceiveGoodsAsync(
             id,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -89,6 +125,9 @@ public class SalesGoodsIssueController : Controller
     [HttpGet]
     public async Task<IActionResult> View(int id, CancellationToken ct = default)
     {
+        if (!await IsGoodsIssueReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
+
         var doc = await _db.SalesGoodsIssueDocuments.AsNoTracking()
             .Include(d => d.SalesOrder)
             .Include(d => d.Lines)
@@ -97,5 +136,35 @@ public class SalesGoodsIssueController : Controller
         if (doc == null)
             return NotFound();
         return PartialView("_SalesGoodsIssueDetails", doc);
+    }
+
+    private async Task<bool> IsSalesOrderPlantAllowedAsync(int salesOrderId, CancellationToken ct)
+    {
+        var plantId = await _db.SalesOrders.AsNoTracking()
+            .Where(o => o.Id == salesOrderId)
+            .Select(o => o.PlantId)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct).ConfigureAwait(false);
+        return SalesPlantAccess.IsPlantReadable(scope, plantId);
+    }
+
+    private async Task<bool> IsGoodsIssueReadableAsync(int goodsIssueId, CancellationToken ct)
+    {
+        var plantId = await (
+            from doc in _db.SalesGoodsIssueDocuments.AsNoTracking()
+            join so in _db.SalesOrders.AsNoTracking() on doc.SalesOrderId equals so.Id
+            where doc.Id == goodsIssueId
+            select so.PlantId).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct).ConfigureAwait(false);
+        return SalesPlantAccess.IsPlantReadable(scope, plantId);
     }
 }

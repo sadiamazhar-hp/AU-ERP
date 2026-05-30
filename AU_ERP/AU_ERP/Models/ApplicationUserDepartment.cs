@@ -9,7 +9,9 @@ namespace AU_ERP.Models
         public int DepartmentId { get; set; }
         public Department Department { get; set; } = null!;
 
-        /// <summary>Required when <see cref="Department"/> is Store; selects which plant this user’s Store access applies to.</summary>
+        /// <summary>
+        /// Comma-separated <see cref="PlantsSample.PlantID"/> values when <see cref="Department"/> is Store or Sales.
+        /// </summary>
         public string? PlantID { get; set; }
 
         [ForeignKey(nameof(PlantID))]

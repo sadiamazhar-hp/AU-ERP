@@ -246,18 +246,14 @@ namespace AU_ERP.Controllers
                 .FirstOrDefaultAsync(m => m.MaterialNumber == mn, ct);
             var hdrType = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
 
-            var boms = await _db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == mn && h.HeaderMaterialTypeCode == hdrType)
-                .ForMrpSelection(DateTime.Today)
-                .OrderForMrpSelection()
-                .Select(h => new
-                {
-                    bomId = h.BomID,
-                    code = h.BOMCode ?? "",
-                    title = h.BOMTitle ?? "",
-                    plant = h.Plant ?? ""
-                })
-                .ToListAsync(ct);
+            var options = await BomMrpLookup.GetOptionsAsync(_db, mn, hdrType, ct: ct);
+            var boms = options.Select(h => new
+            {
+                bomId = h.BomId,
+                code = h.BomCode ?? "",
+                title = h.BomTitle ?? "",
+                plant = h.Plant
+            }).ToList();
 
             var requiresSelection = boms.Count > 1;
             return Json(new { success = true, data = new { boms, requiresSelection } });
@@ -859,11 +855,8 @@ namespace AU_ERP.Controllers
                 var matEntity = await _db.CreateMaterialMaster.AsNoTracking()
                     .FirstOrDefaultAsync(m => m.MaterialNumber == l.MaterialNumber, ct);
                 var hdrType = (matEntity?.MaterialTypeCode ?? "").Trim().ToUpperInvariant();
-                var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
-                    .Where(h => h.BomMaterialNumber == l.MaterialNumber && h.HeaderMaterialTypeCode == hdrType)
-                    .ForMrpSelection(DateTime.Today)
-                    .Select(h => h.BomID)
-                    .ToListAsync(ct);
+                var bomOptions = await BomMrpLookup.GetOptionsAsync(_db, l.MaterialNumber, hdrType, ct: ct);
+                var bomCandidates = bomOptions.Select(x => x.BomId).ToList();
                 if (bomCandidates.Count > 1 && (!l.SelectedBomId.HasValue || l.SelectedBomId.Value <= 0))
                     return $"Line {l.LineNo}: BOM selection is required.";
                 if (l.SelectedBomId.HasValue && l.SelectedBomId.Value > 0 && !bomCandidates.Contains(l.SelectedBomId.Value))

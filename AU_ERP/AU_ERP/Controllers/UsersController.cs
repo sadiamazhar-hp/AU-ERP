@@ -48,36 +48,7 @@ public class UsersController : Controller
                 .ConfigureAwait(false);
             if (toEdit != null)
             {
-                var storeDeptId = await _db.Departments.AsNoTracking()
-                    .Where(d => d.Code == "Store")
-                    .Select(d => d.Id)
-                    .FirstOrDefaultAsync()
-                    .ConfigureAwait(false);
-                string[] storePlants = Array.Empty<string>();
-                if (storeDeptId > 0)
-                {
-                    var storePlantCsv = await _db.ApplicationUserDepartments.AsNoTracking()
-                        .Where(ud => ud.UserId == toEdit.Id && ud.DepartmentId == storeDeptId)
-                        .Select(ud => ud.PlantID)
-                        .FirstOrDefaultAsync()
-                        .ConfigureAwait(false);
-                    var storeFromDept = ParseStorePlantIds(storePlantCsv);
-                    var userForClaims = await _userManager.FindByIdAsync(toEdit.Id).ConfigureAwait(false);
-                    var storeFromClaims = Array.Empty<string>();
-                    if (userForClaims != null)
-                    {
-                        var claims = await _userManager.GetClaimsAsync(userForClaims).ConfigureAwait(false);
-                        storeFromClaims = claims
-                            .Where(c => string.Equals(c.Type, AuClaimTypes.StorePlant, StringComparison.Ordinal))
-                            .Select(c => (c.Value ?? "").Trim())
-                            .Where(v => v.Length > 0)
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .ToArray();
-                    }
-                    storePlants = storeFromClaims.Length > 0
-                        ? storeFromClaims
-                        : storeFromDept;
-                }
+                var storePlants = await LoadAssignedPlantIdsForUserAsync(toEdit.Id).ConfigureAwait(false);
 
                 editForm = new EditUserViewModel
                 {
@@ -191,23 +162,28 @@ public class UsersController : Controller
             .ToListAsync()
             .ConfigureAwait(false);
         _db.ApplicationUserDepartments.RemoveRange(existing);
-        var storeDeptId = await _db.Departments.AsNoTracking()
-            .Where(d => d.Code == "Store").Select(d => d.Id).FirstOrDefaultAsync().ConfigureAwait(false);
+        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        var plantCsv = JoinStorePlantIds(model.StorePlantIds);
+        var hasStore = storeDeptId > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+        var hasSales = salesDeptId > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId);
+        var needsPlants = hasStore || hasSales;
         foreach (var deptId in model.DepartmentIds!.Distinct())
         {
+            string? rowPlantId = null;
+            if (needsPlants && (deptId == storeDeptId || deptId == salesDeptId))
+                rowPlantId = plantCsv;
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
                 UserId = user.Id,
                 DepartmentId = deptId,
-                PlantID = null
+                PlantID = rowPlantId
             });
         }
 
         await _db.SaveChangesAsync().ConfigureAwait(false);
-        var hasStore = storeDeptId > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
         await SyncStorePlantClaimsAsync(
             user,
-            hasStore ? model.StorePlantIds : Array.Empty<string>())
+            needsPlants ? model.StorePlantIds : Array.Empty<string>())
             .ConfigureAwait(false);
 
         if (string.Equals(_userManager.GetUserId(User), user.Id, StringComparison.Ordinal))
@@ -292,23 +268,28 @@ public class UsersController : Controller
             });
         }
 
-        var storeDeptIdCreate = await _db.Departments.AsNoTracking()
-            .Where(d => d.Code == "Store").Select(d => d.Id).FirstOrDefaultAsync().ConfigureAwait(false);
+        var (storeDeptIdCreate, salesDeptIdCreate) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        var plantCsvCreate = JoinStorePlantIds(model.StorePlantIds);
+        var hasStoreCreate = storeDeptIdCreate > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptIdCreate);
+        var hasSalesCreate = salesDeptIdCreate > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptIdCreate);
+        var needsPlantsCreate = hasStoreCreate || hasSalesCreate;
         foreach (var deptId in (model.DepartmentIds ?? Array.Empty<int>()).Distinct())
         {
+            string? rowPlantId = null;
+            if (needsPlantsCreate && (deptId == storeDeptIdCreate || deptId == salesDeptIdCreate))
+                rowPlantId = plantCsvCreate;
             _db.ApplicationUserDepartments.Add(new ApplicationUserDepartment
             {
                 UserId = user.Id,
                 DepartmentId = deptId,
-                PlantID = null
+                PlantID = rowPlantId
             });
         }
 
         await _db.SaveChangesAsync().ConfigureAwait(false);
-        var hasStoreCreate = storeDeptIdCreate > 0 && (model.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptIdCreate);
         await SyncStorePlantClaimsAsync(
             user,
-            hasStoreCreate ? model.StorePlantIds : Array.Empty<string>())
+            needsPlantsCreate ? model.StorePlantIds : Array.Empty<string>())
             .ConfigureAwait(false);
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user).ConfigureAwait(false);
@@ -348,15 +329,58 @@ public class UsersController : Controller
 
     private async Task FillUserPlantLookupsAsync()
     {
-        ViewBag.StoreDepartmentId = await _db.Departments.AsNoTracking()
-            .Where(d => d.Code == "Store")
-            .Select(d => d.Id)
-            .FirstOrDefaultAsync()
-            .ConfigureAwait(false);
+        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        ViewBag.StoreDepartmentId = storeDeptId;
+        ViewBag.SalesDepartmentId = salesDeptId;
         ViewBag.Plants = await _db.PlantsSamples.AsNoTracking()
             .OrderBy(p => p.PlantName)
             .ToListAsync()
             .ConfigureAwait(false);
+    }
+
+    private async Task<(int storeDeptId, int salesDeptId)> GetStoreAndSalesDepartmentIdsAsync()
+    {
+        var rows = await _db.Departments.AsNoTracking()
+            .Where(d => d.Code == "Store" || d.Code == "Sales")
+            .Select(d => new { d.Code, d.Id })
+            .ToListAsync()
+            .ConfigureAwait(false);
+        var storeDeptId = rows.FirstOrDefault(r => r.Code == "Store")?.Id ?? 0;
+        var salesDeptId = rows.FirstOrDefault(r => r.Code == "Sales")?.Id ?? 0;
+        return (storeDeptId, salesDeptId);
+    }
+
+    private async Task<string[]> LoadAssignedPlantIdsForUserAsync(string userId)
+    {
+        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
+        var deptIds = new[] { storeDeptId, salesDeptId }.Where(id => id > 0).ToList();
+        if (deptIds.Count == 0)
+            return Array.Empty<string>();
+
+        var csvs = await _db.ApplicationUserDepartments.AsNoTracking()
+            .Where(ud => ud.UserId == userId && deptIds.Contains(ud.DepartmentId))
+            .Select(ud => ud.PlantID)
+            .ToListAsync()
+            .ConfigureAwait(false);
+
+        var fromDb = csvs
+            .SelectMany(c => ParseStorePlantIds(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (fromDb.Length > 0)
+            return fromDb;
+
+        var userForClaims = await _userManager.FindByIdAsync(userId).ConfigureAwait(false);
+        if (userForClaims == null)
+            return Array.Empty<string>();
+
+        var claims = await _userManager.GetClaimsAsync(userForClaims).ConfigureAwait(false);
+        return claims
+            .Where(c => string.Equals(c.Type, AuClaimTypes.StorePlant, StringComparison.Ordinal))
+            .Select(c => (c.Value ?? "").Trim())
+            .Where(v => v.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private async Task ValidateStorePlantAssignmentAsync(
@@ -365,27 +389,23 @@ public class UsersController : Controller
         int[]? departmentIds,
         string[]? storePlantIds)
     {
-        var storeDeptId = await _db.Departments.AsNoTracking()
-            .Where(d => d.Code == "Store")
-            .Select(d => d.Id)
-            .FirstOrDefaultAsync()
-            .ConfigureAwait(false);
-        if (storeDeptId <= 0)
-            return;
+        var (storeDeptId, salesDeptId) = await GetStoreAndSalesDepartmentIdsAsync().ConfigureAwait(false);
 
-        var hasStore = departmentIds?.Contains(storeDeptId) ?? false;
+        var hasStore = storeDeptId > 0 && (departmentIds?.Contains(storeDeptId) ?? false);
+        var hasSales = salesDeptId > 0 && (departmentIds?.Contains(salesDeptId) ?? false);
+        var needsPlants = hasStore || hasSales;
         var ids = (storePlantIds ?? Array.Empty<string>())
             .Select(p => (p ?? "").Trim())
             .Where(p => p.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (hasStore)
+        if (needsPlants)
         {
             if (ids.Length == 0)
             {
                 modelState.AddModelError($"{fieldPrefix}StorePlantIds",
-                    "Select at least one plant when the Store department is assigned.");
+                    "Select at least one assigned plant when the Store or Sales department is assigned.");
                 return;
             }
 
@@ -399,7 +419,7 @@ public class UsersController : Controller
         else if (ids.Length > 0)
         {
             modelState.AddModelError($"{fieldPrefix}StorePlantIds",
-                "Store plants are only applicable when Store department is selected.");
+                "Assigned plants are only applicable when Store or Sales department is selected.");
         }
     }
 

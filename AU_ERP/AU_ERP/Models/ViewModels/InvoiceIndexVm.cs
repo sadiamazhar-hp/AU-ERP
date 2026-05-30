@@ -13,6 +13,9 @@ public sealed class InvoiceIndexVm
     /// <summary>Inclusive document-date upper bound.</summary>
     public DateTime? DocumentDateTo { get; set; }
 
+    /// <summary>Active plant filter (via delivery challan plant).</summary>
+    public string? FilterPlantId { get; set; }
+
     public int OpenCount { get; set; }
     public decimal OpenAmount { get; set; }
     public int OverdueCount { get; set; }

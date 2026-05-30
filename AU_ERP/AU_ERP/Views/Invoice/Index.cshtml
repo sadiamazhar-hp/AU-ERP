@@ -9,6 +9,13 @@
     string FmtMoney(decimal v) => v.ToString("N2", CultureInfo.CurrentCulture);
     var payPrefillUrl = Url.Action("PaymentPrefill", "Invoice") ?? "";
     var payCreateUrl = Url.Action("CreatePayment", "Invoice") ?? "";
+    var plants = ViewBag.Plants as List<PlantsSample> ?? new List<PlantsSample>();
+    var missingPlantAssignment = ViewBag.MissingPlantAssignment as bool? == true;
+    var isSinglePlantLocked = ViewBag.IsSinglePlantLocked as bool? == true;
+    var lockedPlantId = ViewBag.LockedPlantId as string ?? "";
+    var filterPlantId = Model.FilterPlantId ?? "";
+    PlantsSample? InvPlantNameRow(string pid) =>
+        plants.FirstOrDefault(p => string.Equals(p.PlantID, pid, StringComparison.OrdinalIgnoreCase));
 }
 
 @section Styles {
@@ -49,6 +56,12 @@
     @if (TempData["RoMessage"] is string rom && !string.IsNullOrWhiteSpace(rom))
     {
         <div class="alert alert-success py-2 mb-3" role="status">@rom</div>
+    }
+    @if (missingPlantAssignment)
+    {
+        <div class="alert alert-warning py-2 small mb-3" role="status">
+            You have no plant assigned to your profile. Ask an administrator to edit your user and select at least one plant for the Sales or Store department.
+        </div>
     }
     <h1 class="h4 mb-3">Invoice</h1>
 
@@ -115,6 +128,36 @@
                     }
                 </select>
             </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label mb-1 small text-secondary">Plant</label>
+                @if (isSinglePlantLocked && !string.IsNullOrWhiteSpace(lockedPlantId))
+                {
+                    var lockPn = InvPlantNameRow(lockedPlantId.Trim());
+                    <input type="hidden" name="plantId" value="@lockedPlantId.Trim()" />
+                    <input type="text" class="form-control form-control-sm bg-light" readonly value="@(lockPn?.PlantName ?? lockedPlantId)" title="Assigned plant" />
+                }
+                else if (!missingPlantAssignment)
+                {
+                    <select name="plantId" class="form-select form-select-sm" id="invPlantFilter">
+                        <option value="">All assigned</option>
+                        @foreach (var p in plants)
+                        {
+                            if (string.Equals(p.PlantID, filterPlantId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="@p.PlantID" selected="selected">@p.PlantName</option>
+                            }
+                            else
+                            {
+                                <option value="@p.PlantID">@p.PlantName</option>
+                            }
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm bg-light" readonly value="—" title="No plants assigned" />
+                }
+            </div>
             <div class="col-6 col-md-2 col-lg-2">
                 <label class="form-label mb-1 small text-secondary">Doc. date from</label>
                 <input type="date" name="docFrom" class="form-control form-control-sm" value="@(Model.DocumentDateFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
@@ -177,7 +220,8 @@
                             Model.DocumentDateFrom != null ||
                             Model.DocumentDateTo != null ||
                             !string.IsNullOrEmpty(Model.SearchQuery) ||
-                            !string.IsNullOrEmpty(Model.StatusFilter);
+                            !string.IsNullOrEmpty(Model.StatusFilter) ||
+                            !string.IsNullOrEmpty(Model.FilterPlantId);
                         var emptyMsg = anyFilter ? "No invoices match the current filters." : "No invoices yet. Invoices are created when you save a delivery challan.";
                         <tr><td colspan="9" class="text-secondary">@emptyMsg</td></tr>
                     }

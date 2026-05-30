@@ -39,6 +39,7 @@ public sealed class SalesOrderWorkflowCountFilter
 {
     public string? Q { get; init; }
     public string? PlantId { get; init; }
+    public IReadOnlyList<string>? AllowedPlantIds { get; init; }
     public int? DistributionChannelId { get; init; }
 }
 
@@ -135,7 +136,9 @@ public sealed class SalesOrderWorkflowStatusResolver
                 x.SalesOrderNumber.Contains(qq)
                 || (x.CustomerName != null && x.CustomerName.Contains(qq)));
         }
-        if (!string.IsNullOrWhiteSpace(filter?.PlantId))
+        if (filter?.AllowedPlantIds is { Count: > 0 } allowedPlants)
+            query = query.Where(x => x.PlantId != null && allowedPlants.Contains(x.PlantId));
+        else if (!string.IsNullOrWhiteSpace(filter?.PlantId))
             query = query.Where(x => x.PlantId == filter.PlantId);
         if (filter?.DistributionChannelId is { } dcid && dcid > 0)
             query = query.Where(x => x.DistributionChannelId == dcid);

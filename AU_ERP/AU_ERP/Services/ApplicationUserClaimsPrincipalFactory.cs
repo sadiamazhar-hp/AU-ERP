@@ -9,7 +9,7 @@ namespace AU_ERP.Services
     public static class AuClaimTypes
     {
         public const string Department = "department";
-        /// <summary>Value is <see cref="PlantsSample.PlantID"/> for the user’s Store department assignment.</summary>
+        /// <summary>Value is <see cref="PlantsSample.PlantID"/> for Store or Sales department plant assignments.</summary>
         public const string StorePlant = "store_plant";
     }
 
@@ -38,21 +38,29 @@ namespace AU_ERP.Services
                 .ToListAsync()
                 .ConfigureAwait(false);
 
+            var plantClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var row in deptRows)
             {
                 identity.AddClaim(new Claim(AuClaimTypes.Department, row.Code));
-                if (string.Equals(row.Code, "Store", StringComparison.OrdinalIgnoreCase)
+                if ((string.Equals(row.Code, "Store", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(row.Code, "Sales", StringComparison.OrdinalIgnoreCase))
                     && !string.IsNullOrWhiteSpace(row.PlantID))
                 {
-                    var plantIds = row.PlantID!
+                    foreach (var p in row.PlantID!
                         .Split(',', StringSplitOptions.RemoveEmptyEntries)
                         .Select(x => x.Trim())
-                        .Where(x => x.Length > 0)
-                        .Distinct(StringComparer.OrdinalIgnoreCase);
-                    foreach (var p in plantIds)
-                        identity.AddClaim(new Claim(AuClaimTypes.StorePlant, p));
+                        .Where(x => x.Length > 0))
+                    {
+                        plantClaims.Add(p);
+                    }
                 }
             }
+
+            foreach (var stale in identity.FindAll(AuClaimTypes.StorePlant).ToList())
+                identity.RemoveClaim(stale);
+
+            foreach (var p in plantClaims)
+                identity.AddClaim(new Claim(AuClaimTypes.StorePlant, p));
 
             return identity;
         }

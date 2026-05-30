@@ -97,11 +97,9 @@ namespace AU_ERP.Models
                 .Property(ud => ud.PlantID)
                 .HasMaxLength(450);
 
+            // PlantID stores comma-separated plant codes for Store/Sales assignments — not a single FK value.
             modelBuilder.Entity<ApplicationUserDepartment>()
-                .HasOne(ud => ud.Plant)
-                .WithMany()
-                .HasForeignKey(ud => ud.PlantID)
-                .OnDelete(DeleteBehavior.Restrict);
+                .Ignore(ud => ud.Plant);
 
             modelBuilder.Entity<Department>().HasData(
                 new Department { Id = 1, Code = "Store", Name = "Store" },

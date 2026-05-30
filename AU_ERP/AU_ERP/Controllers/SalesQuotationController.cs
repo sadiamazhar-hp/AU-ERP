@@ -244,10 +244,11 @@ public class SalesQuotationController : Controller
     {
         if (editId is > 0)
             ViewBag.OpenEditId = editId;
-        var plants = await _db.PlantsSamples.AsNoTracking()
+        var allPlants = await _db.PlantsSamples.AsNoTracking()
             .OrderBy(p => p.PlantName)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
         var channels = await _db.DistributionChannels.AsNoTracking()
             .OrderBy(c => c.DistributionChannelName)
             .ToListAsync(ct)
@@ -270,8 +271,7 @@ public class SalesQuotationController : Controller
         else if (string.Equals(st, SalesQuotation.StatusSent, StringComparison.OrdinalIgnoreCase))
             query = query.Where(x => x.Status == SalesQuotation.StatusSent);
 
-        if (!string.IsNullOrWhiteSpace(plantId))
-            query = query.Where(x => x.PlantId == plantId);
+        query = SalesPlantAccess.ApplyListingPlantFilter(query, plantScope, x => x.PlantId);
         if (distributionChannelId is { } dcid && dcid > 0)
             query = query.Where(x => x.DistributionChannelId == dcid);
 
@@ -315,19 +315,19 @@ public class SalesQuotationController : Controller
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        ViewBag.Plants = plants;
         ViewBag.DistributionChannels = channels;
         ViewBag.Customers = customers;
         ViewBag.ConfigurationSchemas = schemas;
         ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
         ViewBag.IsEmporiumWalkInUser = isEmporiumWalkIn;
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
         var vm = new SalesQuotationListVm
         {
             Items = list,
             LinkedSalesOrderStatusByQuotationId = linkedStatusByQid,
             Q = string.IsNullOrEmpty(qq) ? null : qq,
             Status = string.IsNullOrEmpty(st) ? "All" : st,
-            PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,
+            PlantId = plantScope.EffectiveListPlantId,
             DistributionChannelId = distributionChannelId is > 0 ? distributionChannelId : null
         };
         return View(vm);
@@ -341,6 +341,25 @@ public class SalesQuotationController : Controller
         var isSendSubmit = string.Equals(model.SubmitAction, "send", StringComparison.OrdinalIgnoreCase);
         var isEmailSubmit = string.Equals(model.SubmitAction, "email", StringComparison.OrdinalIgnoreCase);
         var strict = isSendSubmit || isEmailSubmit;
+
+        var allPlantsForWrite = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var writeScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantsForWrite, ct).ConfigureAwait(false);
+        if (writeScope.MissingAssignment)
+        {
+            TempData["QuotationError"] =
+                "Your user has no plant assigned. An administrator must assign at least one plant for your Sales or Store department.";
+            return RedirectToQuotationListFromModel(model);
+        }
+        model.PlantId = SalesPlantAccess.ResolveWritePlantId(writeScope, model.PlantId);
+        var plantAccessErr = SalesPlantAccess.EnsurePlantAllowed(writeScope, model.PlantId);
+        if (plantAccessErr != null)
+        {
+            TempData["QuotationError"] = plantAccessErr;
+            return RedirectToQuotationListFromModel(model);
+        }
 
         if (strict)
         {
@@ -832,6 +851,10 @@ public class SalesQuotationController : Controller
         var q = await LoadQuotationForPdfAsync(id, ct).ConfigureAwait(false);
         if (q == null)
             return NotFound();
+        var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(readScope, q.PlantId))
+            return NotFound();
         var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
         var bytes = SalesQuotationPdfService.BuildPdf(q, q.Items.ToList(), companyHeader);
         var fileName = SafePdfFileName(q.QuotationNumber);
@@ -850,6 +873,10 @@ public class SalesQuotationController : Controller
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             .ConfigureAwait(false);
         if (o == null)
+            return NotFound();
+        var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(readScope, o.PlantId))
             return NotFound();
         if (o.Status != SalesQuotation.StatusSent)
             return NotFound();
@@ -896,6 +923,13 @@ public class SalesQuotationController : Controller
             TempData["QuotationError"] = "Quotation not found.";
             return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
         }
+        var deleteScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(deleteScope, q.PlantId))
+        {
+            TempData["QuotationError"] = "You cannot delete this quotation (plant not allowed for your login).";
+            return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
         _db.SalesQuotationItems.RemoveRange(q.Items);
         _db.SalesQuotations.Remove(q);
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -927,6 +961,10 @@ public class SalesQuotationController : Controller
             .ConfigureAwait(false);
         if (header == null)
             return (false, "Quotation not found.");
+        var emailScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(emailScope, header.PlantId))
+            return (false, "You cannot email this quotation (plant not allowed for your login).");
         if (string.IsNullOrWhiteSpace(header.CustomerBusinessPartnerId))
         {
             return (false, "This quotation has no customer (sold-to) selected. Choose a customer before sending email.");

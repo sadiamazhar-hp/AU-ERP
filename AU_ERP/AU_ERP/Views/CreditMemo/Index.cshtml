@@ -26,6 +26,12 @@
     {
         <div class="alert alert-danger py-2 small mb-3" role="alert">@xe</div>
     }
+    @if (ViewBag.MissingPlantAssignment as bool? == true)
+    {
+        <div class="alert alert-warning py-2 small mb-3" role="status">
+            You have Sales access but no plant is assigned to your profile. Ask an administrator to edit your user and select at least one plant for the Sales or Store department.
+        </div>
+    }
 
     <h1 class="h4 mb-3">Credit memo</h1>
     <p class="small text-secondary mb-3">Credits issued automatically when return orders are saved. Search by credit memo number, return order, invoice, or dealer.</p>

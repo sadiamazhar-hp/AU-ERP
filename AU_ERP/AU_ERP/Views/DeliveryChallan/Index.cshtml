@@ -23,6 +23,7 @@
     var dcLockedPlantId = ViewBag.DcLockedPlantId as string ?? "";
     var dcDrivers = ViewBag.DcDrivers as List<Driver> ?? new List<Driver>();
     var dcVehicles = ViewBag.DcVehicles as List<Vehicle> ?? new List<Vehicle>();
+    var missingPlantAssignment = ViewBag.MissingPlantAssignment as bool? == true;
     PlantsSample? DcPlantNameRow(string pid) =>
         dcModalPlants.FirstOrDefault(p => string.Equals(p.PlantID, pid, StringComparison.OrdinalIgnoreCase))
         ?? plants.FirstOrDefault(p => string.Equals(p.PlantID, pid, StringComparison.OrdinalIgnoreCase));
@@ -106,6 +107,12 @@
     @if (TempData["DcError"] is string errDc)
     {
         <div class="alert alert-danger py-2 small mb-3" role="status">@errDc</div>
+    }
+    @if (missingPlantAssignment)
+    {
+        <div class="alert alert-warning py-2 small mb-3" role="status">
+            You have Sales access but no plant is assigned to your profile. Ask an administrator to edit your user and select at least one plant for the Sales or Store department.
+        </div>
     }
 
     <div class="dc-table-card">
@@ -206,16 +213,29 @@
             <div class="modal-body py-2">
                 <div class="mb-2">
                     <label class="form-label small mb-0">Plant</label>
-                    <select class="form-select form-select-sm" id="dcFPlant">
-                        <option value="">All</option>
-                        @foreach (var p in plants)
-                        {
-                            if (p.PlantID == listPlant)
-                            { <option value="@p.PlantID" selected>@p.PlantName</option> }
-                            else
-                            { <option value="@p.PlantID">@p.PlantName</option> }
-                        }
-                    </select>
+                    @if (dcPlantSingleLocked && !string.IsNullOrWhiteSpace(dcLockedPlantId))
+                    {
+                        var filterLockPn = DcPlantNameRow(dcLockedPlantId.Trim());
+                        <input type="hidden" id="dcFPlant" value="@dcLockedPlantId.Trim()" />
+                        <input type="text" class="form-control form-control-sm bg-light" readonly value="@(filterLockPn?.PlantName ?? dcLockedPlantId)" title="Assigned plant" />
+                    }
+                    else if (!missingPlantAssignment)
+                    {
+                        <select class="form-select form-select-sm" id="dcFPlant">
+                            <option value="">All assigned</option>
+                            @foreach (var p in plants)
+                            {
+                                if (p.PlantID == listPlant)
+                                { <option value="@p.PlantID" selected>@p.PlantName</option> }
+                                else
+                                { <option value="@p.PlantID">@p.PlantName</option> }
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <p class="small text-muted mb-0">No plants assigned.</p>
+                    }
                 </div>
                 <div class="row g-2">
                     <div class="col-6">

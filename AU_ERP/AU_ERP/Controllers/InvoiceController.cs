@@ -26,6 +26,7 @@ public class InvoiceController : Controller
     public async Task<IActionResult> Index(
         string? q,
         string? status,
+        string? plantId,
         DateTime? docFrom,
         DateTime? docTo,
         CancellationToken ct = default)
@@ -39,8 +40,12 @@ public class InvoiceController : Controller
         if (dFrom.HasValue && dTo.HasValue && dFrom.Value > dTo.Value)
             (dFrom, dTo) = (dTo, dFrom);
 
-        var baseQ = _db.SalesInvoices.AsNoTracking();
-        baseQ = ApplyInvoiceIndexFilters(baseQ, search, status, dFrom, dTo, today);
+        var allPlants = await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+
+        var scopedInvoices = ApplyInvoicePlantScope(_db.SalesInvoices.AsNoTracking(), plantScope);
+        var baseQ = ApplyInvoiceIndexFilters(scopedInvoices, search, status, dFrom, dTo, today);
 
         var openQ = baseQ.Where(i => i.Status == SalesInvoice.StatusOpen && i.DueDate >= today);
         var overdueQ = baseQ.Where(i => i.Status == SalesInvoice.StatusOpen && i.DueDate < today);
@@ -53,6 +58,7 @@ public class InvoiceController : Controller
             StatusFilter = string.IsNullOrWhiteSpace(status) ? null : status.Trim(),
             DocumentDateFrom = dFrom,
             DocumentDateTo = dTo,
+            FilterPlantId = plantScope.EffectiveListPlantId,
             OpenCount = await openQ.CountAsync(ct),
             OpenAmount = await SumGrandTotalAsync(openQ, ct),
             OverdueCount = await overdueQ.CountAsync(ct),
@@ -61,7 +67,7 @@ public class InvoiceController : Controller
             CollectedAmount = await SumGrandTotalAsync(collectedQ, ct),
             ReturnInProcessCount = await ripQ.CountAsync(ct),
             ReturnInProcessAmount = await SumGrandTotalAsync(ripQ, ct),
-            Invoices = await ApplyInvoiceIndexFilters(_db.SalesInvoices.AsNoTracking(), search, status, dFrom, dTo, today)
+            Invoices = await ApplyInvoiceIndexFilters(scopedInvoices, search, status, dFrom, dTo, today)
                 .Include(i => i.DeliveryChallan)
                 .OrderByDescending(i => i.DocumentDate)
                 .ThenByDescending(i => i.Id)
@@ -156,6 +162,9 @@ public class InvoiceController : Controller
         if (invoiceId <= 0)
             return BadRequest();
 
+        if (!await IsInvoiceReadableAsync(invoiceId, ct).ConfigureAwait(false))
+            return NotFound();
+
         string? invoiceDocNum;
         try
         {
@@ -205,6 +214,9 @@ public class InvoiceController : Controller
     [HttpGet]
     public async Task<IActionResult> Details(int id, CancellationToken ct = default)
     {
+        if (!await IsInvoiceReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
+
         var inv = await _db.SalesInvoices.AsNoTracking()
             .Include(i => i.Lines).ThenInclude(l => l.QuantityUom)
             .Include(i => i.DeliveryChallan)
@@ -280,6 +292,9 @@ public class InvoiceController : Controller
     [HttpGet]
     public async Task<JsonResult> PaymentPrefill(int invoiceId, CancellationToken ct = default)
     {
+        if (!await IsInvoiceReadableAsync(invoiceId, ct).ConfigureAwait(false))
+            return Json(new { success = false, message = "Invoice not found or not allowed for your plant access." });
+
         var inv = await _db.SalesInvoices.AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == invoiceId, ct);
         if (inv == null)
@@ -334,6 +349,13 @@ public class InvoiceController : Controller
         {
             if (isAjax) return Json(new { success = false, message = "Invalid invoice." });
             TempData["InvoiceError"] = "Invalid invoice.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (!await IsInvoiceReadableAsync(model.InvoiceId, ct).ConfigureAwait(false))
+        {
+            if (isAjax) return Json(new { success = false, message = "Invoice not found or not allowed for your plant access." });
+            TempData["InvoiceError"] = "Invoice not found or not allowed for your plant access.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -482,5 +504,39 @@ public class InvoiceController : Controller
             return q.Where(i => i.Status == SalesInvoice.StatusReturned);
 
         return q.Where(i => i.Status == sf);
+    }
+
+    private IQueryable<SalesInvoice> ApplyInvoicePlantScope(
+        IQueryable<SalesInvoice> query,
+        SalesPlantScope scope)
+    {
+        if (scope.IsAdminAllPlants && string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+            return query;
+        if (scope.MissingAssignment)
+            return query.Where(_ => false);
+
+        var joined = from inv in query
+            join dc in _db.DeliveryChallans.AsNoTracking() on inv.DeliveryChallanId equals dc.Id
+            select new { inv, PlantId = dc.PlantId };
+        joined = SalesPlantAccess.ApplyListingPlantFilter(joined, scope, x => x.PlantId);
+        return joined.Select(x => x.inv);
+    }
+
+    private async Task<string?> GetInvoicePlantIdAsync(int invoiceId, CancellationToken ct) =>
+        await (
+            from inv in _db.SalesInvoices.AsNoTracking()
+            join dc in _db.DeliveryChallans.AsNoTracking() on inv.DeliveryChallanId equals dc.Id
+            where inv.Id == invoiceId
+            select dc.PlantId).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+
+    private async Task<bool> IsInvoiceReadableAsync(int invoiceId, CancellationToken ct)
+    {
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct).ConfigureAwait(false);
+        var plantId = await GetInvoicePlantIdAsync(invoiceId, ct).ConfigureAwait(false);
+        return SalesPlantAccess.IsPlantReadable(scope, plantId);
     }
 }

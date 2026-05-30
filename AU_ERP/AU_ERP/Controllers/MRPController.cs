@@ -177,11 +177,8 @@ namespace AU_ERP.Controllers
                 return Json(new MrpRunResponseDto { Success = false, Message = "Invalid plant." });
             
             var mat = (dto.MaterialNumber ?? "").Trim();
-            var bomCandidates = await _db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == mat)
-                .ForMrpSelection(DateTime.Today)
-                .Select(h => h.BomID)
-                .ToListAsync(ct);
+            var bomOptions = await BomMrpLookup.GetOptionsAsync(_db, mat, ct: ct);
+            var bomCandidates = bomOptions.Select(x => x.BomId).ToList();
             if (bomCandidates.Count > 1 && (!dto.SelectedBomId.HasValue || dto.SelectedBomId.Value <= 0))
                 return Json(new MrpRunResponseDto { Success = false, Message = "BOM selection is required." });
             if (dto.SelectedBomId.HasValue && dto.SelectedBomId.Value > 0 && !bomCandidates.Contains(dto.SelectedBomId.Value))
@@ -295,12 +292,7 @@ namespace AU_ERP.Controllers
                     continue;
                 }
                 
-                var bomOptions = await _db.BomHeadersSamples.AsNoTracking()
-                    .Where(h => h.BomMaterialNumber == mat)
-                    .ForMrpSelection(DateTime.Today)
-                    .OrderForMrpSelection()
-                    .Select(h => new { h.BomID, h.BOMCode, h.IsDefaultBom })
-                    .ToListAsync(ct);
+                var bomOptions = await BomMrpLookup.GetOptionsAsync(_db, mat, ct: ct);
                 if (bomOptions.Count == 0)
                 {
                     outLines.Add(new MrpMultiRunResultLineDto
@@ -322,21 +314,21 @@ namespace AU_ERP.Controllers
                 {
                     if (bomOptions.Count == 1)
                     {
-                        selectedBomId = bomOptions[0].BomID;
-                        selectedBomRef = bomOptions[0].BOMCode ?? "";
+                        selectedBomId = bomOptions[0].BomId;
+                        selectedBomRef = bomOptions[0].BomCode ?? "";
                     }
                     else
                     {
                         var def = bomOptions.FirstOrDefault(x => x.IsDefaultBom);
-                        selectedBomId = def?.BomID;
-                        if (def != null) selectedBomRef = def.BOMCode ?? "";
+                        selectedBomId = def?.BomId;
+                        if (def != null) selectedBomRef = def.BomCode ?? "";
                     }
                 }
                 else
                 {
-                    var picked = bomOptions.FirstOrDefault(x => x.BomID == selectedBomId.Value);
+                    var picked = bomOptions.FirstOrDefault(x => x.BomId == selectedBomId.Value);
                     if (picked != null && string.IsNullOrWhiteSpace(selectedBomRef))
-                        selectedBomRef = picked.BOMCode ?? "";
+                        selectedBomRef = picked.BomCode ?? "";
                 }
                 if (!selectedBomId.HasValue || selectedBomId.Value <= 0)
                 {

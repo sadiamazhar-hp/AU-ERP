@@ -27,24 +27,30 @@ public class ReorderQualityInspectionController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken ct = default)
+    public async Task<IActionResult> Index(string? plantId, CancellationToken ct = default)
     {
         ViewData["Title"] = "ROD Inspection";
+        var allPlants = await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
         List<ReorderQiIndexRowVm> rows;
         try
         {
-            rows = await (
-                from qi in _db.SalesReturnQualityInspections.AsNoTracking()
+            var joined = from qi in _db.SalesReturnQualityInspections.AsNoTracking()
                 join ro in _db.SalesReturnOrders.AsNoTracking() on qi.SalesReturnOrderId equals ro.Id
-                orderby qi.DocumentDate descending, qi.Id descending
-                select new ReorderQiIndexRowVm
+                select new { qi, ro };
+            var plantFiltered = SalesPlantAccess.ApplyListingPlantFilter(joined, plantScope, x => x.qi.PlantId);
+            rows = await plantFiltered
+                .OrderByDescending(x => x.qi.DocumentDate)
+                .ThenByDescending(x => x.qi.Id)
+                .Select(x => new ReorderQiIndexRowVm
                 {
-                    QiId = qi.Id,
-                    DocumentNumber = qi.DocumentNumber,
-                    DocumentDate = qi.DocumentDate,
-                    Status = qi.Status,
-                    InvoiceDocumentNumber = ro.InvoiceDocumentNumber,
-                    ReturnOrderDocumentNumber = ro.DocumentNumber
+                    QiId = x.qi.Id,
+                    DocumentNumber = x.qi.DocumentNumber,
+                    DocumentDate = x.qi.DocumentDate,
+                    Status = x.qi.Status,
+                    InvoiceDocumentNumber = x.ro.InvoiceDocumentNumber,
+                    ReturnOrderDocumentNumber = x.ro.DocumentNumber
                 }).ToListAsync(ct);
         }
         catch (SqlException ex) when (
@@ -58,9 +64,26 @@ public class ReorderQualityInspectionController : Controller
         return View(new ReorderQiIndexVm { Items = rows });
     }
 
+    private async Task<bool> IsQiReadableAsync(int qiId, CancellationToken ct)
+    {
+        var plantId = await _db.SalesReturnQualityInspections.AsNoTracking()
+            .Where(q => q.Id == qiId)
+            .Select(q => q.PlantId)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct).ConfigureAwait(false);
+        return SalesPlantAccess.IsPlantReadable(scope, plantId);
+    }
+
     [HttpGet]
     public async Task<IActionResult> Details(int id, CancellationToken ct = default)
     {
+        if (!await IsQiReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
         var vm = await BuildDetailsVmAsync(id, ct).ConfigureAwait(false);
         if (vm == null)
             return NotFound();
@@ -73,6 +96,8 @@ public class ReorderQualityInspectionController : Controller
     [HttpGet]
     public async Task<IActionResult> ReadOnlyPartial(int id, CancellationToken ct = default)
     {
+        if (!await IsQiReadableAsync(id, ct).ConfigureAwait(false))
+            return NotFound();
         var vm = await BuildDetailsVmAsync(id, ct).ConfigureAwait(false);
         if (vm == null)
             return NotFound();
@@ -153,6 +178,9 @@ public class ReorderQualityInspectionController : Controller
         var qi = await _db.SalesReturnQualityInspections.AsNoTracking()
             .FirstOrDefaultAsync(q => q.Id == model.QiId, ct);
         if (qi == null)
+            return NotFound();
+
+        if (!await IsQiReadableAsync(model.QiId, ct).ConfigureAwait(false))
             return NotFound();
 
         if (!string.Equals(qi.Status, SalesReturnQualityInspection.StatusPending, StringComparison.OrdinalIgnoreCase))

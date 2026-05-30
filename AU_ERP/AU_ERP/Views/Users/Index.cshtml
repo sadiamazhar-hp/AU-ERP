@@ -4,6 +4,7 @@
     ViewData["Title"] = "Users";
     var deptList = ViewBag.Departments as IEnumerable<Department>;
     var storeDeptId = ViewBag.StoreDepartmentId is int sdi ? sdi : 0;
+    var salesDeptId = ViewBag.SalesDepartmentId is int sldi ? sldi : 0;
     var plantsForUsers = ViewBag.Plants as IEnumerable<PlantsSample>;
 }
 
@@ -111,11 +112,13 @@
                         <span asp-validation-for="CreateForm.DepartmentIds" class="text-danger small"></span>
                     </div>
                     @{
-                        var hasStoreCreate = (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+                        var hasPlantsCreate = (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId)
+                            || (salesDeptId > 0 && (Model.CreateForm.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId));
                         var selectedStorePlantsCreate = Model.CreateForm.StorePlantIds ?? Array.Empty<string>();
                     }
-                    <div class="mb-3" id="createStorePlantRow" style="display:@(hasStoreCreate ? "block" : "none");">
-                        <div class="form-label">Store plants</div>
+                    <div class="mb-3" id="createStorePlantRow" style="display:@(hasPlantsCreate ? "block" : "none");">
+                        <div class="form-label">Assigned plants</div>
+                        <div class="form-text mb-1">Required when Store or Sales department is selected.</div>
                         <div class="border rounded p-2 bg-body-secondary" style="max-height: 10rem; overflow-y: auto;">
                             @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
                             {
@@ -198,11 +201,13 @@
                         <span asp-validation-for="EditForm.DepartmentIds" class="text-danger small"></span>
                     </div>
                     @{
-                        var hasStoreEdit = (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId);
+                        var hasPlantsEdit = (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(storeDeptId)
+                            || (salesDeptId > 0 && (Model.EditForm.DepartmentIds ?? Array.Empty<int>()).Contains(salesDeptId));
                         var selectedStorePlantsEdit = Model.EditForm.StorePlantIds ?? Array.Empty<string>();
                     }
-                    <div class="mb-3" id="editStorePlantRow" style="display:@(hasStoreEdit ? "block" : "none");">
-                        <div class="form-label">Store plants</div>
+                    <div class="mb-3" id="editStorePlantRow" style="display:@(hasPlantsEdit ? "block" : "none");">
+                        <div class="form-label">Assigned plants</div>
+                        <div class="form-text mb-1">Required when Store or Sales department is selected.</div>
                         <div class="border rounded p-2 bg-body-secondary" style="max-height: 10rem; overflow-y: auto;">
                             @foreach (var p in (plantsForUsers ?? Enumerable.Empty<PlantsSample>()).OrderBy(x => x.PlantName))
                             {
@@ -234,22 +239,24 @@
                     if (el && el.parentElement !== document.body) document.body.appendChild(el);
                 };
             }
-            function toggleStorePlantRow(cbSelector, rowId, storeDeptIdNum) {
+            function toggleAssignedPlantRow(cbSelector, rowId, storeDeptIdNum, salesDeptIdNum) {
                 var row = document.getElementById(rowId);
                 if (!row) return;
                 var any = Array.prototype.some.call(document.querySelectorAll(cbSelector), function (inp) {
-                    return inp.checked && inp.value === String(storeDeptIdNum);
+                    if (!inp.checked) return false;
+                    var v = String(inp.value);
+                    return v === String(storeDeptIdNum) || (salesDeptIdNum > 0 && v === String(salesDeptIdNum));
                 });
                 row.style.display = any ? 'block' : 'none';
             }
 
-            function wireStoreDeptToggle(cbSel, rowId, storeDeptIdNum) {
+            function wireAssignedPlantToggle(cbSel, rowId, storeDeptIdNum, salesDeptIdNum) {
                 document.querySelectorAll(cbSel).forEach(function (inp) {
                     inp.addEventListener('change', function () {
-                        toggleStorePlantRow(cbSel, rowId, storeDeptIdNum);
+                        toggleAssignedPlantRow(cbSel, rowId, storeDeptIdNum, salesDeptIdNum);
                     });
                 });
-                toggleStorePlantRow(cbSel, rowId, storeDeptIdNum);
+                toggleAssignedPlantRow(cbSel, rowId, storeDeptIdNum, salesDeptIdNum);
             }
 
             function init() {
@@ -264,10 +271,9 @@
                     moveToBody('editUserModal')();
                 }
                 var sd = @storeDeptId;
-                if (sd > 0) {
-                    wireStoreDeptToggle('input[name=\"CreateForm.DepartmentIds\"]', 'createStorePlantRow', sd);
-                    wireStoreDeptToggle('input[name=\"EditForm.DepartmentIds\"]', 'editStorePlantRow', sd);
-                }
+                var sld = @salesDeptId;
+                wireAssignedPlantToggle('input[name=\"CreateForm.DepartmentIds\"]', 'createStorePlantRow', sd, sld);
+                wireAssignedPlantToggle('input[name=\"EditForm.DepartmentIds\"]', 'editStorePlantRow', sd, sld);
             }
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
             else init();

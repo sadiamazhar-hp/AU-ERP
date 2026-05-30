@@ -1,5 +1,6 @@
 using AU_ERP.Models;
 using AU_ERP.Models.ViewModels;
+using AU_ERP.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -18,6 +19,7 @@ public class CreditMemoController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(
         string? q,
+        string? plantId,
         DateTime? docFrom,
         DateTime? docTo,
         int? openRo,
@@ -48,11 +50,20 @@ public class CreditMemoController : Controller
             }
         }
 
+        var allPlants = await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+
         List<CreditMemoIndexRowVm> rows;
         try
         {
-            var query = _db.SalesReturnCreditMemos.AsNoTracking();
-            query = ApplyCreditMemoFilters(query, search, dFrom, dTo);
+            var joined = from cm in _db.SalesReturnCreditMemos.AsNoTracking()
+                join ro in _db.SalesReturnOrders.AsNoTracking() on cm.SalesReturnOrderId equals ro.Id
+                join inv in _db.SalesInvoices.AsNoTracking() on ro.SalesInvoiceId equals inv.Id
+                join dc in _db.DeliveryChallans.AsNoTracking() on inv.DeliveryChallanId equals dc.Id
+                select new { cm, PlantId = dc.PlantId };
+            joined = SalesPlantAccess.ApplyListingPlantFilter(joined, plantScope, x => x.PlantId);
+            var query = ApplyCreditMemoFilters(joined.Select(x => x.cm), search, dFrom, dTo);
 
             rows = await query
                 .OrderByDescending(c => c.DocumentDate)
@@ -87,6 +98,7 @@ public class CreditMemoController : Controller
             OpenReturnOrderId = validatedOpenRo,
             Items = rows
         };
+        ViewBag.FilterPlantId = plantScope.EffectiveListPlantId;
 
         return View(vm);
     }

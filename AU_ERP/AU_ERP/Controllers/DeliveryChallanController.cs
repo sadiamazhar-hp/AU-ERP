@@ -40,7 +40,8 @@ public class DeliveryChallanController : Controller
             .Select(p => p.PlantID)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        return UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, all).ToList();
+        var scope = await SalesPlantAccess.ResolveAsync(_db, User, null, all, ct).ConfigureAwait(false);
+        return scope.IsAdminAllPlants ? all : scope.AllowedPlantIds.ToList();
     }
 
     private static string ExplainSalesOrderPlantDeniedForDc(ClaimsPrincipal user, SalesOrder o)
@@ -99,8 +100,9 @@ public class DeliveryChallanController : Controller
                 (d.ShipToDisplayName != null && d.ShipToDisplayName.Contains(t)) ||
                 (d.SalesOrder != null && d.SalesOrder.SalesOrderNumber.Contains(t)));
         }
-        if (!string.IsNullOrWhiteSpace(plantId))
-            query = query.Where(d => d.PlantId == plantId);
+        var allPlants = await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
+        query = SalesPlantAccess.ApplyListingPlantFilter(query, plantScope, d => d.PlantId);
         if (dateFrom is { } df)
         {
             var d0 = df.Date;
@@ -117,18 +119,14 @@ public class DeliveryChallanController : Controller
             .ThenByDescending(d => d.Id)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var plants = await _db.PlantsSamples.AsNoTracking().OrderBy(p => p.PlantName).ToListAsync(ct).ConfigureAwait(false);
         var customers = await _db.BusinessPartnerMasterSamples.AsNoTracking()
             .OrderBy(c => c.FullName)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var allPlantIds = plants.Select(p => p.PlantID).ToList();
-        var allowedPlantIds = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIds)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var dcModalPlants = plants.Where(p => allowedPlantIds.Contains(p.PlantID)).ToList();
-        var storePlantIds = UserPlantResolution.GetStorePlantIds(User);
-        var dcPlantSingleLocked = storePlantIds.Count == 1;
-        var dcLockedPlantId = dcPlantSingleLocked ? storePlantIds[0] : null;
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
+        var dcModalPlants = ViewBag.FilterPlants as List<PlantsSample> ?? new List<PlantsSample>();
+        var dcPlantSingleLocked = plantScope.IsSinglePlantLocked;
+        var dcLockedPlantId = ViewBag.LockedPlantId as string ?? "";
         var driversInUse = await DeliveryFleetAvailability.GetDriverIdsBusyOnOpenInvoiceAsync(_db, ct).ConfigureAwait(false);
         var vehiclesInUse = await DeliveryFleetAvailability.GetVehicleIdsBusyOnOpenInvoiceAsync(_db, ct).ConfigureAwait(false);
 
@@ -142,13 +140,13 @@ public class DeliveryChallanController : Controller
             .OrderBy(v => v.NumberPlate)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        ViewBag.Plants = plants;
         ViewBag.DcModalPlants = dcModalPlants;
         ViewBag.DcPlantSingleLocked = dcPlantSingleLocked;
         ViewBag.DcLockedPlantId = dcLockedPlantId;
         ViewBag.DcDrivers = drivers;
         ViewBag.DcVehicles = vehicles;
         ViewBag.Customers = customers;
+        vm.PlantId = plantScope.EffectiveListPlantId;
         return View(vm);
     }
 
@@ -165,6 +163,10 @@ public class DeliveryChallanController : Controller
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             .ConfigureAwait(false);
         if (d == null)
+            return NotFound();
+        var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(readScope, d.PlantId))
             return NotFound();
         return View(d);
     }
@@ -183,6 +185,10 @@ public class DeliveryChallanController : Controller
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             .ConfigureAwait(false);
         if (d == null)
+            return NotFound();
+        var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(readScope, d.PlantId))
             return NotFound();
         return PartialView("_DetailsModal", d);
     }
@@ -222,9 +228,8 @@ public class DeliveryChallanController : Controller
             .Select(p => p.PlantID)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var allowedPlants = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIds)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        query = query.Where(x => x.PlantId != null && allowedPlants.Contains(x.PlantId));
+        var searchScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIds, ct).ConfigureAwait(false);
+        query = SalesPlantAccess.ApplyListingPlantFilter(query, searchScope, x => x.PlantId);
         var items = await query
             .OrderByDescending(x => x.OrderDate)
             .ThenBy(x => x.SalesOrderNumber)
@@ -263,9 +268,8 @@ public class DeliveryChallanController : Controller
             .Select(p => p.PlantID)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var allowedLines = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsLines)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(o.PlantId) || !allowedLines.Contains(o.PlantId.Trim()))
+        var lineScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIdsLines, ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(lineScope, o.PlantId))
             return Json(new { success = false, message = ExplainSalesOrderPlantDeniedForDc(User, o) });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders are listed." });
@@ -307,6 +311,10 @@ public class DeliveryChallanController : Controller
         var d = await LoadDeliveryChallanForPdfAsync(id, ct).ConfigureAwait(false);
         if (d == null)
             return NotFound();
+        var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(readScope, d.PlantId))
+            return NotFound();
         var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
         var bytes = DeliveryChallanPdfService.BuildPdf(d, d.Items.ToList(), companyHeader);
         var fileName = SafePdfName(d.DeliveryChallanNumber, "challan");
@@ -342,9 +350,8 @@ public class DeliveryChallanController : Controller
             .Select(p => p.PlantID)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var allowedPrep = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsPrep)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(o.PlantId) || !allowedPrep.Contains(o.PlantId.Trim()))
+        var prepScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIdsPrep, ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(prepScope, o.PlantId))
             return Json(new { success = false, message = ExplainSalesOrderPlantDeniedForDc(User, o) });
         if (o.Status != SalesOrder.StatusConfirmed)
             return Json(new { success = false, message = "Only confirmed sales orders can create a delivery challan." });
@@ -416,11 +423,12 @@ public class DeliveryChallanController : Controller
             .Select(p => p.PlantID)
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var allowedPlants = UserPlantResolution.GetDeliveryChallanPlantIdFilter(User, allPlantIdsForUser)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!allowedPlants.Contains(model.PlantId.Trim()))
+        var writeScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantIdsForUser, ct).ConfigureAwait(false);
+        model.PlantId = SalesPlantAccess.ResolveWritePlantId(writeScope, model.PlantId);
+        var plantAccessErr = SalesPlantAccess.EnsurePlantAllowed(writeScope, model.PlantId);
+        if (plantAccessErr != null)
         {
-            TempData["DcError"] = "Selected plant is not allowed for your user.";
+            TempData["DcError"] = plantAccessErr;
             return RedirectToAction(nameof(Index));
         }
         if (string.IsNullOrWhiteSpace(model.ShipToBusinessPartnerId))

@@ -24,6 +24,11 @@
     var sqDetailsModalUrlPlaceholder = Url.Action("DetailsModal", "SalesQuotation", new { id = 900000001 }) ?? "";
     var walkInSchemaId = ViewBag.WalkInSchemaId as int? ?? 0;
     var isEmporiumWalkIn = ViewBag.IsEmporiumWalkInUser as bool? == true;
+    var missingPlantAssignment = ViewBag.MissingPlantAssignment as bool? == true;
+    var isSinglePlantLocked = ViewBag.IsSinglePlantLocked as bool? == true;
+    var lockedPlantId = ViewBag.LockedPlantId as string ?? "";
+    PlantsSample? SqPlantNameRow(string pid) =>
+        plants.FirstOrDefault(p => string.Equals(p.PlantID, pid, StringComparison.OrdinalIgnoreCase));
 }
 
 @section Styles {
@@ -118,6 +123,12 @@
     @if (TempData["QuotationError"] is string errMsg2)
     {
         <div class="alert alert-danger py-2 small mb-3" role="status">@errMsg2</div>
+    }
+    @if (missingPlantAssignment)
+    {
+        <div class="alert alert-warning py-2 small mb-3" role="status">
+            You have Sales access but no plant is assigned to your profile. Ask an administrator to edit your user and select at least one plant for the Sales or Store department.
+        </div>
     }
 
     <div class="sq-table-card">
@@ -249,13 +260,26 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">Plant</label>
-                    <select id="sqModPlant" class="form-select form-select-sm">
-                        <option value="">All</option>
-                        @foreach (var p in plants)
-                        {
-                            <option value="@p.PlantID">@p.PlantName</option>
-                        }
-                    </select>
+                    @if (isSinglePlantLocked && !string.IsNullOrWhiteSpace(lockedPlantId))
+                    {
+                        var lockPn = SqPlantNameRow(lockedPlantId.Trim());
+                        <input type="hidden" id="sqModPlant" value="@lockedPlantId.Trim()" />
+                        <input type="text" class="form-control form-control-sm bg-light" readonly value="@(lockPn?.PlantName ?? lockedPlantId)" title="Assigned plant" />
+                    }
+                    else if (!missingPlantAssignment)
+                    {
+                        <select id="sqModPlant" class="form-select form-select-sm">
+                            <option value="">All assigned</option>
+                            @foreach (var p in plants)
+                            {
+                                <option value="@p.PlantID">@p.PlantName</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <p class="small text-muted mb-0">No plants assigned.</p>
+                    }
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">Distribution channel</label>
@@ -300,6 +324,14 @@
                         </div>
                         <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="sqPlant">Plant <span class="text-danger">*</span></label>
+                            @if (isSinglePlantLocked && !string.IsNullOrWhiteSpace(lockedPlantId))
+                            {
+                                var createLockPn = SqPlantNameRow(lockedPlantId.Trim());
+                                <input type="hidden" name="PlantId" id="sqPlantHidden" value="@lockedPlantId.Trim()" />
+                                <input type="text" class="form-control form-control-sm bg-light" id="sqPlant" readonly value="@(createLockPn?.PlantName ?? lockedPlantId)" title="Assigned plant" />
+                            }
+                            else
+                            {
                             <select class="form-select form-select-sm" id="sqPlant" required disabled>
                                 <option value="">— Select —</option>
                                 @foreach (var p in plants)
@@ -308,6 +340,7 @@
                                 }
                             </select>
                             <input type="hidden" name="PlantId" id="sqPlantHidden" />
+                            }
                         </div>
                         <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="form-label small mb-0" for="sqDc">Distribution channel <span class="text-danger">*</span></label>

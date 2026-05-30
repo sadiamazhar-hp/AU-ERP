@@ -112,8 +112,6 @@ namespace AU_ERP.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.HasIndex("PlantID");
-
                     b.ToTable("ApplicationUserDepartments");
                 });
 
@@ -327,6 +325,9 @@ namespace AU_ERP.Migrations
                         .HasColumnType("nvarchar(30)")
                         .HasDefaultValue("Production");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("HeaderMaterialTypeCode")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
@@ -336,9 +337,6 @@ namespace AU_ERP.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
 
                     b.Property<string>("Plant")
                         .HasColumnType("nvarchar(450)");
@@ -370,7 +368,7 @@ namespace AU_ERP.Migrations
 
                     b.HasIndex("BomMaterialNumber", "Plant", "BomUsage", "AlternativeNo")
                         .IsUnique()
-                        .HasFilter("[BomMaterialNumber] IS NOT NULL AND [Plant] IS NOT NULL AND [IsDeleted] = 0");
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.HasIndex("BomMaterialNumber", "Plant", "IsDefaultBom", "Status");
 
@@ -3338,11 +3336,6 @@ namespace AU_ERP.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("AU_ERP.Models.PlantsSample", "Plant")
-                        .WithMany()
-                        .HasForeignKey("PlantID")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AU_ERP.Models.ApplicationUser", "User")
                         .WithMany("UserDepartments")
                         .HasForeignKey("UserId")
@@ -3350,8 +3343,6 @@ namespace AU_ERP.Migrations
                         .IsRequired();
 
                     b.Navigation("Department");
-
-                    b.Navigation("Plant");
 
                     b.Navigation("User");
                 });

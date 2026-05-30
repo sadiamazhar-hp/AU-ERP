@@ -320,21 +320,18 @@ namespace AU_ERP.Controllers
             var mat = (materialNumber ?? "").Trim();
             if (mat.Length == 0)
                 return Json(new { success = true, items = Array.Empty<object>() });
-            var today = DateTime.Today;
-            var list = await _db.BomHeadersSamples.AsNoTracking()
-                .Where(h => h.BomMaterialNumber == mat)
-                .ForMrpSelection(today)
-                .OrderForMrpSelection()
-                .Select(h => new
-                {
-                    bomId = h.BomID,
-                    bomCode = h.BOMCode,
-                    plant = h.Plant ?? "",
-                    validFrom = h.ValidFrom,
-                    isDefault = h.IsDefaultBom
-                })
-                .ToListAsync(ct);
-            return Json(new { success = true, items = list });
+
+            var list = await BomMrpLookup.GetOptionsAsync(_db, mat, ct: ct);
+            var items = list.Select(h => new
+            {
+                bomId = h.BomId,
+                bomCode = h.BomCode,
+                plant = h.Plant,
+                validFrom = h.ValidFrom,
+                isDefault = h.IsDefaultBom
+            }).ToList();
+
+            return Json(new { success = true, items });
         }
 
         [HttpGet]

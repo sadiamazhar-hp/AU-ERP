@@ -295,10 +295,11 @@ public class SalesOrderController : Controller
     {
         if (editId is > 0)
             ViewBag.OpenEditId = editId;
-        var plants = await _db.PlantsSamples.AsNoTracking()
+        var allPlants = await _db.PlantsSamples.AsNoTracking()
             .OrderBy(p => p.PlantName)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, plantId, allPlants.Select(p => p.PlantID), ct).ConfigureAwait(false);
         var channels = await _db.DistributionChannels.AsNoTracking()
             .OrderBy(c => c.DistributionChannelName)
             .ToListAsync(ct)
@@ -316,8 +317,7 @@ public class SalesOrderController : Controller
                 || (x.CustomerName != null && x.CustomerName.Contains(qq)));
         }
 
-        if (!string.IsNullOrWhiteSpace(plantId))
-            query = query.Where(x => x.PlantId == plantId);
+        query = SalesPlantAccess.ApplyListingPlantFilter(query, plantScope, x => x.PlantId);
         if (distributionChannelId is { } dcid && dcid > 0)
             query = query.Where(x => x.DistributionChannelId == dcid);
 
@@ -331,7 +331,12 @@ public class SalesOrderController : Controller
         var countFilter = new SalesOrderWorkflowCountFilter
         {
             Q = string.IsNullOrEmpty(qq) ? null : qq,
-            PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,
+            PlantId = plantScope.EffectiveListPlantId,
+            AllowedPlantIds = plantScope.IsAdminAllPlants || plantScope.MissingAssignment
+                ? null
+                : (plantScope.EffectiveListPlantId != null
+                    ? null
+                    : plantScope.AllowedPlantIds),
             DistributionChannelId = distributionChannelId is > 0 ? distributionChannelId : null
         };
         var statusCounts = await _workflowStatus.CountByStatusAsync(countFilter, ct).ConfigureAwait(false);
@@ -359,12 +364,12 @@ public class SalesOrderController : Controller
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        ViewBag.Plants = plants;
         ViewBag.DistributionChannels = channels;
         ViewBag.Customers = customers;
         ViewBag.ConfigurationSchemas = schemas;
         ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
         ViewBag.IsEmporiumWalkInUser = isEmporiumWalkIn;
+        SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
         var orderIds = list.Select(x => x.Id).ToList();
         var dcRows = orderIds.Count == 0
             ? new List<DeliveryChallan>()
@@ -411,7 +416,7 @@ public class SalesOrderController : Controller
             Items = list,
             Q = string.IsNullOrEmpty(qq) ? null : qq,
             Status = string.IsNullOrEmpty(st) ? "All" : st,
-            PlantId = string.IsNullOrWhiteSpace(plantId) ? null : plantId,
+            PlantId = plantScope.EffectiveListPlantId,
             DistributionChannelId = distributionChannelId is > 0 ? distributionChannelId : null,
             WorkflowStatusById = workflowById,
             CountOpen = statusCounts.GetValueOrDefault(SalesOrderWorkflowStatus.Open),
@@ -460,6 +465,10 @@ public class SalesOrderController : Controller
         var o = await LoadSalesOrderForPdfAsync(id, ct).ConfigureAwait(false);
         if (o == null)
             return NotFound();
+        var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(readScope, o.PlantId))
+            return NotFound();
         var companyHeader = await _companyInfo.GetPdfHeaderAsync(ct).ConfigureAwait(false);
         var bytes = SalesOrderPdfService.BuildPdf(o, o.Items.OrderBy(i => i.Id).ToList(), companyHeader);
         var fileName = SafeSalesOrderPdfName(o.SalesOrderNumber);
@@ -479,6 +488,10 @@ public class SalesOrderController : Controller
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             .ConfigureAwait(false);
         if (o == null)
+            return NotFound();
+        var readScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(readScope, o.PlantId))
             return NotFound();
         if (o.Status != SalesOrder.StatusConfirmed)
             return NotFound();
@@ -500,6 +513,25 @@ public class SalesOrderController : Controller
         var isDraftSubmit = string.Equals(model.SubmitAction, "draft", StringComparison.OrdinalIgnoreCase);
         var isConfirmSubmit = string.Equals(model.SubmitAction, "send", StringComparison.OrdinalIgnoreCase);
         var strict = isConfirmSubmit;
+
+        var allPlantsForWrite = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var writeScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlantsForWrite, ct).ConfigureAwait(false);
+        if (writeScope.MissingAssignment)
+        {
+            TempData["OrderError"] =
+                "Your user has no plant assigned. An administrator must assign at least one plant for your Sales or Store department.";
+            return RedirectToOrderListFromModel(model);
+        }
+        model.PlantId = SalesPlantAccess.ResolveWritePlantId(writeScope, model.PlantId);
+        var plantAccessErr = SalesPlantAccess.EnsurePlantAllowed(writeScope, model.PlantId);
+        if (plantAccessErr != null)
+        {
+            TempData["OrderError"] = plantAccessErr;
+            return RedirectToOrderListFromModel(model);
+        }
 
         if (strict)
         {
@@ -976,6 +1008,13 @@ public class SalesOrderController : Controller
             TempData["QuotationError"] = "Quotation not found.";
             return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
         }
+        var fromQScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(fromQScope, q.PlantId))
+        {
+            TempData["QuotationError"] = "You cannot create a sales order from this quotation (plant not allowed for your login).";
+            return RedirectToQuotationList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
         if (q.Status != SalesQuotation.StatusSent)
         {
             TempData["QuotationError"] = "Only sent quotations can be converted to a sales order.";
@@ -1105,6 +1144,13 @@ public class SalesOrderController : Controller
         if (o == null)
         {
             TempData["OrderError"] = "Sales order not found.";
+            return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
+        }
+        var deleteScope = await SalesPlantAccess.ResolveAsync(_db, User, null,
+            await _db.PlantsSamples.AsNoTracking().Select(p => p.PlantID).ToListAsync(ct), ct).ConfigureAwait(false);
+        if (!SalesPlantAccess.IsPlantReadable(deleteScope, o.PlantId))
+        {
+            TempData["OrderError"] = "You cannot delete this sales order (plant not allowed for your login).";
             return RedirectToOrderList(returnQ, returnStatus, returnPlantId, returnDistributionChannelId);
         }
         if (!string.Equals(o.Status, SalesOrder.StatusOpen, StringComparison.OrdinalIgnoreCase))
