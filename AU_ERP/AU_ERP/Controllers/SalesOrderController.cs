@@ -348,12 +348,14 @@ public class SalesOrderController : Controller
         var list = FilterByWorkflowStatus(allMatching, workflowById, st);
         var walkInSchemaId = await SalesSchemaResolution.GetWalkInSchemaIdAsync(_db, ct).ConfigureAwait(false);
         var dealerSchemaId = await SalesSchemaResolution.GetDealerSchemaIdAsync(_db, ct).ConfigureAwait(false);
-        var isEmporiumWalkIn = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
+        var customerMode = SalesCustomerPopulation.ResolveMode(
+            plantScope.IsAdminAllPlants ? Array.Empty<string>() : plantScope.AllowedPlantIds,
+            plantScope.IsAdminAllPlants);
         var customersQuery = _db.BusinessPartnerMasterSamples.AsNoTracking();
-        if (isEmporiumWalkIn)
-            customersQuery = SalesSchemaResolution.FilterWalkInCustomers(customersQuery, walkInSchemaId!.Value);
-        else if (dealerSchemaId is > 0)
-            customersQuery = SalesSchemaResolution.FilterDealerCustomers(customersQuery, dealerSchemaId.Value);
+        if (plantScope.MissingAssignment)
+            customersQuery = customersQuery.Where(_ => false);
+        else
+            customersQuery = SalesCustomerPopulation.ApplyFilter(customersQuery, customerMode, walkInSchemaId, dealerSchemaId);
         var customers = await customersQuery
             .OrderBy(c => c.FullName)
             .ToListAsync(ct)
@@ -368,7 +370,7 @@ public class SalesOrderController : Controller
         ViewBag.Customers = customers;
         ViewBag.ConfigurationSchemas = schemas;
         ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
-        ViewBag.IsEmporiumWalkInUser = isEmporiumWalkIn;
+        ViewBag.IsEmporiumWalkInUser = SalesCustomerPopulation.IsWalkInOnlyUi(customerMode, walkInSchemaId);
         SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
         var orderIds = list.Select(x => x.Id).ToList();
         var dcRows = orderIds.Count == 0
@@ -1350,34 +1352,25 @@ public class SalesOrderController : Controller
             .ConfigureAwait(false);
     }
 
-    /// <summary>Validates customer schema for Emporium (WalkIn) vs other plants (Dealer).</summary>
+    /// <summary>Validates customer schema against user plant assignments and document plant.</summary>
     private async Task<string?> ValidateCustomerSalesSchemaAsync(
         BusinessPartnerMasterSample bp,
         string? plantId,
         bool forSalesOrder,
         CancellationToken ct)
     {
+        var allPlants = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var plantScope = await SalesPlantAccess.ResolveAsync(_db, User, null, allPlants, ct).ConfigureAwait(false);
         var walkInSchemaId = await SalesSchemaResolution.GetWalkInSchemaIdAsync(_db, ct).ConfigureAwait(false);
         var dealerSchemaId = await SalesSchemaResolution.GetDealerSchemaIdAsync(_db, ct).ConfigureAwait(false);
-        var isEmporiumUser = UserPlantResolution.HasEmporiumStorePlant(User) && walkInSchemaId is > 0;
-        var plant = (plantId ?? string.Empty).Trim();
-        var isEmporiumPlant = string.Equals(plant, UserPlantResolution.EmporiumPlantId, StringComparison.OrdinalIgnoreCase);
-        var requireWalkIn = isEmporiumPlant || (plant.Length == 0 && isEmporiumUser);
-
+        var customerMode = SalesCustomerPopulation.ResolveMode(
+            plantScope.IsAdminAllPlants ? Array.Empty<string>() : plantScope.AllowedPlantIds,
+            plantScope.IsAdminAllPlants);
         var docLabel = forSalesOrder ? "sales orders" : "sales quotations";
-        if (requireWalkIn)
-        {
-            if (walkInSchemaId is not > 0)
-                return null;
-            if (!SalesSchemaResolution.MatchesWalkInSchema(bp.SalesSchema, walkInSchemaId.Value))
-                return $"Only WalkIn customers can be used for Emporium {docLabel}.";
-            return null;
-        }
-
-        if (dealerSchemaId is not > 0)
-            return null;
-        if (!SalesSchemaResolution.MatchesDealerSchema(bp.SalesSchema, dealerSchemaId.Value))
-            return $"Only Dealer customers can be used for {docLabel} outside Emporium plant.";
-        return null;
+        return SalesCustomerPopulation.ValidateCustomer(
+            bp, customerMode, walkInSchemaId, dealerSchemaId, plantId, docLabel);
     }
 }

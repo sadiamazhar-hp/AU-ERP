@@ -63,6 +63,19 @@ public static class SalesSchemaResolution
                                 || c.SalesSchema == DealerSchemaTitle);
     }
 
+    public static IQueryable<BusinessPartnerMasterSample> FilterWalkInAndDealerCustomers(
+        IQueryable<BusinessPartnerMasterSample> query,
+        int walkInSchemaId,
+        int dealerSchemaId)
+    {
+        var walkInIdStr = walkInSchemaId.ToString();
+        var dealerIdStr = dealerSchemaId.ToString();
+        return query.Where(c => c.SalesSchema == walkInIdStr
+                                || c.SalesSchema == WalkInSchemaTitle
+                                || c.SalesSchema == dealerIdStr
+                                || c.SalesSchema == DealerSchemaTitle);
+    }
+
     /// <summary>Display label for BP list (WalkIn, Dealer, or em dash when unset).</summary>
     public static string ResolveSalesSchemaDisplayTitle(
         string? bpSalesSchema,

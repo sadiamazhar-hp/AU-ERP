@@ -11,6 +11,9 @@ public static class UserPlantResolution
     /// <summary><see cref="PlantsSample.PlantID"/> for Emporium (walk-in retail).</summary>
     public const string EmporiumPlantId = "Emp101";
 
+    /// <summary><see cref="PlantsSample.PlantID"/> for Manufacturing Plant (dealer sales).</summary>
+    public const string ManufacturingPlantId = "Man102";
+
     /// <summary>True when the user has Store access to Emporium plant (store_plant claim).</summary>
     public static bool HasEmporiumStorePlant(ClaimsPrincipal? user) =>
         GetStorePlantIds(user).Contains(EmporiumPlantId, StringComparer.OrdinalIgnoreCase);

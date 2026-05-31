@@ -21,7 +21,7 @@ public sealed class EmporiumWalkInCustomerService
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
 
-    /// <summary>Creates a customer BP with WalkIn sales schema. Caller must ensure <see cref="UserPlantResolution.HasEmporiumStorePlant"/>.</summary>
+    /// <summary>Creates a customer BP with WalkIn sales schema for users assigned to Emporium plant.</summary>
     public async Task<(bool Ok, string? Error, string? BpId, string? DisplayName)> CreateWalkInCustomerAsync(
         ClaimsPrincipal user,
         string? firstName,
@@ -30,7 +30,12 @@ public sealed class EmporiumWalkInCustomerService
         string? mobile,
         CancellationToken ct = default)
     {
-        if (!UserPlantResolution.HasEmporiumStorePlant(user))
+        var allPlants = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var assigned = await SalesPlantAccess.LoadAssignedPlantIdsAsync(_db, user, allPlants, ct).ConfigureAwait(false);
+        if (!SalesCustomerPopulation.CanCreateWalkInCustomer(assigned))
             return (false, "Walk-in customer is only available for users assigned to Emporium plant.", null, null);
 
         var fn = (firstName ?? "").Trim();
