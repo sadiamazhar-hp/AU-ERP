@@ -322,6 +322,9 @@ public class SalesQuotationController : Controller
         ViewBag.ConfigurationSchemas = schemas;
         ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
         ViewBag.IsEmporiumWalkInUser = SalesCustomerPopulation.IsWalkInOnlyUi(customerMode, walkInSchemaId);
+        ViewBag.CanAddWalkInCustomer = plantScope.IsAdminAllPlants
+            ? false
+            : SalesCustomerPopulation.ShowAddWalkInCustomer(plantScope.AllowedPlantIds);
         SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
         var vm = new SalesQuotationListVm
         {

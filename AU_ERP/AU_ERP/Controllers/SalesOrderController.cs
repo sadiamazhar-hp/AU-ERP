@@ -371,6 +371,9 @@ public class SalesOrderController : Controller
         ViewBag.ConfigurationSchemas = schemas;
         ViewBag.WalkInSchemaId = walkInSchemaId ?? 0;
         ViewBag.IsEmporiumWalkInUser = SalesCustomerPopulation.IsWalkInOnlyUi(customerMode, walkInSchemaId);
+        ViewBag.CanAddWalkInCustomer = plantScope.IsAdminAllPlants
+            ? false
+            : SalesCustomerPopulation.ShowAddWalkInCustomer(plantScope.AllowedPlantIds);
         SalesPlantAccess.SetViewBag(this, plantScope, allPlants);
         var orderIds = list.Select(x => x.Id).ToList();
         var dcRows = orderIds.Count == 0

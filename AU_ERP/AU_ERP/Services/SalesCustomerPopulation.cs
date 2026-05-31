@@ -94,6 +94,10 @@ public static class SalesCustomerPopulation
     public static bool CanCreateWalkInCustomer(IReadOnlyList<string> assignedPlantIds) =>
         assignedPlantIds.Contains(UserPlantResolution.EmporiumPlantId, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>True when SQ/SO should show the walk-in "Add customer" control (any Emporium assignment).</summary>
+    public static bool ShowAddWalkInCustomer(IReadOnlyList<string> assignedPlantIds) =>
+        CanCreateWalkInCustomer(assignedPlantIds);
+
     public static string? ValidateCustomer(
         BusinessPartnerMasterSample bp,
         SalesCustomerPopulationMode mode,

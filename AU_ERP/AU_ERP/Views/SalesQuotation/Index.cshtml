@@ -24,6 +24,7 @@
     var sqDetailsModalUrlPlaceholder = Url.Action("DetailsModal", "SalesQuotation", new { id = 900000001 }) ?? "";
     var walkInSchemaId = ViewBag.WalkInSchemaId as int? ?? 0;
     var isEmporiumWalkIn = ViewBag.IsEmporiumWalkInUser as bool? == true;
+    var canAddWalkInCustomer = ViewBag.CanAddWalkInCustomer as bool? == true;
     var missingPlantAssignment = ViewBag.MissingPlantAssignment as bool? == true;
     var isSinglePlantLocked = ViewBag.IsSinglePlantLocked as bool? == true;
     var lockedPlantId = ViewBag.LockedPlantId as string ?? "";
@@ -358,7 +359,7 @@
                         <div class="col-md-6">
                             <label class="form-label small mb-0" for="sqCustomerSearch">Customer (Sold to party) <span class="text-danger">*</span></label>
                             <input type="hidden" name="CustomerBusinessPartnerId" id="sqCustomer" value="" required autocomplete="off" />
-                            @if (isEmporiumWalkIn)
+                            @if (canAddWalkInCustomer)
                             {
                                 <div class="d-flex flex-wrap align-items-center gap-2 border rounded px-2 py-2 bg-light mt-1">
                                     <span class="text-secondary small flex-grow-1" id="sqWalkInCustomerSummary" style="min-height:1.35rem;">No customer selected.</span>
@@ -373,7 +374,7 @@
                                     <option value="@c.BPID" data-ship="@ship">@(c.FullName ?? c.BPID)</option>
                                 }
                             </select>
-                            <div class="sq-customer-combo position-relative@(isEmporiumWalkIn ? " mt-2" : " mt-1")">
+                            <div class="sq-customer-combo position-relative@(canAddWalkInCustomer ? " mt-2" : " mt-1")">
                                 <input type="text" class="form-control form-control-sm" id="sqCustomerSearch" placeholder="Search customer (name, ID, address)…" autocomplete="off" />
                                 <div id="sqCustomerDropdown" class="sq-customer-dropdown border rounded bg-white shadow-sm" style="display: none;" role="listbox"></div>
                             </div>
@@ -487,7 +488,7 @@
     </div>
 </div>
 
-@if (isEmporiumWalkIn)
+@if (canAddWalkInCustomer)
 {
     <div class="modal fade walk-in-add-customer-modal" id="sqWalkInAddCustomerModal" tabindex="-1" aria-labelledby="sqWalkInAddCustomerModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
