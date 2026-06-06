@@ -48,6 +48,17 @@
         .db-period-chips a.is-active {
             background: var(--blue, #0070f2); border-color: var(--blue, #0070f2); color: #fff;
         }
+        .db-filter-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--subtle, #6a7c8e); margin: .75rem 0 .35rem 0; }
+        .db-plant-select {
+            min-width: 220px;
+            font-size: .82rem;
+            border: 1px solid var(--border, #d9d9d9);
+            border-radius: 6px;
+            padding: .38rem .55rem;
+            color: var(--dark, #354a5e);
+            background: #fff;
+        }
+        .db-filter-note { margin-top: .4rem; font-size: .75rem; color: var(--subtle, #6a7c8e); }
         .db-headline-row {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -127,6 +138,28 @@
         .db-table td { padding: .4rem .5rem; border-bottom: 1px solid #f0f0f0; }
         .db-table tbody tr:hover { background: #f8fafc; }
         .db-table .mono { font-family: "IBM Plex Mono", monospace; }
+        .db-topstock-parent-row { cursor: pointer; }
+        .db-topstock-parent-row:hover { background: #f8fafc; }
+        .db-topstock-parent-row.is-open { background: #f0f7ff; }
+        .db-topstock-expand {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            background: #eef3f9;
+            color: var(--dark, #354a5e);
+            font-size: .65rem;
+            font-weight: 700;
+            margin-right: .45rem;
+        }
+        .db-topstock-batch-row td {
+            background: #fbfdff;
+            font-size: .78rem;
+            color: var(--subtle, #6a7c8e);
+        }
+        .db-topstock-batch-label { padding-left: 2rem !important; }
     </style>
 }
 
@@ -150,9 +183,44 @@
                         var active = string.Equals(Model.Period, opt.Key, StringComparison.OrdinalIgnoreCase);
                         <a asp-action="Index" asp-route-period="@opt.Key"
                            class="@(active ? "is-active" : null)"
+                           asp-route-plantId="@Model.SelectedPlantId"
                            aria-pressed="@(active ? "true" : "false")">@opt.Label</a>
                     }
                 </div>
+                @if (Model.IsPlantFilterVisible)
+                {
+                    <p class="db-filter-label">Plant</p>
+                    <form asp-action="Index" method="get">
+                        <input type="hidden" name="period" value="@Model.Period" />
+                        <select class="db-plant-select" name="plantId" onchange="this.form.submit()" aria-label="Dashboard plant filter">
+                            <option value="">All assigned plants</option>
+                            @foreach (var p in Model.PlantOptions)
+                            {
+                                if (string.Equals(Model.SelectedPlantId, p.PlantId, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@p.PlantId" selected>
+                                        @($"{p.PlantName} ({p.PlantId})")
+                                    </option>
+                                }
+                                else
+                                {
+                                    <option value="@p.PlantId">
+                                    @($"{p.PlantName} ({p.PlantId})")
+                                    </option>
+                                }
+                            }
+                        </select>
+                    </form>
+                    <div class="db-filter-note">
+                        Showing: @(string.IsNullOrWhiteSpace(Model.EffectivePlantName) ? "All assigned plants" : $"{Model.EffectivePlantName} ({Model.SelectedPlantId})")
+                    </div>
+                }
+                else if (Model.IsPlantSingleLocked && !string.IsNullOrWhiteSpace(Model.SelectedPlantId))
+                {
+                    <div class="db-filter-note">
+                        Plant scope: @(string.IsNullOrWhiteSpace(Model.EffectivePlantName) ? Model.SelectedPlantId : $"{Model.EffectivePlantName} ({Model.SelectedPlantId})")
+                    </div>
+                }
             </div>
         }
     </div>
@@ -325,12 +393,16 @@
                     <div class="db-table-card">
                         <h3>Top stock value items</h3>
                         <table class="db-table">
-                            <thead><tr><th>Material</th><th>Grade</th><th class="text-end">Qty</th><th class="text-end">Value (PKR)</th></tr></thead>
+                            <thead><tr><th>Material</th><th>Grade</th><th class="text-end">Qty (sum)</th><th class="text-end">Value (PKR)</th></tr></thead>
                             <tbody>
-                            @foreach (var row in s.TopStockByValue)
+                            @for (var i = 0; i < s.TopStockByValue.Count; i++)
                             {
-                                <tr>
+                                var row = s.TopStockByValue[i];
+                                var rowId = $"db-topstock-{i}";
+                                var hasBatches = row.BatchBreakdown.Count > 0;
+                                <tr class="@(hasBatches ? "db-topstock-parent-row" : null)" data-row-id="@rowId">
                                     <td>
+                                        <span class="db-topstock-expand">@(hasBatches ? "+" : "•")</span>
                                         <span class="mono">@row.MaterialNumber</span>
                                         @if (!string.IsNullOrWhiteSpace(row.MaterialDescription))
                                         {
@@ -341,6 +413,20 @@
                                     <td class="text-end mono">@row.Quantity.ToString("N2", CultureInfo.InvariantCulture)</td>
                                     <td class="text-end mono">@FmtMoney(row.StockValue)</td>
                                 </tr>
+                                if (hasBatches)
+                                {
+                                    foreach (var batch in row.BatchBreakdown)
+                                    {
+                                        <tr class="db-topstock-batch-row" data-parent="@rowId" style="display:none;">
+                                            <td class="db-topstock-batch-label">
+                                                Batch: <span class="mono">@batch.BatchOrLot</span>
+                                            </td>
+                                            <td></td>
+                                            <td class="text-end mono">@batch.Quantity.ToString("N2", CultureInfo.InvariantCulture)</td>
+                                            <td class="text-end mono">@FmtMoney(batch.StockValue)</td>
+                                        </tr>
+                                    }
+                                }
                             }
                             </tbody>
                         </table>
@@ -682,6 +768,19 @@
             })();
                 </text>
             }
+
+            document.querySelectorAll(".db-topstock-parent-row[data-row-id]").forEach(function (parent) {
+                parent.addEventListener("click", function () {
+                    const id = parent.getAttribute("data-row-id");
+                    if (!id) return;
+                    const batchRows = document.querySelectorAll('tr[data-parent="' + id + '"]');
+                    if (!batchRows.length) return;
+                    const open = parent.classList.toggle("is-open");
+                    batchRows.forEach(r => r.style.display = open ? "" : "none");
+                    const icon = parent.querySelector(".db-topstock-expand");
+                    if (icon) icon.textContent = open ? "−" : "+";
+                });
+            });
         })();
     </script>
 }

@@ -16,7 +16,7 @@ async function unwrapList<T>(path: string, search: string, take: number): Promis
 }
 
 export function getPlants(search = '', take = 50) {
-  return unwrapList<LookupItem>('/lookups/plants', search, take);
+  return unwrapList<LookupItem>('/lookups/plants', search, Math.max(take, 200));
 }
 
 export function getCustomers(search = '', take = 50) {

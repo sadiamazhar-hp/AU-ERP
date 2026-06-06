@@ -22,7 +22,7 @@ public class MobileInventoryController : ControllerBase
     public async Task<ActionResult<MobileApiResponse<FinishedGoodsDto>>> FinishedGoods(
         [FromQuery] MobileReportFilter filter, CancellationToken ct)
     {
-        var data = await _reports.GetFinishedGoodsAsync(filter, ct);
+        var data = await _reports.GetFinishedGoodsAsync(filter, ct, User);
         return Ok(MobileApiResponse<FinishedGoodsDto>.Ok(data));
     }
 }

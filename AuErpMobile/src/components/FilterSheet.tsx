@@ -1,11 +1,13 @@
 import React, {useEffect, useState} from 'react';
 import {
+  Alert,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -13,6 +15,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {getCustomers, getPlants, getProducts} from '../api/lookups';
 import LookupSelector from './LookupSelector';
+import {formatDateShort, toIsoDate} from '../utils/dateRanges';
 import {Colors} from '../theme/colors';
 
 export interface FilterValues {
@@ -34,6 +37,7 @@ interface Props {
   showPlant?: boolean;
   showCustomer?: boolean;
   showProduct?: boolean;
+  hideDates?: boolean;
 }
 
 type DateField = 'dateFrom' | 'dateTo' | null;
@@ -46,26 +50,92 @@ export default function FilterSheet({
   showPlant,
   showCustomer,
   showProduct,
+  hideDates,
 }: Props) {
   const [local, setLocal] = useState<FilterValues>(values);
   const [pickerField, setPickerField] = useState<DateField>(null);
+  const [androidDateField, setAndroidDateField] = useState<DateField>(null);
+  const [androidDateInput, setAndroidDateInput] = useState('');
+  const [plantOptions, setPlantOptions] = useState<{id: string; label: string}[]>([]);
 
   useEffect(() => {
     if (visible) setLocal(values);
   }, [visible, values]);
 
-  const fmt = (d: Date | null) =>
-    d ? d.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}) : 'Any date';
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPlants() {
+      if (!visible || !showPlant) return;
+      try {
+        const rows = await getPlants('');
+        if (cancelled) return;
+        const mapped = rows.map(r => ({id: r.id, label: r.name}));
+        setPlantOptions(mapped);
+      } catch {
+        if (!cancelled) setPlantOptions([]);
+      }
+    }
+    void loadPlants();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, showPlant]);
 
   function handleDateChange(_: unknown, date?: Date) {
     if (Platform.OS === 'android') setPickerField(null);
     if (date && pickerField) setLocal(v => ({...v, [pickerField]: date}));
   }
 
+  function parseDateInput(raw: string): Date | null {
+    const text = raw.trim();
+    if (!text) return null;
+
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) {
+      const y = Number(iso[1]);
+      const m = Number(iso[2]);
+      const d = Number(iso[3]);
+      const date = new Date(y, m - 1, d);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null;
+    }
+
+    const dmy = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmy) {
+      const d = Number(dmy[1]);
+      const m = Number(dmy[2]);
+      const y = Number(dmy[3]);
+      const date = new Date(y, m - 1, d);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null;
+    }
+
+    return null;
+  }
+
+  function openDateField(field: Exclude<DateField, null>) {
+    if (Platform.OS === 'android') {
+      const current = local[field] ?? new Date();
+      setAndroidDateInput(toIsoDate(current));
+      setAndroidDateField(field);
+      return;
+    }
+    setPickerField(field);
+  }
+
+  function applyAndroidDate() {
+    if (!androidDateField) return;
+    const parsed = parseDateInput(androidDateInput);
+    if (!parsed) {
+      Alert.alert('Invalid date', 'Use YYYY-MM-DD or DD/MM/YYYY format.');
+      return;
+    }
+    setLocal(v => ({...v, [androidDateField]: parsed}));
+    setAndroidDateField(null);
+  }
+
   function reset() {
     setLocal({
-      dateFrom: null,
-      dateTo: null,
+      dateFrom: values.dateFrom,
+      dateTo: values.dateTo,
       plantId: '',
       customerId: '',
       materialNumber: '',
@@ -88,26 +158,30 @@ export default function FilterSheet({
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionLabel}>Date Range</Text>
-          <View style={styles.dateRow}>
-            <View style={styles.dateFlex}>
-              <Text style={styles.label}>From</Text>
-              <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerField('dateFrom')}>
-                <Icon name="calendar-today" size={14} color={Colors.blue} style={{marginRight: 6}} />
-                <Text style={[styles.dateTxt, !local.dateFrom && styles.datePlaceholder]}>{fmt(local.dateFrom)}</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.dateSeparator}>
-              <Icon name="arrow-forward" size={16} color={Colors.subtle} />
-            </View>
-            <View style={styles.dateFlex}>
-              <Text style={styles.label}>To</Text>
-              <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerField('dateTo')}>
-                <Icon name="calendar-today" size={14} color={Colors.blue} style={{marginRight: 6}} />
-                <Text style={[styles.dateTxt, !local.dateTo && styles.datePlaceholder]}>{fmt(local.dateTo)}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {!hideDates && (
+            <>
+              <Text style={styles.sectionLabel}>Custom Date Range</Text>
+              <View style={styles.dateRow}>
+                <View style={styles.dateFlex}>
+                  <Text style={styles.label}>From</Text>
+                  <TouchableOpacity style={styles.dateBtn} onPress={() => openDateField('dateFrom')}>
+                    <Icon name="calendar-today" size={14} color={Colors.blue} style={{marginRight: 6}} />
+                    <Text style={[styles.dateTxt, !local.dateFrom && styles.datePlaceholder]}>{formatDateShort(local.dateFrom)}</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.dateSeparator}>
+                  <Icon name="arrow-forward" size={16} color={Colors.subtle} />
+                </View>
+                <View style={styles.dateFlex}>
+                  <Text style={styles.label}>To</Text>
+                  <TouchableOpacity style={styles.dateBtn} onPress={() => openDateField('dateTo')}>
+                    <Icon name="calendar-today" size={14} color={Colors.blue} style={{marginRight: 6}} />
+                    <Text style={[styles.dateTxt, !local.dateTo && styles.datePlaceholder]}>{formatDateShort(local.dateTo)}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          )}
 
           {showPlant && (
             <LookupSelector
@@ -118,8 +192,23 @@ export default function FilterSheet({
               icon="business"
               onSelect={(id, name) => setLocal(v => ({...v, plantId: id, plantName: name}))}
               fetchItems={async search => {
-                const rows = await getPlants(search);
-                return rows.map(r => ({id: r.id, label: r.name}));
+                const term = search.trim().toLowerCase();
+                const rows =
+                  plantOptions.length > 0
+                    ? plantOptions
+                    : (await getPlants(search)).map(r => ({id: r.id, label: r.name}));
+                const base =
+                  term.length === 0
+                    ? rows
+                    : rows.filter(
+                        p =>
+                          p.id.toLowerCase().includes(term) ||
+                          p.label.toLowerCase().includes(term),
+                      );
+                if (!term && rows.length > 1) {
+                  return [{id: '', label: 'All Plants'}, ...base];
+                }
+                return base;
               }}
             />
           )}
@@ -155,7 +244,7 @@ export default function FilterSheet({
           )}
         </ScrollView>
 
-        {pickerField && (
+        {Platform.OS !== 'android' && pickerField && (
           <DateTimePicker
             value={local[pickerField] ?? new Date()}
             mode="date"
@@ -163,6 +252,31 @@ export default function FilterSheet({
             onChange={handleDateChange}
           />
         )}
+
+        <Modal visible={Platform.OS === 'android' && !!androidDateField} transparent animationType="fade">
+          <Pressable style={styles.modalOverlay} onPress={() => setAndroidDateField(null)} />
+          <View style={styles.dateModalCard}>
+            <Text style={styles.dateModalTitle}>Select {androidDateField === 'dateFrom' ? 'From' : 'To'} Date</Text>
+            <Text style={styles.dateModalHint}>Enter date as YYYY-MM-DD or DD/MM/YYYY</Text>
+            <TextInput
+              style={styles.dateInput}
+              value={androidDateInput}
+              onChangeText={setAndroidDateInput}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={Colors.placeholder}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.dateModalActions}>
+              <TouchableOpacity style={styles.resetBtn} onPress={() => setAndroidDateField(null)}>
+                <Text style={styles.resetTxt}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.applyBtn} onPress={applyAndroidDate}>
+                <Text style={styles.applyTxt}>Set Date</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.resetBtn} onPress={reset}>
@@ -232,7 +346,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   label: {fontSize: 11, color: Colors.subtle, marginBottom: 4, fontWeight: '600'},
-  dateRow: {flexDirection: 'row', alignItems: 'flex-end', gap: 8},
+  dateRow: {flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 4},
   dateFlex: {flex: 1},
   dateSeparator: {paddingBottom: 10},
   dateBtn: {
@@ -274,4 +388,28 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   applyTxt: {fontSize: 14, fontWeight: '700', color: '#fff'},
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,22,40,0.45)',
+  },
+  dateModalCard: {
+    marginHorizontal: 20,
+    marginTop: '55%',
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    padding: 16,
+    elevation: 8,
+  },
+  dateModalTitle: {fontSize: 16, fontWeight: '700', color: Colors.text},
+  dateModalHint: {fontSize: 12, color: Colors.subtle, marginTop: 4, marginBottom: 10},
+  dateInput: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: Colors.text,
+    backgroundColor: Colors.bg,
+  },
+  dateModalActions: {flexDirection: 'row', gap: 10, marginTop: 12},
 });

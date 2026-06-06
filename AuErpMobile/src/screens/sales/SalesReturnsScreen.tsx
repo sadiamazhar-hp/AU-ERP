@@ -1,11 +1,12 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getSalesReturns, SalesReturnsDto, SalesReturnRow} from '../../api/sales';
-import KpiCard from '../../components/KpiCard';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
@@ -13,10 +14,11 @@ import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToSalesParams} from '../../utils/reportFilters';
 import {filterRowsBySearch} from '../../utils/tableSearch';
+import {formatPkr} from '../../utils/currency';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {Colors} from '../../theme/colors';
 
 const fmtDate = (s: string) => (s ? new Date(s).toLocaleDateString() : '');
-const fmtAmt = (n: number) => `${(n / 1000).toFixed(0)}K`;
 
 const COLS: Column<SalesReturnRow>[] = [
   {key: 'returnNumber', label: 'Return #', flex: 1.2},
@@ -24,8 +26,8 @@ const COLS: Column<SalesReturnRow>[] = [
   {key: 'customerName', label: 'Customer', flex: 1.6},
   {key: 'invoiceNumber', label: 'Invoice', flex: 1.1},
   {key: 'returnReason', label: 'Reason', flex: 1.4},
-  {key: 'invoiceTotal', label: 'Inv total', flex: 0.9, align: 'right', render: v => fmtAmt(Number(v))},
-  {key: 'creditAmount', label: 'Credit', flex: 0.9, align: 'right', render: v => (v != null ? fmtAmt(Number(v)) : '—')},
+  {key: 'invoiceTotal', label: 'Inv total', flex: 0.9, align: 'right', render: v => formatPkr(Number(v))},
+  {key: 'creditAmount', label: 'Credit', flex: 0.9, align: 'right', render: v => (v != null ? formatPkr(Number(v)) : '—')},
   {key: 'hasQualityInspection', label: 'QI', flex: 0.6, render: v => (v ? 'Yes' : 'No')},
   {key: 'hasCreditMemo', label: 'CM', flex: 0.6, render: v => (v ? 'Yes' : 'No')},
 ];
@@ -56,6 +58,11 @@ export default function SalesReturnsScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(data?.rows.items ?? [], search, SEARCH_KEYS),
     [data?.rows.items, search],
@@ -65,30 +72,28 @@ export default function SalesReturnsScreen() {
   if (error && !data) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
   const kpis = data?.kpis;
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{data?.rows.totalCount ?? 0} returns</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Return KPIs" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Total Returns" value={String(kpis?.totalReturns ?? 0)} accent={Colors.red} />
-          <KpiCard label="Return Value" value={fmtAmt(kpis?.totalReturnValue ?? 0)} accent={Colors.orange} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Pending QI" value={String(kpis?.pendingQualityInspection ?? 0)} accent={Colors.orange} />
-          <KpiCard label="Credit memos" value={String(kpis?.creditMemoIssued ?? 0)} accent={Colors.green} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Credit issued" value={fmtAmt(kpis?.totalCreditIssued ?? 0)} accent={Colors.blue} />
-          <View style={{flex: 1, minWidth: 140}} />
-        </View>
+        <SectionHeader title={`Return KPIs (${data?.rows.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Total Returns', value: String(kpis?.totalReturns ?? 0), sub: periodSub, accent: Colors.red},
+            {label: 'Return Value', value: formatPkr(kpis?.totalReturnValue ?? 0), sub: periodSub, accent: Colors.orange},
+            {label: 'Pending QI', value: String(kpis?.pendingQualityInspection ?? 0), sub: periodSub, accent: Colors.orange},
+            {label: 'Credit memos', value: String(kpis?.creditMemoIssued ?? 0), sub: periodSub, accent: Colors.green},
+            {label: 'Credit issued', value: formatPkr(kpis?.totalCreditIssued ?? 0), sub: periodSub, accent: Colors.blue},
+          ]}
+        />
 
         <SectionHeader title="Return List" />
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search returns…" />
@@ -109,18 +114,13 @@ export default function SalesReturnsScreen() {
         )}
       </ScrollView>
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showCustomer />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   tableWrap: {backgroundColor: Colors.card, borderRadius: 8, overflow: 'hidden', elevation: 1, marginBottom: 8},
   pagination: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16},
   pageBtn: {padding: 4},

@@ -23,8 +23,11 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
       const token = await AsyncStorage.getItem('jwt_token');
       const userJson = await AsyncStorage.getItem('jwt_user');
       if (token && userJson) {
-        setState({token, user: JSON.parse(userJson), isLoading: false});
+        const user = JSON.parse(userJson);
+        (globalThis as any).__AU_USER_PLANT_IDS__ = Array.isArray(user?.plantIds) ? user.plantIds : [];
+        setState({token, user, isLoading: false});
       } else {
+        (globalThis as any).__AU_USER_PLANT_IDS__ = [];
         setState(s => ({...s, isLoading: false}));
       }
     })();
@@ -34,12 +37,14 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     const data = await apiLogin(req);
     await AsyncStorage.setItem('jwt_token', data.token);
     await AsyncStorage.setItem('jwt_user', JSON.stringify(data));
+    (globalThis as any).__AU_USER_PLANT_IDS__ = Array.isArray(data.plantIds) ? data.plantIds : [];
     setState({token: data.token, user: data, isLoading: false});
   };
 
   const signOut = async () => {
     await AsyncStorage.removeItem('jwt_token');
     await AsyncStorage.removeItem('jwt_user');
+    (globalThis as any).__AU_USER_PLANT_IDS__ = [];
     setState({token: null, user: null, isLoading: false});
   };
 

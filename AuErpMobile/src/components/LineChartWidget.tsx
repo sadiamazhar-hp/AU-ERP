@@ -1,6 +1,8 @@
-import React from 'react';
-import {Dimensions, StyleSheet, Text, View} from 'react-native';
+import React, {useMemo} from 'react';
+import {ScrollView, StyleSheet} from 'react-native';
 import {LineChart} from 'react-native-chart-kit';
+import ChartCard from './ChartCard';
+import {useOrientationLayout} from '../hooks/useOrientationLayout';
 import {Colors} from '../theme/colors';
 
 interface Dataset {
@@ -11,68 +13,78 @@ interface Dataset {
 
 interface Props {
   title?: string;
+  subtitle?: string;
   labels: string[];
   datasets: Dataset[];
   decimalPlaces?: number;
   formatYLabel?: (value: string) => string;
 }
 
-const W = Dimensions.get('window').width - 32;
-
 function hasChartData(datasets: Dataset[]) {
   return datasets.some(ds => ds.data.length > 0 && ds.data.some(v => Number.isFinite(v)));
 }
 
-export default function LineChartWidget({title, labels, datasets, decimalPlaces = 0, formatYLabel}: Props) {
-  if (!hasChartData(datasets) || labels.length === 0) {
-    return (
-      <View style={styles.container}>
-        {title ? <Text style={styles.title}>{title}</Text> : null}
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>No data for selected period</Text>
-        </View>
-      </View>
-    );
-  }
+function truncateLabel(label: string, max = 7): string {
+  return label.length > max ? `${label.slice(0, max)}…` : label;
+}
+
+export default function LineChartWidget({
+  title,
+  subtitle,
+  labels,
+  datasets,
+  decimalPlaces = 0,
+  formatYLabel,
+}: Props) {
+  const {chartContentWidth, isLandscape} = useOrientationLayout();
+  const displayLabels = useMemo(() => labels.map(l => truncateLabel(l)), [labels]);
+  const labelPitch = isLandscape ? 48 : 56;
+  const scrollThreshold = isLandscape ? 8 : 6;
+  const chartWidth = Math.max(chartContentWidth, labels.length * labelPitch);
+  const scrollable = labels.length > scrollThreshold;
+  const empty = !hasChartData(datasets) || labels.length === 0;
+  const legend = datasets.map(ds => ({label: ds.label, color: ds.color}));
+  const renderWidth = scrollable ? chartWidth : chartContentWidth;
+  const chartHeight = isLandscape ? 190 : 210;
 
   return (
-    <View style={styles.container}>
-      {title ? <Text style={styles.title}>{title}</Text> : null}
-      <LineChart
-        data={{
-          labels,
-          datasets: datasets.map(ds => ({
-            data: ds.data,
-            color: () => ds.color,
-            strokeWidth: 2,
-          })),
-          legend: datasets.map(ds => ds.label),
-        }}
-        width={W}
-        height={210}
-        chartConfig={{
-          backgroundColor: Colors.card,
-          backgroundGradientFrom: Colors.card,
-          backgroundGradientTo: Colors.card,
-          decimalPlaces,
-          color: () => Colors.blue,
-          labelColor: () => Colors.subtle,
-          propsForBackgroundLines: {stroke: Colors.border},
-          propsForDots: {r: '4'},
-          formatYLabel,
-        }}
-        bezier
-        style={styles.chart}
-        fromZero
-      />
-    </View>
+    <ChartCard title={title} subtitle={subtitle} legend={legend} empty={empty}>
+      {!empty && (
+        <ScrollView horizontal={scrollable} showsHorizontalScrollIndicator={false}>
+          <LineChart
+            data={{
+              labels: displayLabels,
+              datasets: datasets.map(ds => ({
+                data: ds.data,
+                color: () => ds.color,
+                strokeWidth: 2,
+              })),
+              legend: datasets.map(ds => ds.label),
+            }}
+            width={renderWidth}
+            height={chartHeight}
+            chartConfig={{
+              backgroundColor: Colors.card,
+              backgroundGradientFrom: Colors.card,
+              backgroundGradientTo: Colors.card,
+              decimalPlaces,
+              color: () => Colors.blue,
+              labelColor: () => Colors.subtle,
+              propsForBackgroundLines: {stroke: Colors.border, strokeDasharray: ''},
+              propsForDots: {r: '4', strokeWidth: 2},
+              propsForLabels: {fontSize: isLandscape ? 9 : 10},
+              formatYLabel,
+            }}
+            bezier
+            style={styles.chart}
+            fromZero
+          />
+        </ScrollView>
+      )}
+    </ChartCard>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {backgroundColor: Colors.card, borderRadius: 8, padding: 12, marginBottom: 12, elevation: 1},
-  title: {fontSize: 13, fontWeight: '600', color: Colors.text, marginBottom: 8},
-  chart: {borderRadius: 8, marginLeft: -12},
-  empty: {padding: 32, alignItems: 'center'},
-  emptyText: {color: Colors.subtle, fontSize: 14, fontWeight: '500'},
+  chart: {borderRadius: 8, marginLeft: -8},
 });

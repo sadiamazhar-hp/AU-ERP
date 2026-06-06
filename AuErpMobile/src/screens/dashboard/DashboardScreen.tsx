@@ -1,31 +1,29 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getDashboard, DashboardDto} from '../../api/dashboard';
 import {getProductionSummary} from '../../api/production';
 import {getSalesSummary} from '../../api/sales';
 import {useAuth} from '../../auth/AuthContext';
-import KpiCard from '../../components/KpiCard';
+import QuickRangeChips from '../../components/QuickRangeChips';
+import KpiGrid from '../../components/KpiGrid';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import BarChartWidget from '../../components/BarChartWidget';
 import LineChartWidget from '../../components/LineChartWidget';
+import {formatNumber, formatPkr, formatPkrAxis} from '../../utils/currency';
+import {
+  defaultFilterDates,
+  ensureDate,
+  formatPeriodLabel,
+  getPeriodSubtitle,
+  isValidDate,
+  toIsoDate,
+} from '../../utils/dateRanges';
 import {Colors} from '../../theme/colors';
-
-function fmtPKR(n: number) {
-  if (n >= 1_000_000) return `PKR ${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `PKR ${(n / 1_000).toFixed(0)}K`;
-  return `PKR ${n}`;
-}
-
-function fmt(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(Math.round(n));
-}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -34,10 +32,10 @@ function getGreeting() {
   return 'Good evening';
 }
 
-const MONTH = new Date().toLocaleString('default', {month: 'long', year: 'numeric'});
-
 export default function DashboardScreen() {
   const {user, signOut} = useAuth();
+  const [dateFrom, setDateFrom] = useState(() => defaultFilterDates().dateFrom);
+  const [dateTo, setDateTo] = useState(() => defaultFilterDates().dateTo);
   const [data, setData] = useState<DashboardDto | null>(null);
   const [revenueLabels, setRevenueLabels] = useState<string[]>([]);
   const [revenueData, setRevenueData] = useState<number[]>([]);
@@ -46,14 +44,26 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    if (!isValidDate(dateFrom) || !isValidDate(dateTo)) {
+      const fallback = defaultFilterDates();
+      setDateFrom(fallback.dateFrom);
+      setDateTo(fallback.dateTo);
+    }
+  }, [dateFrom, dateTo]);
+
+  const load = useCallback(async (from: Date | null | undefined, to: Date | null | undefined) => {
     setLoading(true);
     setError(null);
+    const fallback = defaultFilterDates();
+    const safeFrom = ensureDate(from, fallback.dateFrom);
+    const safeTo = ensureDate(to, fallback.dateTo);
+    const params = {dateFrom: toIsoDate(safeFrom), dateTo: toIsoDate(safeTo)};
     try {
       const [d, sales, production] = await Promise.all([
-        getDashboard(),
-        getSalesSummary({}),
-        getProductionSummary({}),
+        getDashboard(params),
+        getSalesSummary(params),
+        getProductionSummary(params),
       ]);
       setData(d);
       const monthly = sales.monthlySeries.slice(-6);
@@ -69,15 +79,22 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { load(dateFrom, dateTo); }, [load, dateFrom, dateTo]));
+
+  function handleQuickRange(from: Date, to: Date) {
+    setDateFrom(ensureDate(from));
+    setDateTo(ensureDate(to));
+  }
 
   if (loading && !data) return <LoadingView message="Loading dashboard…" />;
-  if (error && !data) return <ErrorView message={error} onRetry={load} />;
+  if (error && !data) return <ErrorView message={error} onRetry={() => load(dateFrom, dateTo)} />;
 
   const firstName = user?.fullName?.split(' ')[0] ?? 'User';
+  const periodLabel = formatPeriodLabel(dateFrom, dateTo);
+  const periodSub = getPeriodSubtitle(dateFrom, dateTo);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <ScreenSafeArea style={styles.safe} edgePreset="top">
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.avatarBox}>
@@ -93,39 +110,50 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.quickTabs}>
+        <QuickRangeChips
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onChange={handleQuickRange}
+          disabled={loading}
+        />
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={Colors.blue} />}>
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(dateFrom, dateTo)} tintColor={Colors.blue} />}>
 
         <View style={styles.summaryCard}>
           <View style={styles.summaryTop}>
-            <View>
+            <View style={{flex: 1, marginRight: 12}}>
               <Text style={styles.summaryLabel}>Total Revenue</Text>
-              <Text style={styles.summaryRevenue}>{fmtPKR(data?.totalRevenueThisMonth ?? 0)}</Text>
+              <Text style={styles.summaryRevenue} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.7}>
+                {formatPkr(data?.totalRevenueThisMonth ?? 0)}
+              </Text>
             </View>
             <View style={styles.monthBadge}>
               <Icon name="calendar-today" size={12} color={Colors.blue} style={{marginRight: 4}} />
-              <Text style={styles.monthBadgeText}>{MONTH}</Text>
+              <Text style={styles.monthBadgeText}>{periodLabel}</Text>
             </View>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryStats}>
             <View style={styles.statItem}>
               <Icon name="receipt-long" size={14} color="rgba(255,255,255,0.6)" />
-              <Text style={styles.statValue}>{data?.invoicesThisMonth ?? 0}</Text>
+              <Text style={styles.statValue}>{formatNumber(data?.invoicesThisMonth ?? 0)}</Text>
               <Text style={styles.statLabel}>Invoices</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Icon name="factory" size={14} color="rgba(255,255,255,0.6)" />
-              <Text style={styles.statValue}>{data?.activeWorkOrders ?? 0}</Text>
+              <Text style={styles.statValue}>{formatNumber(data?.activeWorkOrders ?? 0)}</Text>
               <Text style={styles.statLabel}>Active WOs</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Icon name="inventory" size={14} color="rgba(255,255,255,0.6)" />
-              <Text style={styles.statValue}>{fmt(data?.finishedGoodsLines ?? 0)}</Text>
+              <Text style={styles.statValue}>{formatNumber(data?.finishedGoodsLines ?? 0)}</Text>
               <Text style={styles.statLabel}>FG lines</Text>
             </View>
           </View>
@@ -133,15 +161,16 @@ export default function DashboardScreen() {
 
         <SectionHeader title="Trends" accent={Colors.blue} />
         <LineChartWidget
-          title="Revenue (last 6 months)"
+          title="Revenue trend"
+          subtitle={periodSub}
           labels={revenueLabels}
           datasets={[{label: 'Revenue', data: revenueData, color: Colors.blue}]}
           decimalPlaces={0}
-          formatYLabel={v => `${v}K`}
+          formatYLabel={v => formatPkrAxis(Number(v))}
         />
-        <View style={{height: 10}} />
         <BarChartWidget
-          title="Production (last 6 weeks)"
+          title="Production trend"
+          subtitle={periodSub}
           labels={prodLabels}
           data={prodData}
           color={Colors.orangeMid}
@@ -149,38 +178,38 @@ export default function DashboardScreen() {
         />
 
         <SectionHeader title="Sales Overview" accent={Colors.blue} />
-        <View style={styles.row}>
-          <KpiCard label="Revenue" value={fmtPKR(data?.totalRevenueThisMonth ?? 0)} sub="this month" accent={Colors.blue} icon="trending-up" />
-          <KpiCard label="Outstanding" value={fmtPKR(data?.outstandingRevenueThisMonth ?? 0)} sub="receivables" accent={Colors.orangeMid} icon="schedule" />
-        </View>
-        <View style={styles.row}>
-          <KpiCard label="Invoices" value={String(data?.invoicesThisMonth ?? 0)} sub="this month" accent={Colors.green} icon="receipt" />
-          <KpiCard label="Returns" value={String(data?.salesReturnsThisMonth ?? 0)} sub="this month" accent={Colors.red} icon="assignment-return" />
-        </View>
-        <View style={styles.row}>
-          <KpiCard label="Collected" value={fmtPKR(data?.collectedRevenueThisMonth ?? 0)} sub="this month" accent={Colors.green} icon="payments" />
-          <KpiCard label="Pending inv." value={String(data?.pendingInvoices ?? 0)} sub="open" accent={Colors.orangeMid} icon="pending" />
-        </View>
+        <KpiGrid
+          items={[
+            {label: 'Revenue', value: formatPkr(data?.totalRevenueThisMonth ?? 0), sub: periodSub, accent: Colors.blue, icon: 'trending-up'},
+            {label: 'Outstanding', value: formatPkr(data?.outstandingRevenueThisMonth ?? 0), sub: periodSub, accent: Colors.orangeMid, icon: 'schedule'},
+            {label: 'Invoices', value: String(data?.invoicesThisMonth ?? 0), sub: periodSub, accent: Colors.green, icon: 'receipt'},
+            {label: 'Returns', value: String(data?.salesReturnsThisMonth ?? 0), sub: periodSub, accent: Colors.red, icon: 'assignment-return'},
+            {label: 'Collected', value: formatPkr(data?.collectedRevenueThisMonth ?? 0), sub: periodSub, accent: Colors.green, icon: 'payments'},
+            {label: 'Pending inv.', value: String(data?.pendingInvoices ?? 0), sub: 'current', accent: Colors.orangeMid, icon: 'pending'},
+          ]}
+        />
 
         <SectionHeader title="Manufacturing" accent={Colors.orangeMid} />
-        <View style={styles.row}>
-          <KpiCard label="Production" value={fmt(data?.totalProductionQtyThisMonth ?? 0)} sub="units this month" accent={Colors.blue} icon="precision-manufacturing" />
-          <KpiCard label="Work Orders" value={String(data?.activeWorkOrders ?? 0)} sub="active" accent={Colors.accent} icon="assignment" />
-        </View>
-        <View style={styles.row}>
-          <KpiCard label="Defect rate" value={`${(data?.defectPercentThisMonth ?? 0).toFixed(1)}%`} sub="this month" accent={Colors.red} icon="warning" />
-          <KpiCard label="Prod orders" value={String(data?.productionOrdersThisMonth ?? 0)} sub="this month" accent={Colors.orangeMid} icon="list-alt" />
-        </View>
+        <KpiGrid
+          items={[
+            {label: 'Production', value: formatNumber(data?.totalProductionQtyThisMonth ?? 0), sub: periodSub, accent: Colors.blue, icon: 'precision-manufacturing'},
+            {label: 'Work Orders', value: String(data?.activeWorkOrders ?? 0), sub: 'current', accent: Colors.accent, icon: 'assignment'},
+            {label: 'Defect rate', value: `${(data?.defectPercentThisMonth ?? 0).toFixed(1)}%`, sub: periodSub, accent: Colors.red, icon: 'warning'},
+            {label: 'Prod orders', value: String(data?.productionOrdersThisMonth ?? 0), sub: periodSub, accent: Colors.orangeMid, icon: 'list-alt'},
+          ]}
+        />
 
         <SectionHeader title="Inventory" accent={Colors.green} />
-        <View style={styles.row}>
-          <KpiCard label="Finished Goods" value={fmt(data?.finishedGoodsLines ?? 0)} sub="SKU lines" accent={Colors.green} icon="inventory-2" />
-          <KpiCard label="Stock value" value={fmtPKR(data?.totalStockValue ?? 0)} sub="active lines" accent={Colors.blue} icon="account-balance-wallet" />
-        </View>
+        <KpiGrid
+          items={[
+            {label: 'Finished Goods', value: formatNumber(data?.finishedGoodsLines ?? 0), sub: 'current', accent: Colors.green, icon: 'inventory-2'},
+            {label: 'Stock value', value: formatPkr(data?.totalStockValue ?? 0), sub: 'current', accent: Colors.blue, icon: 'account-balance-wallet'},
+          ]}
+        />
 
         <View style={{height: 8}} />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
@@ -192,7 +221,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 14,
+    paddingBottom: 10,
     paddingTop: 6,
   },
   headerLeft: {flexDirection: 'row', alignItems: 'center', gap: 12},
@@ -201,6 +230,13 @@ const styles = StyleSheet.create({
   greeting: {fontSize: 16, fontWeight: '700', color: '#fff'},
   subGreeting: {fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 1},
   signOutBtn: {width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center'},
+  quickTabs: {
+    backgroundColor: Colors.shell,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.shellLight,
+  },
   scroll: {flex: 1, backgroundColor: Colors.bg},
   content: {padding: 16, paddingTop: 20},
   summaryCard: {
@@ -227,5 +263,4 @@ const styles = StyleSheet.create({
   statValue: {fontSize: 18, fontWeight: '800', color: '#fff'},
   statLabel: {fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: '600', textTransform: 'uppercase'},
   statDivider: {width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.1)'},
-  row: {flexDirection: 'row', gap: 10, marginBottom: 10},
 });

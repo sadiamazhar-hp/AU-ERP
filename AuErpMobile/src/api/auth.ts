@@ -12,6 +12,7 @@ export interface LoginResponse {
   email: string;
   fullName: string;
   department: string;
+  plantIds: string[];
 }
 
 type MobileApiBody<T> = {
@@ -28,6 +29,7 @@ export async function login(req: LoginRequest): Promise<LoginResponse> {
     email: string;
     displayName: string;
     departments: string[];
+    plantIds?: string[];
   }>>('/auth/login', {
     email: req.email.trim(),
     password: req.password,
@@ -45,6 +47,7 @@ export async function login(req: LoginRequest): Promise<LoginResponse> {
     email: data.email,
     fullName: data.displayName,
     department: Array.isArray(data.departments) && data.departments.length > 0 ? data.departments.join(', ') : 'General',
+    plantIds: Array.isArray(data.plantIds) ? data.plantIds : [],
   };
 }
 
@@ -54,6 +57,7 @@ export interface UserProfile {
   fullName: string;
   department: string;
   roles: string[];
+  plantIds: string[];
 }
 
 export async function getMe(): Promise<UserProfile> {
@@ -65,5 +69,6 @@ export async function getMe(): Promise<UserProfile> {
     fullName: data.displayName,
     department: Array.isArray(data.departments) && data.departments.length > 0 ? data.departments.join(', ') : 'General',
     roles: data.departments ?? [],
+    plantIds: Array.isArray(data.plantIds) ? data.plantIds : [],
   };
 }

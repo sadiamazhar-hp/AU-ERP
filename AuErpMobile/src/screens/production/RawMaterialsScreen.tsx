@@ -1,17 +1,19 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getRawMaterials, RawMaterialConsumptionDto, RawMaterialConsumptionRow} from '../../api/production';
-import KpiCard from '../../components/KpiCard';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToProductionParams} from '../../utils/reportFilters';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {filterRowsBySearch} from '../../utils/tableSearch';
 import {Colors} from '../../theme/colors';
 
@@ -51,6 +53,11 @@ export default function RawMaterialsScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(data?.rows.items ?? [], search, SEARCH_KEYS),
     [data?.rows.items, search],
@@ -69,22 +76,25 @@ export default function RawMaterialsScreen() {
   if (error && !data) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
   const kpis = data?.kpis;
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{data?.rows.totalCount ?? 0} records</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Consumption KPIs" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Qty consumed" value={String(kpis?.totalMaterialsConsumed ?? 0)} accent={Colors.orange} />
-          <KpiCard label="Issue lines" value={String(kpis?.totalIssuedLines ?? 0)} accent={Colors.blue} />
-        </View>
+        <SectionHeader title={`Consumption KPIs (${data?.rows.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Qty consumed', value: String(kpis?.totalMaterialsConsumed ?? 0), sub: periodSub, accent: Colors.orange},
+            {label: 'Issue lines', value: String(kpis?.totalIssuedLines ?? 0), sub: periodSub, accent: Colors.blue},
+          ]}
+        />
 
         {topConsumed.length > 0 && (
           <>
@@ -117,18 +127,13 @@ export default function RawMaterialsScreen() {
         )}
       </ScrollView>
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showPlant />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   topRow: {flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.divider},
   topName: {flex: 1, fontSize: 13, color: Colors.text, marginRight: 8},
   topQty: {fontSize: 13, fontWeight: '700', color: Colors.blue},

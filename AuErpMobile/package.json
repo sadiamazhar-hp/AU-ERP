@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "android:build": "powershell -ExecutionPolicy Bypass -File scripts/android-build.ps1",
     "ios": "react-native run-ios",
     "postinstall": "node scripts/patch-metro-transformer.js",
     "start": "react-native start",

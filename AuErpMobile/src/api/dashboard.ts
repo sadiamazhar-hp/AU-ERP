@@ -31,8 +31,13 @@ interface MobileDashboardDto {
   salesReturnsThisMonth: number;
 }
 
-export async function getDashboard(): Promise<DashboardDto> {
-  const res = await client.get<{data: MobileDashboardDto}>('/dashboard');
+export interface DashboardParams {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export async function getDashboard(params: DashboardParams = {}): Promise<DashboardDto> {
+  const res = await client.get<{data: MobileDashboardDto}>('/dashboard', {params});
   const data = res.data.data;
   return {
     productionOrdersThisMonth: data.productionOrdersThisMonth,

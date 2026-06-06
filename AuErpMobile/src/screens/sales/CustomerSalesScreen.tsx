@@ -1,12 +1,13 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getCustomerSales, CustomerSalesRow, PagedResult} from '../../api/sales';
-import KpiCard from '../../components/KpiCard';
 import BarChartWidget from '../../components/BarChartWidget';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
@@ -14,16 +15,16 @@ import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToSalesParams} from '../../utils/reportFilters';
 import {filterRowsBySearch} from '../../utils/tableSearch';
+import {formatPkr, formatPkrAxis} from '../../utils/currency';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {Colors} from '../../theme/colors';
-
-const fmtAmt = (n: number) => `${(n / 1000).toFixed(0)}K`;
 
 const COLS: Column<CustomerSalesRow>[] = [
   {key: 'customerNumber', label: 'Cust #', flex: 0.9},
   {key: 'customerName', label: 'Customer', flex: 2},
-  {key: 'totalRevenue', label: 'Revenue', flex: 1.1, align: 'right', render: v => fmtAmt(Number(v))},
-  {key: 'totalCollected', label: 'Collected', flex: 1.1, align: 'right', render: v => fmtAmt(Number(v))},
-  {key: 'totalOutstanding', label: 'Due', flex: 0.9, align: 'right', render: v => fmtAmt(Number(v))},
+  {key: 'totalRevenue', label: 'Revenue', flex: 1.1, align: 'right', render: v => formatPkr(Number(v))},
+  {key: 'totalCollected', label: 'Collected', flex: 1.1, align: 'right', render: v => formatPkr(Number(v))},
+  {key: 'totalOutstanding', label: 'Due', flex: 0.9, align: 'right', render: v => formatPkr(Number(v))},
   {key: 'invoiceCount', label: 'Invoices', flex: 0.8, align: 'right'},
 ];
 
@@ -53,6 +54,11 @@ export default function CustomerSalesScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(result?.items ?? [], search, SEARCH_KEYS),
     [result?.items, search],
@@ -67,29 +73,35 @@ export default function CustomerSalesScreen() {
   if (loading && !result) return <LoadingView />;
   if (error && !result) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{result?.totalCount ?? 0} customers</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Customer KPIs (this page)" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Customers" value={String(result?.items.length ?? 0)} accent={Colors.blue} />
-          <KpiCard label="Top revenue" value={topCustomer ? fmtAmt(topCustomer.totalRevenue) : '—'} accent={Colors.green} />
-        </View>
+        <SectionHeader title={`Customer KPIs (${result?.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Customers', value: String(result?.items.length ?? 0), sub: 'this page', accent: Colors.blue},
+            {label: 'Top revenue', value: topCustomer ? formatPkr(topCustomer.totalRevenue) : '—', sub: periodSub, accent: Colors.green},
+          ]}
+        />
 
         {topCustomers.length > 0 && (
           <BarChartWidget
-            title="Top 5 customers (this page)"
-            labels={topCustomers.map(c => (c.customerName.length > 10 ? `${c.customerName.slice(0, 10)}…` : c.customerName))}
+            title="Top 5 customers"
+            subtitle={`${periodSub} · this page`}
+            labels={topCustomers.map(c => c.customerName)}
             data={topCustomers.map(c => c.totalRevenue)}
             color={Colors.blue}
             decimalPlaces={0}
+            formatYLabel={v => formatPkrAxis(Number(v))}
           />
         )}
 
@@ -111,18 +123,13 @@ export default function CustomerSalesScreen() {
         )}
       </ScrollView>
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showCustomer />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   tableWrap: {backgroundColor: Colors.card, borderRadius: 8, overflow: 'hidden', elevation: 1, marginBottom: 8},
   pagination: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16},
   pageBtn: {padding: 4},

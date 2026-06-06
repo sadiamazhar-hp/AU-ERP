@@ -1,6 +1,8 @@
 using AU_ERP.Models;
 using AU_ERP.Models.Mobile;
+using AU_ERP.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace AU_ERP.Services.Mobile;
 
@@ -10,50 +12,123 @@ public class MobileReportingService
 
     public MobileReportingService(AppDbContext db) => _db = db;
 
+    private async Task<List<string>> ResolveAllowedPlantIdsAsync(CancellationToken ct, ClaimsPrincipal? user)
+    {
+        var allPlantIds = await _db.PlantsSamples
+            .AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct);
+
+        var assigned = await SalesPlantAccess.LoadAssignedPlantIdsAsync(_db, user, allPlantIds, ct);
+        return assigned.ToList();
+    }
+
+    private static IQueryable<GoodsProduceBatch> ApplyProductionBatchPlantScope(
+        IQueryable<GoodsProduceBatch> query,
+        MobileReportFilter filter,
+        IReadOnlyCollection<string> allowedPlantIds,
+        bool allowAllWhenUnassigned)
+    {
+        if (!string.IsNullOrWhiteSpace(filter.PlantId))
+        {
+            var pid = filter.PlantId.Trim();
+            return query.Where(b => b.ProductionOrder!.Lines.Any(l => l.PlantId == pid));
+        }
+
+        var explicitIds = (filter.PlantIds ?? new List<string>())
+            .Select(p => (p ?? "").Trim())
+            .Where(p => p.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var ids = explicitIds.Count > 0 ? explicitIds : allowedPlantIds.ToList();
+        if (ids.Count == 0 && !allowAllWhenUnassigned)
+            return query.Where(_ => false);
+        if (ids.Count == 0 && allowAllWhenUnassigned)
+            return query;
+
+        return query.Where(b => b.ProductionOrder!.Lines.Any(l => l.PlantId != null && ids.Contains(l.PlantId)));
+    }
+
+    private static IQueryable<StockInventoryLine> ApplyStockPlantScope(
+        IQueryable<StockInventoryLine> query,
+        MobileReportFilter filter,
+        IReadOnlyCollection<string> allowedPlantIds,
+        bool allowAllWhenUnassigned)
+    {
+        if (!string.IsNullOrWhiteSpace(filter.PlantId))
+        {
+            var pid = filter.PlantId.Trim();
+            return query.Where(s => s.PlantID == pid);
+        }
+
+        var explicitIds = (filter.PlantIds ?? new List<string>())
+            .Select(p => (p ?? "").Trim())
+            .Where(p => p.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var ids = explicitIds.Count > 0 ? explicitIds : allowedPlantIds.ToList();
+        if (ids.Count == 0 && !allowAllWhenUnassigned)
+            return query.Where(_ => false);
+        if (ids.Count == 0 && allowAllWhenUnassigned)
+            return query;
+
+        return query.Where(s => ids.Contains(s.PlantID));
+    }
+
     // ─── Dashboard ────────────────────────────────────────────────────────────
 
-    public async Task<MobileDashboardDto> GetDashboardAsync(CancellationToken ct = default)
+    public async Task<MobileDashboardDto> GetDashboardAsync(
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null,
+        CancellationToken ct = default)
     {
-        var now = DateTime.UtcNow;
-        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var today = now.Date;
+        var today = DateTime.UtcNow.Date;
+        var to = (dateTo ?? today).Date;
+        var from = (dateFrom ?? to.AddDays(-29)).Date;
+        if (from > to)
+            (from, to) = (to, from);
 
-        // Production batches this month (GrDate is stored as DateTime with date column type)
-        var batchesThisMonth = await _db.GoodsProduceBatches
+        var periodStart = DateTime.SpecifyKind(from, DateTimeKind.Utc);
+        var periodEnd = DateTime.SpecifyKind(to, DateTimeKind.Utc);
+
+        var batchesInPeriod = await _db.GoodsProduceBatches
             .AsNoTracking()
-            .Where(b => b.GrDate >= monthStart && b.GrDate <= today)
+            .Where(b => b.GrDate >= periodStart && b.GrDate <= periodEnd)
             .Select(b => new { b.ProducedQty, b.RejectedScrapQty })
             .ToListAsync(ct);
 
-        var totalProducedThisMonth = batchesThisMonth.Sum(b => b.ProducedQty);
-        var totalScrapThisMonth = batchesThisMonth.Sum(b => b.RejectedScrapQty);
-        var defectPct = totalProducedThisMonth > 0
-            ? Math.Round(totalScrapThisMonth / totalProducedThisMonth * 100, 2)
+        var totalProducedInPeriod = batchesInPeriod.Sum(b => b.ProducedQty);
+        var totalScrapInPeriod = batchesInPeriod.Sum(b => b.RejectedScrapQty);
+        var defectPct = totalProducedInPeriod > 0
+            ? Math.Round(totalScrapInPeriod / totalProducedInPeriod * 100, 2)
             : 0m;
 
-        var ordersThisMonth = await _db.ProductionOrders
+        var ordersInPeriod = await _db.ProductionOrders
             .AsNoTracking()
-            .CountAsync(o => o.CreatedAt >= monthStart, ct);
+            .CountAsync(o => o.CreatedAt >= periodStart && o.CreatedAt <= periodEnd.AddDays(1), ct);
 
         var activeWorkOrders = await _db.ProductionOrders
             .AsNoTracking()
             .CountAsync(o => o.Status == ProductionOrder.StatusReleased
                           || o.Status == ProductionOrder.StatusInProgress, ct);
 
-        // Sales invoices this month (DocumentDate is DateTime with date column type)
-        var invoicesThisMonth = await _db.SalesInvoices
+        var invoicesInPeriod = await _db.SalesInvoices
             .AsNoTracking()
-            .Where(i => i.DocumentDate >= monthStart && i.DocumentDate <= today)
+            .Where(i => i.DocumentDate >= periodStart && i.DocumentDate <= periodEnd)
             .Select(i => new { i.GrandTotal, i.Status })
             .ToListAsync(ct);
 
-        var totalRevenueThisMonth = invoicesThisMonth.Sum(i => i.GrandTotal);
-        var pendingInvoicesCount = invoicesThisMonth.Count(i => i.Status == SalesInvoice.StatusOpen);
+        var totalRevenueInPeriod = invoicesInPeriod.Sum(i => i.GrandTotal);
 
-        // SalesPayment uses DocumentDate (not PaymentDate)
-        var collectedThisMonth = await _db.SalesPayments
+        var pendingInvoicesCount = await _db.SalesInvoices
             .AsNoTracking()
-            .Where(p => p.DocumentDate >= monthStart && p.DocumentDate <= today)
+            .CountAsync(i => i.Status == SalesInvoice.StatusOpen, ct);
+
+        var collectedInPeriod = await _db.SalesPayments
+            .AsNoTracking()
+            .Where(p => p.DocumentDate >= periodStart && p.DocumentDate <= periodEnd)
             .SumAsync(p => p.Amount, ct);
 
         var stockLines = await _db.StockInventoryLines
@@ -67,100 +142,87 @@ public class MobileReportingService
             .AsNoTracking()
             .CountAsync(s => s.Status == StockInventoryLine.StatusActive && s.Quantity > 0, ct);
 
-        var returnsThisMonth = await _db.SalesReturnOrders
+        var returnsInPeriod = await _db.SalesReturnOrders
             .AsNoTracking()
-            .CountAsync(r => r.DocumentDate >= monthStart && r.DocumentDate <= today, ct);
+            .CountAsync(r => r.DocumentDate >= periodStart && r.DocumentDate <= periodEnd, ct);
 
         return new MobileDashboardDto(
-            ProductionOrdersThisMonth: ordersThisMonth,
+            ProductionOrdersThisMonth: ordersInPeriod,
             ActiveWorkOrders: activeWorkOrders,
-            TotalProductionQtyThisMonth: totalProducedThisMonth,
+            TotalProductionQtyThisMonth: totalProducedInPeriod,
             DefectPercentThisMonth: defectPct,
-            TotalRevenueThisMonth: totalRevenueThisMonth,
-            CollectedRevenueThisMonth: collectedThisMonth,
-            OutstandingRevenueThisMonth: totalRevenueThisMonth - collectedThisMonth,
-            InvoicesThisMonth: invoicesThisMonth.Count,
+            TotalRevenueThisMonth: totalRevenueInPeriod,
+            CollectedRevenueThisMonth: collectedInPeriod,
+            OutstandingRevenueThisMonth: totalRevenueInPeriod - collectedInPeriod,
+            InvoicesThisMonth: invoicesInPeriod.Count,
             PendingInvoices: pendingInvoicesCount,
             TotalStockValue: totalStockValue,
             FinishedGoodsLines: finishedGoodsCount,
-            SalesReturnsThisMonth: returnsThisMonth
+            SalesReturnsThisMonth: returnsInPeriod
         );
     }
 
     // ─── Daily Production ─────────────────────────────────────────────────────
 
     public async Task<PagedResult<DailyProductionRow>> GetDailyProductionAsync(
-        MobileReportFilter filter, CancellationToken ct = default)
+        MobileReportFilter filter, CancellationToken ct = default, ClaimsPrincipal? user = null)
     {
         var from = filter.EffectiveDateFrom;
         var to = filter.EffectiveDateTo;
+        var allowedPlantIds = await ResolveAllowedPlantIdsAsync(ct, user);
+        var allowAll = UserPlantResolution.IsAdminDepartment(user) && allowedPlantIds.Count == 0;
 
-        var query = _db.GoodsProduceBatches
+        var query = _db.StockInventoryLines
             .AsNoTracking()
-            .Where(b => b.GrDate >= from && b.GrDate <= to);
-
-        if (!string.IsNullOrWhiteSpace(filter.PlantId))
-        {
-            var orderIdsInPlant = _db.ProductionOrderLines
-                .Where(l => l.PlantId == filter.PlantId)
-                .Select(l => l.ProductionOrderId)
-                .Distinct();
-            query = query.Where(b => orderIdsInPlant.Contains(b.ProductionOrderId));
-        }
+            .Where(s =>
+                s.Status == StockInventoryLine.StatusActive
+                && s.Quantity > 0
+                && s.Material != null
+                && s.Material.MaterialTypeCode == "FERT"
+                && s.CreatedAt.Date >= from
+                && s.CreatedAt.Date <= to);
+        query = ApplyStockPlantScope(query, filter, allowedPlantIds, allowAll);
 
         var total = await query.CountAsync(ct);
 
         var rows = await query
-            .OrderByDescending(b => b.GrDate)
-            .ThenBy(b => b.ProductionOrderId)
+            .OrderByDescending(s => s.CreatedAt)
+            .ThenBy(s => s.MaterialNumber)
+            .ThenBy(s => s.BatchOrLot)
+            .ThenBy(s => s.Grade)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
-            .Select(b => new
+            .Select(s => new
             {
-                b.GrDate,
-                b.BatchNo,
-                b.ProducedQty,
-                b.QtyFirstQuality,
-                b.QtySecondQuality,
-                b.QtyThirdQuality,
-                b.RejectedScrapQty,
-                b.ProductionOrderId,
-                OrderNo = b.ProductionOrder!.ProductionNumber,
-                DocNo = b.ProductionOrder.ProductionDocumentNumber,
-                OrderStatus = b.ProductionOrder.Status,
-                MaterialDesc = b.Material != null ? b.Material.Description : b.MaterialNumber,
-                b.MaterialNumber,
+                s.CreatedAt,
+                s.BatchOrLot,
+                s.Quantity,
+                s.Grade,
+                s.Status,
+                MaterialDesc = s.Material != null ? s.Material.Description : s.MaterialNumber,
+                s.MaterialNumber,
             })
             .ToListAsync(ct);
 
-        var poIds = rows.Select(r => r.ProductionOrderId).Distinct().ToList();
-        var wastageByOrder = await _db.ProductionOrderStageProgresses
-            .AsNoTracking()
-            .Where(s => poIds.Contains(s.ProductionOrderId))
-            .GroupBy(s => s.ProductionOrderId)
-            .Select(g => new { OrderId = g.Key, TotalWastage = g.Sum(s => s.WastageQuantity ?? 0) })
-            .ToDictionaryAsync(x => x.OrderId, x => x.TotalWastage, ct);
-
         var result = rows.Select(b =>
         {
-            var goodQty = b.QtyFirstQuality + b.QtySecondQuality + b.QtyThirdQuality;
-            wastageByOrder.TryGetValue(b.ProductionOrderId, out var wastage);
-            var defectPct = b.ProducedQty > 0
-                ? Math.Round(b.RejectedScrapQty / b.ProducedQty * 100, 2) : 0m;
+            var producedQty = b.Quantity;
+            var goodQty = b.Quantity;
+            var batchNo = string.IsNullOrWhiteSpace(b.BatchOrLot) ? "-" : b.BatchOrLot!;
 
             return new DailyProductionRow(
-                ProductionDate: b.GrDate,
-                ProductionOrderNumber: b.OrderNo.ToString(),
-                DocumentNumber: b.DocNo,
+                ProductionDate: b.CreatedAt,
+                ProductionOrderNumber: "-",
+                DocumentNumber: null,
                 MaterialNumber: b.MaterialNumber,
                 MaterialDescription: b.MaterialDesc ?? b.MaterialNumber,
-                ProducedQty: b.ProducedQty,
+                ProducedQty: producedQty,
                 GoodQty: goodQty,
-                DefectiveQty: b.RejectedScrapQty,
-                WastageQty: wastage,
-                DefectPercent: defectPct,
-                BatchNo: b.BatchNo,
-                Status: b.OrderStatus
+                DefectiveQty: 0m,
+                WastageQty: 0m,
+                DefectPercent: 0m,
+                BatchNo: batchNo,
+                Status: b.Grade
             );
         }).ToList();
 
@@ -170,14 +232,17 @@ public class MobileReportingService
     // ─── Production Summary ───────────────────────────────────────────────────
 
     public async Task<ProductionSummaryDto> GetProductionSummaryAsync(
-        MobileReportFilter filter, CancellationToken ct = default)
+        MobileReportFilter filter, CancellationToken ct = default, ClaimsPrincipal? user = null)
     {
         var from = filter.EffectiveDateFrom;
         var to = filter.EffectiveDateTo;
+        var allowedPlantIds = await ResolveAllowedPlantIdsAsync(ct, user);
+        var allowAll = UserPlantResolution.IsAdminDepartment(user) && allowedPlantIds.Count == 0;
 
-        var batches = await _db.GoodsProduceBatches
+        var baseBatchQuery = _db.GoodsProduceBatches
             .AsNoTracking()
-            .Where(b => b.GrDate >= from && b.GrDate <= to)
+            .Where(b => b.GrDate >= from && b.GrDate <= to);
+        var batches = await ApplyProductionBatchPlantScope(baseBatchQuery, filter, allowedPlantIds, allowAll)
             .Select(b => new
             {
                 b.GrDate,
@@ -188,27 +253,25 @@ public class MobileReportingService
                 b.RejectedScrapQty
             })
             .ToListAsync(ct);
-
-        var orderQuery = _db.ProductionOrders.AsNoTracking()
-            .Where(o => o.CreatedAt.Date >= from && o.CreatedAt.Date <= to);
-
-        if (!string.IsNullOrWhiteSpace(filter.PlantId))
-        {
-            var orderIdsInPlant = _db.ProductionOrderLines
-                .Where(l => l.PlantId == filter.PlantId)
-                .Select(l => l.ProductionOrderId);
-            orderQuery = orderQuery.Where(o => orderIdsInPlant.Contains(o.Id));
-        }
-
-        var orderStatuses = await orderQuery
-            .Select(o => o.Status)
+        var orderIds = await ApplyProductionBatchPlantScope(baseBatchQuery, filter, allowedPlantIds, allowAll)
+            .Select(b => b.ProductionOrderId)
+            .Distinct()
             .ToListAsync(ct);
 
-        var wastage = await _db.ProductionOrderStageProgresses
-            .AsNoTracking()
-            .Where(s => s.ProductionOrder!.CreatedAt.Date >= from
-                     && s.ProductionOrder.CreatedAt.Date <= to)
-            .SumAsync(s => s.WastageQuantity ?? 0, ct);
+        var orderStatuses = orderIds.Count == 0
+            ? new List<string>()
+            : await _db.ProductionOrders
+                .AsNoTracking()
+                .Where(o => orderIds.Contains(o.Id))
+                .Select(o => o.Status)
+                .ToListAsync(ct);
+
+        var wastage = orderIds.Count == 0
+            ? 0m
+            : await _db.ProductionOrderStageProgresses
+                .AsNoTracking()
+                .Where(s => orderIds.Contains(s.ProductionOrderId))
+                .SumAsync(s => s.WastageQuantity ?? 0, ct);
 
         var totalProduced = batches.Sum(b => b.ProducedQty);
         var totalGood = batches.Sum(b => b.QtyFirstQuality + b.QtySecondQuality + b.QtyThirdQuality);
@@ -254,22 +317,17 @@ public class MobileReportingService
     // ─── Defect / Wastage ─────────────────────────────────────────────────────
 
     public async Task<DefectReportDto> GetDefectsAsync(
-        MobileReportFilter filter, CancellationToken ct = default)
+        MobileReportFilter filter, CancellationToken ct = default, ClaimsPrincipal? user = null)
     {
         var from = filter.EffectiveDateFrom;
         var to = filter.EffectiveDateTo;
+        var allowedPlantIds = await ResolveAllowedPlantIdsAsync(ct, user);
+        var allowAll = UserPlantResolution.IsAdminDepartment(user) && allowedPlantIds.Count == 0;
 
         var query = _db.GoodsProduceBatches
             .AsNoTracking()
             .Where(b => b.GrDate >= from && b.GrDate <= to);
-
-        if (!string.IsNullOrWhiteSpace(filter.PlantId))
-        {
-            var orderIdsInPlant = _db.ProductionOrderLines
-                .Where(l => l.PlantId == filter.PlantId)
-                .Select(l => l.ProductionOrderId);
-            query = query.Where(b => orderIdsInPlant.Contains(b.ProductionOrderId));
-        }
+        query = ApplyProductionBatchPlantScope(query, filter, allowedPlantIds, allowAll);
 
         var total = await query.CountAsync(ct);
 
@@ -392,22 +450,17 @@ public class MobileReportingService
     // ─── Batch / Lot Tracking ─────────────────────────────────────────────────
 
     public async Task<PagedResult<BatchTrackingRow>> GetBatchTrackingAsync(
-        MobileReportFilter filter, CancellationToken ct = default)
+        MobileReportFilter filter, CancellationToken ct = default, ClaimsPrincipal? user = null)
     {
         var from = filter.EffectiveDateFrom;
         var to = filter.EffectiveDateTo;
+        var allowedPlantIds = await ResolveAllowedPlantIdsAsync(ct, user);
+        var allowAll = UserPlantResolution.IsAdminDepartment(user) && allowedPlantIds.Count == 0;
 
         var query = _db.GoodsProduceBatches
             .AsNoTracking()
             .Where(b => b.GrDate >= from && b.GrDate <= to);
-
-        if (!string.IsNullOrWhiteSpace(filter.PlantId))
-        {
-            var orderIdsInPlant = _db.ProductionOrderLines
-                .Where(l => l.PlantId == filter.PlantId)
-                .Select(l => l.ProductionOrderId);
-            query = query.Where(b => orderIdsInPlant.Contains(b.ProductionOrderId));
-        }
+        query = ApplyProductionBatchPlantScope(query, filter, allowedPlantIds, allowAll);
 
         var total = await query.CountAsync(ct);
 
@@ -459,20 +512,30 @@ public class MobileReportingService
     // ─── Work Orders ──────────────────────────────────────────────────────────
 
     public async Task<WorkOrdersDto> GetWorkOrdersAsync(
-        MobileReportFilter filter, CancellationToken ct = default)
+        MobileReportFilter filter, CancellationToken ct = default, ClaimsPrincipal? user = null)
     {
         var from = filter.EffectiveDateFrom;
         var to = filter.EffectiveDateTo;
+        var allowedPlantIds = await ResolveAllowedPlantIdsAsync(ct, user);
+        var allowAll = UserPlantResolution.IsAdminDepartment(user) && allowedPlantIds.Count == 0;
 
         var orderQuery = _db.ProductionOrders.AsNoTracking()
             .Where(o => o.CreatedAt.Date >= from && o.CreatedAt.Date <= to);
-
         if (!string.IsNullOrWhiteSpace(filter.PlantId))
         {
-            var orderIdsInPlant = _db.ProductionOrderLines
-                .Where(l => l.PlantId == filter.PlantId)
-                .Select(l => l.ProductionOrderId);
-            orderQuery = orderQuery.Where(o => orderIdsInPlant.Contains(o.Id));
+            var pid = filter.PlantId.Trim();
+            orderQuery = orderQuery.Where(o => o.Lines.Any(l => l.PlantId == pid));
+        }
+        else
+        {
+            var ids = (filter.PlantIds ?? new List<string>())
+                .Select(p => (p ?? "").Trim())
+                .Where(p => p.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (ids.Count == 0) ids = allowedPlantIds;
+            if (ids.Count == 0 && !allowAll) orderQuery = orderQuery.Where(_ => false);
+            else if (ids.Count > 0) orderQuery = orderQuery.Where(o => o.Lines.Any(l => l.PlantId != null && ids.Contains(l.PlantId)));
         }
 
         var statuses = await orderQuery.Select(o => o.Status).ToListAsync(ct);
@@ -529,8 +592,10 @@ public class MobileReportingService
     // ─── Finished Goods Inventory ─────────────────────────────────────────────
 
     public async Task<FinishedGoodsDto> GetFinishedGoodsAsync(
-        MobileReportFilter filter, CancellationToken ct = default)
+        MobileReportFilter filter, CancellationToken ct = default, ClaimsPrincipal? user = null)
     {
+        var allowedPlantIds = await ResolveAllowedPlantIdsAsync(ct, user);
+        var allowAll = UserPlantResolution.IsAdminDepartment(user) && allowedPlantIds.Count == 0;
         var query = _db.StockInventoryLines
             .AsNoTracking()
             .Where(s => s.Status == StockInventoryLine.StatusActive
@@ -538,7 +603,21 @@ public class MobileReportingService
                      && s.Material.MaterialTypeCode == "FERT");
 
         if (!string.IsNullOrWhiteSpace(filter.PlantId))
-            query = query.Where(s => s.PlantID == filter.PlantId);
+        {
+            var pid = filter.PlantId.Trim();
+            query = query.Where(s => s.PlantID == pid);
+        }
+        else
+        {
+            var ids = (filter.PlantIds ?? new List<string>())
+                .Select(p => (p ?? "").Trim())
+                .Where(p => p.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (ids.Count == 0) ids = allowedPlantIds;
+            if (ids.Count == 0 && !allowAll) query = query.Where(_ => false);
+            else if (ids.Count > 0) query = query.Where(s => ids.Contains(s.PlantID));
+        }
 
         var allLines = await query
             .Select(s => new { s.StockValue, s.Quantity })

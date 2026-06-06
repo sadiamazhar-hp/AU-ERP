@@ -1,17 +1,19 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getBatches, BatchTrackingRow, PagedResult} from '../../api/production';
-import KpiCard from '../../components/KpiCard';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToProductionParams} from '../../utils/reportFilters';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {filterRowsBySearch} from '../../utils/tableSearch';
 import {Colors} from '../../theme/colors';
 
@@ -53,6 +55,11 @@ export default function BatchTrackingScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(result?.items ?? [], search, SEARCH_KEYS),
     [result?.items, search],
@@ -64,24 +71,28 @@ export default function BatchTrackingScreen() {
     return rows.reduce((s, r) => s + r.goodPercent, 0) / rows.length;
   }, [result?.items]);
 
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
+
   if (loading && !result) return <LoadingView />;
   if (error && !result) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{result?.totalCount ?? 0} batches</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Batch KPIs (this filter)" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Total batches" value={String(result?.totalCount ?? 0)} accent={Colors.blue} />
-          <KpiCard label="Avg Good %" value={`${avgGood.toFixed(1)}%`} sub="this page" accent={Colors.green} />
-        </View>
+        <SectionHeader title={`Batch KPIs (${result?.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Total batches', value: String(result?.totalCount ?? 0), sub: periodSub, accent: Colors.blue},
+            {label: 'Avg Good %', value: `${avgGood.toFixed(1)}%`, sub: 'this page', accent: Colors.green},
+          ]}
+        />
 
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search batches…" />
         <View style={styles.tableWrap}>
@@ -101,18 +112,13 @@ export default function BatchTrackingScreen() {
         )}
       </ScrollView>
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showPlant />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   tableWrap: {backgroundColor: Colors.card, borderRadius: 8, overflow: 'hidden', elevation: 1, marginBottom: 8},
   pagination: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16},
   pageBtn: {padding: 4},

@@ -15,12 +15,16 @@ public class MobileDashboardController : ControllerBase
     public MobileDashboardController(MobileReportingService reports) => _reports = reports;
 
     /// <summary>
-    /// Returns current-month KPIs across production, sales, and inventory for the home dashboard.
+    /// Returns period-scoped KPIs across production, sales, and inventory for the home dashboard.
+    /// Defaults to the last 30 days when dateFrom/dateTo are omitted.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<MobileApiResponse<MobileDashboardDto>>> Get(CancellationToken ct)
+    public async Task<ActionResult<MobileApiResponse<MobileDashboardDto>>> Get(
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        CancellationToken ct)
     {
-        var data = await _reports.GetDashboardAsync(ct);
+        var data = await _reports.GetDashboardAsync(dateFrom, dateTo, ct);
         return Ok(MobileApiResponse<MobileDashboardDto>.Ok(data));
     }
 }

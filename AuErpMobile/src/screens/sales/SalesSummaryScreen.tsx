@@ -1,20 +1,19 @@
 import React, {useCallback, useState} from 'react';
-import {RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import {RefreshControl, ScrollView, StyleSheet, View} from 'react-native';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {useFocusEffect} from '@react-navigation/native';
 import {getSalesSummary, SalesSummaryDto} from '../../api/sales';
-import KpiCard from '../../components/KpiCard';
 import LineChartWidget from '../../components/LineChartWidget';
 import FilterSheet from '../../components/FilterSheet';
+import KpiGrid from '../../components/KpiGrid';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
+import ReportToolbar from '../../components/ReportToolbar';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToSalesParams} from '../../utils/reportFilters';
+import {formatPkr, formatPkrAxis} from '../../utils/currency';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {Colors} from '../../theme/colors';
-
-const fmtM = (n: number) => `PKR ${(n / 1_000_000).toFixed(2)}M`;
-const fmtK = (n: number) => `PKR ${(n / 1_000).toFixed(0)}K`;
 
 export default function SalesSummaryScreen() {
   const [data, setData] = useState<SalesSummaryDto | null>(null);
@@ -38,6 +37,10 @@ export default function SalesSummaryScreen() {
 
   useFocusEffect(useCallback(() => { load(filter); }, [load, filter]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   if (loading && !data) return <LoadingView />;
   if (error && !data) return <ErrorView message={error} onRetry={() => load(filter)} />;
 
@@ -46,63 +49,56 @@ export default function SalesSummaryScreen() {
   const labels = monthly.map(m => m.month);
   const revData = monthly.map(m => m.revenue);
   const colData = monthly.map(m => m.collected);
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.period}>
-          {filter.dateFrom ? filter.dateFrom.toLocaleDateString() : 'All time'} – {filter.dateTo ? filter.dateTo.toLocaleDateString() : 'Today'}
-        </Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(filter)} tintColor={Colors.blue} />}>
 
         <SectionHeader title="Revenue & Collections" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Revenue" value={fmtM(kpis?.totalRevenue ?? 0)} accent={Colors.blue} />
-          <KpiCard label="Collected" value={fmtM(kpis?.totalCollected ?? 0)} accent={Colors.green} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Outstanding" value={fmtK(kpis?.totalOutstanding ?? 0)} accent={Colors.orange} />
-          <KpiCard label="Invoices" value={String(kpis?.totalInvoices ?? 0)} accent={Colors.accent} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Paid" value={String(kpis?.paidInvoices ?? 0)} accent={Colors.green} />
-          <KpiCard label="Unpaid" value={String(kpis?.unpaidInvoices ?? 0)} accent={Colors.red} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Avg invoice" value={fmtK(kpis?.averageInvoiceValue ?? 0)} accent={Colors.blue} />
-          <KpiCard label="Returns" value={String(kpis?.totalReturns ?? 0)} accent={Colors.subtle} />
-        </View>
+        <KpiGrid
+          items={[
+            {label: 'Revenue', value: formatPkr(kpis?.totalRevenue ?? 0), accent: Colors.blue, sub: periodSub},
+            {label: 'Collected', value: formatPkr(kpis?.totalCollected ?? 0), accent: Colors.green, sub: periodSub},
+            {label: 'Outstanding', value: formatPkr(kpis?.totalOutstanding ?? 0), accent: Colors.orange, sub: periodSub},
+            {label: 'Invoices', value: String(kpis?.totalInvoices ?? 0), accent: Colors.accent, sub: periodSub},
+            {label: 'Paid', value: String(kpis?.paidInvoices ?? 0), accent: Colors.green, sub: periodSub},
+            {label: 'Unpaid', value: String(kpis?.unpaidInvoices ?? 0), accent: Colors.red, sub: periodSub},
+            {label: 'Avg invoice', value: formatPkr(kpis?.averageInvoiceValue ?? 0), accent: Colors.blue, sub: periodSub},
+            {label: 'Returns', value: String(kpis?.totalReturns ?? 0), accent: Colors.subtle, sub: periodSub},
+          ]}
+        />
 
         <SectionHeader title="Monthly Trend" />
         <LineChartWidget
+          title="Revenue vs Collections"
+          subtitle={periodSub}
           labels={labels}
           datasets={[
             {label: 'Revenue', data: revData, color: Colors.blue},
             {label: 'Collected', data: colData, color: Colors.green},
           ]}
           decimalPlaces={0}
+          formatYLabel={v => formatPkrAxis(Number(v))}
         />
       </ScrollView>
 
       <FilterSheet visible={showFilter} values={filter} onApply={setFilter} onClose={() => setShowFilter(false)} showCustomer showProduct />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  period: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
 });

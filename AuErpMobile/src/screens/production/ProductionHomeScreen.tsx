@@ -1,6 +1,6 @@
 import React from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {useNavigation} from '@react-navigation/native';
 import type {StackNavigationProp} from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -13,7 +13,7 @@ type Nav = StackNavigationProp<ProductionStackParamList, 'ProductionHome'>;
 export default function ProductionHomeScreen() {
   const nav = useNavigation<Nav>();
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <ScreenSafeArea style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* Section banner */}
         <View style={styles.banner}>
@@ -41,7 +41,7 @@ export default function ProductionHomeScreen() {
           <MenuCard icon="assignment" label="Work Orders" description="Status tracker with KPI counts" color={Colors.green} onPress={() => nav.navigate('WorkOrders')} />
         </MenuGroup>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

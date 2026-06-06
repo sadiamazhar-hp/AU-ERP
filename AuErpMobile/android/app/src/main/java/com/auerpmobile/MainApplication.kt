@@ -10,6 +10,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
+import com.reactcommunity.rndatetimepicker.RNDateTimePickerPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -18,7 +19,8 @@ class MainApplication : Application(), ReactApplication {
             override fun getPackages(): List<ReactPackage> =
                 PackageList(this).packages.apply {
                     // Auto-linked packages are added by PackageList
-                    // Add any manually-linked packages here
+                    // DateTimePicker is not present in generated PackageList on this project setup.
+                    add(RNDateTimePickerPackage())
                 }
 
             override fun getJSMainModuleName(): String = "index"

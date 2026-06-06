@@ -11,6 +11,11 @@ public sealed class DashboardPageVm
     public string PeriodLabel { get; init; } = "";
     public DateTime PeriodFrom { get; init; }
     public DateTime PeriodTo { get; init; }
+    public string? SelectedPlantId { get; init; }
+    public bool IsPlantFilterVisible { get; init; }
+    public bool IsPlantSingleLocked { get; init; }
+    public string? EffectivePlantName { get; init; }
+    public IReadOnlyList<DashboardPlantOptionVm> PlantOptions { get; init; } = Array.Empty<DashboardPlantOptionVm>();
 
     public bool ShowAdmin { get; init; }
     public bool ShowStore { get; init; }
@@ -26,6 +31,12 @@ public sealed class DashboardPageVm
     public SalesModuleStats? Sales { get; init; }
     public FinanceModuleStats? Finance { get; init; }
     public ProductionModuleStats? Production { get; init; }
+}
+
+public sealed class DashboardPlantOptionVm
+{
+    public string PlantId { get; init; } = "";
+    public string PlantName { get; init; } = "";
 }
 
 public static class DashboardPeriod
@@ -103,6 +114,14 @@ public sealed class DashboardTopStockRowVm
     public string MaterialNumber { get; init; } = "";
     public string? MaterialDescription { get; init; }
     public string Grade { get; init; } = "";
+    public decimal Quantity { get; init; }
+    public decimal StockValue { get; init; }
+    public IReadOnlyList<DashboardTopStockBatchRowVm> BatchBreakdown { get; init; } = Array.Empty<DashboardTopStockBatchRowVm>();
+}
+
+public sealed class DashboardTopStockBatchRowVm
+{
+    public string BatchOrLot { get; init; } = "";
     public decimal Quantity { get; init; }
     public decimal StockValue { get; init; }
 }

@@ -1,12 +1,13 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getProductSales, ProductSalesRow, PagedResult} from '../../api/sales';
-import KpiCard from '../../components/KpiCard';
 import BarChartWidget from '../../components/BarChartWidget';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
@@ -14,16 +15,16 @@ import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToSalesParams} from '../../utils/reportFilters';
 import {filterRowsBySearch} from '../../utils/tableSearch';
+import {formatPkr, formatPkrAxis} from '../../utils/currency';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {Colors} from '../../theme/colors';
-
-const fmtAmt = (n: number) => `${(n / 1000).toFixed(0)}K`;
 
 const COLS: Column<ProductSalesRow>[] = [
   {key: 'materialNumber', label: 'Mat #', flex: 0.9},
   {key: 'materialDescription', label: 'Material', flex: 2},
   {key: 'totalQuantity', label: 'Qty', flex: 0.8, align: 'right'},
   {key: 'unitOfMeasure', label: 'UoM', flex: 0.6, align: 'center'},
-  {key: 'totalRevenue', label: 'Revenue', flex: 1.1, align: 'right', render: v => fmtAmt(Number(v))},
+  {key: 'totalRevenue', label: 'Revenue', flex: 1.1, align: 'right', render: v => formatPkr(Number(v))},
   {key: 'invoiceCount', label: 'Invoices', flex: 0.8, align: 'right'},
 ];
 
@@ -53,6 +54,11 @@ export default function ProductSalesScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(result?.items ?? [], search, SEARCH_KEYS),
     [result?.items, search],
@@ -74,33 +80,36 @@ export default function ProductSalesScreen() {
   if (loading && !result) return <LoadingView />;
   if (error && !result) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{result?.totalCount ?? 0} products</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Product KPIs (this page)" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Total qty" value={String(pageKpis.totalQty)} accent={Colors.blue} />
-          <KpiCard label="Revenue" value={fmtAmt(pageKpis.totalRevenue)} accent={Colors.green} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Top SKU" value={pageKpis.top?.materialNumber ?? '—'} accent={Colors.accent} />
-          <View style={{flex: 1, minWidth: 140}} />
-        </View>
+        <SectionHeader title={`Product KPIs (${result?.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Total qty', value: String(pageKpis.totalQty), sub: 'this page', accent: Colors.blue},
+            {label: 'Revenue', value: formatPkr(pageKpis.totalRevenue), sub: periodSub, accent: Colors.green},
+            {label: 'Top SKU', value: pageKpis.top?.materialNumber ?? '—', sub: periodSub, accent: Colors.accent},
+          ]}
+        />
 
         {topProducts.length > 0 && (
           <BarChartWidget
-            title="Top 5 products (this page)"
+            title="Top 5 products"
+            subtitle={`${periodSub} · this page`}
             labels={topProducts.map(p => p.materialNumber)}
             data={topProducts.map(p => p.totalRevenue)}
             color={Colors.green}
             decimalPlaces={0}
+            formatYLabel={v => formatPkrAxis(Number(v))}
           />
         )}
 
@@ -122,18 +131,13 @@ export default function ProductSalesScreen() {
         )}
       </ScrollView>
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showCustomer showProduct />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   tableWrap: {backgroundColor: Colors.card, borderRadius: 8, overflow: 'hidden', elevation: 1, marginBottom: 8},
   pagination: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16},
   pageBtn: {padding: 4},

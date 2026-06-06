@@ -22,7 +22,7 @@ public class MobileProductionController : ControllerBase
     public async Task<ActionResult<MobileApiResponse<PagedResult<DailyProductionRow>>>> Daily(
         [FromQuery] MobileReportFilter filter, CancellationToken ct)
     {
-        var data = await _reports.GetDailyProductionAsync(filter, ct);
+        var data = await _reports.GetDailyProductionAsync(filter, ct, User);
         return Ok(MobileApiResponse<PagedResult<DailyProductionRow>>.Ok(data));
     }
 
@@ -34,7 +34,7 @@ public class MobileProductionController : ControllerBase
     public async Task<ActionResult<MobileApiResponse<ProductionSummaryDto>>> Summary(
         [FromQuery] MobileReportFilter filter, CancellationToken ct)
     {
-        var data = await _reports.GetProductionSummaryAsync(filter, ct);
+        var data = await _reports.GetProductionSummaryAsync(filter, ct, User);
         return Ok(MobileApiResponse<ProductionSummaryDto>.Ok(data));
     }
 
@@ -46,7 +46,7 @@ public class MobileProductionController : ControllerBase
     public async Task<ActionResult<MobileApiResponse<DefectReportDto>>> Defects(
         [FromQuery] MobileReportFilter filter, CancellationToken ct)
     {
-        var data = await _reports.GetDefectsAsync(filter, ct);
+        var data = await _reports.GetDefectsAsync(filter, ct, User);
         return Ok(MobileApiResponse<DefectReportDto>.Ok(data));
     }
 
@@ -70,7 +70,7 @@ public class MobileProductionController : ControllerBase
     public async Task<ActionResult<MobileApiResponse<PagedResult<BatchTrackingRow>>>> Batches(
         [FromQuery] MobileReportFilter filter, CancellationToken ct)
     {
-        var data = await _reports.GetBatchTrackingAsync(filter, ct);
+        var data = await _reports.GetBatchTrackingAsync(filter, ct, User);
         return Ok(MobileApiResponse<PagedResult<BatchTrackingRow>>.Ok(data));
     }
 
@@ -82,7 +82,7 @@ public class MobileProductionController : ControllerBase
     public async Task<ActionResult<MobileApiResponse<WorkOrdersDto>>> WorkOrders(
         [FromQuery] MobileReportFilter filter, CancellationToken ct)
     {
-        var data = await _reports.GetWorkOrdersAsync(filter, ct);
+        var data = await _reports.GetWorkOrdersAsync(filter, ct, User);
         return Ok(MobileApiResponse<WorkOrdersDto>.Ok(data));
     }
 }

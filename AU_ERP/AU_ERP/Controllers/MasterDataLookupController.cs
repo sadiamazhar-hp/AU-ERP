@@ -27,7 +27,7 @@ namespace AU_ERP.Controllers
         /// <summary>
         /// Shared material lookup for dropdowns across modules.
         /// purpose=header: HALB/FERT (optionally narrowed by materialType=HALB|FERT)
-        /// purpose=component: ROH/HALB
+        /// purpose=component: ROH/HALB/PACK
         /// </summary>
         [HttpGet]
         public async Task<JsonResult> SearchBomMaterials(string? purpose, string? q, string? materialType, CancellationToken ct = default)
@@ -36,7 +36,10 @@ namespace AU_ERP.Controllers
             IQueryable<CreateMaterialMaster> query = _db.CreateMaterialMaster.AsNoTracking();
 
             if (p == "component")
-                query = query.Where(m => m.MaterialTypeCode == "ROH" || m.MaterialTypeCode == "HALB");
+                query = query.Where(m =>
+                    m.MaterialTypeCode == "ROH"
+                    || m.MaterialTypeCode == "HALB"
+                    || m.MaterialTypeCode == "PACK");
             else if (p == "header")
             {
                 var mt = (materialType ?? "").Trim().ToUpperInvariant();

@@ -103,7 +103,7 @@ namespace AU_ERP.Controllers
             return Json(new { success = true, nextBomCode = next });
         }
 
-        /// <summary>Materials for BOM UI: header = FERT only; component = ROH/HALB. Search q is partial match on number or description.</summary>
+        /// <summary>Materials for BOM UI: header = FERT only; component = ROH/HALB/PACK. Search q is partial match on number or description.</summary>
         [HttpGet]
         public async Task<JsonResult> SearchBomMaterials(string? purpose, string? q, string? materialType, CancellationToken ct = default)
         {
@@ -111,7 +111,10 @@ namespace AU_ERP.Controllers
             IQueryable<CreateMaterialMaster> query = _db.CreateMaterialMaster.AsNoTracking();
 
             if (p == "component")
-                query = query.Where(m => m.MaterialTypeCode == "ROH" || m.MaterialTypeCode == "HALB");
+                query = query.Where(m =>
+                    m.MaterialTypeCode == "ROH"
+                    || m.MaterialTypeCode == "HALB"
+                    || m.MaterialTypeCode == "PACK");
             else if (p == "header")
                 query = query.Where(m => m.MaterialTypeCode == HeaderMaterialTypeFixed);
             else
@@ -209,8 +212,8 @@ namespace AU_ERP.Controllers
 
                             if (compMat == null)
                                 return Json(new { success = false, message = $"Component material '{compNum}' does not exist." });
-                            if (compMat.MaterialTypeCode is not ("ROH" or "HALB"))
-                                return Json(new { success = false, message = $"Component '{compNum}' must be Raw (ROH) or Semi-finished (HALB) material." });
+                            if (compMat.MaterialTypeCode is not ("ROH" or "HALB" or "PACK"))
+                                return Json(new { success = false, message = $"Component '{compNum}' must be Raw (ROH), Semi-finished (HALB), or Packaging (PACK) material." });
 
                             if (item.UomId is null || item.UomId <= 0)
                                 return Json(new { success = false, message = "Each component line must have a UOM selected." });
@@ -417,8 +420,8 @@ namespace AU_ERP.Controllers
 
                             if (compMat == null)
                                 return Json(new { success = false, message = $"Component material '{compNum}' does not exist." });
-                            if (compMat.MaterialTypeCode is not ("ROH" or "HALB"))
-                                return Json(new { success = false, message = $"Component '{compNum}' must be Raw (ROH) or Semi-finished (HALB) material." });
+                            if (compMat.MaterialTypeCode is not ("ROH" or "HALB" or "PACK"))
+                                return Json(new { success = false, message = $"Component '{compNum}' must be Raw (ROH), Semi-finished (HALB), or Packaging (PACK) material." });
 
                             if (item.UomId is null || item.UomId <= 0)
                                 return Json(new { success = false, message = "Each component line must have a UOM selected." });

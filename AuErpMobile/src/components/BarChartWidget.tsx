@@ -1,10 +1,13 @@
-import React from 'react';
-import {Dimensions, StyleSheet, Text, View} from 'react-native';
+import React, {useMemo} from 'react';
+import {ScrollView, StyleSheet} from 'react-native';
 import {BarChart} from 'react-native-chart-kit';
+import ChartCard from './ChartCard';
+import {useOrientationLayout} from '../hooks/useOrientationLayout';
 import {Colors} from '../theme/colors';
 
 interface Props {
   title?: string;
+  subtitle?: string;
   labels: string[];
   data: number[];
   color?: string;
@@ -13,14 +16,17 @@ interface Props {
   formatYLabel?: (value: string) => string;
 }
 
-const W = Dimensions.get('window').width - 32;
-
 function hasChartData(data: number[]) {
   return data.length > 0 && data.some(v => Number.isFinite(v));
 }
 
+function truncateLabel(label: string, max = 7): string {
+  return label.length > max ? `${label.slice(0, max)}…` : label;
+}
+
 export default function BarChartWidget({
   title,
+  subtitle,
   labels,
   data,
   color = Colors.blue,
@@ -28,51 +34,51 @@ export default function BarChartWidget({
   decimalPlaces = 0,
   formatYLabel,
 }: Props) {
-  if (!hasChartData(data) || labels.length === 0) {
-    return (
-      <View style={styles.container}>
-        {title ? <Text style={styles.title}>{title}</Text> : null}
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>No data for selected period</Text>
-        </View>
-      </View>
-    );
-  }
+  const {chartContentWidth, isLandscape} = useOrientationLayout();
+  const displayLabels = useMemo(() => labels.map(l => truncateLabel(l)), [labels]);
+  const labelPitch = isLandscape ? 48 : 56;
+  const scrollThreshold = isLandscape ? 8 : 6;
+  const chartWidth = Math.max(chartContentWidth, labels.length * labelPitch);
+  const scrollable = labels.length > scrollThreshold;
+  const empty = !hasChartData(data) || labels.length === 0;
+  const renderWidth = scrollable ? chartWidth : chartContentWidth;
+  const chartHeight = isLandscape ? 180 : 200;
 
   return (
-    <View style={styles.container}>
-      {title ? <Text style={styles.title}>{title}</Text> : null}
-      <BarChart
-        data={{
-          labels,
-          datasets: [{data}],
-        }}
-        width={W}
-        height={200}
-        yAxisLabel=""
-        yAxisSuffix={suffix}
-        chartConfig={{
-          backgroundColor: Colors.card,
-          backgroundGradientFrom: Colors.card,
-          backgroundGradientTo: Colors.card,
-          decimalPlaces,
-          color: () => color,
-          labelColor: () => Colors.subtle,
-          propsForBackgroundLines: {stroke: Colors.border},
-          formatYLabel,
-        }}
-        style={styles.chart}
-        showValuesOnTopOfBars
-        fromZero
-      />
-    </View>
+    <ChartCard title={title} subtitle={subtitle} empty={empty}>
+      {!empty && (
+        <ScrollView horizontal={scrollable} showsHorizontalScrollIndicator={false}>
+          <BarChart
+            data={{
+              labels: displayLabels,
+              datasets: [{data}],
+            }}
+            width={renderWidth}
+            height={chartHeight}
+            yAxisLabel=""
+            yAxisSuffix={suffix}
+            chartConfig={{
+              backgroundColor: Colors.card,
+              backgroundGradientFrom: Colors.card,
+              backgroundGradientTo: Colors.card,
+              decimalPlaces,
+              color: () => color,
+              labelColor: () => Colors.subtle,
+              propsForBackgroundLines: {stroke: Colors.border, strokeDasharray: ''},
+              propsForLabels: {fontSize: isLandscape ? 9 : 10},
+              barPercentage: isLandscape ? 0.55 : 0.65,
+              formatYLabel,
+            }}
+            style={styles.chart}
+            showValuesOnTopOfBars
+            fromZero
+          />
+        </ScrollView>
+      )}
+    </ChartCard>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {backgroundColor: Colors.card, borderRadius: 8, padding: 12, marginBottom: 12, elevation: 1},
-  title: {fontSize: 13, fontWeight: '600', color: Colors.text, marginBottom: 8},
-  chart: {borderRadius: 8, marginLeft: -12},
-  empty: {padding: 32, alignItems: 'center'},
-  emptyText: {color: Colors.subtle, fontSize: 14, fontWeight: '500'},
+  chart: {borderRadius: 8, marginLeft: -8},
 });

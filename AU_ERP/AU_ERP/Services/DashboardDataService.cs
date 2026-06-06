@@ -18,7 +18,7 @@ public sealed class DashboardDataService
         _orderWorkflow = orderWorkflow;
     }
 
-    public async Task<DashboardPageVm> BuildAsync(ClaimsPrincipal user, string? period = null, CancellationToken ct = default)
+    public async Task<DashboardPageVm> BuildAsync(ClaimsPrincipal user, string? period = null, string? plantId = null, CancellationToken ct = default)
     {
         var display = user.Identity?.Name?.Trim();
         if (string.IsNullOrEmpty(display) && user.Identity is ClaimsIdentity id)
@@ -55,6 +55,8 @@ public sealed class DashboardDataService
         var periodKey = NormalizePeriod(period);
         var window = ResolvePeriodWindow(periodKey);
         var today = DateTime.Today;
+        var plantScope = await ResolveDashboardPlantScopeAsync(user, plantId, ct).ConfigureAwait(false);
+        var selectedPlantId = plantScope.EffectiveListPlantId;
 
         AdminModuleStats? admin = null;
         if (showAd)
@@ -63,13 +65,12 @@ public sealed class DashboardDataService
         StoreModuleStats? store = null;
         if (showSt)
         {
-            var storePlant = user.FindFirst(AuClaimTypes.StorePlant)?.Value?.Trim();
-            store = await BuildStoreAsync(storePlant, window.From, window.To, ct).ConfigureAwait(false);
+            store = await BuildStoreAsync(plantScope, window.From, window.To, ct).ConfigureAwait(false);
         }
 
         SalesModuleStats? sales = null;
         if (showSa)
-            sales = await BuildSalesAsync(user, window.From, window.To, today, ct).ConfigureAwait(false);
+            sales = await BuildSalesAsync(plantScope, window.From, window.To, today, ct).ConfigureAwait(false);
 
         FinanceModuleStats? finance = null;
         if (showFi)
@@ -77,13 +78,16 @@ public sealed class DashboardDataService
 
         ProductionModuleStats? prod = null;
         if (showPr)
-            prod = await BuildProductionAsync(window.From, window.To, ct).ConfigureAwait(false);
+            prod = await BuildProductionAsync(plantScope, window.From, window.To, ct).ConfigureAwait(false);
 
         var headline = await BuildHeadlineAsync(
             showSa, showFi, showSt, showPr,
             window, window.PreviousFrom, window.PreviousTo,
-            user, user.FindFirst(AuClaimTypes.StorePlant)?.Value?.Trim(),
+            plantScope,
             today, ct).ConfigureAwait(false);
+
+        var plantOptions = await BuildDashboardPlantOptionsAsync(plantScope, ct).ConfigureAwait(false);
+        var selectedPlantName = ResolvePlantName(plantOptions, selectedPlantId);
 
         return new DashboardPageVm
         {
@@ -94,6 +98,11 @@ public sealed class DashboardDataService
             PeriodLabel = window.Label,
             PeriodFrom = window.From,
             PeriodTo = window.To,
+            SelectedPlantId = selectedPlantId,
+            IsPlantFilterVisible = plantOptions.Count > 1,
+            IsPlantSingleLocked = plantScope.IsSinglePlantLocked,
+            EffectivePlantName = selectedPlantName,
+            PlantOptions = plantOptions,
             ShowAdmin = showAd,
             ShowStore = showSt,
             ShowSales = showSa,
@@ -149,19 +158,27 @@ public sealed class DashboardDataService
     }
 
     private async Task<StoreModuleStats> BuildStoreAsync(
-        string? storePlant, DateTime from, DateTime to, CancellationToken ct)
+        SalesPlantScope scope, DateTime from, DateTime to, CancellationToken ct)
     {
-        List<StockInventoryLine> lines;
-        if (string.IsNullOrEmpty(storePlant))
-            lines = new List<StockInventoryLine>();
-        else
+        if (scope.MissingAssignment)
         {
-            lines = await _db.StockInventoryLines.AsNoTracking()
-                .Where(s => s.Status == StockInventoryLine.StatusActive && s.PlantID == storePlant)
-                .Include(s => s.Material)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
+            return new StoreModuleStats
+            {
+                ValueByGrade = new List<LabelCountDto>(),
+                MovementsByDay = BuildDailySeries(from, to, Array.Empty<DateTime>()),
+                TopStockByValue = new List<DashboardTopStockRowVm>()
+            };
         }
+
+        var stockQuery = SalesPlantAccess.ApplyListingPlantFilter(
+            _db.StockInventoryLines.AsNoTracking()
+                .Where(s => s.Status == StockInventoryLine.StatusActive),
+            scope,
+            s => s.PlantID);
+        var lines = await stockQuery
+            .Include(s => s.Material)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
 
         var byGrade = lines
             .GroupBy(s => string.IsNullOrEmpty(s.Grade) ? "—" : s.Grade)
@@ -191,8 +208,15 @@ public sealed class DashboardDataService
 
         var movementsQ = _db.StockMovements.AsNoTracking()
             .Where(m => m.MovementDate >= from && m.MovementDate <= to);
-        if (!string.IsNullOrEmpty(storePlant))
-            movementsQ = movementsQ.Where(m => m.FromPlantId == storePlant || m.ToPlantId == storePlant);
+        if (!scope.IsAdminAllPlants || !string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+        {
+            var allowedPlants = scope.EffectiveListPlantId != null
+                ? new[] { scope.EffectiveListPlantId }
+                : scope.AllowedPlantIds;
+            movementsQ = movementsQ.Where(m =>
+                (m.FromPlantId != null && allowedPlants.Contains(m.FromPlantId))
+                || (m.ToPlantId != null && allowedPlants.Contains(m.ToPlantId)));
+        }
 
         var movements = await movementsQ
             .Select(m => m.MovementDate)
@@ -212,16 +236,34 @@ public sealed class DashboardDataService
             .ConfigureAwait(false);
 
         var topStock = lines
-            .OrderByDescending(s => s.StockValue)
-            .Take(5)
-            .Select(s => new DashboardTopStockRowVm
+            .GroupBy(s => new
             {
-                MaterialNumber = s.MaterialNumber,
+                s.MaterialNumber,
                 MaterialDescription = s.Material != null ? s.Material.Description : null,
-                Grade = string.IsNullOrEmpty(s.Grade) ? "—" : s.Grade,
-                Quantity = s.Quantity,
-                StockValue = s.StockValue
+                Grade = string.IsNullOrWhiteSpace(s.Grade) ? "—" : s.Grade
             })
+            .Select(g => new DashboardTopStockRowVm
+            {
+                MaterialNumber = g.Key.MaterialNumber,
+                MaterialDescription = g.Key.MaterialDescription,
+                Grade = g.Key.Grade,
+                Quantity = g.Sum(x => x.Quantity),
+                StockValue = g.Sum(x => x.StockValue),
+                BatchBreakdown = g
+                    .GroupBy(x => string.IsNullOrWhiteSpace(x.BatchOrLot) ? "—" : x.BatchOrLot!)
+                    .OrderBy(bg => bg.Key)
+                    .Select(bg => new DashboardTopStockBatchRowVm
+                    {
+                        BatchOrLot = bg.Key,
+                        Quantity = bg.Sum(x => x.Quantity),
+                        StockValue = bg.Sum(x => x.StockValue)
+                    })
+                    .ToList()
+            })
+            .OrderByDescending(s => s.StockValue)
+            .ThenBy(s => s.MaterialNumber)
+            .ThenBy(s => s.Grade)
+            .Take(5)
             .ToList();
 
         return new StoreModuleStats
@@ -239,15 +281,6 @@ public sealed class DashboardDataService
         };
     }
 
-    private async Task<SalesPlantScope> ResolveSalesPlantScopeAsync(ClaimsPrincipal user, CancellationToken ct)
-    {
-        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
-            .Select(p => p.PlantID)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-        return await SalesPlantAccess.ResolveAsync(_db, user, null, allPlantIds, ct).ConfigureAwait(false);
-    }
-
     private static SalesOrderWorkflowCountFilter? BuildSalesWorkflowCountFilter(SalesPlantScope scope)
     {
         if (scope.MissingAssignment)
@@ -263,10 +296,9 @@ public sealed class DashboardDataService
     }
 
     private async Task<SalesModuleStats> BuildSalesAsync(
-        ClaimsPrincipal user,
+        SalesPlantScope scope,
         DateTime from, DateTime to, DateTime today, CancellationToken ct)
     {
-        var scope = await ResolveSalesPlantScopeAsync(user, ct).ConfigureAwait(false);
         if (scope.MissingAssignment)
         {
             return new SalesModuleStats
@@ -511,9 +543,23 @@ public sealed class DashboardDataService
     }
 
     private async Task<ProductionModuleStats> BuildProductionAsync(
-        DateTime from, DateTime to, CancellationToken ct)
+        SalesPlantScope scope, DateTime from, DateTime to, CancellationToken ct)
     {
-        var bySt = await _db.ProductionOrders.AsNoTracking()
+        if (scope.MissingAssignment)
+        {
+            return new ProductionModuleStats
+            {
+                ProductionOrdersByStatus = new Dictionary<string, int>(),
+                ProductionOrdersByStatusChart = new List<LabelCountDto>(),
+                RecentProductionOrders = new List<DashboardRecentProductionOrderRowVm>()
+            };
+        }
+
+        var orderQuery = SalesPlantAccess.ApplyProductionOrderPlantFilter(
+            _db.ProductionOrders.AsNoTracking(),
+            scope);
+
+        var bySt = await orderQuery
             .GroupBy(p => p.Status)
             .Select(g => new { g.Key, C = g.Count() })
             .ToListAsync(ct)
@@ -522,40 +568,73 @@ public sealed class DashboardDataService
         var fert = await _db.CreateMaterialMaster.AsNoTracking()
             .CountAsync(m => m.MaterialTypeCode == "FERT" || m.MaterialTypeCode == "HALB", ct)
             .ConfigureAwait(false);
-        var ot = await _db.ProductionOrders.AsNoTracking()
+        var ot = await orderQuery
             .CountAsync(p =>
                 p.ReleasedRoutingId != null
                 && (p.Status == ProductionOrder.StatusReleased || p.Status == ProductionOrder.StatusInProgress),
                 ct)
             .ConfigureAwait(false);
 
-        var stagesStarted = await _db.ProductionOrderStageProgresses.AsNoTracking()
+        var stageQuery = _db.ProductionOrderStageProgresses.AsNoTracking();
+        if (!scope.IsAdminAllPlants || !string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+        {
+            var allowedPlants = scope.EffectiveListPlantId != null
+                ? new[] { scope.EffectiveListPlantId }
+                : scope.AllowedPlantIds;
+            stageQuery = stageQuery.Where(s => s.ProductionOrder!.Lines
+                .Any(l => l.PlantId != null && allowedPlants.Contains(l.PlantId)));
+        }
+
+        var stagesStarted = await stageQuery
             .CountAsync(s =>
                 s.StageStatus == ProductionOrderStageProgress.StageInProgress
                 && s.UpdatedAt >= from && s.UpdatedAt <= to.AddDays(1), ct)
             .ConfigureAwait(false);
-        var stagesCompleted = await _db.ProductionOrderStageProgresses.AsNoTracking()
+        var stagesCompleted = await stageQuery
             .CountAsync(s =>
                 s.StageStatus == ProductionOrderStageProgress.StageCompleted
                 && s.UpdatedAt >= from && s.UpdatedAt <= to.AddDays(1), ct)
             .ConfigureAwait(false);
 
-        var produceBatches = await _db.GoodsProduceBatches.AsNoTracking()
-            .CountAsync(b => b.GrDate >= from && b.GrDate <= to, ct)
+        var batchQuery = _db.GoodsProduceBatches.AsNoTracking()
+            .Where(b => b.GrDate >= from && b.GrDate <= to);
+        if (!scope.IsAdminAllPlants || !string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+        {
+            var allowedPlants = scope.EffectiveListPlantId != null
+                ? new[] { scope.EffectiveListPlantId }
+                : scope.AllowedPlantIds;
+            batchQuery = batchQuery.Where(b => b.ProductionOrderLine != null
+                && b.ProductionOrderLine.PlantId != null
+                && allowedPlants.Contains(b.ProductionOrderLine.PlantId));
+        }
+        var produceBatches = await batchQuery
+            .CountAsync(ct)
             .ConfigureAwait(false);
 
-        var grPending = await _db.GoodReceiptDocuments.AsNoTracking()
+        var grQuery = _db.GoodReceiptDocuments.AsNoTracking();
+        if (!scope.IsAdminAllPlants || !string.IsNullOrWhiteSpace(scope.EffectiveListPlantId))
+        {
+            var allowedPlants = scope.EffectiveListPlantId != null
+                ? new[] { scope.EffectiveListPlantId }
+                : scope.AllowedPlantIds;
+            grQuery = grQuery.Where(d => d.ProductionOrder != null
+                && d.ProductionOrder.Lines.Any(l => l.PlantId != null && allowedPlants.Contains(l.PlantId)));
+        }
+
+        var grPending = await grQuery
             .CountAsync(d => !d.IsPosted, ct)
             .ConfigureAwait(false);
-        var grPosted = await _db.GoodReceiptDocuments.AsNoTracking()
+        var grPosted = await grQuery
             .CountAsync(d => d.IsPosted && d.PostedAt != null
                 && d.PostedAt.Value.Date >= from && d.PostedAt.Value.Date <= to, ct)
             .ConfigureAwait(false);
 
-        var qiPending = await _db.SalesReturnQualityInspections.AsNoTracking()
+        IQueryable<SalesReturnQualityInspection> qiQuery = _db.SalesReturnQualityInspections.AsNoTracking();
+        qiQuery = SalesPlantAccess.ApplyListingPlantFilter(qiQuery, scope, q => q.PlantId);
+        var qiPending = await qiQuery
             .CountAsync(q => q.Status == SalesReturnQualityInspection.StatusPending, ct)
             .ConfigureAwait(false);
-        var qiCompleted = await _db.SalesReturnQualityInspections.AsNoTracking()
+        var qiCompleted = await qiQuery
             .CountAsync(q =>
                 q.Status == SalesReturnQualityInspection.StatusCompleted
                 && q.CompletedAt != null
@@ -563,7 +642,7 @@ public sealed class DashboardDataService
                 && q.CompletedAt.Value.Date <= to, ct)
             .ConfigureAwait(false);
 
-        var recentPos = await _db.ProductionOrders.AsNoTracking()
+        var recentPos = await orderQuery
             .OrderByDescending(p => p.PlannedStartDate).ThenByDescending(p => p.Id)
             .Take(5)
             .Select(p => new DashboardRecentProductionOrderRowVm
@@ -618,7 +697,7 @@ public sealed class DashboardDataService
     private async Task<DashboardHeadlineVm> BuildHeadlineAsync(
         bool showSa, bool showFi, bool showSt, bool showPr,
         PeriodWindow current, DateTime prevFrom, DateTime prevTo,
-        ClaimsPrincipal user, string? storePlant, DateTime today, CancellationToken ct)
+        SalesPlantScope scope, DateTime today, CancellationToken ct)
     {
         decimal revenue = 0, revenuePrev = 0, outstanding = 0;
         int openCount = 0, ordersOpen = 0, ordersPendingPayment = 0, dcTransit = 0, lowStock = 0, wip = 0;
@@ -626,15 +705,22 @@ public sealed class DashboardDataService
 
         if (showFi)
         {
-            revenue = await _db.SalesInvoices.AsNoTracking()
-                .Where(i => i.DocumentDate >= current.From && i.DocumentDate <= current.To)
+            var financeInvoiceCurrent = SalesPlantAccess.ApplyListingPlantFilter(
+                _db.SalesInvoices.AsNoTracking()
+                    .Where(i => i.DocumentDate >= current.From && i.DocumentDate <= current.To),
+                scope,
+                i => i.DeliveryChallan != null ? i.DeliveryChallan.PlantId : null);
+            var financeInvoicePrev = SalesPlantAccess.ApplyListingPlantFilter(
+                _db.SalesInvoices.AsNoTracking()
+                    .Where(i => i.DocumentDate >= prevFrom && i.DocumentDate <= prevTo),
+                scope,
+                i => i.DeliveryChallan != null ? i.DeliveryChallan.PlantId : null);
+            revenue = await financeInvoiceCurrent
                 .SumAsync(i => (decimal?)i.GrandTotal, ct).ConfigureAwait(false) ?? 0m;
-            revenuePrev = await _db.SalesInvoices.AsNoTracking()
-                .Where(i => i.DocumentDate >= prevFrom && i.DocumentDate <= prevTo)
+            revenuePrev = await financeInvoicePrev
                 .SumAsync(i => (decimal?)i.GrandTotal, ct).ConfigureAwait(false) ?? 0m;
 
-            var invDates = await _db.SalesInvoices.AsNoTracking()
-                .Where(i => i.DocumentDate >= current.From && i.DocumentDate <= current.To)
+            var invDates = await financeInvoiceCurrent
                 .Select(i => new { i.DocumentDate, i.GrandTotal })
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
@@ -643,16 +729,19 @@ public sealed class DashboardDataService
                 current.From, current.To,
                 invDates.Select(x => (x.DocumentDate, x.GrandTotal)));
 
-            outstanding = await _db.SalesInvoices.AsNoTracking()
-                .Where(i => i.Status == SalesInvoice.StatusOpen)
+            var openInvoiceQuery = SalesPlantAccess.ApplyListingPlantFilter(
+                _db.SalesInvoices.AsNoTracking()
+                    .Where(i => i.Status == SalesInvoice.StatusOpen),
+                scope,
+                i => i.DeliveryChallan != null ? i.DeliveryChallan.PlantId : null);
+            outstanding = await openInvoiceQuery
                 .SumAsync(i => (decimal?)i.GrandTotal, ct).ConfigureAwait(false) ?? 0m;
-            openCount = await _db.SalesInvoices.AsNoTracking()
-                .CountAsync(i => i.Status == SalesInvoice.StatusOpen, ct).ConfigureAwait(false);
+            openCount = await openInvoiceQuery
+                .CountAsync(ct).ConfigureAwait(false);
         }
 
         if (showSa)
         {
-            var scope = await ResolveSalesPlantScopeAsync(user, ct).ConfigureAwait(false);
             if (!scope.MissingAssignment)
             {
                 var workflowCounts = await _orderWorkflow.CountByStatusAsync(
@@ -666,10 +755,14 @@ public sealed class DashboardDataService
             }
         }
 
-        if (showSt && !string.IsNullOrEmpty(storePlant))
+        if (showSt && !scope.MissingAssignment)
         {
-            var lines = await _db.StockInventoryLines.AsNoTracking()
-                .Where(s => s.Status == StockInventoryLine.StatusActive && s.PlantID == storePlant)
+            var stockLines = SalesPlantAccess.ApplyListingPlantFilter(
+                _db.StockInventoryLines.AsNoTracking()
+                    .Where(s => s.Status == StockInventoryLine.StatusActive),
+                scope,
+                s => s.PlantID);
+            var lines = await stockLines
                 .Select(s => new { s.MaterialNumber, s.Quantity })
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
@@ -688,7 +781,10 @@ public sealed class DashboardDataService
 
         if (showPr)
         {
-            wip = await _db.ProductionOrders.AsNoTracking()
+            var wipQuery = SalesPlantAccess.ApplyProductionOrderPlantFilter(
+                _db.ProductionOrders.AsNoTracking(),
+                scope);
+            wip = await wipQuery
                 .CountAsync(p =>
                     p.Status == ProductionOrder.StatusReleased
                     || p.Status == ProductionOrder.StatusInProgress, ct)
@@ -713,6 +809,47 @@ public sealed class DashboardDataService
             ShowProductionWip = showPr,
             ProductionWip = wip
         };
+    }
+
+    private async Task<SalesPlantScope> ResolveDashboardPlantScopeAsync(
+        ClaimsPrincipal user,
+        string? requestedPlantId,
+        CancellationToken ct)
+    {
+        var allPlantIds = await _db.PlantsSamples.AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return await SalesPlantAccess.ResolveAsync(_db, user, requestedPlantId, allPlantIds, ct)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<DashboardPlantOptionVm>> BuildDashboardPlantOptionsAsync(
+        SalesPlantScope scope, CancellationToken ct)
+    {
+        if (scope.MissingAssignment)
+            return Array.Empty<DashboardPlantOptionVm>();
+
+        var allowed = scope.AllowedPlantIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var plants = await _db.PlantsSamples.AsNoTracking()
+            .Where(p => scope.IsAdminAllPlants || allowed.Contains(p.PlantID))
+            .OrderBy(p => p.PlantName)
+            .Select(p => new DashboardPlantOptionVm
+            {
+                PlantId = p.PlantID,
+                PlantName = string.IsNullOrWhiteSpace(p.PlantName) ? p.PlantID : p.PlantName!
+            })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return plants;
+    }
+
+    private static string? ResolvePlantName(IReadOnlyList<DashboardPlantOptionVm> options, string? selectedPlantId)
+    {
+        if (string.IsNullOrWhiteSpace(selectedPlantId))
+            return null;
+        return options.FirstOrDefault(p =>
+            string.Equals(p.PlantId, selectedPlantId, StringComparison.OrdinalIgnoreCase))?.PlantName;
     }
 
     private static List<LabelCountDto> BuildDailySeries(DateTime from, DateTime to, IEnumerable<DateTime> dates)

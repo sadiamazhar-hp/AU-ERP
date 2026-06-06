@@ -1,11 +1,12 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getInvoices, InvoiceRow, PagedResult} from '../../api/sales';
-import KpiCard from '../../components/KpiCard';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
@@ -13,16 +14,17 @@ import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToSalesParams} from '../../utils/reportFilters';
 import {filterRowsBySearch} from '../../utils/tableSearch';
+import {formatPkr} from '../../utils/currency';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {Colors} from '../../theme/colors';
 
 const fmtDate = (s: string) => (s ? new Date(s).toLocaleDateString() : '');
-const fmtAmt = (n: number) => `${(n / 1000).toFixed(0)}K`;
 
 const COLS: Column<InvoiceRow>[] = [
   {key: 'invoiceNumber', label: 'Invoice #', flex: 1.3},
   {key: 'documentDate', label: 'Date', flex: 1, render: v => fmtDate(String(v))},
   {key: 'customerName', label: 'Customer', flex: 2},
-  {key: 'totalAmount', label: 'Total', flex: 1, align: 'right', render: v => fmtAmt(Number(v))},
+  {key: 'totalAmount', label: 'Total', flex: 1, align: 'right', render: v => formatPkr(Number(v))},
   {key: 'status', label: 'Status', flex: 1.1},
 ];
 
@@ -52,6 +54,11 @@ export default function InvoicesScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(result?.items ?? [], search, SEARCH_KEYS),
     [result?.items, search],
@@ -68,25 +75,27 @@ export default function InvoicesScreen() {
   if (loading && !result) return <LoadingView />;
   if (error && !result) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{result?.totalCount ?? 0} invoices</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Page totals (current view)" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Rows" value={String(pageKpis.count)} accent={Colors.blue} />
-          <KpiCard label="Grand total" value={fmtAmt(pageKpis.grandTotal)} accent={Colors.green} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Open" value={String(pageKpis.open)} accent={Colors.orange} />
-          <KpiCard label="Collected" value={String(pageKpis.collected)} accent={Colors.green} />
-        </View>
+        <SectionHeader title={`Invoices (${result?.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Rows', value: String(pageKpis.count), sub: 'current view', accent: Colors.blue},
+            {label: 'Grand total', value: formatPkr(pageKpis.grandTotal), sub: periodSub, accent: Colors.green},
+            {label: 'Open', value: String(pageKpis.open), sub: 'current view', accent: Colors.orange},
+            {label: 'Collected', value: String(pageKpis.collected), sub: 'current view', accent: Colors.green},
+          ]}
+        />
 
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search invoices…" />
         <View style={styles.tableWrap}>
@@ -106,18 +115,13 @@ export default function InvoicesScreen() {
         )}
       </ScrollView>
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showCustomer showProduct />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   tableWrap: {backgroundColor: Colors.card, borderRadius: 8, overflow: 'hidden', elevation: 1, marginBottom: 8},
   pagination: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16},
   pageBtn: {padding: 4},

@@ -1,18 +1,20 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getWorkOrders, WorkOrdersDto, WorkOrderRow} from '../../api/production';
-import KpiCard from '../../components/KpiCard';
 import BarChartWidget from '../../components/BarChartWidget';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToProductionParams} from '../../utils/reportFilters';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {filterRowsBySearch} from '../../utils/tableSearch';
 import {Colors} from '../../theme/colors';
 
@@ -53,6 +55,11 @@ export default function WorkOrdersScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(data?.rows.items ?? [], search, SEARCH_KEYS),
     [data?.rows.items, search],
@@ -62,33 +69,33 @@ export default function WorkOrdersScreen() {
   if (error && !data) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
   const kpis = data?.kpis;
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{data?.rows.totalCount ?? 0} orders</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Status Summary" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Total" value={String(kpis?.total ?? 0)} accent={Colors.blue} />
-          <KpiCard label="Completion" value={`${(kpis?.completionPercent ?? 0).toFixed(0)}%`} accent={Colors.green} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Planned" value={String(kpis?.planned ?? 0)} accent={Colors.subtle} />
-          <KpiCard label="Released" value={String(kpis?.released ?? 0)} accent={Colors.blue} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="In Progress" value={String(kpis?.inProgress ?? 0)} accent={Colors.orange} />
-          <KpiCard label="Completed" value={String(kpis?.completed ?? 0)} accent={Colors.green} />
-        </View>
+        <SectionHeader title={`Status summary (${data?.rows.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Total', value: String(kpis?.total ?? 0), sub: periodSub, accent: Colors.blue},
+            {label: 'Completion', value: `${(kpis?.completionPercent ?? 0).toFixed(0)}%`, sub: periodSub, accent: Colors.green},
+            {label: 'Planned', value: String(kpis?.planned ?? 0), sub: periodSub, accent: Colors.subtle},
+            {label: 'Released', value: String(kpis?.released ?? 0), sub: periodSub, accent: Colors.blue},
+            {label: 'In Progress', value: String(kpis?.inProgress ?? 0), sub: periodSub, accent: Colors.orange},
+            {label: 'Completed', value: String(kpis?.completed ?? 0), sub: periodSub, accent: Colors.green},
+          ]}
+        />
 
         <BarChartWidget
           title="By status"
+          subtitle={periodSub}
           labels={['Planned', 'Released', 'In prog.', 'Done']}
           data={[kpis?.planned ?? 0, kpis?.released ?? 0, kpis?.inProgress ?? 0, kpis?.completed ?? 0]}
           color={Colors.blue}
@@ -113,18 +120,13 @@ export default function WorkOrdersScreen() {
         )}
       </ScrollView>
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showPlant />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   tableWrap: {backgroundColor: Colors.card, borderRadius: 8, overflow: 'hidden', elevation: 1, marginBottom: 8},
   pagination: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16},
   pageBtn: {padding: 4},

@@ -1,17 +1,20 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useFocusEffect} from '@react-navigation/native';
 import {getDailyProduction, DailyProductionRow, PagedResult} from '../../api/production';
-import KpiCard from '../../components/KpiCard';
+import BarChartWidget from '../../components/BarChartWidget';
+import KpiGrid from '../../components/KpiGrid';
 import ReportTable, {Column} from '../../components/ReportTable';
+import ReportToolbar from '../../components/ReportToolbar';
 import SearchBar from '../../components/SearchBar';
 import FilterSheet from '../../components/FilterSheet';
 import LoadingView from '../../components/LoadingView';
 import ErrorView from '../../components/ErrorView';
 import SectionHeader from '../../components/SectionHeader';
 import {defaultFilter, filterToProductionParams} from '../../utils/reportFilters';
+import {getPeriodSubtitle} from '../../utils/dateRanges';
 import {filterRowsBySearch} from '../../utils/tableSearch';
 import {Colors} from '../../theme/colors';
 
@@ -54,6 +57,11 @@ export default function DailyProductionScreen() {
 
   useFocusEffect(useCallback(() => { load(filter, page); }, [load, filter, page]));
 
+  function handleQuickRange(from: Date, to: Date) {
+    setPage(1);
+    setFilter(prev => ({...prev, dateFrom: from, dateTo: to}));
+  }
+
   const filteredRows = useMemo(
     () => filterRowsBySearch(result?.items ?? [], search, SEARCH_KEYS),
     [result?.items, search],
@@ -68,29 +76,46 @@ export default function DailyProductionScreen() {
     return {totalQty, goodQty, defectiveQty, defectPercent};
   }, [result?.items]);
 
+  const chartRows = useMemo(
+    () => (result?.items ?? []).slice(0, 8),
+    [result?.items],
+  );
+  const periodSub = getPeriodSubtitle(filter.dateFrom, filter.dateTo);
+
   if (loading && !result) return <LoadingView />;
   if (error && !result) return <ErrorView message={error} onRetry={() => load(filter, page)} />;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <View style={styles.toolbar}>
-        <Text style={styles.count}>{result?.totalCount ?? 0} records</Text>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilter(true)}>
-          <Icon name="filter-list" size={16} color={Colors.blue} />
-          <Text style={styles.filterTxt}>Filter</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenSafeArea style={styles.safe}>
+      <ReportToolbar
+        dateFrom={filter.dateFrom}
+        dateTo={filter.dateTo}
+        onQuickRangeChange={handleQuickRange}
+        onFilterPress={() => setShowFilter(true)}
+        loading={loading}
+      />
 
       <ScrollView nestedScrollEnabled contentContainerStyle={styles.content}>
-        <SectionHeader title="Totals in current view" />
-        <View style={styles.kpiRow}>
-          <KpiCard label="Total qty" value={String(pageKpis.totalQty)} accent={Colors.blue} />
-          <KpiCard label="Good qty" value={String(pageKpis.goodQty)} accent={Colors.green} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiCard label="Defective" value={String(pageKpis.defectiveQty)} accent={Colors.red} />
-          <KpiCard label="Defect %" value={`${pageKpis.defectPercent.toFixed(1)}%`} accent={Colors.orange} />
-        </View>
+        <SectionHeader title={`Production lines (${result?.totalCount ?? 0})`} />
+        <KpiGrid
+          items={[
+            {label: 'Total qty', value: String(pageKpis.totalQty), sub: 'current view', accent: Colors.blue},
+            {label: 'Good qty', value: String(pageKpis.goodQty), sub: 'current view', accent: Colors.green},
+            {label: 'Defective', value: String(pageKpis.defectiveQty), sub: 'current view', accent: Colors.red},
+            {label: 'Defect %', value: `${pageKpis.defectPercent.toFixed(1)}%`, sub: 'current view', accent: Colors.orange},
+          ]}
+        />
+
+        {chartRows.length > 0 && (
+          <BarChartWidget
+            title="Qty by batch"
+            subtitle={`${periodSub} · current page`}
+            labels={chartRows.map(r => r.batchNumber || '—')}
+            data={chartRows.map(r => r.quantityProduced)}
+            color={Colors.blue}
+            decimalPlaces={0}
+          />
+        )}
 
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search production…" />
         <View style={styles.tableWrap}>
@@ -111,18 +136,13 @@ export default function DailyProductionScreen() {
       </ScrollView>
 
       <FilterSheet visible={showFilter} values={filter} onApply={v => { setFilter(v); setPage(1); setSearch(''); }} onClose={() => setShowFilter(false)} showPlant />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.bg},
-  toolbar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border},
-  count: {fontSize: 13, color: Colors.subtle},
-  filterBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.blueLight, borderRadius: 6},
-  filterTxt: {fontSize: 13, color: Colors.blue, fontWeight: '600'},
   content: {padding: 16},
-  kpiRow: {flexDirection: 'row', gap: 10, marginBottom: 10},
   tableWrap: {backgroundColor: Colors.card, borderRadius: 8, overflow: 'hidden', elevation: 1, marginBottom: 8},
   pagination: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16},
   pageBtn: {padding: 4},

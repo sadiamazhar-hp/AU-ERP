@@ -12,14 +12,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
+import {useOrientationLayout} from '../../hooks/useOrientationLayout';
 import {Colors} from '../../theme/colors';
 import {useAuth} from '../../auth/AuthContext';
 import {getApiBaseUrl} from '../../config/apiHost';
 
 export default function LoginScreen() {
   const {signIn} = useAuth();
+  const {isLandscape} = useOrientationLayout();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -59,12 +61,14 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenSafeArea style={styles.safe} edgePreset="full">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex: 1}}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.scroll, isLandscape && styles.scrollLandscape]}
+          keyboardShouldPersistTaps="handled">
 
           {/* ── Hero ── */}
-          <View style={styles.hero}>
+          <View style={[styles.hero, isLandscape && styles.heroLandscape]}>
             {/* Decorative circles */}
             <View style={styles.circle1} />
             <View style={styles.circle2} />
@@ -91,7 +95,7 @@ export default function LoginScreen() {
           </View>
 
           {/* ── Form Card ── */}
-          <View style={styles.card}>
+          <View style={[styles.card, isLandscape && styles.cardLandscape]}>
             <Text style={styles.cardTitle}>Welcome back</Text>
             <Text style={styles.cardSub}>Sign in to your account to continue</Text>
 
@@ -162,13 +166,14 @@ export default function LoginScreen() {
           <Text style={styles.footer}>AU ERP · Read-only reporting access</Text>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: Colors.heroTop},
   scroll: {flexGrow: 1},
+  scrollLandscape: {justifyContent: 'center', minHeight: '100%'},
 
   // Hero
   hero: {
@@ -178,6 +183,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     position: 'relative',
+  },
+  heroLandscape: {
+    paddingTop: 24,
+    paddingBottom: 20,
   },
   circle1: {
     position: 'absolute', width: 280, height: 280, borderRadius: 140,
@@ -226,6 +235,12 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: {width: 0, height: 8},
     elevation: 8,
+  },
+  cardLandscape: {
+    marginHorizontal: 24,
+    maxWidth: 480,
+    alignSelf: 'center',
+    width: '100%',
   },
   cardTitle: {fontSize: 22, fontWeight: '800', color: Colors.text, marginBottom: 4},
   cardSub: {fontSize: 14, color: Colors.subtle, marginBottom: 24},

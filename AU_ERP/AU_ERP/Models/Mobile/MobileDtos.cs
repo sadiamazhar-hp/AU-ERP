@@ -20,14 +20,16 @@ public record MobileLoginResponse(
     string UserId,
     string Email,
     string DisplayName,
-    List<string> Departments
+    List<string> Departments,
+    List<string> PlantIds
 );
 
 public record MobileUserProfile(
     string UserId,
     string Email,
     string DisplayName,
-    List<string> Departments
+    List<string> Departments,
+    List<string> PlantIds
 );
 
 // ─── Shared filter ────────────────────────────────────────────────────────────
@@ -37,6 +39,7 @@ public class MobileReportFilter
     public DateTime? DateFrom { get; set; }
     public DateTime? DateTo { get; set; }
     public string? PlantId { get; set; }
+    public List<string>? PlantIds { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 

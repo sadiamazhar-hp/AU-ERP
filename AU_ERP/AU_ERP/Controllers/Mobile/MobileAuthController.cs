@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Linq;
 
 namespace AU_ERP.Controllers.Mobile;
 
@@ -63,6 +64,13 @@ public class MobileAuthController : ControllerBase
             .Select(ud => ud.Department!.Code)
             .ToListAsync(ct);
 
+        var allPlantIds = await _db.PlantsSamples
+            .AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct);
+        var plantIds = (await SalesPlantAccess.LoadAssignedPlantIdsAsync(_db, User, allPlantIds, ct))
+            .ToList();
+
         var token = BuildJwt(user, departments);
         var expiryDays = _config.GetValue<int>("Jwt:ExpirationDays", 30);
         var expiresAt = DateTime.UtcNow.AddDays(expiryDays);
@@ -77,7 +85,8 @@ public class MobileAuthController : ControllerBase
             UserId: user.Id,
             Email: user.Email ?? "",
             DisplayName: displayName,
-            Departments: departments
+            Departments: departments,
+            PlantIds: plantIds
         );
 
         return Ok(MobileApiResponse<MobileLoginResponse>.Ok(response));
@@ -100,6 +109,13 @@ public class MobileAuthController : ControllerBase
             .Select(ud => ud.Department!.Code)
             .ToListAsync(ct);
 
+        var allPlantIds = await _db.PlantsSamples
+            .AsNoTracking()
+            .Select(p => p.PlantID)
+            .ToListAsync(ct);
+        var plantIds = (await SalesPlantAccess.LoadAssignedPlantIdsAsync(_db, User, allPlantIds, ct))
+            .ToList();
+
         var displayName = string.Join(" ", new[] { user.FirstName, user.LastName }
             .Where(s => !string.IsNullOrWhiteSpace(s)));
         if (string.IsNullOrWhiteSpace(displayName)) displayName = user.Email ?? user.UserName ?? "User";
@@ -108,7 +124,8 @@ public class MobileAuthController : ControllerBase
             UserId: user.Id,
             Email: user.Email ?? "",
             DisplayName: displayName,
-            Departments: departments
+            Departments: departments,
+            PlantIds: plantIds
         )));
     }
 
