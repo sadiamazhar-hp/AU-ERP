@@ -200,7 +200,7 @@ public class StockMovementController : Controller
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             ct).ConfigureAwait(false);
 
-        return Json(new { success = result.Success, message = result.Message, movementNumber = result.MovementNumber });
+        return Json(new { success = result.Success, message = result.Message, movementNumber = result.MovementNumber, batchOrLot = result.BatchOrLot });
     }
 }
 

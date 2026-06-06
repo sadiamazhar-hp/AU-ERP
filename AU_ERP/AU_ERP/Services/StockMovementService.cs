@@ -21,7 +21,7 @@ public sealed class StockMovementService
         string ToPlantId,
         decimal QuantityMoved);
 
-    public sealed record MoveResult(bool Success, string Message, string? MovementNumber = null);
+    public sealed record MoveResult(bool Success, string Message, string? MovementNumber = null, string? BatchOrLot = null);
 
     public async Task<decimal> GetQuantityPresentAsync(string materialNumber, string grade, string fromPlantId, CancellationToken ct = default)
     {
@@ -101,10 +101,17 @@ public sealed class StockMovementService
 
             var remaining = qty;
             var now = DateTime.UtcNow;
+            var movedByBatch = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             foreach (var row in sourceRows)
             {
                 if (remaining <= 0) break;
                 var take = Math.Min(row.Quantity, remaining);
+                var batchKey = StockInventoryBatchKey.Normalize(row.BatchOrLot);
+                if (movedByBatch.TryGetValue(batchKey, out var existingQty))
+                    movedByBatch[batchKey] = Math.Round(existingQty + take, 4, MidpointRounding.AwayFromZero);
+                else
+                    movedByBatch[batchKey] = take;
+
                 row.Quantity = Math.Round(row.Quantity - take, 4, MidpointRounding.AwayFromZero);
                 row.StockValue = Math.Round(row.Quantity * row.StandardCostPerUom, 2, MidpointRounding.AwayFromZero);
                 row.UpdatedAt = now;
@@ -117,39 +124,45 @@ public sealed class StockMovementService
 
             var moveCost = available > 0 ? Math.Round(availableCost / available, 4, MidpointRounding.AwayFromZero) : 0m;
 
-            var dest = await _db.StockInventoryLines.FirstOrDefaultAsync(s =>
-                s.MaterialNumber == mat
-                && s.PlantID == toPlant
-                && s.QuantityUomId == uom.Id
-                && s.Status == StockInventoryLine.StatusActive
-                && s.Grade == g
-                && (s.BatchOrLot ?? "") == "", ct).ConfigureAwait(false);
-
-            if (dest == null)
+            foreach (var (batchKey, batchQty) in movedByBatch)
             {
-                _db.StockInventoryLines.Add(new StockInventoryLine
+                var dest = await _db.StockInventoryLines.FirstOrDefaultAsync(s =>
+                    s.MaterialNumber == mat
+                    && s.PlantID == toPlant
+                    && s.QuantityUomId == uom.Id
+                    && s.Status == StockInventoryLine.StatusActive
+                    && s.Grade == g
+                    && (s.BatchOrLot ?? "") == batchKey, ct).ConfigureAwait(false);
+
+                if (dest == null)
                 {
-                    MaterialNumber = mat,
-                    PlantID = toPlant,
-                    QuantityUomId = uom.Id,
-                    Status = StockInventoryLine.StatusActive,
-                    Grade = g,
-                    Quantity = qty,
-                    StandardCostPerUom = moveCost,
-                    StockValue = Math.Round(qty * moveCost, 2, MidpointRounding.AwayFromZero),
-                    BatchOrLot = "",
-                    CreatedAt = now,
-                    UpdatedAt = now
-                });
-            }
-            else
-            {
-                dest.Quantity += qty;
-                if (dest.StandardCostPerUom <= 0 && moveCost > 0) dest.StandardCostPerUom = moveCost;
-                dest.StockValue = Math.Round(dest.Quantity * dest.StandardCostPerUom, 2, MidpointRounding.AwayFromZero);
-                dest.UpdatedAt = now;
+                    _db.StockInventoryLines.Add(new StockInventoryLine
+                    {
+                        MaterialNumber = mat,
+                        PlantID = toPlant,
+                        QuantityUomId = uom.Id,
+                        Status = StockInventoryLine.StatusActive,
+                        Grade = g,
+                        Quantity = batchQty,
+                        StandardCostPerUom = moveCost,
+                        StockValue = Math.Round(batchQty * moveCost, 2, MidpointRounding.AwayFromZero),
+                        BatchOrLot = batchKey.Length == 0 ? "" : batchKey,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+                else
+                {
+                    dest.Quantity += batchQty;
+                    if (dest.StandardCostPerUom <= 0 && moveCost > 0) dest.StandardCostPerUom = moveCost;
+                    dest.StockValue = Math.Round(dest.Quantity * dest.StandardCostPerUom, 2, MidpointRounding.AwayFromZero);
+                    if (string.IsNullOrWhiteSpace(dest.BatchOrLot) && batchKey.Length > 0)
+                        dest.BatchOrLot = batchKey;
+                    dest.UpdatedAt = now;
+                }
             }
 
+            var batchLabel = FormatMovedBatches(movedByBatch.Keys);
             var movementNo = await GenerateNextMovementNumberAsync(ct).ConfigureAwait(false);
             _db.StockMovements.Add(new StockMovement
             {
@@ -160,6 +173,7 @@ public sealed class StockMovementService
                 FromPlantId = fromPlant,
                 ToPlantId = toPlant,
                 QuantityMoved = qty,
+                BatchOrLot = batchLabel.Length == 0 ? null : batchLabel,
                 QuantityUomId = uom.Id,
                 CreatedByUserId = string.IsNullOrWhiteSpace(createdByUserId) ? null : createdByUserId.Trim(),
                 CreatedAt = now
@@ -167,7 +181,7 @@ public sealed class StockMovementService
 
             await _db.SaveChangesAsync(ct).ConfigureAwait(false);
             await tx.CommitAsync(ct).ConfigureAwait(false);
-            return new(true, "Stock transferred successfully.", movementNo);
+            return new(true, "Stock transferred successfully.", movementNo, batchLabel.Length == 0 ? null : batchLabel);
         }
         catch (Exception ex)
         {
@@ -176,14 +190,21 @@ public sealed class StockMovementService
         }
     }
 
-    private static string NormalizeGrade(string? grade)
+    private static string NormalizeGrade(string? grade) =>
+        StockInventoryGradeCodes.NormalizeGradeKey(grade);
+
+    private static string FormatMovedBatches(IEnumerable<string> batchKeys)
     {
-        var g = (grade ?? "").Trim();
-        if (g.Equals("A", StringComparison.OrdinalIgnoreCase)) return "A";
-        if (g.Equals("B", StringComparison.OrdinalIgnoreCase)) return "B";
-        if (g.Equals("C", StringComparison.OrdinalIgnoreCase)) return "C";
-        if (g.Equals("Scrap", StringComparison.OrdinalIgnoreCase)) return "Scrap";
-        return g;
+        var labels = batchKeys
+            .Select(StockInventoryBatchKey.Normalize)
+            .Where(k => k.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (labels.Count == 0)
+            return "";
+        var joined = string.Join(", ", labels);
+        return joined.Length <= 256 ? joined : joined[..256];
     }
 
     private async Task<string> GenerateNextMovementNumberAsync(CancellationToken ct)

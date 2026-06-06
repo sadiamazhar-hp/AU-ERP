@@ -34,6 +34,10 @@ public class StockMovement
     [Column(TypeName = "decimal(18,4)")]
     public decimal QuantityMoved { get; set; }
 
+    /// <summary>Batch/lot numbers moved (comma-separated when multiple batches are consumed).</summary>
+    [MaxLength(256)]
+    public string? BatchOrLot { get; set; }
+
     public int QuantityUomId { get; set; }
 
     [MaxLength(450)]

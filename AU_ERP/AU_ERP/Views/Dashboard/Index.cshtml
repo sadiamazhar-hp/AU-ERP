@@ -370,7 +370,7 @@
                 </div>
                 <div class="db-chart-row">
                     <div class="db-chart-card">
-                        <h3>Stock value by grade</h3>
+                        <h3>Stock quantity by grade</h3>
                         @if (s.ValueByGrade.Count == 0)
                         {
                             <p class="text-muted small mb-0">No graded stock lines yet.</p>
@@ -699,8 +699,10 @@
             (function () {
                 const el = document.getElementById("dbChartStoreGrade");
                 if (!el) return;
-                const data = @Html.Raw(DashboardDataService.ChartJsonDoughnut(Model.Store.ValueByGrade, new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6" }));
-                new Chart(el, { type: "doughnut", data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: function (ctx) { const v = ctx.parsed; return (ctx.label || "") + ": " + (v != null ? Number(v).toFixed(2) : ""); } } } } } });
+                const data = @Html.Raw(DashboardDataService.ChartJsonGradeQuantityDoughnut(Model.Store.ValueByGrade, new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6" }));
+                const stockValues = data.stockValues || [];
+                delete data.stockValues;
+                new Chart(el, { type: "doughnut", data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: function (ctx) { const qty = ctx.parsed; const val = stockValues[ctx.dataIndex]; const valTxt = val != null && val > 0 ? (" · PKR " + Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })) : ""; return (ctx.label || "") + ": " + (qty != null ? Number(qty).toLocaleString() : "0") + " units" + valTxt; } } } } } });
             })();
                 </text>
             }

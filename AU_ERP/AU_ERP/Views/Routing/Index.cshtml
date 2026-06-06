@@ -6,7 +6,14 @@
     var rtTabList = string.Equals(ViewContext.HttpContext?.Request.Query["tab"].ToString(), "list", StringComparison.OrdinalIgnoreCase);
     var plants = ViewBag.Plants as Microsoft.AspNetCore.Mvc.Rendering.SelectList;
     var workCentres = ViewBag.WorkCentres as List<AU_ERP.Models.WorkCenterMasterSample> ?? new List<AU_ERP.Models.WorkCenterMasterSample>();
-    var rtWcJson = JsonSerializer.Serialize(workCentres.Select(w => new { id = w.ID, name = w.WorkCenterName ?? "", timeUom = w.TimeUom ?? "" }));
+    var rtWcJson = JsonSerializer.Serialize(workCentres.Select(w => new
+    {
+        id = w.ID,
+        name = w.WorkCenterName ?? "",
+        timeUom = w.TimeUom ?? "",
+        machineTime = w.MachineTime,
+        laborTime = w.LaborTime
+    }));
 }
 
 <style>
@@ -448,14 +455,28 @@
         return null;
     }
 
-    function rtSyncOpRowUomFromWc(tr) {
+    function rtFormatWcTime(val) {
+        if (val == null || val === "") return "";
+        return String(val);
+    }
+
+    function rtSyncOpRowUomFromWc(tr, overwriteTimes) {
         if (!tr) return;
         var sel = tr.querySelector(".rt-op-wc");
         var uomSel = tr.querySelector(".rt-op-uom");
-        if (!uomSel) return;
+        var machInp = tr.querySelector(".rt-op-machine");
+        var labInp = tr.querySelector(".rt-op-labor");
         var meta = sel ? rtFindWcMeta(sel.value) : null;
-        if (meta && meta.timeUom != null && String(meta.timeUom).trim() !== "") {
+        if (!meta) return;
+
+        if (uomSel && meta.timeUom != null && String(meta.timeUom).trim() !== "") {
             uomSel.value = String(meta.timeUom).trim();
+        }
+        if (machInp && (overwriteTimes === true || (machInp.value || "").trim() === "")) {
+            machInp.value = rtFormatWcTime(meta.machineTime);
+        }
+        if (labInp && (overwriteTimes === true || (labInp.value || "").trim() === "")) {
+            labInp.value = rtFormatWcTime(meta.laborTime);
         }
     }
 
@@ -911,7 +932,7 @@
         var t = e.target;
         if (t && t.classList && t.classList.contains("rt-op-wc")) {
             var tr = t.closest("tr");
-            if (tr) rtSyncOpRowUomFromWc(tr);
+            if (tr) rtSyncOpRowUomFromWc(tr, true);
         }
     });
 </script>

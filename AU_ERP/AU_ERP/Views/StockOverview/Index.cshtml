@@ -123,10 +123,9 @@
                                 var typeLabel = mat?.MaterialType != null
                                     ? (!string.IsNullOrWhiteSpace(mat.MaterialType.Description) ? mat.MaterialType.Description : mat.MaterialType.MaterialTypeCode)
                                     : (mat?.MaterialTypeCode ?? "—");
-                                var isFert = string.Equals(mat?.MaterialTypeCode, "FERT", StringComparison.OrdinalIgnoreCase);
                                 var name = mat?.Description ?? "—";
                                 var uom = row.QuantityUom?.Code ?? "—";
-                                var batchNo = isFert ? (string.IsNullOrWhiteSpace(row.BatchOrLot) ? "—" : row.BatchOrLot) : "—";
+                                var batchNo = string.IsNullOrWhiteSpace(row.BatchOrLot) ? "—" : row.BatchOrLot;
                                 var gradeLabel = string.IsNullOrEmpty(row.Grade) ? "—" : row.Grade;
                                 <tr>
                                     <td><strong>@row.MaterialNumber</strong></td>

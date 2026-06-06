@@ -192,6 +192,7 @@
                     <th>Date</th>
                     <th>Material</th>
                     <th>Grade</th>
+                    <th>Batch No</th>
                     <th>From</th>
                     <th>To</th>
                     <th>Qty</th>
@@ -201,7 +202,7 @@
                 <tbody>
                 @if (!rows.Any())
                 {
-                    <tr><td colspan="8" class="text-secondary">No stock movements match the current filters.</td></tr>
+                    <tr><td colspan="9" class="text-secondary">No stock movements match the current filters.</td></tr>
                 }
                 else
                 {
@@ -212,6 +213,7 @@
                             <td>@m.MovementDate.ToString("dd-MMM-yyyy")</td>
                             <td>@m.MaterialNumber @(m.Material?.Description is { Length: > 0 } d ? $"— {d}" : "")</td>
                             <td>@m.Grade</td>
+                            <td>@(string.IsNullOrWhiteSpace(m.BatchOrLot) ? "—" : m.BatchOrLot)</td>
                             <td>@m.FromPlantId</td>
                             <td>@m.ToPlantId</td>
                             <td>@m.QuantityMoved.ToString("0.####")</td>
@@ -322,7 +324,10 @@
                 });
                 const data = await res.json();
                 if (!data.success) return showErr(data.message || 'Transfer failed.');
-                showOk((data.message || 'Transferred.') + (data.movementNumber ? (' No: ' + data.movementNumber) : ''));
+                var okMsg = (data.message || 'Transferred.')
+                    + (data.movementNumber ? (' No: ' + data.movementNumber) : '')
+                    + (data.batchOrLot ? (' · Batch: ' + data.batchOrLot) : '');
+                showOk(okMsg);
                 const qs = new URLSearchParams(window.location.search);
                 setTimeout(function () { window.location.href = '@Url.Action("Index","StockMovement")' + (qs.toString() ? ('?' + qs.toString()) : ''); }, 700);
             });

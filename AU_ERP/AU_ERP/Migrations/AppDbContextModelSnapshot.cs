@@ -3002,6 +3002,10 @@ namespace AU_ERP.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("BatchOrLot")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<string>("CreatedByUserId")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");

@@ -181,14 +181,15 @@ public sealed class DashboardDataService
             .ConfigureAwait(false);
 
         var byGrade = lines
-            .GroupBy(s => string.IsNullOrEmpty(s.Grade) ? "—" : s.Grade)
+            .GroupBy(s => StockInventoryGradeCodes.NormalizeGradeKey(s.Grade))
             .Select(g => new LabelCountDto
             {
-                Label = g.Key,
-                Count = g.Count(),
+                Label = StockInventoryGradeCodes.DisplayGradeLabel(g.Key),
+                Count = (int)Math.Round(g.Sum(x => x.Quantity), MidpointRounding.AwayFromZero),
                 Value = g.Sum(x => x.StockValue)
             })
-            .OrderByDescending(x => x.Value)
+            .Where(x => x.Count > 0 || x.Value > 0)
+            .OrderByDescending(x => x.Value > 0 ? x.Value : x.Count)
             .ToList();
 
         var qtyByMaterial = lines
@@ -240,7 +241,7 @@ public sealed class DashboardDataService
             {
                 s.MaterialNumber,
                 MaterialDescription = s.Material != null ? s.Material.Description : null,
-                Grade = string.IsNullOrWhiteSpace(s.Grade) ? "—" : s.Grade
+                Grade = StockInventoryGradeCodes.DisplayGradeLabel(s.Grade)
             })
             .Select(g => new DashboardTopStockRowVm
             {
@@ -953,6 +954,15 @@ public sealed class DashboardDataService
         {
             labels = items.Select(i => i.Label).ToList(),
             datasets = new[] { new { data = items.Select(i => (double)i.Value).ToList(), backgroundColor = background ?? new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6" } } }
+        });
+
+    /// <summary>Doughnut chart using quantity (Count) with stock value carried for tooltips.</summary>
+    public static string ChartJsonGradeQuantityDoughnut(IReadOnlyList<LabelCountDto> items, IReadOnlyList<string>? background = null) =>
+        JsonSerializer.Serialize(new
+        {
+            labels = items.Select(i => i.Label).ToList(),
+            stockValues = items.Select(i => (double)i.Value).ToList(),
+            datasets = new[] { new { data = items.Select(i => (double)i.Count).ToList(), backgroundColor = background ?? new[] { "#0070f2", "#27ae60", "#9b59b6", "#e67e22", "#e74c3c", "#95a5a6" } } }
         });
 
     /// <summary>Doughnut chart for sales order workflow — one distinct color per status label.</summary>
