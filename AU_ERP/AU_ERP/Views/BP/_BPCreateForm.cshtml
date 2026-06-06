@@ -176,9 +176,9 @@
             <div class="tab-pane tab-comm d-none">
                 <div class="bp-section-box">
                     <h3 class="bp-section-title">Communication</h3>
-                    <div class="bp-field-row"><label>Telephone</label> @Html.TextBoxFor(m => m.Telephone, new { @class = "form-control form-control-sm f-tel" })</div>
-                    <div class="bp-field-row"><label>Mobile</label> @Html.TextBoxFor(m => m.Mobile, new { @class = "form-control form-control-sm f-mob" })</div>
-                    <div class="bp-field-row"><label>Email</label> @Html.TextBoxFor(m => m.Email, new { @class = "form-control form-control-sm f-email", type = "email" })</div>
+                    <div class="bp-field-row"><label>Telephone</label> @Html.TextBoxFor(m => m.Telephone, new { @class = "form-control form-control-sm f-tel", placeholder = "021-34567890", autocomplete = "tel" })</div>
+                    <div class="bp-field-row"><label>Mobile</label> @Html.TextBoxFor(m => m.Mobile, new { @class = "form-control form-control-sm f-mob", placeholder = "0301-2345678", autocomplete = "tel" })</div>
+                    <div class="bp-field-row"><label>Email</label> @Html.TextBoxFor(m => m.Email, new { @class = "form-control form-control-sm f-email", placeholder = "john.smith@gmail.com", autocomplete = "email", type = "text" })</div>
                 </div>
             </div>
 
@@ -440,6 +440,13 @@
         }
         if (roleCode === 'FLVN01' || roleCode === 'FLCU00') {
             req('.f-purch-schema');
+        }
+        if (typeof window.bpValidateContactFields === 'function') {
+            bad = bad.concat(window.bpValidateContactFields(root, {
+                telephone: '.f-tel',
+                mobile: '.f-mob',
+                email: '.f-email'
+            }));
         }
         return bad;
     }

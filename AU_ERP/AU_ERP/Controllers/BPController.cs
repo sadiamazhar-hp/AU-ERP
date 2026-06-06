@@ -89,6 +89,16 @@ namespace AU_ERP.Main_Controller
         private static readonly string[] BpPaymentTermsAllowed = { "10-days", "15-days", "30-days" };
         private static readonly string[] BpPaymentMethodsAllowed = { "Cash", "Cheque", "Online" };
 
+        private void ValidateBpContactFields(BusinessPartnerMasterSample m)
+        {
+            if (BusinessPartnerContactRules.ValidateEmail(m.Email) is { } emailErr)
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.Email), emailErr);
+            if (BusinessPartnerContactRules.ValidateTelephone(m.Telephone) is { } telErr)
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.Telephone), telErr);
+            if (BusinessPartnerContactRules.ValidateMobile(m.Mobile) is { } mobErr)
+                ModelState.AddModelError(nameof(BusinessPartnerMasterSample.Mobile), mobErr);
+        }
+
         private async Task ValidateBpPaymentAndSchemaFieldsAsync(BusinessPartnerMasterSample m, CancellationToken ct = default)
         {
             var pt = m.PaymentTerms?.Trim();
@@ -393,6 +403,7 @@ namespace AU_ERP.Main_Controller
             NormalizePartnerFkIds(model);
             await ApplyRoleDerivedDefaultsAsync(model, ct);
             await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
+            ValidateBpContactFields(model);
 
             if (string.IsNullOrWhiteSpace(model.FullName))
             {
@@ -552,6 +563,7 @@ namespace AU_ERP.Main_Controller
             NormalizePartnerFkIds(model);
             await ApplyRoleDerivedDefaultsAsync(model, ct);
             await ValidateBpPaymentAndSchemaFieldsAsync(model, ct);
+            ValidateBpContactFields(model);
             if (!ModelState.IsValid)
             {
                 var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors)

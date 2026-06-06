@@ -222,15 +222,15 @@
                                 <div class="row g-2">
                                     <div class="col-md-6">
                                         <label class="form-label">Telephone</label>
-                                        <input name="Telephone" id="bpEditTelephone" class="form-control" />
+                                        <input name="Telephone" id="bpEditTelephone" class="form-control" placeholder="021-34567890" autocomplete="tel" />
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Mobile</label>
-                                        <input name="Mobile" id="bpEditMobile" class="form-control" />
+                                        <input name="Mobile" id="bpEditMobile" class="form-control" placeholder="0301-2345678" autocomplete="tel" />
                                     </div>
                                     <div class="col-12">
                                         <label class="form-label">Email</label>
-                                        <input name="Email" id="bpEditEmail" class="form-control" type="email" />
+                                        <input name="Email" id="bpEditEmail" class="form-control" placeholder="john.smith@gmail.com" autocomplete="email" type="text" />
                                     </div>
                                 </div>
                             </div>
@@ -349,6 +349,49 @@
 
 @section Scripts {
     <script>
+        (function () {
+            var emailRe = /^[a-zA-Z0-9._%+-]+@@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            var landlineRe = /^\d{2,4}-\d{7,8}$/;
+            var mobileRe = /^03\d{2}-\d{7}$/;
+
+            function bpContactDigitsOnly(v) {
+                return String(v || "").replace(/\D/g, "");
+            }
+
+            window.bpValidateContactFields = function (root, selectors) {
+                root = root || document;
+                selectors = selectors || {};
+                var bad = [];
+                function field(sel) {
+                    if (!sel) return null;
+                    return root.querySelector ? root.querySelector(sel) : document.querySelector(sel);
+                }
+                function pushIf(el, msg) {
+                    if (el) bad.push({ el: el, msg: msg });
+                }
+
+                var telEl = field(selectors.telephone);
+                var telVal = telEl ? String(telEl.value || "").trim() : "";
+                if (telVal && !landlineRe.test(telVal))
+                    pushIf(telEl, "Enter a valid Pakistan landline (e.g. 021-34567890 or 042-12345678). Use digits and one hyphen only.");
+
+                var mobEl = field(selectors.mobile);
+                var mobVal = mobEl ? String(mobEl.value || "").trim() : "";
+                if (mobVal) {
+                    if (!mobileRe.test(mobVal) || bpContactDigitsOnly(mobVal).length !== 11)
+                        pushIf(mobEl, "Enter a valid Pakistan mobile number (e.g. 0301-2345678). Format: 03XX-XXXXXXX, 11 digits.");
+                }
+
+                var emailEl = field(selectors.email);
+                var emailVal = emailEl ? String(emailEl.value || "").trim() : "";
+                if (emailVal && !emailRe.test(emailVal))
+                    pushIf(emailEl, "Enter a valid email address (e.g. ahmed.khan@gmail.com).");
+
+                window.bpContactValidationMessages = bad.map(function (x) { return x.msg; }).filter(Boolean);
+                return bad.map(function (x) { return x.el; });
+            };
+        })();
+
         function bpEditApplySalesSchema(salesSchemaVal) {
             var sel = document.getElementById('bpEditSalesSchema');
             if (!sel) return;
@@ -458,6 +501,13 @@
             if (code === "FLVN01" || code === "FLCU00") {
                 req("bpEditPurchSchema");
             }
+            if (typeof window.bpValidateContactFields === "function") {
+                bad = bad.concat(window.bpValidateContactFields(document.getElementById("bpEditForm"), {
+                    telephone: "#bpEditTelephone",
+                    mobile: "#bpEditMobile",
+                    email: "#bpEditEmail"
+                }));
+            }
             return bad;
         }
 
@@ -493,8 +543,9 @@
                 if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(form);
                 var bad = typeof bpValidateCreateForm === "function" ? bpValidateCreateForm(form) : [];
                 if (bad.length) {
+                    var contactMsg = (window.bpContactValidationMessages || []).join(" ");
                     if (typeof window.auShowInlineValidation === "function")
-                        window.auShowInlineValidation(form, bad);
+                        window.auShowInlineValidation(form, bad, contactMsg || "Please correct the highlighted contact fields.");
                     return;
                 }
                 var fd = new FormData(form);
@@ -653,8 +704,9 @@
             if (typeof window.auClearInlineValidation === "function") window.auClearInlineValidation(form);
             var badEdit = bpValidateEditForm();
             if (badEdit.length) {
+                var contactMsgEdit = (window.bpContactValidationMessages || []).join(" ");
                 if (typeof window.auShowInlineValidation === "function")
-                    window.auShowInlineValidation(form, badEdit);
+                    window.auShowInlineValidation(form, badEdit, contactMsgEdit || "Please correct the highlighted contact fields.");
                 return;
             }
             var fd = new FormData(form);
