@@ -262,9 +262,10 @@
                 <h5 class="modal-title" id="addDeliveryChallanModalLabel">New delivery challan</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="dcForm" method="post" asp-controller="DeliveryChallan" asp-action="Create" data-au-prevent-enter-submit>
+            <form id="dcForm" method="post" asp-controller="DeliveryChallan" asp-action="Create" data-au-prevent-enter-submit novalidate>
                 @Html.AntiForgeryToken()
                 <div class="modal-body py-2">
+                    <div class="au-validation-summary mb-2 text-danger small" style="display:none;" role="alert"></div>
                     <div class="row g-2 mb-2">
                         <div class="col-md-4">
                             <label class="form-label small mb-0">Plant</label>
@@ -329,7 +330,7 @@
                     </div>
                     <div class="row g-2 mb-2">
                         <div class="col-md-6">
-                            <label class="form-label small mb-0">Driver</label>
+                            <label class="form-label small mb-0" id="dcDriverLabel">Driver</label>
                             <select class="form-select form-select-sm" name="DriverId" id="dcDriver">
                                 <option value="">—</option>
                                 @foreach (var dr in dcDrivers)
@@ -341,7 +342,7 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small mb-0">Vehicle</label>
+                            <label class="form-label small mb-0" id="dcVehicleLabel">Vehicle</label>
                             <select class="form-select form-select-sm" name="VehicleId" id="dcVehicle">
                                 <option value="">—</option>
                                 @foreach (var v in dcVehicles)
@@ -407,7 +408,34 @@
         window.dcPlantSingleLocked = @(dcPlantSingleLocked ? "true" : "false");
         window.dcLockedPlantId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(dcLockedPlantId));
 
-        var dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [] };
+        var dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [], isDealerCustomer: false };
+
+        function dcClearFormValidation() {
+            var form = document.getElementById("dcForm");
+            if (form && typeof window.auClearInlineValidation === "function")
+                window.auClearInlineValidation(form);
+        }
+
+        function dcShowFormValidation(invalidEls, message) {
+            var form = document.getElementById("dcForm");
+            if (!form) return;
+            if (typeof window.auShowInlineValidation === "function")
+                window.auShowInlineValidation(form, invalidEls || [], message);
+            else alert(message || "Please correct the highlighted fields.");
+        }
+
+        function setDealerFleetRequirement(isDealer) {
+            var dealer = !!isDealer;
+            dcSoContext.isDealerCustomer = dealer;
+            var driver = document.getElementById("dcDriver");
+            var vehicle = document.getElementById("dcVehicle");
+            var dl = document.getElementById("dcDriverLabel");
+            var vl = document.getElementById("dcVehicleLabel");
+            if (driver) driver.required = dealer;
+            if (vehicle) vehicle.required = dealer;
+            if (dl) dl.innerHTML = dealer ? 'Driver <span class="text-danger">*</span>' : 'Driver';
+            if (vl) vl.innerHTML = dealer ? 'Vehicle <span class="text-danger">*</span>' : 'Vehicle';
+        }
 
         function dcEsc(s) {
             if (s == null) return "";
@@ -620,12 +648,14 @@
 
         function applyDcOrderPayload(j) {
             if (!j) return;
+            dcClearFormValidation();
             var lines = j.lines || [];
             if (!lines.length) {
                 alert("This sales order has no lines to ship.");
                 return;
             }
-            dcSoContext = { salesOrderId: j.salesOrderId, salesOrderNumber: j.salesOrderNumber || "", lines: lines };
+            dcSoContext = { salesOrderId: j.salesOrderId, salesOrderNumber: j.salesOrderNumber || "", lines: lines, isDealerCustomer: !!j.isDealerCustomer };
+            setDealerFleetRequirement(!!j.isDealerCustomer);
             if (!window.dcPlantSingleLocked && j.plantId && document.getElementById("dcPlant")) document.getElementById("dcPlant").value = j.plantId;
             if (j.salesOrderId) document.getElementById("dcSalesOrderId").value = String(j.salesOrderId);
             syncRefReadonly();
@@ -729,7 +759,8 @@
         })();
 
         document.getElementById("dcHeaderSoClear") && document.getElementById("dcHeaderSoClear").addEventListener("click", function () {
-            dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [] };
+            dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [], isDealerCustomer: false };
+            setDealerFleetRequirement(false);
             document.getElementById("dcSalesOrderId").value = "";
             document.getElementById("dcRefSoNum").value = "";
             setHeaderSoEditable();
@@ -738,12 +769,14 @@
         });
 
         function clearModalForNew() {
+            dcClearFormValidation();
             document.getElementById("dcForm").reset();
             if (document.getElementById("dcDocDate")) document.getElementById("dcDocDate").value = today;
             if (document.getElementById("dcDelType")) document.getElementById("dcDelType").value = "Standard";
             document.getElementById("dcSalesOrderId").value = "";
             document.getElementById("dcRefSoNum").value = "";
-            dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [] };
+            dcSoContext = { salesOrderId: null, salesOrderNumber: "", lines: [], isDealerCustomer: false };
+            setDealerFleetRequirement(false);
             setHeaderSoEditable();
             dcPlaceholderOnly();
             dcSyncShipToSearchFromHidden();
@@ -767,6 +800,7 @@
                 salesOrderNumber: d.salesOrderNumber,
                 plantId: d.plantId,
                 shipToBusinessPartnerId: d.shipToBusinessPartnerId,
+                isDealerCustomer: !!d.isDealerCustomer,
                 lines: lines
             });
         }
@@ -784,18 +818,39 @@
         });
         document.getElementById("btnDcNewNoPrefill") && document.getElementById("btnDcNewNoPrefill").addEventListener("click", function () { clearModalForNew(); });
         document.getElementById("dcForm") && document.getElementById("dcForm").addEventListener("submit", function (e) {
+            dcClearFormValidation();
             var soEl = document.getElementById("dcSalesOrderId");
+            var soSearchEl = document.getElementById("dcHeaderSoSearch");
             var shipEl = document.getElementById("dcShipTo");
+            var shipSearchEl = document.getElementById("dcShipToSearch");
+            var drvEl = document.getElementById("dcDriver");
+            var vehEl = document.getElementById("dcVehicle");
             if (!soEl || !String(soEl.value || "").trim()) {
                 e.preventDefault();
-                alert("Select a sales order in the header.");
+                dcShowFormValidation([soSearchEl].filter(Boolean), "Select a sales order in the header.");
                 return;
             }
             if (!shipEl || !String(shipEl.value || "").trim()) {
                 e.preventDefault();
-                alert("Select a ship-to party.");
+                dcShowFormValidation([shipSearchEl].filter(Boolean), "Select a ship-to party.");
                 return;
             }
+            if (dcSoContext.isDealerCustomer) {
+                var badFleet = [];
+                if (!drvEl || !String(drvEl.value || "").trim()) badFleet.push(drvEl);
+                if (!vehEl || !String(vehEl.value || "").trim()) badFleet.push(vehEl);
+                if (badFleet.length) {
+                    e.preventDefault();
+                    dcShowFormValidation(badFleet, "Driver and vehicle are mandatory for Dealer customer orders.");
+                    return;
+                }
+            }
+        });
+        ["dcDriver", "dcVehicle", "dcShipToSearch", "dcHeaderSoSearch"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener("change", dcClearFormValidation);
+            el.addEventListener("input", dcClearFormValidation);
         });
         if (fromSalesOrderId && prepareFromSoUrl) {
             fetch(prepareFromSoUrl + (prepareFromSoUrl.indexOf("?") >= 0 ? "&" : "?") + "id=" + fromSalesOrderId)

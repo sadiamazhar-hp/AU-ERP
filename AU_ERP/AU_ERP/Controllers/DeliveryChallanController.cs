@@ -34,6 +34,23 @@ public class DeliveryChallanController : Controller
         _companyInfo = companyInfo;
     }
 
+    private async Task<bool> IsDealerCustomerOrderAsync(SalesOrder? order, CancellationToken ct)
+    {
+        if (order == null || string.IsNullOrWhiteSpace(order.CustomerBusinessPartnerId))
+            return false;
+
+        var dealerSchemaId = await SalesSchemaResolution.GetDealerSchemaIdAsync(_db, ct).ConfigureAwait(false);
+        if (dealerSchemaId is not > 0)
+            return false;
+
+        var salesSchema = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+            .Where(bp => bp.BPID == order.CustomerBusinessPartnerId)
+            .Select(bp => bp.SalesSchema)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        return SalesSchemaResolution.MatchesDealerSchema(salesSchema, dealerSchemaId.Value);
+    }
+
     private async Task<IReadOnlyList<string>> AllowedDeliveryChallanPlantIdsAsync(CancellationToken ct)
     {
         var all = await _db.PlantsSamples.AsNoTracking()
@@ -294,6 +311,7 @@ public class DeliveryChallanController : Controller
                 batch = batchMapLines.TryGetValue(i.Id, out var bLine) ? bLine : ""
             })
             .ToList();
+        var isDealerCustomer = await IsDealerCustomerOrderAsync(o, ct).ConfigureAwait(false);
         return Json(new
         {
             success = true,
@@ -301,6 +319,7 @@ public class DeliveryChallanController : Controller
             salesOrderNumber = o.SalesOrderNumber,
             plantId = o.PlantId,
             shipToBusinessPartnerId = o.CustomerBusinessPartnerId,
+            isDealerCustomer,
             lines
         });
     }
@@ -383,6 +402,7 @@ public class DeliveryChallanController : Controller
                 batch = batchMapPrep.TryGetValue(i.Id, out var bIt) ? bIt : ""
             })
             .ToList();
+        var isDealerCustomer = await IsDealerCustomerOrderAsync(o, ct).ConfigureAwait(false);
         return Json(new
         {
             success = true,
@@ -393,6 +413,7 @@ public class DeliveryChallanController : Controller
             salesOrderId = o.Id,
             salesOrderNumber = o.SalesOrderNumber,
             shipToDisplayName = o.CustomerName ?? "",
+            isDealerCustomer,
             items = itemList
         });
     }
@@ -457,7 +478,7 @@ public class DeliveryChallanController : Controller
         {
             var soRow = await _db.SalesOrders.AsNoTracking()
                 .Where(x => x.Id == s)
-                .Select(x => new { x.Status, x.PlantId })
+                .Select(x => new { x.Status, x.PlantId, x.CustomerBusinessPartnerId })
                 .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false);
             if (soRow == null)
@@ -484,6 +505,22 @@ public class DeliveryChallanController : Controller
             {
                 TempData["DcError"] = "Sales goods issue must be dispatched (sent) or received before delivery challan.";
                 return RedirectToAction(nameof(Index));
+            }
+
+            var dealerSchemaId = await SalesSchemaResolution.GetDealerSchemaIdAsync(_db, ct).ConfigureAwait(false);
+            if (dealerSchemaId is > 0 && !string.IsNullOrWhiteSpace(soRow.CustomerBusinessPartnerId))
+            {
+                var customerSalesSchema = await _db.BusinessPartnerMasterSamples.AsNoTracking()
+                    .Where(bp => bp.BPID == soRow.CustomerBusinessPartnerId)
+                    .Select(bp => bp.SalesSchema)
+                    .FirstOrDefaultAsync(ct)
+                    .ConfigureAwait(false);
+                var isDealerCustomer = SalesSchemaResolution.MatchesDealerSchema(customerSalesSchema, dealerSchemaId.Value);
+                if (isDealerCustomer && (model.DriverId is not > 0 || model.VehicleId is not > 0))
+                {
+                    TempData["DcError"] = "Driver and vehicle are mandatory for Dealer customer orders.";
+                    return RedirectToAction(nameof(Index));
+                }
             }
         }
         if (soId is int dupSo)
